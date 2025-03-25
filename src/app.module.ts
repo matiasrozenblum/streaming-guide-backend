@@ -16,6 +16,9 @@ import { PanelistsModule } from './panelists/panelists.module';
     TypeOrmModule.forRoot({
       type: 'postgres',
       url: process.env.DATABASE_URL,
+      ssl: {
+        rejectUnauthorized: false, 
+      },
       autoLoadEntities: true,
       synchronize: true, // Only for development
       entities: [Channel, Program, Schedule, Panelist],
