@@ -1,23 +1,21 @@
-# Usa una imagen base oficial de Node.js
+# Usa una imagen oficial de Node.js
 FROM node:18-alpine
 
-# Crea el directorio de la aplicación
+# Crea el directorio de trabajo
 WORKDIR /app
 
-# Copia los archivos del proyecto
+# Copia package.json e instala dependencias
 COPY package*.json ./
-
-# Instala las dependencias
 RUN npm install
 
 # Copia el resto de los archivos
 COPY . .
 
-# Construye la aplicación
+# Compila el código de TypeScript a JavaScript
 RUN npm run build
 
 # Expone el puerto
 EXPOSE 3000
 
-# Comando para ejecutar la app
+# Establece el comando de inicio
 CMD ["node", "dist/main.js"]
