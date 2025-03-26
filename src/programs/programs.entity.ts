@@ -14,6 +14,12 @@ export class Program {
   @Column({ type: 'text', nullable: true })
   description: string;
 
+  @Column({ type: 'time', nullable: true })
+  start_time: string;
+
+  @Column({ type: 'time', nullable: true })
+  end_time: string;
+
   @ManyToOne(() => Channel, (channel) => channel.programs)
   channel: Channel;
 
