@@ -1,6 +1,6 @@
 import { Controller, Post } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { Channel } from './channels/channels.entity';
 import { Program } from './programs/programs.entity';
 import { Schedule } from './schedules/schedules.entity';
@@ -17,10 +17,12 @@ export class AppController {
     private readonly schedulesRepository: Repository<Schedule>,
     @InjectRepository(Panelist)
     private readonly panelistsRepository: Repository<Panelist>,
+    private readonly dataSource: DataSource,
   ) {}
 
   @Post('seed')
 async seed() {
+  await this.dataSource.query('DELETE FROM "program_panelists_panelist"');
   await this.panelistsRepository.delete({});
   await this.schedulesRepository.delete({});
   await this.programsRepository.delete({});
