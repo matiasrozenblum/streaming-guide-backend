@@ -10,6 +10,9 @@ export class SchedulesService {
   constructor(
     @InjectRepository(Schedule)
     private schedulesRepository: Repository<Schedule>,
+    
+    @InjectRepository(Program)
+    private programsRepository: Repository<Program>,
   ) {}
 
   async findAll(): Promise<Schedule[]> {
@@ -26,18 +29,21 @@ export class SchedulesService {
             return channel;
     }
 
-  create(createScheduleDto: CreateScheduleDto): Promise<Schedule> {
-    const schedule = this.schedulesRepository.create({
-      day_of_week: createScheduleDto.dayOfWeek,
-      start_time: createScheduleDto.startTime,
-      end_time: createScheduleDto.endTime,
-      program: createScheduleDto.programId,
-    });
-
-    return this.schedulesRepository.save(schedule);
-  }
-
-  remove(id: string): Promise<void> {
-    return this.schedulesRepository.delete(id).then(() => {});
-  }
-}
+    async create(createScheduleDto: CreateScheduleDto): Promise<Schedule> {
+      const program = await this.programsRepository.findOne({
+        where: { id: parseInt(createScheduleDto.programId, 10) },
+      });
+    
+      if (!program) {
+        throw new NotFoundException(`Program with ID ${createScheduleDto.programId} not found`);
+      }
+    
+      const schedule = this.schedulesRepository.create({
+        day_of_week: createScheduleDto.dayOfWeek,
+        start_time: createScheduleDto.startTime,
+        end_time: createScheduleDto.endTime,
+        program,
+      });
+    
+      return this.schedulesRepository.save(schedule);
+    }
