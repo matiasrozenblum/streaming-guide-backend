@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, ManyToMany, JoinTable } from 'typeorm';
 import { Channel } from '../channels/channels.entity';
 import { Schedule } from '../schedules/schedules.entity';
 import { Panelist } from '../panelists/panelists.entity';
@@ -26,6 +26,7 @@ export class Program {
   @OneToMany(() => Schedule, (schedule) => schedule.program)
   schedules: Schedule[];
 
-  @OneToMany(() => Panelist, (panelist) => panelist.programs)
+  @ManyToMany(() => Panelist, (panelist) => panelist.programs)
+  @JoinTable()
   panelists: Panelist[];
 }
