@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Channel } from './channels/channels.entity';
 import { Program } from './programs/programs.entity';
 import { Schedule } from './schedules/schedules.entity';
+import { Panelist } from './panelists/panelists.entity';
 
 @Controller()
 export class AppController {
@@ -14,6 +15,8 @@ export class AppController {
     private readonly programsRepository: Repository<Program>,
     @InjectRepository(Schedule)
     private readonly schedulesRepository: Repository<Schedule>,
+    @InjectRepository(Panelist)
+    private readonly panelistsRepository: Repository<Schedule>,
   ) {}
 
   @Post('seed')
@@ -21,6 +24,7 @@ export class AppController {
     await this.programsRepository.delete({});
     await this.channelsRepository.delete({});
     await this.schedulesRepository.delete({});
+    await this.panelistsRepository.delete({});
 
     const channels = await this.channelsRepository.save([
       {
@@ -63,6 +67,25 @@ export class AppController {
         start_time: '11:00',
         end_time: '13:00',
         channel: channels[1],
+      },
+    ]);
+
+    await this.panelistsRepository.save([
+      {
+        name: 'Nico Occhiato',
+        program: programs[0], // Nadie Dice Nada
+      },
+      {
+        name: 'Flor Jazmín Peña',
+        program: programs[0],
+      },
+      {
+        name: 'Diego Leuco',
+        program: programs[1], // Antes Que Nadie
+      },
+      {
+        name: 'Cande Molfese',
+        program: programs[1],
       },
     ]);
 

@@ -17,7 +17,7 @@ export class SchedulesService {
 
   async findAll(): Promise<Schedule[]> {
     return this.schedulesRepository.find({
-      relations: ['program', 'program.channel'],
+      relations: ['program', 'program.channel', 'program.panelists'],
     });
   }
 
