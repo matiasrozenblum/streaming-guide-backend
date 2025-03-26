@@ -9,6 +9,7 @@ import { ChannelsModule } from './channels/channels.module';
 import { ProgramsModule } from './programs/programs.module';
 import { SchedulesModule } from './schedules/schedules.module';
 import { PanelistsModule } from './panelists/panelists.module';
+import { ScraperModule } from './scraper/scraper.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -30,6 +31,7 @@ import { AppController } from './app.controller';
     ProgramsModule,
     SchedulesModule,
     PanelistsModule,
+    ScraperModule,
   ],
   controllers: [AppController],
 })
