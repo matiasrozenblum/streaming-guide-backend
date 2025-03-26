@@ -25,7 +25,7 @@ import { AppController } from './app.controller';
       entities: [Channel, Program, Schedule, Panelist],
       logging: true, // Enable query logging for debugging
     }),
-    TypeOrmModule.forFeature([Channel, Program, Schedule]),
+    TypeOrmModule.forFeature([Channel, Program, Schedule, Panelist]),
     ChannelsModule,
     ProgramsModule,
     SchedulesModule,
