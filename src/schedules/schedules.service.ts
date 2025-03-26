@@ -47,4 +47,8 @@ export class SchedulesService {
   
     return this.schedulesRepository.save(schedule);
   }
+
+  remove(id: string): Promise<void> {
+    return this.schedulesRepository.delete(id).then(() => {});
+  }
 }
