@@ -1,18 +1,34 @@
-import puppeteer from 'puppeteer';
+import chromium from 'chrome-aws-lambda';
+import puppeteer from 'puppeteer-core';
 
 export async function scrapeLuzuSchedule() {
+  const executablePath = await chromium.executablePath;
+
   const browser = await puppeteer.launch({
-    headless: true, // para Puppeteer moderno
+    args: chromium.args,
+    executablePath,
+    headless: chromium.headless,
   });
+
   const page = await browser.newPage();
   await page.goto('https://luzutv.com.ar/', { waitUntil: 'networkidle0' });
 
-  // Esperamos que cargue el contenido relevante (ajustar si hace falta)
-  await new Promise((resolve) => setTimeout(resolve, 2000));
+  await page.waitForSelector('.program__title');
 
-  // 👇 Logueamos el HTML de la grilla (luego extraemos info real)
-  const html = await page.content();
+  const data = await page.evaluate(() => {
+    const blocks = Array.from(document.querySelectorAll('.program'));
+    return blocks.map((el) => {
+      const title = el.querySelector('.program__title')?.textContent?.trim() || '';
+      const hour = el.querySelector('.program__hour')?.textContent?.trim() || '';
+      const [start_time, end_time] = hour.split(' - ');
+      return {
+        name: title,
+        start_time,
+        end_time,
+      };
+    });
+  });
 
   await browser.close();
-  return { html }; // después devolvemos la data procesada
+  return data;
 }
