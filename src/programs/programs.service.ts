@@ -12,7 +12,9 @@ export class ProgramsService {
   ) {}
 
   findAll(): Promise<Program[]> {
-    return this.programsRepository.find();
+    return this.programsRepository.find({
+      relations: ['channel'], // 👈 esto incluye la relación con el canal
+    });
   }
 
   async findOne(id: string): Promise<Program> {
