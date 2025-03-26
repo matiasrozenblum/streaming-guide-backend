@@ -1,20 +1,22 @@
-import chromium from 'chrome-aws-lambda';
-import puppeteer from 'puppeteer-core';
+const chromium = require('chrome-aws-lambda');
+const puppeteer = require('puppeteer-core');
 
 export async function scrapeLuzuSchedule() {
-  const isProduction = process.env.AWS_REGION || process.env.NODE_ENV === 'production';
+    const isProduction = process.env.AWS_REGION || process.env.NODE_ENV === 'production';
 
-  const browser = await puppeteer.launch({
-    args: chromium.args,
-    executablePath: isProduction
-      ? await chromium.executablePath
-      : '/usr/bin/google-chrome', // para local si tenés Chrome instalado
-    headless: true,
-  });
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: isProduction ? chromium.args : [],
+      executablePath: isProduction
+        ? await chromium.executablePath
+        : '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    });
 
   const page = await browser.newPage();
   await page.goto('https://luzutv.com.ar/', { waitUntil: 'networkidle0' });
-  await page.waitForSelector('.program__title');
+  const html = await page.content();
+  console.log('🧪 HTML CONTENT:\n', html.slice(0, 1000));
+  await page.waitForTimeout(5000);
 
   const data = await page.evaluate(() => {
     const blocks = Array.from(document.querySelectorAll('.program'));
