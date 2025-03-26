@@ -21,10 +21,10 @@ export class AppController {
 
   @Post('seed')
   async seed() {
+    await this.panelistsRepository.delete({});
+    await this.schedulesRepository.delete({});
     await this.programsRepository.delete({});
     await this.channelsRepository.delete({});
-    await this.schedulesRepository.delete({});
-    await this.panelistsRepository.delete({});
 
     const channels = await this.channelsRepository.save([
       {
