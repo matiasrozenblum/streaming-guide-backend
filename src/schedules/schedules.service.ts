@@ -12,8 +12,10 @@ export class SchedulesService {
     private schedulesRepository: Repository<Schedule>,
   ) {}
 
-  findAll(): Promise<Schedule[]> {
-    return this.schedulesRepository.find();
+  async findAll(): Promise<Schedule[]> {
+    return this.schedulesRepository.find({
+      relations: ['program', 'program.channel'],
+    });
   }
 
   async findOne(id: string): Promise<Schedule> {

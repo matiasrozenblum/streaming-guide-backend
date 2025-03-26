@@ -16,5 +16,5 @@ export class Schedule {
   end_time: string;
 
   @ManyToOne(() => Program, (program) => program.schedules)
-  program: string;
+  program: Program;
 }
