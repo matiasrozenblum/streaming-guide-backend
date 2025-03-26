@@ -9,6 +9,7 @@ import { ChannelsModule } from './channels/channels.module';
 import { ProgramsModule } from './programs/programs.module';
 import { SchedulesModule } from './schedules/schedules.module';
 import { PanelistsModule } from './panelists/panelists.module';
+import { AppController } from './app.controller';
 
 @Module({
   imports: [
@@ -24,10 +25,12 @@ import { PanelistsModule } from './panelists/panelists.module';
       entities: [Channel, Program, Schedule, Panelist],
       logging: true, // Enable query logging for debugging
     }),
+    TypeOrmModule.forFeature([Channel, Program]),
     ChannelsModule,
     ProgramsModule,
     SchedulesModule,
     PanelistsModule,
   ],
+  controllers: [AppController],
 })
 export class AppModule {}

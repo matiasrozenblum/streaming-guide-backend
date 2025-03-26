@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ChannelsController } from './channel.controller';
+import { ChannelsController } from './channels.controller';
 import { ChannelsService } from './channels.service';
 import { CreateChannelDto } from './dto/create-channel.dto';
 import { Channel } from './channels.entity';
