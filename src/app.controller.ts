@@ -16,7 +16,7 @@ export class AppController {
     @InjectRepository(Schedule)
     private readonly schedulesRepository: Repository<Schedule>,
     @InjectRepository(Panelist)
-    private readonly panelistsRepository: Repository<Schedule>,
+    private readonly panelistsRepository: Repository<Panelist>,
   ) {}
 
   @Post('seed')
@@ -73,19 +73,27 @@ export class AppController {
     await this.panelistsRepository.save([
       {
         name: 'Nico Occhiato',
-        program: programs[0], // Nadie Dice Nada
+        programs: [programs[0]],
       },
       {
         name: 'Flor Jazmín Peña',
-        program: programs[0],
+        programs: [programs[0]],
       },
       {
         name: 'Diego Leuco',
-        program: programs[1], // Antes Que Nadie
+        programs: [programs[1]],
       },
       {
         name: 'Cande Molfese',
-        program: programs[1],
+        programs: [programs[1]],
+      },
+      {
+        name: 'Migue Granados',
+        programs: [programs[2]],
+      },
+      {
+        name: 'Nati Jota',
+        programs: [programs[3]],
       },
     ]);
 
