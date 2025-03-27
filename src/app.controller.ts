@@ -53,6 +53,7 @@ async seed() {
       start_time: '07:00',
       end_time: '08:00',
       program: find('FM Luzu'),
+      logo_url: 'https://luzutv.com.ar/wp-content/uploads/2025/01/card-ndn-hover.jpg',
     })),
 
     // Antes Que Nadie: Lun-Vie
@@ -61,6 +62,7 @@ async seed() {
       start_time: '08:00',
       end_time: '10:00',
       program: find('Antes Que Nadie'),
+      logo_url: 'https://luzutv.com.ar/wp-content/uploads/2025/01/card-aqn-hover.jpg',
     })),
 
     // Nadie Dice Nada: Lun-Vie
@@ -69,6 +71,7 @@ async seed() {
       start_time: '10:00',
       end_time: '12:30',
       program: find('Nadie Dice Nada'),
+      logo_url: 'https://luzutv.com.ar/wp-content/uploads/2025/01/card-ndn-hover.jpg',
     })),
 
     // Patria y Familia: Lun-Vie
@@ -77,6 +80,7 @@ async seed() {
       start_time: '12:30',
       end_time: '14:30',
       program: find('Patria y Familia'),
+      logo_url: 'https://luzutv.com.ar/wp-content/uploads/2025/01/card-pyf-hover.jpg',
     })),
 
     // Se Fue Larga: Lun-Vie
@@ -85,6 +89,7 @@ async seed() {
       start_time: '14:30',
       end_time: '16:30',
       program: find('Se Fue Larga'),
+      logo_url: 'https://luzutv.com.ar/wp-content/uploads/2025/01/card-ndn-hover.jpg',
     })),
 
     // La Novela: Lun, Mié, Vie
@@ -93,6 +98,7 @@ async seed() {
       start_time: '16:30',
       end_time: '18:30',
       program: find('La Novela'),
+      logo_url: 'https://luzutv.com.ar/wp-content/uploads/2025/01/card-ln-hover.jpg',
     })),
 
     // Algo Va a Picar: Mar y Jue
@@ -101,6 +107,7 @@ async seed() {
       start_time: '16:30',
       end_time: '18:30',
       program: find('Algo Va a Picar'),
+      logo_url: 'https://luzutv.com.ar/wp-content/uploads/2025/01/card-ndn-hover.jpg',
     })),
   ]);
 

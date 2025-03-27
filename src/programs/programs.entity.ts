@@ -29,4 +29,7 @@ export class Program {
   @ManyToMany(() => Panelist, (panelist) => panelist.programs)
   @JoinTable()
   panelists: Panelist[];
+
+  @Column({ type: 'text', nullable: true })
+  logo_url: string;
 }
