@@ -8,10 +8,10 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ScraperService = void 0;
 const common_1 = require("@nestjs/common");
-const luzu_scraper_1 = require("./luzu.scraper");
+const vorterix_scraper_1 = require("./vorterix.scraper");
 let ScraperService = class ScraperService {
-    async scrapeLuzuSchedule() {
-        return await (0, luzu_scraper_1.scrapeLuzuSchedule)();
+    async scrapeVorterixSchedule() {
+        return (0, vorterix_scraper_1.scrapeVorterixSchedule)();
     }
 };
 exports.ScraperService = ScraperService;

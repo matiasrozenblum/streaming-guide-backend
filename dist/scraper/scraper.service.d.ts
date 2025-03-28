@@ -1,3 +1,3 @@
 export declare class ScraperService {
-    scrapeLuzuSchedule(): Promise<any>;
+    scrapeVorterixSchedule(): Promise<import("./vorterix.scraper").VorterixProgram[]>;
 }

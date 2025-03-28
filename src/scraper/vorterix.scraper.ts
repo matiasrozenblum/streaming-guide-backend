@@ -1,5 +1,4 @@
-import axios from 'axios';
-import * as cheerio from 'cheerio';
+import puppeteer from 'puppeteer';
 
 export interface VorterixProgram {
   name: string;
@@ -9,43 +8,50 @@ export interface VorterixProgram {
 }
 
 export async function scrapeVorterixSchedule(): Promise<VorterixProgram[]> {
-  const url = 'https://www.vorterix.com/programacion';
-  const { data: html } = await axios.get(url);
-  const $ = cheerio.load(html);
-  const result: VorterixProgram[] = [];
-
-  $('.programa').each((_, el) => {
-    const name = $(el).find('.nombre').text().trim();
-    const horario = $(el).find('.hora').text().trim(); // Ej: "09:00 a 11:00"
-    const diasRaw = $(el).find('.dias').text().trim(); // Ej: "LUNES A VIERNES" o "LUNES / MIÉRCOLES / VIERNES"
-
-    const [startTime, endTime] = horario.split(' a ').map(s => s.trim());
-
-    let days: string[] = [];
-    if (diasRaw.includes('A')) {
-      // Ej: "LUNES A VIERNES"
-      const diasOrden = ['LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO', 'DOMINGO'];
-      const [startDay, endDay] = diasRaw.split(' A ').map(d => d.trim());
-      const startIndex = diasOrden.indexOf(startDay);
-      const endIndex = diasOrden.indexOf(endDay);
-      if (startIndex !== -1 && endIndex !== -1) {
-        days = diasOrden.slice(startIndex, endIndex + 1);
-      }
-    } else if (diasRaw.includes('/')) {
-      // Ej: "LUNES / MIÉRCOLES / VIERNES"
-      days = diasRaw.split('/').map(d => d.trim());
-    } else {
-      // Ej: "DOMINGO"
-      days = [diasRaw.trim()];
-    }
-
-    result.push({
-      name,
-      days,
-      startTime,
-      endTime,
-    });
+  const browser = await puppeteer.launch({
+    headless: false,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    defaultViewport: null,
   });
 
-  return result;
+  const page = await browser.newPage();
+  await page.goto('https://www.vorterix.com/programacion', {
+    waitUntil: 'networkidle2',
+    timeout: 60000,
+  });
+
+  // Esperamos específicamente al selector correcto
+  await page.waitForSelector('.showP', { timeout: 15000 });
+
+  const bloques = await page.$$eval('.showP', (els) =>
+    els.map((el) => el.innerHTML)
+  );
+  console.log('🧱 InnerHTML de los bloques .showP:', bloques);
+
+  const data = await page.$$eval('.showP', (programas) => {
+    const results: { name: string; startTime: string; endTime: string; days: string[] }[] = [];
+  
+    for (const el of programas) {
+      const name = el.querySelector('h3')?.textContent?.trim() || '';
+      const horarioRaw = el.querySelector('h4')?.textContent?.trim() || '';
+  
+      if (!name || !horarioRaw.includes('-')) continue;
+  
+      const [startTime, endTime] = horarioRaw
+        .split('-')
+        .map((s) => s.trim());
+  
+      results.push({
+        name,
+        startTime,
+        endTime,
+        days: []
+      });
+    }
+  
+    return results;
+  });
+
+  await browser.close();
+  return data;
 }
