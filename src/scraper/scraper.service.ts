@@ -1,4 +1,5 @@
 import { InjectRepository } from '@nestjs/typeorm';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { Repository } from 'typeorm';
 import { Channel } from '../channels/channels.entity';
 import { Program } from '../programs/programs.entity';
@@ -16,6 +17,13 @@ export class ScraperService {
     @InjectRepository(Schedule)
     private readonly scheduleRepo: Repository<Schedule>,
   ) {}
+
+  @Cron(CronExpression.EVERY_WEEK)
+  async handleWeeklyVorterixUpdate() {
+    console.log('⏰ Ejecutando actualización semanal de Vorterix...');
+    await this.insertVorterixSchedule();
+    console.log('✅ Actualización semanal de Vorterix completada');
+  }
 
   async insertVorterixSchedule() {
     const data: VorterixProgram[] = await scrapeVorterixSchedule();

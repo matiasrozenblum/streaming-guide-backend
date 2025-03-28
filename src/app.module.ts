@@ -11,9 +11,11 @@ import { SchedulesModule } from './schedules/schedules.module';
 import { PanelistsModule } from './panelists/panelists.module';
 import { ScraperModule } from './scraper/scraper.module';
 import { AppController } from './app.controller';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ConfigModule.forRoot(),
     TypeOrmModule.forRoot({
       type: 'postgres',
