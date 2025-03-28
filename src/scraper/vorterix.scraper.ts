@@ -20,38 +20,49 @@ export async function scrapeVorterixSchedule(): Promise<VorterixProgram[]> {
     timeout: 60000,
   });
 
-  // Esperamos específicamente al selector correcto
   await page.waitForSelector('.showP', { timeout: 15000 });
 
-  const bloques = await page.$$eval('.showP', (els) =>
-    els.map((el) => el.innerHTML)
-  );
-  console.log('🧱 InnerHTML de los bloques .showP:', bloques);
+  const data = await page.$$eval(
+    '.mb-2.md\\:flex-1.md\\:min-w-\\[200px\\]',
+    (columns) => {
+      const results: { name: string; startTime: string; endTime: string; days: string[] }[] = [];
 
-  const data = await page.$$eval('.showP', (programas) => {
-    const results: { name: string; startTime: string; endTime: string; days: string[] }[] = [];
-  
-    for (const el of programas) {
-      const name = el.querySelector('h3')?.textContent?.trim() || '';
-      const horarioRaw = el.querySelector('h4')?.textContent?.trim() || '';
-  
-      if (!name || !horarioRaw.includes('-')) continue;
-  
-      const [startTime, endTime] = horarioRaw
-        .split('-')
-        .map((s) => s.trim());
-  
-      results.push({
-        name,
-        startTime,
-        endTime,
-        days: []
+      columns.forEach((column) => {
+        const dayBlock = column.querySelector('.title.bg-primary');
+        const dayName = dayBlock?.querySelector('h2')?.textContent?.trim().toUpperCase() || '';
+        const programs = column.querySelectorAll('.showP');
+
+        programs.forEach((block) => {
+          const name = block.querySelector('h3')?.textContent?.trim() || '';
+          const horarioRaw = block.querySelector('h4')?.textContent?.trim() || '';
+
+          if (!name || !horarioRaw.includes('-')) return;
+
+          const [startTime, endTime] = horarioRaw.split('-').map((s) => s.trim());
+
+          results.push({
+            name,
+            startTime,
+            endTime,
+            days: [dayName],
+          });
+        });
       });
+
+      return results;
     }
-  
-    return results;
-  });
+  );
 
   await browser.close();
-  return data;
+  const grouped = data.reduce((acc, curr) => {
+    const key = `${curr.name}_${curr.startTime}_${curr.endTime}`;
+    if (!acc[key]) {
+      acc[key] = { ...curr };
+    } else {
+      acc[key].days.push(...curr.days);
+    }
+    return acc;
+  }, {} as Record<string, VorterixProgram>);
+  
+  return Object.values(grouped);
 }

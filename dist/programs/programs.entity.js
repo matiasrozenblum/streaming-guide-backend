@@ -61,7 +61,7 @@ __decorate([
 ], Program.prototype, "panelists", void 0);
 __decorate([
     (0, typeorm_1.Column)({ type: 'text', nullable: true }),
-    __metadata("design:type", String)
+    __metadata("design:type", Object)
 ], Program.prototype, "logo_url", void 0);
 exports.Program = Program = __decorate([
     (0, typeorm_1.Entity)()

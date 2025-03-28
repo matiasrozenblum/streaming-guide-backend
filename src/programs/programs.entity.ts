@@ -31,5 +31,5 @@ export class Program {
   panelists: Panelist[];
 
   @Column({ type: 'text', nullable: true })
-  logo_url: string;
+  logo_url: string | null;
 }

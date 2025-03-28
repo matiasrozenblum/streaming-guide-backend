@@ -10,5 +10,5 @@ export declare class Program {
     channel: Channel;
     schedules: Schedule[];
     panelists: Panelist[];
-    logo_url: string;
+    logo_url: string | null;
 }

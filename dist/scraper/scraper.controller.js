@@ -17,17 +17,17 @@ let ScraperController = class ScraperController {
     constructor(scraperService) {
         this.scraperService = scraperService;
     }
-    async scrapeVorterix() {
-        return this.scraperService.scrapeVorterixSchedule();
+    async insertVorterixSchedule() {
+        return this.scraperService.insertVorterixSchedule();
     }
 };
 exports.ScraperController = ScraperController;
 __decorate([
-    (0, common_1.Get)('vorterix'),
+    (0, common_1.Post)('vorterix/insert'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
-], ScraperController.prototype, "scrapeVorterix", null);
+], ScraperController.prototype, "insertVorterixSchedule", null);
 exports.ScraperController = ScraperController = __decorate([
     (0, common_1.Controller)('scrape'),
     __metadata("design:paramtypes", [scraper_service_1.ScraperService])
