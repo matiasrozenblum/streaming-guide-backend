@@ -1,42 +1,51 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 
-export async function scrapeVorterixSchedule() {
-  const res = await axios.get('https://www.vorterix.com/programacion');
-  const $ = cheerio.load(res.data);
+export interface VorterixProgram {
+  name: string;
+  days: string[]; // Ej: ["LUNES", "MIÉRCOLES"]
+  startTime: string; // "HH:mm"
+  endTime: string;   // "HH:mm"
+}
 
-  const data: any[] = [];
+export async function scrapeVorterixSchedule(): Promise<VorterixProgram[]> {
+  const url = 'https://www.vorterix.com/programacion';
+  const { data: html } = await axios.get(url);
+  const $ = cheerio.load(html);
+  const result: VorterixProgram[] = [];
 
-  $('.programacion .programa').each((_, el) => {
-    const name = $(el).find('.titulo').text().trim();
-    const time = $(el).find('.hora').text().trim(); // ej: 08:00 a 10:00
-    const [start_time, end_time] = time.split(' a ').map(t => t.trim());
+  $('.programa').each((_, el) => {
+    const name = $(el).find('.nombre').text().trim();
+    const horario = $(el).find('.hora').text().trim(); // Ej: "09:00 a 11:00"
+    const diasRaw = $(el).find('.dias').text().trim(); // Ej: "LUNES A VIERNES" o "LUNES / MIÉRCOLES / VIERNES"
 
-    const days = $(el).find('.dias').text().toLowerCase(); // ej: lunes a viernes
+    const [startTime, endTime] = horario.split(' a ').map(s => s.trim());
 
-    const mappedDays = mapDaysToWeekdays(days);
+    let days: string[] = [];
+    if (diasRaw.includes('A')) {
+      // Ej: "LUNES A VIERNES"
+      const diasOrden = ['LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO', 'DOMINGO'];
+      const [startDay, endDay] = diasRaw.split(' A ').map(d => d.trim());
+      const startIndex = diasOrden.indexOf(startDay);
+      const endIndex = diasOrden.indexOf(endDay);
+      if (startIndex !== -1 && endIndex !== -1) {
+        days = diasOrden.slice(startIndex, endIndex + 1);
+      }
+    } else if (diasRaw.includes('/')) {
+      // Ej: "LUNES / MIÉRCOLES / VIERNES"
+      days = diasRaw.split('/').map(d => d.trim());
+    } else {
+      // Ej: "DOMINGO"
+      days = [diasRaw.trim()];
+    }
 
-    mappedDays.forEach(day => {
-      data.push({
-        name,
-        start_time,
-        end_time,
-        day_of_week: day,
-      });
+    result.push({
+      name,
+      days,
+      startTime,
+      endTime,
     });
   });
 
-  return data;
-}
-
-function mapDaysToWeekdays(text: string): string[] {
-  if (text.includes('lunes a viernes')) return ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
-  if (text.includes('lunes')) return ['monday'];
-  if (text.includes('martes')) return ['tuesday'];
-  if (text.includes('miércoles') || text.includes('miercoles')) return ['wednesday'];
-  if (text.includes('jueves')) return ['thursday'];
-  if (text.includes('viernes')) return ['friday'];
-  if (text.includes('sábado')) return ['saturday'];
-  if (text.includes('domingo')) return ['sunday'];
-  return [];
+  return result;
 }
