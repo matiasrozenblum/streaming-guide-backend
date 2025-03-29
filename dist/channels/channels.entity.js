@@ -35,7 +35,7 @@ __decorate([
 ], Channel.prototype, "streaming_url", void 0);
 __decorate([
     (0, typeorm_1.Column)({ type: 'text', nullable: true }),
-    __metadata("design:type", String)
+    __metadata("design:type", Object)
 ], Channel.prototype, "logo_url", void 0);
 __decorate([
     (0, typeorm_1.Column)({ type: 'text', nullable: true }),

@@ -20,12 +20,14 @@ const schedules_module_1 = require("./schedules/schedules.module");
 const panelists_module_1 = require("./panelists/panelists.module");
 const scraper_module_1 = require("./scraper/scraper.module");
 const app_controller_1 = require("./app.controller");
+const schedule_1 = require("@nestjs/schedule");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
 exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
         imports: [
+            schedule_1.ScheduleModule.forRoot(),
             config_1.ConfigModule.forRoot(),
             typeorm_1.TypeOrmModule.forRoot({
                 type: 'postgres',

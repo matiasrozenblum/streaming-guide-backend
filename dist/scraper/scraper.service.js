@@ -14,6 +14,7 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ScraperService = void 0;
 const typeorm_1 = require("@nestjs/typeorm");
+const schedule_1 = require("@nestjs/schedule");
 const typeorm_2 = require("typeorm");
 const channels_entity_1 = require("../channels/channels.entity");
 const programs_entity_1 = require("../programs/programs.entity");
@@ -28,6 +29,11 @@ let ScraperService = class ScraperService {
         this.channelRepo = channelRepo;
         this.programRepo = programRepo;
         this.scheduleRepo = scheduleRepo;
+    }
+    async handleWeeklyVorterixUpdate() {
+        console.log('⏰ Ejecutando actualización semanal de Vorterix...');
+        await this.insertVorterixSchedule();
+        console.log('✅ Actualización semanal de Vorterix completada');
     }
     async insertVorterixSchedule() {
         const data = await (0, vorterix_scraper_1.scrapeVorterixSchedule)();
@@ -69,6 +75,12 @@ let ScraperService = class ScraperService {
     }
 };
 exports.ScraperService = ScraperService;
+__decorate([
+    (0, schedule_1.Cron)(schedule_1.CronExpression.EVERY_WEEK),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], ScraperService.prototype, "handleWeeklyVorterixUpdate", null);
 exports.ScraperService = ScraperService = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, typeorm_1.InjectRepository)(channels_entity_1.Channel)),

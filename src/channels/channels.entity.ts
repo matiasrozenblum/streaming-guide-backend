@@ -13,7 +13,7 @@ export class Channel {
   streaming_url: string;
 
   @Column({ type: 'text', nullable: true })
-  logo_url: string;
+  logo_url: string | null;
 
   @Column({ type: 'text', nullable: true })
   description: string;

@@ -21,96 +21,115 @@ export class AppController {
   ) {}
 
   @Post('seed')
-async seed() {
-  await this.dataSource.query('DELETE FROM "program_panelists_panelist"');
-  await this.panelistsRepository.delete({});
-  await this.schedulesRepository.delete({});
-  await this.programsRepository.delete({});
-  await this.channelsRepository.delete({});
-
-  const luzu = await this.channelsRepository.save({
-    name: 'Luzu TV',
-    description: 'Canal de streaming de Luzu',
-    logo_url: 'https://upload.wikimedia.org/wikipedia/commons/4/4f/Luzu_TV_logo.png',
-  });
-
-  const programs = await this.programsRepository.save([
-    { name: 'Se Fue Larga', description: '', start_time: '14:30', end_time: '16:30', channel: luzu },
-    { name: 'La Novela', description: '', start_time: '16:30', end_time: '18:30', channel: luzu },
-    { name: 'FM Luzu', description: '', start_time: '07:00', end_time: '08:00', channel: luzu },
-    { name: 'Patria y Familia', description: '', start_time: '12:30', end_time: '14:30', channel: luzu },
-    { name: 'Algo Va a Picar', description: '', start_time: '16:30', end_time: '18:30', channel: luzu },
-    { name: 'Antes Que Nadie', description: '', start_time: '08:00', end_time: '10:00', channel: luzu },
-    { name: 'Nadie Dice Nada', description: '', start_time: '10:00', end_time: '12:30', channel: luzu },
-  ]);
-
-  const find = (name: string) => programs.find(p => p.name === name)!;
-
-  await this.schedulesRepository.save([
-    // FM Luzu: Lun-Vie
-    ...['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].map(day => ({
-      day_of_week: day,
-      start_time: '07:00',
-      end_time: '08:00',
-      program: find('FM Luzu'),
-      logo_url: 'https://luzutv.com.ar/wp-content/uploads/2025/01/card-ndn-hover.jpg',
-    })),
-
-    // Antes Que Nadie: Lun-Vie
-    ...['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].map(day => ({
-      day_of_week: day,
-      start_time: '08:00',
-      end_time: '10:00',
-      program: find('Antes Que Nadie'),
-      logo_url: 'https://luzutv.com.ar/wp-content/uploads/2025/01/card-aqn-hover.jpg',
-    })),
-
-    // Nadie Dice Nada: Lun-Vie
-    ...['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].map(day => ({
-      day_of_week: day,
-      start_time: '10:00',
-      end_time: '12:30',
-      program: find('Nadie Dice Nada'),
-      logo_url: 'https://luzutv.com.ar/wp-content/uploads/2025/01/card-ndn-hover.jpg',
-    })),
-
-    // Patria y Familia: Lun-Vie
-    ...['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].map(day => ({
-      day_of_week: day,
-      start_time: '12:30',
-      end_time: '14:30',
-      program: find('Patria y Familia'),
-      logo_url: 'https://luzutv.com.ar/wp-content/uploads/2025/01/card-pyf-hover.jpg',
-    })),
-
-    // Se Fue Larga: Lun-Vie
-    ...['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].map(day => ({
-      day_of_week: day,
-      start_time: '14:30',
-      end_time: '16:30',
-      program: find('Se Fue Larga'),
-      logo_url: 'https://luzutv.com.ar/wp-content/uploads/2025/01/card-ndn-hover.jpg',
-    })),
-
-    // La Novela: Lun, Mié, Vie
-    ...['monday', 'wednesday', 'friday'].map(day => ({
-      day_of_week: day,
-      start_time: '16:30',
-      end_time: '18:30',
-      program: find('La Novela'),
-      logo_url: 'https://luzutv.com.ar/wp-content/uploads/2025/01/card-ln-hover.jpg',
-    })),
-
-    // Algo Va a Picar: Mar y Jue
-    ...['tuesday', 'thursday'].map(day => ({
-      day_of_week: day,
-      start_time: '16:30',
-      end_time: '18:30',
-      program: find('Algo Va a Picar'),
-      logo_url: 'https://luzutv.com.ar/wp-content/uploads/2025/01/card-ndn-hover.jpg',
-    })),
-  ]);
-
-  return { success: true };
+  async seed() {
+    const existingOlga = await this.channelsRepository.findOne({ where: { name: 'Olga' } });
+    if (!existingOlga) {
+      const olga = await this.channelsRepository.save({
+        name: 'Olga',
+        description: 'Canal de streaming Olga',
+        logo_url: null,
+      });
+  
+      const panelistsMap = {
+        'Paraíso Fiscal': ['Fer Dente', 'Luciana Geuna', 'Martín Reich', 'Tania Wed'],
+        'Sería Increíble': ['Nati Jota', 'Damián Betular', 'Homero Pettinato', 'Eial Moldavsky'],
+        'Soñé que Volaba': ['Migue Granados', 'Marti Benza', 'Lucas Fridman', 'Evitta Luna', 'Benja Amadeo'],
+        'El Fin del Mundo': ['Lizy Tagliani', 'Toto Kirzner', 'Cami Jara'],
+        'Tapados de Laburo': ['Nachito Elizalde', 'Paula Chaves', 'Luli González', 'Evelyn Botto', 'Mortedor'],
+        'TDT': ['Marti Benza', 'Cami Jara', 'Gian Odoguari', 'Nico Ferrero'],
+        'Mi Primo es Así': ['Martín Rechimuzzi', 'Toto Kirzner', 'Evelyn Botto', 'Noe Custodio'],
+        'Gol Gana': ['Gastón Edul', 'Pollo Álvarez', 'Ariel Senosiain', 'Pedro Alfonso', 'Coker'],
+      };
+  
+      const olgaPrograms = await Promise.all(
+        Object.entries(panelistsMap).map(async ([name, panelistNames]) => {
+          const panelists = await this.panelistsRepository.save(
+            panelistNames.map((name) => ({ name }))
+          );
+          const [start_time, end_time] = (() => {
+            switch (name) {
+              case 'Paraíso Fiscal': return ['06:00', '08:00'];
+              case 'Sería Increíble': return ['08:00', '10:00'];
+              case 'Soñé que Volaba': return ['10:00', '12:00'];
+              case 'El Fin del Mundo': return ['12:00', '14:00'];
+              case 'Tapados de Laburo': return ['14:00', '16:00'];
+              case 'TDT': return ['16:00', '18:00'];
+              case 'Mi Primo es Así': return ['16:00', '18:00'];
+              case 'Gol Gana': return ['18:00', '20:00'];
+              default: return ['00:00', '00:00'];
+            }
+          })();
+          return this.programsRepository.save({
+            name,
+            description: '',
+            start_time,
+            end_time,
+            channel: olga,
+            panelists,
+          });
+        })
+      );
+  
+      const findOlga = (name: string) => olgaPrograms.find(p => p.name === name)!;
+  
+      await this.schedulesRepository.save([
+        // Lunes a Viernes
+        ...['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].flatMap(day => [
+          {
+            day_of_week: day,
+            start_time: '06:00',
+            end_time: '08:00',
+            program: findOlga('Paraíso Fiscal'),
+          },
+          {
+            day_of_week: day,
+            start_time: '08:00',
+            end_time: '10:00',
+            program: findOlga('Sería Increíble'),
+          },
+          {
+            day_of_week: day,
+            start_time: '10:00',
+            end_time: '12:00',
+            program: findOlga('Soñé que Volaba'),
+          },
+          {
+            day_of_week: day,
+            start_time: '12:00',
+            end_time: '14:00',
+            program: findOlga('El Fin del Mundo'),
+          },
+          {
+            day_of_week: day,
+            start_time: '14:00',
+            end_time: '16:00',
+            program: findOlga('Tapados de Laburo'),
+          },
+        ]),
+        // TDT: Lunes y Miércoles
+        ...['monday', 'wednesday'].map(day => ({
+          day_of_week: day,
+          start_time: '16:00',
+          end_time: '18:00',
+          program: findOlga('TDT'),
+        })),
+        // Mi Primo es Así: Jueves
+        {
+          day_of_week: 'thursday',
+          start_time: '16:00',
+          end_time: '18:00',
+          program: findOlga('Mi Primo es Así'),
+        },
+        // Gol Gana: Martes
+        {
+          day_of_week: 'tuesday',
+          start_time: '18:00',
+          end_time: '20:00',
+          program: findOlga('Gol Gana'),
+        },
+      ]);
+    }
+  
+    return { message: 'Seed completed for Blender and Olga (only if not already present).' };
 }
 }

@@ -7,6 +7,7 @@ export declare class ScraperService {
     private readonly programRepo;
     private readonly scheduleRepo;
     constructor(channelRepo: Repository<Channel>, programRepo: Repository<Program>, scheduleRepo: Repository<Schedule>);
+    handleWeeklyVorterixUpdate(): Promise<void>;
     insertVorterixSchedule(): Promise<{
         success: boolean;
     }>;

@@ -11,6 +11,6 @@ export declare class AppController {
     private readonly dataSource;
     constructor(channelsRepository: Repository<Channel>, programsRepository: Repository<Program>, schedulesRepository: Repository<Schedule>, panelistsRepository: Repository<Panelist>, dataSource: DataSource);
     seed(): Promise<{
-        success: boolean;
+        message: string;
     }>;
 }
