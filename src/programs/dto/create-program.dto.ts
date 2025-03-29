@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateProgramDto {
@@ -21,4 +21,8 @@ export class CreateProgramDto {
   @IsString()
   @IsNotEmpty()
   endTime: string;
+
+  @IsOptional()
+  @IsString()
+  youtube_url?: string;
 }

@@ -17,6 +17,7 @@ class CreateProgramDto {
     description;
     startTime;
     endTime;
+    youtube_url;
 }
 exports.CreateProgramDto = CreateProgramDto;
 __decorate([
@@ -43,4 +44,9 @@ __decorate([
     (0, class_validator_1.IsNotEmpty)(),
     __metadata("design:type", String)
 ], CreateProgramDto.prototype, "endTime", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CreateProgramDto.prototype, "youtube_url", void 0);
 //# sourceMappingURL=create-program.dto.js.map

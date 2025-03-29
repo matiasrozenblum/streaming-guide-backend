@@ -32,4 +32,7 @@ export class Program {
 
   @Column({ type: 'text', nullable: true })
   logo_url: string | null;
+
+  @Column({ type: 'text', nullable: true })
+youtube_url: string | null;
 }

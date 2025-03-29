@@ -11,4 +11,5 @@ export declare class Program {
     schedules: Schedule[];
     panelists: Panelist[];
     logo_url: string | null;
+    youtube_url: string | null;
 }

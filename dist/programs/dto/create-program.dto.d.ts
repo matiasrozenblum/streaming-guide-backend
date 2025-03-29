@@ -3,4 +3,5 @@ export declare class CreateProgramDto {
     description: string;
     startTime: string;
     endTime: string;
+    youtube_url?: string;
 }
