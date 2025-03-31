@@ -7,6 +7,11 @@ export class ScraperController {
 
   @Post('vorterix/insert')
   async insertVorterixSchedule() {
-  return this.scraperService.insertVorterixSchedule();
-}
+    return this.scraperService.insertVorterixSchedule();
+  }
+
+  @Get('gelatina/insert')
+  insertGelatinaSchedule() {
+    return this.scraperService.insertGelatinaSchedule();
+  }
 }

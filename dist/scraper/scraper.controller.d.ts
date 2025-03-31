@@ -5,4 +5,7 @@ export declare class ScraperController {
     insertVorterixSchedule(): Promise<{
         success: boolean;
     }>;
+    insertGelatinaSchedule(): Promise<{
+        success: boolean;
+    }>;
 }

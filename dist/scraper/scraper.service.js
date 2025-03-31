@@ -20,6 +20,7 @@ const channels_entity_1 = require("../channels/channels.entity");
 const programs_entity_1 = require("../programs/programs.entity");
 const schedules_entity_1 = require("../schedules/schedules.entity");
 const vorterix_scraper_1 = require("./vorterix.scraper");
+const gelatina_scraper_1 = require("./gelatina.scraper");
 const common_1 = require("@nestjs/common");
 let ScraperService = class ScraperService {
     channelRepo;
@@ -65,6 +66,50 @@ let ScraperService = class ScraperService {
                     await this.scheduleRepo.save({
                         program,
                         day_of_week: day.toLowerCase(),
+                        start_time: item.startTime,
+                        end_time: item.endTime,
+                    });
+                }
+            }
+        }
+        return { success: true };
+    }
+    async insertGelatinaSchedule() {
+        const data = await (0, gelatina_scraper_1.scrapeGelatinaSchedule)();
+        const channelName = 'Gelatina';
+        let channel = await this.channelRepo.findOne({ where: { name: channelName } });
+        if (!channel) {
+            channel = this.channelRepo.create({ name: channelName, logo_url: 'https://gelatina.com.ar/wp-content/uploads/2025/02/Gelatina-2025.png' });
+            await this.channelRepo.save(channel);
+        }
+        for (const item of data) {
+            let program = await this.programRepo.findOne({ where: { name: item.name, channel: { id: channel.id } }, relations: ['channel'] });
+            console.log('Program:', program);
+            if (!program) {
+                program = this.programRepo.create({
+                    name: item.name,
+                    channel,
+                    logo_url: item.logoUrl || null,
+                    panelists: [],
+                });
+                await this.programRepo.save(program);
+            }
+            else {
+            }
+            for (const day of item.days) {
+                const dayLower = day.toLowerCase();
+                const exists = await this.scheduleRepo.findOne({
+                    where: {
+                        program: { id: program.id },
+                        day_of_week: dayLower,
+                    },
+                    relations: ['program'],
+                });
+                console.log('Schedule:', exists);
+                if (!exists) {
+                    await this.scheduleRepo.save({
+                        program,
+                        day_of_week: dayLower,
                         start_time: item.startTime,
                         end_time: item.endTime,
                     });

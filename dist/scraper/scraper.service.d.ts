@@ -11,4 +11,7 @@ export declare class ScraperService {
     insertVorterixSchedule(): Promise<{
         success: boolean;
     }>;
+    insertGelatinaSchedule(): Promise<{
+        success: boolean;
+    }>;
 }
