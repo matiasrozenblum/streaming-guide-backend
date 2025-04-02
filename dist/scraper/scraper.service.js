@@ -21,6 +21,7 @@ const programs_entity_1 = require("../programs/programs.entity");
 const schedules_entity_1 = require("../schedules/schedules.entity");
 const vorterix_scraper_1 = require("./vorterix.scraper");
 const gelatina_scraper_1 = require("./gelatina.scraper");
+const urbana_scraper_1 = require("./urbana.scraper");
 const common_1 = require("@nestjs/common");
 let ScraperService = class ScraperService {
     channelRepo;
@@ -35,6 +36,11 @@ let ScraperService = class ScraperService {
         console.log('⏰ Ejecutando actualización semanal de Vorterix...');
         await this.insertVorterixSchedule();
         console.log('✅ Actualización semanal de Vorterix completada');
+    }
+    async handleWeeklyGelatinaUpdate() {
+        console.log('⏰ Ejecutando actualización semanal de Gelatina...');
+        await this.insertGelatinaSchedule();
+        console.log('✅ Actualización semanal de Gelatina completada');
     }
     async insertVorterixSchedule() {
         const data = await (0, vorterix_scraper_1.scrapeVorterixSchedule)();
@@ -97,7 +103,16 @@ let ScraperService = class ScraperService {
             else {
             }
             for (const day of item.days) {
-                const dayLower = day.toLowerCase();
+                const dayTranslations = {
+                    lunes: 'monday',
+                    martes: 'tuesday',
+                    miércoles: 'wednesday',
+                    jueves: 'thursday',
+                    viernes: 'friday',
+                    sábado: 'saturday',
+                    domingo: 'sunday',
+                };
+                const dayLower = dayTranslations[day.toLowerCase()] || day.toLowerCase();
                 const exists = await this.scheduleRepo.findOne({
                     where: {
                         program: { id: program.id },
@@ -118,6 +133,63 @@ let ScraperService = class ScraperService {
         }
         return { success: true };
     }
+    async insertUrbanaSchedule() {
+        const data = await (0, urbana_scraper_1.scrapeUrbanaPlaySchedule)();
+        const channelName = 'Urbana Play';
+        let channel = await this.channelRepo.findOne({ where: { name: channelName } });
+        if (!channel) {
+            channel = this.channelRepo.create({
+                name: channelName,
+                logo_url: 'https://urbanaplayfm.com/wp-content/uploads/2021/03/LOGO-URBANA-play-nuevo.png',
+            });
+            await this.channelRepo.save(channel);
+        }
+        for (const item of data) {
+            let program = await this.programRepo.findOne({
+                where: { name: item.name, channel: { id: channel.id } },
+                relations: ['channel'],
+            });
+            if (!program) {
+                program = this.programRepo.create({
+                    name: item.name,
+                    channel,
+                    logo_url: item.logoUrl || null,
+                    panelists: [],
+                });
+                await this.programRepo.save(program);
+            }
+            for (const day of item.days) {
+                const dayTranslations = {
+                    lunes: 'monday',
+                    martes: 'tuesday',
+                    miércoles: 'wednesday',
+                    miercoles: 'wednesday',
+                    jueves: 'thursday',
+                    viernes: 'friday',
+                    sábado: 'saturday',
+                    sabado: 'saturday',
+                    domingo: 'sunday',
+                };
+                const dayLower = dayTranslations[day.toLowerCase()] || day.toLowerCase();
+                const exists = await this.scheduleRepo.findOne({
+                    where: {
+                        program: { id: program.id },
+                        day_of_week: dayLower,
+                    },
+                    relations: ['program'],
+                });
+                if (!exists) {
+                    await this.scheduleRepo.save({
+                        program,
+                        day_of_week: dayLower,
+                        start_time: item.startTime.replace('.', ':'),
+                        end_time: item.endTime.replace('.', ':'),
+                    });
+                }
+            }
+        }
+        return { success: true };
+    }
 };
 exports.ScraperService = ScraperService;
 __decorate([
@@ -126,6 +198,12 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], ScraperService.prototype, "handleWeeklyVorterixUpdate", null);
+__decorate([
+    (0, schedule_1.Cron)(schedule_1.CronExpression.EVERY_WEEK),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], ScraperService.prototype, "handleWeeklyGelatinaUpdate", null);
 exports.ScraperService = ScraperService = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, typeorm_1.InjectRepository)(channels_entity_1.Channel)),

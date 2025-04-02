@@ -8,10 +8,14 @@ export declare class ScraperService {
     private readonly scheduleRepo;
     constructor(channelRepo: Repository<Channel>, programRepo: Repository<Program>, scheduleRepo: Repository<Schedule>);
     handleWeeklyVorterixUpdate(): Promise<void>;
+    handleWeeklyGelatinaUpdate(): Promise<void>;
     insertVorterixSchedule(): Promise<{
         success: boolean;
     }>;
     insertGelatinaSchedule(): Promise<{
+        success: boolean;
+    }>;
+    insertUrbanaSchedule(): Promise<{
         success: boolean;
     }>;
 }

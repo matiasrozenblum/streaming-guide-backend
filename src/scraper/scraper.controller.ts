@@ -14,4 +14,9 @@ export class ScraperController {
   insertGelatinaSchedule() {
     return this.scraperService.insertGelatinaSchedule();
   }
+
+  @Get('urbana/insert')
+  scrapeUrbanaPlaySchedule() {
+    return this.scraperService.insertUrbanaSchedule();
+  }
 }

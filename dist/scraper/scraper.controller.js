@@ -23,6 +23,9 @@ let ScraperController = class ScraperController {
     insertGelatinaSchedule() {
         return this.scraperService.insertGelatinaSchedule();
     }
+    scrapeUrbanaPlaySchedule() {
+        return this.scraperService.insertUrbanaSchedule();
+    }
 };
 exports.ScraperController = ScraperController;
 __decorate([
@@ -37,6 +40,12 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], ScraperController.prototype, "insertGelatinaSchedule", null);
+__decorate([
+    (0, common_1.Get)('urbana/insert'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], ScraperController.prototype, "scrapeUrbanaPlaySchedule", null);
 exports.ScraperController = ScraperController = __decorate([
     (0, common_1.Controller)('scrape'),
     __metadata("design:paramtypes", [scraper_service_1.ScraperService])

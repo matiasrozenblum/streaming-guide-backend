@@ -8,4 +8,7 @@ export declare class ScraperController {
     insertGelatinaSchedule(): Promise<{
         success: boolean;
     }>;
+    scrapeUrbanaPlaySchedule(): Promise<{
+        success: boolean;
+    }>;
 }
