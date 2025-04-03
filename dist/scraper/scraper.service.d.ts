@@ -9,6 +9,7 @@ export declare class ScraperService {
     constructor(channelRepo: Repository<Channel>, programRepo: Repository<Program>, scheduleRepo: Repository<Schedule>);
     handleWeeklyVorterixUpdate(): Promise<void>;
     handleWeeklyGelatinaUpdate(): Promise<void>;
+    handleWeeklyUrbanaUpdate(): Promise<void>;
     insertVorterixSchedule(): Promise<{
         success: boolean;
     }>;

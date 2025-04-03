@@ -2,6 +2,17 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.scrapeVorterixSchedule = scrapeVorterixSchedule;
 const puppeteer_1 = require("puppeteer");
+const dayOrder = ['LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO', 'DOMINGO'];
+function getNextDay(day) {
+    const index = dayOrder.indexOf(day.toUpperCase());
+    if (index === -1)
+        return day;
+    return dayOrder[(index + 1) % 7];
+}
+function toMinutes(time) {
+    const [h, m] = time.split(':').map(Number);
+    return h * 60 + m;
+}
 async function scrapeVorterixSchedule() {
     const browser = await puppeteer_1.default.launch({
         headless: false,
@@ -37,7 +48,31 @@ async function scrapeVorterixSchedule() {
         return results;
     });
     await browser.close();
-    const grouped = data.reduce((acc, curr) => {
+    const normalized = [];
+    for (const item of data) {
+        const startMin = toMinutes(item.startTime);
+        const endMin = toMinutes(item.endTime);
+        if (endMin <= startMin) {
+            for (const day of item.days) {
+                normalized.push({
+                    name: item.name,
+                    startTime: item.startTime,
+                    endTime: '23:59',
+                    days: [day],
+                });
+                normalized.push({
+                    name: item.name,
+                    startTime: '00:00',
+                    endTime: item.endTime,
+                    days: [getNextDay(day)],
+                });
+            }
+        }
+        else {
+            normalized.push(item);
+        }
+    }
+    const grouped = normalized.reduce((acc, curr) => {
         const key = `${curr.name}_${curr.startTime}_${curr.endTime}`;
         if (!acc[key]) {
             acc[key] = { ...curr };

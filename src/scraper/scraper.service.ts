@@ -66,10 +66,23 @@ async handleWeeklyUrbanaUpdate() {
       }
 
       for (const day of item.days) {
+        const dayTranslations: Record<string, string> = {
+          lunes: 'monday',
+          martes: 'tuesday',
+          miércoles: 'wednesday',
+          miercoles: 'wednesday',
+          jueves: 'thursday',
+          viernes: 'friday',
+          sábado: 'saturday',
+          sabado: 'saturday',
+          domingo: 'sunday',
+        };
+
+        const dayLower = dayTranslations[day.toLowerCase()] || day.toLowerCase();
         const existingSchedule = await this.scheduleRepo.findOne({
           where: {
             program: { id: program.id },
-            day_of_week: day,
+            day_of_week: dayLower,
           },
           relations: ['program'],
         });
@@ -77,7 +90,7 @@ async handleWeeklyUrbanaUpdate() {
         if (!existingSchedule) {
           await this.scheduleRepo.save({
             program,
-            day_of_week: day.toLowerCase(),
+            day_of_week: dayLower,
             start_time: item.startTime,
             end_time: item.endTime,
           });
@@ -119,9 +132,11 @@ async handleWeeklyUrbanaUpdate() {
           lunes: 'monday',
           martes: 'tuesday',
           miércoles: 'wednesday',
+          miercoles: 'wednesday',
           jueves: 'thursday',
           viernes: 'friday',
           sábado: 'saturday',
+          sabado: 'saturday',
           domingo: 'sunday',
         };
 

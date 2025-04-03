@@ -42,6 +42,11 @@ let ScraperService = class ScraperService {
         await this.insertGelatinaSchedule();
         console.log('✅ Actualización semanal de Gelatina completada');
     }
+    async handleWeeklyUrbanaUpdate() {
+        console.log('⏰ Ejecutando actualización semanal de Urbana Play...');
+        await this.insertUrbanaSchedule();
+        console.log('✅ Actualización semanal de Urbana completada');
+    }
     async insertVorterixSchedule() {
         const data = await (0, vorterix_scraper_1.scrapeVorterixSchedule)();
         const channelName = 'Vorterix';
@@ -61,17 +66,29 @@ let ScraperService = class ScraperService {
                 await this.programRepo.save(program);
             }
             for (const day of item.days) {
+                const dayTranslations = {
+                    lunes: 'monday',
+                    martes: 'tuesday',
+                    miércoles: 'wednesday',
+                    miercoles: 'wednesday',
+                    jueves: 'thursday',
+                    viernes: 'friday',
+                    sábado: 'saturday',
+                    sabado: 'saturday',
+                    domingo: 'sunday',
+                };
+                const dayLower = dayTranslations[day.toLowerCase()] || day.toLowerCase();
                 const existingSchedule = await this.scheduleRepo.findOne({
                     where: {
                         program: { id: program.id },
-                        day_of_week: day,
+                        day_of_week: dayLower,
                     },
                     relations: ['program'],
                 });
                 if (!existingSchedule) {
                     await this.scheduleRepo.save({
                         program,
-                        day_of_week: day.toLowerCase(),
+                        day_of_week: dayLower,
                         start_time: item.startTime,
                         end_time: item.endTime,
                     });
@@ -107,9 +124,11 @@ let ScraperService = class ScraperService {
                     lunes: 'monday',
                     martes: 'tuesday',
                     miércoles: 'wednesday',
+                    miercoles: 'wednesday',
                     jueves: 'thursday',
                     viernes: 'friday',
                     sábado: 'saturday',
+                    sabado: 'saturday',
                     domingo: 'sunday',
                 };
                 const dayLower = dayTranslations[day.toLowerCase()] || day.toLowerCase();
@@ -204,6 +223,12 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], ScraperService.prototype, "handleWeeklyGelatinaUpdate", null);
+__decorate([
+    (0, schedule_1.Cron)(schedule_1.CronExpression.EVERY_WEEK),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], ScraperService.prototype, "handleWeeklyUrbanaUpdate", null);
 exports.ScraperService = ScraperService = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, typeorm_1.InjectRepository)(channels_entity_1.Channel)),
