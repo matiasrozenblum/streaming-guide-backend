@@ -38,6 +38,7 @@ __decorate([
 ], Schedule.prototype, "end_time", void 0);
 __decorate([
     (0, typeorm_1.ManyToOne)(() => programs_entity_1.Program, (program) => program.schedules),
+    (0, typeorm_1.JoinColumn)({ name: 'program_id' }),
     __metadata("design:type", programs_entity_1.Program)
 ], Schedule.prototype, "program", void 0);
 exports.Schedule = Schedule = __decorate([
