@@ -12,6 +12,8 @@ import { PanelistsModule } from './panelists/panelists.module';
 import { ScraperModule } from './scraper/scraper.module';
 import { AppController } from './app.controller';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ConfigModule as AppConfigModule } from './config/config.module';
+import { Config } from './config/config.entity';
 
 @Module({
   imports: [
@@ -25,7 +27,7 @@ import { ScheduleModule } from '@nestjs/schedule';
       },
       autoLoadEntities: true,
       synchronize: true, // Only for development
-      entities: [Channel, Program, Schedule, Panelist],
+      entities: [Channel, Program, Schedule, Panelist, Config],
       logging: true, // Enable query logging for debugging
     }),
     TypeOrmModule.forFeature([Channel, Program, Schedule, Panelist]),
@@ -34,6 +36,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     SchedulesModule,
     PanelistsModule,
     ScraperModule,
+    AppConfigModule,
   ],
   controllers: [AppController],
 })

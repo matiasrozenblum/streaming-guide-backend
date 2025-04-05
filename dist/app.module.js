@@ -21,6 +21,8 @@ const panelists_module_1 = require("./panelists/panelists.module");
 const scraper_module_1 = require("./scraper/scraper.module");
 const app_controller_1 = require("./app.controller");
 const schedule_1 = require("@nestjs/schedule");
+const config_module_1 = require("./config/config.module");
+const config_entity_1 = require("./config/config.entity");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -37,7 +39,7 @@ exports.AppModule = AppModule = __decorate([
                 },
                 autoLoadEntities: true,
                 synchronize: true,
-                entities: [channels_entity_1.Channel, programs_entity_1.Program, schedules_entity_1.Schedule, panelists_entity_1.Panelist],
+                entities: [channels_entity_1.Channel, programs_entity_1.Program, schedules_entity_1.Schedule, panelists_entity_1.Panelist, config_entity_1.Config],
                 logging: true,
             }),
             typeorm_1.TypeOrmModule.forFeature([channels_entity_1.Channel, programs_entity_1.Program, schedules_entity_1.Schedule, panelists_entity_1.Panelist]),
@@ -46,6 +48,7 @@ exports.AppModule = AppModule = __decorate([
             schedules_module_1.SchedulesModule,
             panelists_module_1.PanelistsModule,
             scraper_module_1.ScraperModule,
+            config_module_1.ConfigModule,
         ],
         controllers: [app_controller_1.AppController],
     })
