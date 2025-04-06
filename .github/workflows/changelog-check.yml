@@ -18,7 +18,12 @@ jobs:
       - name: Obtener archivos modificados
         id: files
         run: |
-          echo "changed=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)" >> $GITHUB_OUTPUT
+          base_ref="$(git merge-base origin/${{ github.base_ref }} HEAD || echo 'no-merge-base')"
+          if [ "$base_ref" = "no-merge-base" ]; then
+            echo "No common base found between branches"
+            exit 1
+          fi
+          echo "changed=$(git diff --name-only $base_ref...HEAD)" >> $GITHUB_OUTPUT
 
       - name: Verificar si se modificó CHANGELOG.md
         run: |
