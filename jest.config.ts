@@ -15,6 +15,14 @@ const config: Config = {
   collectCoverageFrom: ['src/**/*.(t|j)s'],
   coverageDirectory: './coverage',
   coverageReporters: ['text', 'lcov'],
+  coverageThreshold: {
+    global: {
+      branches: 30,
+      functions: 64,
+      lines: 63,
+      statements: 62,
+    },
+  },
 };
 
 export default config;
