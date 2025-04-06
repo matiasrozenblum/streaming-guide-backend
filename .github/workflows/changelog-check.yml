@@ -9,14 +9,18 @@ jobs:
     runs-on: ubuntu-latest
     name: Verificar que se haya modificado el CHANGELOG
     steps:
-      - name: Checkout PR
+      - name: Checkout PR con historial completo
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # ⚠️ necesario para comparar correctamente commits
 
       - name: Obtener archivos modificados
-        id: files
+        id: changed
         run: |
-          echo "changed=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)" >> $GITHUB_OUTPUT
+          CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} HEAD)
+          echo "changed=$CHANGED_FILES" >> $GITHUB_OUTPUT
+          echo "🔍 Archivos modificados: $CHANGED_FILES"
 
       - name: Verificar si se modificó CHANGELOG.md
         run: |
-          echo "${{ steps.files.outputs.changed }}" | grep -q "CHANGELOG.md" || (echo "❌ No se modificó CHANGELOG.md" && exit 1)
+          echo "${{ steps.changed.outputs.changed }}" | grep -q "CHANGELOG.md" || (echo "❌ No se modificó CHANGELOG.md" && exit 1)

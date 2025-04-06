@@ -8,15 +8,21 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ## [Unreleased]
 
 ### Added
-- Added tests for all services and modules
 
 ### Changed
+- Modified create-release.sh to update changelog accordingly
 
 ### Removed
 
 ### Fixed
+- Fixed scraper issue in prod
 
 ---
+
+## [0.0.6] - 2025-04-06
+
+### Added
+- Added tests for all services and modules
 
 ## [0.0.5] - 2025-04-05
 

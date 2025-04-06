@@ -1,4 +1,4 @@
-import puppeteer from 'puppeteer';
+import { getBrowser } from '@/utils/puppeteer.util';
 
 export interface UrbanaProgram {
   name: string;
@@ -10,42 +10,29 @@ export interface UrbanaProgram {
 }
 
 export async function scrapeUrbanaPlaySchedule(): Promise<UrbanaProgram[]> {
-  const browser = await puppeteer.launch({
-    headless: false,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    defaultViewport: null,
-  });
-
+  const browser = await getBrowser();
   const page = await browser.newPage();
+
   await page.goto('https://urbanaplayfm.com/programacion/', {
     waitUntil: 'networkidle0',
     timeout: 60000,
   });
 
-  console.log('🕐 Esperando a que la tabla tt_timetable esté presente...');
   await page.waitForSelector('table.tt_timetable', { timeout: 15000 });
-  console.log('✅ Tabla detectada. Ejecutando evaluate...');
 
   const results: { programs: any[]; logs: string[] } = await page.evaluate(() => {
     const logs: string[] = [];
-    logs.push('🌐 ¡Entramos al evaluate!');
     const table = document.querySelector('table.tt_timetable');
-    if (!table) {
-      console.warn('❌ No se encontró la tabla');
-      return { programs: [], logs };
-    }
+    if (!table) return { programs: [], logs };
 
     const dayHeaders = Array.from(table.querySelectorAll('thead th')).slice(1);
-    logs.push(`🗓️ Días encontrados: ${dayHeaders.length}`);
     const days = dayHeaders.map((th) => th.textContent?.trim().toLowerCase() || 'desconocido');
 
     const programs: any[] = [];
     const rows = Array.from(table.querySelectorAll('tbody tr'));
-    logs.push(`📋 Filas de programas encontradas: ${rows.length}`);
 
     rows.forEach((row) => {
       const cells = Array.from(row.querySelectorAll('td'));
-      logs.push(`📋 Celdas encontradas en fila: ${cells.length}`);
       let dayIndex = 0;
 
       cells.forEach((cell) => {
@@ -77,17 +64,5 @@ export async function scrapeUrbanaPlaySchedule(): Promise<UrbanaProgram[]> {
 
   await browser.close();
 
-  // Loguear resultados
-  console.log('📺 Programas encontrados:');
-  results.programs.forEach((program, i) => {
-    console.log(`\n#${i + 1}`);
-    console.log('Nombre:', program.name);
-    console.log('Horario:', `${program.startTime} - ${program.endTime}`);
-    console.log('Panelistas:', program.panelists);
-    console.log('Días:', program.days);
-  });
-
-  console.log(results.logs);
-  await browser.close();
   return results.programs;
 }
