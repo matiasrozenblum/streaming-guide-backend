@@ -44,3 +44,8 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 - Describe los cambios acá.
 
+
+## v0.0.7 - 2025-04-06
+
+- Describe los cambios acá.
+
