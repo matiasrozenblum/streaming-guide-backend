@@ -1,18 +1,18 @@
-import puppeteer from 'puppeteer';
+import { getBrowser } from '@/utils/puppeteer.util';
+import { Page } from 'puppeteer-core';
 
 export interface VorterixProgram {
   name: string;
-  days: string[]; // Ej: ["LUNES", "MIÉRCOLES"]
-  startTime: string; // "HH:mm"
-  endTime: string;   // "HH:mm"
+  days: string[];
+  startTime: string;
+  endTime: string;
 }
 
 const dayOrder = ['LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO', 'DOMINGO'];
 
 function getNextDay(day: string): string {
   const index = dayOrder.indexOf(day.toUpperCase());
-  if (index === -1) return day;
-  return dayOrder[(index + 1) % 7];
+  return index === -1 ? day : dayOrder[(index + 1) % 7];
 }
 
 function toMinutes(time: string): number {
@@ -21,13 +21,9 @@ function toMinutes(time: string): number {
 }
 
 export async function scrapeVorterixSchedule(): Promise<VorterixProgram[]> {
-  const browser = await puppeteer.launch({
-    headless: false,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    defaultViewport: null,
-  });
-
+  const browser = await getBrowser();
   const page = await browser.newPage();
+
   await page.goto('https://www.vorterix.com/programacion', {
     waitUntil: 'networkidle2',
     timeout: 60000,
@@ -68,7 +64,7 @@ export async function scrapeVorterixSchedule(): Promise<VorterixProgram[]> {
 
   await browser.close();
 
-  // Reorganizamos los datos, teniendo en cuenta programas que cruzan la medianoche
+  // Normalización
   const normalized: VorterixProgram[] = [];
 
   for (const item of data) {
@@ -76,7 +72,6 @@ export async function scrapeVorterixSchedule(): Promise<VorterixProgram[]> {
     const endMin = toMinutes(item.endTime);
 
     if (endMin <= startMin) {
-      // Cruza la medianoche → dividir en dos bloques
       for (const day of item.days) {
         normalized.push({
           name: item.name,
@@ -92,12 +87,10 @@ export async function scrapeVorterixSchedule(): Promise<VorterixProgram[]> {
         });
       }
     } else {
-      // Caso normal
       normalized.push(item);
     }
   }
 
-  // Agrupamos por name+start+end
   const grouped = normalized.reduce((acc, curr) => {
     const key = `${curr.name}_${curr.startTime}_${curr.endTime}`;
     if (!acc[key]) {

@@ -8,7 +8,6 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ## [Unreleased]
 
 ### Added
-- Added tests for all services and modules
 
 ### Changed
 
@@ -17,6 +16,19 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ### Fixed
 
 ---
+
+## [0.0.7] - 2025-04-06
+
+### Changed
+- Modified create-release.sh to update changelog accordingly
+
+### Fixed
+- Fixed scraper issue in prod
+
+## [0.0.6] - 2025-04-06
+
+### Added
+- Added tests for all services and modules
 
 ## [0.0.5] - 2025-04-05
 
@@ -35,6 +47,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 - Scrapers de Luzu, Vorterix, Olga, Blender, Urbana, Gelatina, Bondi Live y La Casa Streaming.
 
 ## v0.0.6 - 2025-04-06
+
+- Describe los cambios acá.
+
+
+## v0.0.7 - 2025-04-06
 
 - Describe los cambios acá.
 
