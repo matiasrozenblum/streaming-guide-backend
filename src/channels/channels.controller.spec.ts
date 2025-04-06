@@ -15,9 +15,9 @@ describe('ChannelsController', () => {
         {
           provide: ChannelsService,
           useValue: {
-            findAll: jest.fn().mockResolvedValue([{ name: 'Canal 1', description: 'Descripción del canal' }]),
-            findOne: jest.fn().mockResolvedValue({ name: 'Canal 1', description: 'Descripción del canal' }),
-            create: jest.fn().mockResolvedValue({ name: 'Canal 1', description: 'Descripción del canal' }),
+            findAll: jest.fn().mockResolvedValue([{ name: 'Canal 1', description: 'Descripción del canal', logo_url: 'https://logo1.png', streaming_url: 'https://stream1.com' }]),
+            findOne: jest.fn().mockResolvedValue({ name: 'Canal 1', description: 'Descripción del canal', logo_url: 'https://logo1.png', streaming_url: 'https://stream1.com' }),
+            create: jest.fn().mockResolvedValue({ name: 'Canal 1', description: 'Descripción del canal', logo_url: 'https://logo1.png', streaming_url: 'https://stream1.com' }),
             remove: jest.fn().mockResolvedValue(null),
           },
         },
@@ -34,18 +34,18 @@ describe('ChannelsController', () => {
 
   it('should return an array of channels', async () => {
     const result = await controller.findAll();
-    expect(result).toEqual([{ name: 'Canal 1', description: 'Descripción del canal' }]);
+    expect(result).toEqual([{ name: 'Canal 1', description: 'Descripción del canal', logo_url: 'https://logo1.png', streaming_url: 'https://stream1.com' }]);
   });
 
   it('should return a single channel', async () => {
     const result = await controller.findOne('1');
-    expect(result).toEqual({ name: 'Canal 1', description: 'Descripción del canal' });
+    expect(result).toEqual({ name: 'Canal 1', description: 'Descripción del canal', logo_url: 'https://logo1.png', streaming_url: 'https://stream1.com' });
   });
 
   it('should create a new channel', async () => {
-    const createChannelDto: CreateChannelDto = { name: 'Canal 1', description: 'Descripción del canal' };
+    const createChannelDto: CreateChannelDto = { name: 'Canal 1', description: 'Descripción del canal', logo_url: 'https://logo1.png', streaming_url: 'https://stream1.com' };
     const result = await controller.create(createChannelDto);
-    expect(result).toEqual({ name: 'Canal 1', description: 'Descripción del canal' });
+    expect(result).toEqual({ name: 'Canal 1', description: 'Descripción del canal', logo_url: 'https://logo1.png', streaming_url: 'https://stream1.com' });
   });
 
   it('should delete a channel', async () => {

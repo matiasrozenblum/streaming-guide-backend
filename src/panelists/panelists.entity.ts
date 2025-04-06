@@ -10,10 +10,10 @@ export class Panelist {
   name: string;
 
   @Column({ type: 'text', nullable: true })
-  photo_url: string;
+  photo_url?: string | null;
 
   @Column({ type: 'text', nullable: true })
-  bio: string;
+  bio?: string | null;
 
   @ManyToMany(() => Program, (program) => program.panelists)
   programs: Program[];

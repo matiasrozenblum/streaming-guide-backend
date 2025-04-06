@@ -14,13 +14,13 @@ export class CreateProgramDto {
 
   @ApiProperty({ description: 'Hora de inicio del programa' })
   @IsString()
-  @IsNotEmpty()
-  startTime: string;
+  @IsOptional()
+  startTime?: string;
 
   @ApiProperty({ description: 'Hora de fin del programa' })
   @IsString()
-  @IsNotEmpty()
-  endTime: string;
+  @IsOptional()
+  endTime?: string;
 
   @IsOptional()
   @IsString()

@@ -22,7 +22,7 @@ export class SchedulesService {
   }
 
   async findOne(id: string): Promise<Schedule> {
-    const channel = await this.schedulesRepository.findOne({ where: { id } } as FindOneOptions );
+    const channel = await this.schedulesRepository.findOne({ where: { id: Number(id) } } as FindOneOptions );
     if (!channel) {
       throw new NotFoundException(`Channel with ID ${id} not found`);
     }

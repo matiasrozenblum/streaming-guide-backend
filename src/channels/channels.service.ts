@@ -16,7 +16,7 @@ export class ChannelsService {
   }
 
   async findOne(id: string): Promise<Channel> {
-    const channel = await this.channelsRepository.findOne({ where: { id } } as FindOneOptions );
+    const channel = await this.channelsRepository.findOne({ where: { id: Number(id) } });
     if (!channel) {
       throw new NotFoundException(`Channel with ID ${id} not found`);
     }

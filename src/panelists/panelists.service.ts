@@ -16,7 +16,7 @@ export class PanelistsService {
   }
 
   async findOne(id: string): Promise<Panelist> {
-    const channel = await this.panelistsRepository.findOne({ where: { id } } as FindOneOptions );
+    const channel = await this.panelistsRepository.findOne({ where: { id: Number(id) } } as FindOneOptions );
         if (!channel) {
           throw new NotFoundException(`Channel with ID ${id} not found`);
         }
