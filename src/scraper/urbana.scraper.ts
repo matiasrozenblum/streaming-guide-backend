@@ -6,7 +6,7 @@ export interface UrbanaProgram {
   startTime: string;
   endTime: string;
   panelists?: string[];
-  logoUrl?: string;
+  logoUrl?: string | null;
 }
 
 export async function scrapeUrbanaPlaySchedule(): Promise<UrbanaProgram[]> {

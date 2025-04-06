@@ -15,10 +15,10 @@ export class Program {
   description: string;
 
   @Column({ type: 'time', nullable: true })
-  start_time: string;
+  start_time?: string | null;
 
   @Column({ type: 'time', nullable: true })
-  end_time: string;
+  end_time?: string | null;
 
   @ManyToOne(() => Channel, (channel) => channel.programs)
   channel: Channel;
@@ -34,5 +34,5 @@ export class Program {
   logo_url: string | null;
 
   @Column({ type: 'text', nullable: true })
-youtube_url: string | null;
+  youtube_url: string | null;
 }

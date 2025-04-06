@@ -18,7 +18,7 @@ export class ProgramsService {
   }
 
   async findOne(id: string): Promise<Program> {
-      const channel = await this.programsRepository.findOne({ where: { id } } as FindOneOptions );
+      const channel = await this.programsRepository.findOne({ where: { id: Number(id) } } as FindOneOptions );
           if (!channel) {
             throw new NotFoundException(`Channel with ID ${id} not found`);
           }
