@@ -10,14 +10,20 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ### Added
 
 ### Changed
-- Modified create-release.sh to update changelog accordingly
 
 ### Removed
 
 ### Fixed
-- Fixed scraper issue in prod
 
 ---
+
+## [0.0.7] - 2025-04-06
+
+### Changed
+- Modified create-release.sh to update changelog accordingly
+
+### Fixed
+- Fixed scraper issue in prod
 
 ## [0.0.6] - 2025-04-06
 
