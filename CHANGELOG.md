@@ -9,11 +9,40 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ### Added
 
+
+### Changed
+
+
+### Removed
+
+
+### Fixed
+
+
+### Added
+- Added coverage check to PRs
+
 ### Changed
 
 ### Removed
 
 ### Fixed
+- Fixed failing tests
+
+
+## [v0.0.8] - 2025-04-06
+
+### Added
+- Added coverage check to PRs
+
+### Changed
+
+### Removed
+
+### Fixed
+- Fixed failing tests
+
+---
 
 ---
 
