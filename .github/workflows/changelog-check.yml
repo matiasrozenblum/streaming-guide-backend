@@ -1,0 +1,22 @@
+name: Check CHANGELOG update
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  changelog-check:
+    runs-on: ubuntu-latest
+    name: Verificar que se haya modificado el CHANGELOG
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v3
+
+      - name: Obtener archivos modificados
+        id: files
+        run: |
+          echo "changed=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Verificar si se modificó CHANGELOG.md
+        run: |
+          echo "${{ steps.files.outputs.changed }}" | grep -q "CHANGELOG.md" || (echo "❌ No se modificó CHANGELOG.md" && exit 1)
