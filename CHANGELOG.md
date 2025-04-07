@@ -9,16 +9,16 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ### Added
 
-
 ### Changed
-
 
 ### Removed
 
-
 ### Fixed
 
-----
+## [v0.0.9] - 2025-04-06
+
+### Fixed
+- Fixed cors and 502 errors in prod
 
 ## [v0.0.8] - 2025-04-06
 
