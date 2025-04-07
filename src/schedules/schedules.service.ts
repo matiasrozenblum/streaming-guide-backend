@@ -35,7 +35,7 @@ export class SchedulesService {
       relations: ['program', 'program.channel', 'program.panelists'],
     });
 
-    await this.cacheManager.set(cacheKey, schedules, { ttl: 3600 });
+    await this.cacheManager.set(cacheKey, schedules, 3600);
     console.log(`Database query completed. Total time: ${Date.now() - startTime}ms`);
     return schedules;
   }

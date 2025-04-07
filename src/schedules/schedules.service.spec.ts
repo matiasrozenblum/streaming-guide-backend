@@ -6,11 +6,14 @@ import { Repository } from 'typeorm';
 import { Program } from '../programs/programs.entity';
 import { NotFoundException } from '@nestjs/common';
 import { channel } from 'diagnostics_channel';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 
 describe('SchedulesService', () => {
   let service: SchedulesService;
   let schedulesRepo: Repository<Schedule>;
   let programsRepo: Repository<Program>;
+  let cacheManager: Cache;
 
   const mockSchedules: Schedule[] = [
     {
@@ -44,20 +47,38 @@ describe('SchedulesService', () => {
     },
   ];
 
-  const schedulesRepository = {
+  const mockScheduleRepo = {
     find: jest.fn().mockResolvedValue(mockSchedules),
-    findOne: jest.fn().mockImplementation(({ where: { id } }) =>
-      Promise.resolve(mockSchedules.find(s => s.id === id))
-    ),
+    findOne: jest.fn().mockImplementation((options) => {
+      const id = options.where.id;
+      const schedule = mockSchedules.find(s => s.id === id);
+      if (schedule && options.relations) {
+        return {
+          ...schedule,
+          program: {
+            ...schedule.program,
+            channel: mockChannel,
+            panelists: [],
+          },
+        };
+      }
+      return schedule;
+    }),
     create: jest.fn().mockImplementation((data) => ({ id: 2, ...data })),
     save: jest.fn().mockImplementation((schedule) => Promise.resolve(schedule)),
     delete: jest.fn().mockResolvedValue(undefined),
   };
 
-  const programsRepository = {
+  const mockProgramRepo = {
     findOne: jest.fn().mockImplementation(({ where: { id } }) =>
       Promise.resolve(mockPrograms.find(p => p.id === id))
     ),
+  };
+
+  const mockCacheManager = {
+    get: jest.fn(),
+    set: jest.fn(),
+    del: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -66,11 +87,15 @@ describe('SchedulesService', () => {
         SchedulesService,
         {
           provide: getRepositoryToken(Schedule),
-          useValue: schedulesRepository,
+          useValue: mockScheduleRepo,
         },
         {
           provide: getRepositoryToken(Program),
-          useValue: programsRepository,
+          useValue: mockProgramRepo,
+        },
+        {
+          provide: CACHE_MANAGER,
+          useValue: mockCacheManager,
         },
       ],
     }).compile();
@@ -78,6 +103,7 @@ describe('SchedulesService', () => {
     service = module.get<SchedulesService>(SchedulesService);
     schedulesRepo = module.get(getRepositoryToken(Schedule));
     programsRepo = module.get(getRepositoryToken(Program));
+    cacheManager = module.get(CACHE_MANAGER);
   });
 
   it('should be defined', () => {
@@ -92,12 +118,22 @@ describe('SchedulesService', () => {
 
   it('debería devolver un schedule por ID', async () => {
     const result = await service.findOne('1');
-    expect(result).toEqual(mockSchedules[0]);
-    expect(schedulesRepo.findOne).toHaveBeenCalledWith({ where: { id: 1 } });
+    expect(result).toEqual({
+      ...mockSchedules[0],
+      program: {
+        ...mockSchedules[0].program,
+        channel: mockChannel,
+        panelists: [],
+      },
+    });
+    expect(schedulesRepo.findOne).toHaveBeenCalledWith({
+      where: { id: 1 },
+      relations: ['program', 'program.channel', 'program.panelists'],
+    });
   });
 
   it('debería lanzar NotFoundException si el schedule no existe', async () => {
-    schedulesRepository.findOne.mockResolvedValueOnce(null);
+    mockScheduleRepo.findOne.mockResolvedValueOnce(null);
     await expect(service.findOne('999')).rejects.toThrow(NotFoundException);
   });
 
@@ -124,7 +160,7 @@ describe('SchedulesService', () => {
   });
 
   it('debería lanzar NotFoundException si el programa no existe', async () => {
-    programsRepository.findOne.mockResolvedValueOnce(null);
+    mockProgramRepo.findOne.mockResolvedValueOnce(null);
 
     const dto = {
       dayOfWeek: 'monday',
