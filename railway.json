@@ -3,6 +3,6 @@
       "dockerfile": "Dockerfile"
     },
     "deploy": {
-      "startCommand": "node dist/main.js"
+      "startCommand": "npm run start:prod"
     }
   }
