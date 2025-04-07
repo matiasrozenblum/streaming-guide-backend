@@ -8,6 +8,7 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ## [Unreleased]
 
 ### Added
+- Added redis caché service for schedule GETs
 
 ### Changed
 
