@@ -17,6 +17,14 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ## [v0.0.9] - 2025-04-06
 
+### Added
+- Added redis caché service for schedule GETs
+
+### Removed
+- Removed changelog modification from release script
+
+## [v0.0.9] - 2025-04-06
+
 ### Fixed
 - Fixed cors and 502 errors in prod
 
