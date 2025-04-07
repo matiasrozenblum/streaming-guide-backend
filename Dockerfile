@@ -8,14 +8,14 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
-# Copia el resto de los archivos
+# Copia el resto de los archivos del proyecto
 COPY . .
 
 # Compila el código de TypeScript a JavaScript
 RUN npm run build
 
-# Expone el puerto
+# Expone el puerto 3000 (Nest.js por defecto)
 EXPOSE 3000
 
-# Establece el comando de inicio
-CMD ["node", "dist/main.js"]
+# Establece el comando de inicio (ajustado al nuevo path)
+CMD ["node", "dist/src/main.js"]

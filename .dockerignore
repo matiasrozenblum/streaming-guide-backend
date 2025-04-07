@@ -1,0 +1,25 @@
+# Node.js
+node_modules
+npm-debug.log
+yarn-error.log
+.env
+.env.*.local
+
+# Producción
+dist
+coverage
+.cache
+
+# IDEs / editores
+.vscode
+.idea
+
+# MacOS
+.DS_Store
+
+# Test / tooling
+jest.config.js
+jest.config.ts
+coverage
+test
+*.spec.ts
