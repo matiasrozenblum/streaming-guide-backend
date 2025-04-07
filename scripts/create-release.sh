@@ -29,10 +29,19 @@ UNRELEASED_CONTENT=$(awk '/## \[Unreleased\]/ {flag=1; next} /^## \[/ {flag=0} f
 # Create temporary file
 TMP_FILE=$(mktemp)
 
-# Write new changelog with updated sections
-awk -v version="$VERSION" -v date="$DATE" -v unreleased="$UNRELEASED_CONTENT" '
+# Extraer contenido de Unreleased y guardarlo en un archivo temporal
+UNRELEASED_FILE=$(mktemp)
+awk '/## \[Unreleased\]/ {flag=1; next} /^## \[/ {flag=0} flag' CHANGELOG.md > "$UNRELEASED_FILE"
+
+# Crear archivo temporal para el changelog completo
+TMP_FILE=$(mktemp)
+
+awk -v version="$VERSION" -v date="$DATE" -v unreleased_file="$UNRELEASED_FILE" '
 BEGIN {
   printed_release = 0
+  while ((getline line < unreleased_file) > 0) {
+    unreleased_lines = unreleased_lines line "\n"
+  }
 }
 /^## \[Unreleased\]/ {
   print "## [Unreleased]\n"
@@ -44,13 +53,14 @@ BEGIN {
 }
 /^---$/ && !printed_release {
   print "\n## [v" version "] - " date
-  print unreleased
+  printf "%s", unreleased_lines
   printed_release = 1
 }
 { print }
 ' CHANGELOG.md > "$TMP_FILE"
 
 mv "$TMP_FILE" CHANGELOG.md
+rm "$UNRELEASED_FILE"
 
 # Commit changelog changes
 git add CHANGELOG.md
