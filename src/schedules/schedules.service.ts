@@ -1,9 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FindOneOptions, Repository } from 'typeorm';
 import { Schedule } from './schedules.entity';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
 import { Program } from '../programs/programs.entity';
+import { Cache } from 'cache-manager';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
 
 @Injectable()
 export class SchedulesService {
@@ -13,20 +15,54 @@ export class SchedulesService {
     
     @InjectRepository(Program)
     private programsRepository: Repository<Program>,
+
+    @Inject(CACHE_MANAGER)
+    private cacheManager: Cache,
   ) {}
 
   async findAll(): Promise<Schedule[]> {
-    return this.schedulesRepository.find({
+    const startTime = Date.now();
+    const cacheKey = 'schedules:all';
+    const cachedSchedules = await this.cacheManager.get<Schedule[]>(cacheKey);
+
+    if (cachedSchedules) {
+      console.log(`Cache HIT for ${cacheKey}. Time: ${Date.now() - startTime}ms`);
+      return cachedSchedules;
+    }
+
+    console.log(`Cache MISS for ${cacheKey}`);
+    const schedules = await this.schedulesRepository.find({
       relations: ['program', 'program.channel', 'program.panelists'],
     });
+
+    await this.cacheManager.set(cacheKey, schedules);
+    console.log(`Database query completed. Total time: ${Date.now() - startTime}ms`);
+    return schedules;
   }
 
   async findOne(id: string): Promise<Schedule> {
-    const channel = await this.schedulesRepository.findOne({ where: { id: Number(id) } } as FindOneOptions );
-    if (!channel) {
-      throw new NotFoundException(`Channel with ID ${id} not found`);
+    const startTime = Date.now();
+    const cacheKey = `schedules:${id}`;
+    const cachedSchedule = await this.cacheManager.get<Schedule>(cacheKey);
+
+    if (cachedSchedule) {
+      console.log(`Cache HIT for ${cacheKey}. Time: ${Date.now() - startTime}ms`);
+      return cachedSchedule;
     }
-    return channel;
+
+    console.log(`Cache MISS for ${cacheKey}`);
+    const schedule = await this.schedulesRepository.findOne({ 
+      where: { id: Number(id) },
+      relations: ['program', 'program.channel', 'program.panelists'],
+    } as FindOneOptions);
+
+    if (!schedule) {
+      throw new NotFoundException(`Schedule with ID ${id} not found`);
+    }
+
+    await this.cacheManager.set(cacheKey, schedule);
+    console.log(`Database query completed. Total time: ${Date.now() - startTime}ms`);
+    return schedule;
   }
 
   async create(createScheduleDto: CreateScheduleDto): Promise<Schedule> {
@@ -45,10 +81,21 @@ export class SchedulesService {
       program,
     });
   
-    return this.schedulesRepository.save(schedule);
+    const savedSchedule = await this.schedulesRepository.save(schedule);
+    
+    // Invalidar caché
+    await this.cacheManager.del('schedules:all');
+    
+    return savedSchedule;
   }
 
-  remove(id: string): Promise<void> {
-    return this.schedulesRepository.delete(id).then(() => {});
+  async remove(id: string): Promise<void> {
+    await this.schedulesRepository.delete(id);
+    
+    // Invalidar caché
+    await Promise.all([
+      this.cacheManager.del('schedules:all'),
+      this.cacheManager.del(`schedules:${id}`),
+    ]);
   }
 }

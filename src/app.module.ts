@@ -14,11 +14,13 @@ import { AppController } from './app.controller';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ConfigModule as AppConfigModule } from './config/config.module';
 import { Config } from './config/config.entity';
+import { CacheConfigModule } from './cache/cache.module';
 
 @Module({
   imports: [
     ScheduleModule.forRoot(),
     ConfigModule.forRoot(),
+    CacheConfigModule,
     TypeOrmModule.forRoot({
       type: 'postgres',
       url: process.env.DATABASE_URL,
