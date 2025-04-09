@@ -2,11 +2,30 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ChannelsController } from './channels.controller';
 import { ChannelsService } from './channels.service';
 import { CreateChannelDto } from './dto/create-channel.dto';
+import { UpdateChannelDto } from './dto/update-channel.dto';
 import { Channel } from './channels.entity';
+import { NotFoundException } from '@nestjs/common';
 
 describe('ChannelsController', () => {
   let controller: ChannelsController;
   let service: ChannelsService;
+
+  const mockChannel: Channel = {
+    id: 1,
+    name: 'Test Channel',
+    streaming_url: 'https://test.com/stream',
+    logo_url: 'https://test.com/logo.png',
+    description: 'Test Description',
+    programs: [],
+  };
+
+  const mockChannelsService = {
+    findAll: jest.fn().mockResolvedValue([mockChannel]),
+    findOne: jest.fn().mockResolvedValue(mockChannel),
+    create: jest.fn().mockResolvedValue(mockChannel),
+    update: jest.fn().mockResolvedValue(mockChannel),
+    remove: jest.fn().mockResolvedValue(undefined),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -14,12 +33,7 @@ describe('ChannelsController', () => {
       providers: [
         {
           provide: ChannelsService,
-          useValue: {
-            findAll: jest.fn().mockResolvedValue([{ name: 'Canal 1', description: 'Descripción del canal', logo_url: 'https://logo1.png', streaming_url: 'https://stream1.com' }]),
-            findOne: jest.fn().mockResolvedValue({ name: 'Canal 1', description: 'Descripción del canal', logo_url: 'https://logo1.png', streaming_url: 'https://stream1.com' }),
-            create: jest.fn().mockResolvedValue({ name: 'Canal 1', description: 'Descripción del canal', logo_url: 'https://logo1.png', streaming_url: 'https://stream1.com' }),
-            remove: jest.fn().mockResolvedValue(null),
-          },
+          useValue: mockChannelsService,
         },
       ],
     }).compile();
@@ -32,24 +46,65 @@ describe('ChannelsController', () => {
     expect(controller).toBeDefined();
   });
 
-  it('should return an array of channels', async () => {
-    const result = await controller.findAll();
-    expect(result).toEqual([{ name: 'Canal 1', description: 'Descripción del canal', logo_url: 'https://logo1.png', streaming_url: 'https://stream1.com' }]);
+  describe('findAll', () => {
+    it('should return an array of channels', async () => {
+      const result = await controller.findAll();
+      expect(result).toEqual([mockChannel]);
+      expect(service.findAll).toHaveBeenCalled();
+    });
   });
 
-  it('should return a single channel', async () => {
-    const result = await controller.findOne('1');
-    expect(result).toEqual({ name: 'Canal 1', description: 'Descripción del canal', logo_url: 'https://logo1.png', streaming_url: 'https://stream1.com' });
+  describe('findOne', () => {
+    it('should return a single channel', async () => {
+      const result = await controller.findOne('1');
+      expect(result).toEqual(mockChannel);
+      expect(service.findOne).toHaveBeenCalledWith('1');
+    });
   });
 
-  it('should create a new channel', async () => {
-    const createChannelDto: CreateChannelDto = { name: 'Canal 1', description: 'Descripción del canal', logo_url: 'https://logo1.png', streaming_url: 'https://stream1.com' };
-    const result = await controller.create(createChannelDto);
-    expect(result).toEqual({ name: 'Canal 1', description: 'Descripción del canal', logo_url: 'https://logo1.png', streaming_url: 'https://stream1.com' });
+  describe('create', () => {
+    it('should create a new channel', async () => {
+      const createDto: CreateChannelDto = {
+        name: 'New Channel',
+        streaming_url: 'https://test.com/new-stream',
+        logo_url: 'https://test.com/new-logo.png',
+        description: 'New Description',
+      };
+
+      const result = await controller.create(createDto);
+      expect(result).toEqual(mockChannel);
+      expect(service.create).toHaveBeenCalledWith(createDto);
+    });
   });
 
-  it('should delete a channel', async () => {
-    const result = await controller.remove('1');
-    expect(result).toBeNull();
+  describe('update', () => {
+    it('should update a channel', async () => {
+      const updateDto: UpdateChannelDto = {
+        name: 'Updated Channel',
+        description: 'Updated Description',
+      };
+
+      const result = await controller.update('1', updateDto);
+      expect(result).toEqual(mockChannel);
+      expect(service.update).toHaveBeenCalledWith('1', updateDto);
+    });
+
+    it('should handle partial updates', async () => {
+      const updateDto: UpdateChannelDto = {
+        name: 'Updated Channel',
+      };
+
+      const result = await controller.update('1', updateDto);
+      expect(result).toEqual(mockChannel);
+      expect(service.update).toHaveBeenCalledWith('1', updateDto);
+    });
+  });
+
+  describe('remove', () => {
+    it('should remove a channel', async () => {
+      const result = await controller.remove('1');
+      expect(result).toBeUndefined();
+      expect(service.remove).toHaveBeenCalledWith('1');
+    });
   });
 });
