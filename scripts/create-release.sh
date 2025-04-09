@@ -21,10 +21,6 @@ RELEASE_BRANCH="release/v$VERSION"
 TAG="v$VERSION"
 DATE=$(date +"%Y-%m-%d")
 
-# Commit changelog changes
-git add CHANGELOG.md
-git commit -m "docs: update changelog for v$VERSION"
-
 # Create release branch and tag
 git checkout -b "$RELEASE_BRANCH"
 git push -u origin "$RELEASE_BRANCH"
