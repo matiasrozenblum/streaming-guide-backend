@@ -1,25 +1,26 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AuthService {
-  private readonly ADMIN_PASSWORD = 'admin123'; // This should be moved to environment variables in production
+  constructor(
+    private jwtService: JwtService,
+    private configService: ConfigService,
+  ) {}
 
-  constructor(private jwtService: JwtService) {}
+  async login(password: string, isBackoffice: boolean = false) {
+    const correctPassword = isBackoffice
+      ? this.configService.get<string>('BACKOFFICE_PASSWORD')
+      : this.configService.get<string>('PUBLIC_PASSWORD');
 
-  async validatePassword(password: string): Promise<boolean> {
-    return password === this.ADMIN_PASSWORD;
-  }
-
-  async login(password: string) {
-    const isValid = await this.validatePassword(password);
-    if (!isValid) {
-      throw new Error('Invalid password');
+    if (password !== correctPassword) {
+      throw new UnauthorizedException('Invalid password');
     }
 
-    const payload = { sub: 'admin' };
+    const payload = { sub: isBackoffice ? 'backoffice' : 'public' };
     return {
-      access_token: this.jwtService.sign(payload),
+      access_token: await this.jwtService.signAsync(payload),
     };
   }
 } 
