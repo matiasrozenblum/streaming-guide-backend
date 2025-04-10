@@ -1,26 +1,17 @@
-name: Check CHANGELOG update
+name: Check Changelog
 
 on:
   pull_request:
-    branches: [main, develop]
+    types: [opened, edited, synchronize]
+    branches:
+      - develop
+      - master
 
 jobs:
-  changelog-check:
+  check-changelog:
     runs-on: ubuntu-latest
-    name: Verificar que se haya modificado el CHANGELOG
     steps:
-      - name: Checkout PR con historial completo
-        uses: actions/checkout@v3
+      - name: Check if Changelog is updated
+        uses: tarides/changelog-check-action@v2
         with:
-          fetch-depth: 0  # ⚠️ necesario para comparar correctamente commits
-
-      - name: Obtener archivos modificados
-        id: changed
-        run: |
-          CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} HEAD)
-          echo "changed=$CHANGED_FILES" >> $GITHUB_OUTPUT
-          echo "🔍 Archivos modificados: $CHANGED_FILES"
-
-      - name: Verificar si se modificó CHANGELOG.md
-        run: |
-          echo "${{ steps.changed.outputs.changed }}" | grep -q "CHANGELOG.md" || (echo "❌ No se modificó CHANGELOG.md" && exit 1)
+          changelog: CHANGELOG.md

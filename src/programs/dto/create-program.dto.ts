@@ -15,12 +15,12 @@ export class CreateProgramDto {
   @ApiProperty({ description: 'Hora de inicio del programa' })
   @IsString()
   @IsOptional()
-  startTime?: string;
+  start_time?: string;
 
   @ApiProperty({ description: 'Hora de fin del programa' })
   @IsString()
   @IsOptional()
-  endTime?: string;
+  end_time?: string;
 
   @IsOptional()
   @IsString()
