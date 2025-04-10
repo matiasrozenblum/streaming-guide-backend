@@ -32,15 +32,15 @@ describe('AuthController', () => {
       const mockToken = { access_token: 'mock-jwt-token' };
       jest.spyOn(authService, 'login').mockResolvedValue(mockToken);
 
-      const result = await controller.login('admin123');
+      const result = await controller.login({ password: 'admin123' });
       expect(result).toEqual(mockToken);
-      expect(authService.login).toHaveBeenCalledWith('admin123');
+      expect(authService.login).toHaveBeenCalledWith({ password: 'admin123' });
     });
 
     it('should throw HttpException for incorrect password', async () => {
       jest.spyOn(authService, 'login').mockRejectedValue(new Error('Invalid password'));
 
-      await expect(controller.login('wrong-password')).rejects.toThrow('Invalid credentials');
+      await expect(controller.login({ password: 'wrong-password' })).rejects.toThrow('Invalid credentials');
     });
   });
 }); 
