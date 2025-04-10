@@ -14,21 +14,25 @@ export class ProgramsService {
 
   findAll(): Promise<Program[]> {
     return this.programsRepository.find({
-      relations: ['channel'], // 👈 esto incluye la relación con el canal
+      relations: ['channel'],
     });
   }
 
   async findOne(id: string): Promise<Program> {
-      const channel = await this.programsRepository.findOne({ where: { id: Number(id) } } as FindOneOptions );
-          if (!channel) {
-            throw new NotFoundException(`Channel with ID ${id} not found`);
-          }
-          return channel;
+    const program = await this.programsRepository.findOne({ 
+      where: { id: Number(id) },
+      relations: ['channel']
+    } as FindOneOptions);
+    
+    if (!program) {
+      throw new NotFoundException(`Program with ID ${id} not found`);
+    }
+    return program;
   }
 
   create(createProgramDto: CreateProgramDto): Promise<Program> {
-      const channel = this.programsRepository.create(createProgramDto);
-      return this.programsRepository.save(channel);
+    const program = this.programsRepository.create(createProgramDto);
+    return this.programsRepository.save(program);
   }
 
   update(id: number, updateProgramDto: UpdateProgramDto): Promise<Program> {
