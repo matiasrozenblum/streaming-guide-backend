@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Body, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Patch } from '@nestjs/common';
 import { ChannelsService } from './channels.service';
 import { CreateChannelDto } from './dto/create-channel.dto';
+import { UpdateChannelDto } from './dto/update-channel.dto';
 import { Channel } from './channels.entity';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
@@ -28,6 +29,13 @@ export class ChannelsController {
   @ApiResponse({ status: 201, description: 'Canal creado', type: Channel })
   create(@Body() createChannelDto: CreateChannelDto): Promise<Channel> {
     return this.channelsService.create(createChannelDto);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Actualizar un canal' })
+  @ApiResponse({ status: 200, description: 'Canal actualizado', type: Channel })
+  update(@Param('id') id: string, @Body() updateChannelDto: UpdateChannelDto): Promise<Channel> {
+    return this.channelsService.update(id, updateChannelDto);
   }
 
   @Delete(':id')

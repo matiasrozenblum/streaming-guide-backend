@@ -6,6 +6,7 @@ import { CreateScheduleDto } from './dto/create-schedule.dto';
 import { Program } from '../programs/programs.entity';
 import { Cache } from 'cache-manager';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { UpdateScheduleDto } from './dto/update-schedule.dto';
 
 @Injectable()
 export class SchedulesService {
@@ -65,6 +66,20 @@ export class SchedulesService {
     return schedule;
   }
 
+  async findByProgram(programId: string): Promise<Schedule[]> {
+    return this.schedulesRepository.find({
+      where: { program: { id: Number(programId) } },
+      relations: ['program'],
+    });
+  }
+
+  async findByDay(dayOfWeek: string): Promise<Schedule[]> {
+    return this.schedulesRepository.find({
+      where: { day_of_week: dayOfWeek },
+      relations: ['program'],
+    });
+  }
+
   async create(createScheduleDto: CreateScheduleDto): Promise<Schedule> {
     const program = await this.programsRepository.findOne({
       where: { id: parseInt(createScheduleDto.programId, 10) },
@@ -89,13 +104,35 @@ export class SchedulesService {
     return savedSchedule;
   }
 
-  async remove(id: string): Promise<void> {
-    await this.schedulesRepository.delete(id);
-    
-    // Invalidar caché
-    await Promise.all([
-      this.cacheManager.del('schedules:all'),
-      this.cacheManager.del(`schedules:${id}`),
-    ]);
+  async update(id: string, updateScheduleDto: UpdateScheduleDto): Promise<Schedule> {
+    const schedule = await this.findOne(id);
+    if (!schedule) {
+      throw new NotFoundException(`Schedule with ID ${id} not found`);
+    }
+
+    if (updateScheduleDto.dayOfWeek) {
+      schedule.day_of_week = updateScheduleDto.dayOfWeek;
+    }
+    if (updateScheduleDto.startTime) {
+      schedule.start_time = updateScheduleDto.startTime;
+    }
+    if (updateScheduleDto.endTime) {
+      schedule.end_time = updateScheduleDto.endTime;
+    }
+
+    return this.schedulesRepository.save(schedule);
+  }
+
+  async remove(id: string): Promise<boolean> {
+    const result = await this.schedulesRepository.delete(id);
+    const affected = result?.affected ?? 0;
+    if (affected > 0) {
+      await Promise.all([
+        this.cacheManager.del('schedules:all'),
+        this.cacheManager.del(`schedules:${id}`),
+      ]);
+      return true;
+    }
+    return false;
   }
 }

@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { FindOneOptions, Repository } from 'typeorm';
 import { Program } from './programs.entity';
 import { CreateProgramDto } from './dto/create-program.dto';
+import { UpdateProgramDto } from './dto/update-program.dto';
 
 @Injectable()
 export class ProgramsService {
@@ -28,6 +29,13 @@ export class ProgramsService {
   create(createProgramDto: CreateProgramDto): Promise<Program> {
       const channel = this.programsRepository.create(createProgramDto);
       return this.programsRepository.save(channel);
+  }
+
+  update(id: number, updateProgramDto: UpdateProgramDto): Promise<Program> {
+    return this.findOne(id.toString()).then(program => {
+      Object.assign(program, updateProgramDto);
+      return this.programsRepository.save(program);
+    });
   }
 
   remove(id: string): Promise<void> {
