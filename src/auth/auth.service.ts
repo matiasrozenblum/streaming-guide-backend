@@ -14,6 +14,16 @@ export class AuthService {
       ? this.configService.get<string>('BACKOFFICE_PASSWORD')
       : this.configService.get<string>('PUBLIC_PASSWORD');
 
+    console.log('Login attempt:', {
+      isBackoffice,
+      providedPassword: password,
+      correctPassword,
+      env: {
+        BACKOFFICE_PASSWORD: this.configService.get<string>('BACKOFFICE_PASSWORD'),
+        PUBLIC_PASSWORD: this.configService.get<string>('PUBLIC_PASSWORD'),
+      }
+    });
+
     if (password !== correctPassword) {
       throw new UnauthorizedException('Invalid password');
     }
