@@ -18,9 +18,18 @@ export class AuthService {
       throw new UnauthorizedException('Invalid password');
     }
 
-    const payload = { sub: isBackoffice ? 'backoffice' : 'public' };
+    const payload = { 
+      sub: isBackoffice ? 'backoffice' : 'public',
+      type: isBackoffice ? 'backoffice' : 'public',
+      exp: Math.floor(Date.now() / 1000) + 86400 // 24h
+    };
+
+    const secret = isBackoffice 
+      ? this.configService.get<string>('BACKOFFICE_JWT_SECRET')
+      : this.configService.get<string>('JWT_SECRET');
+
     return {
-      access_token: await this.jwtService.signAsync(payload),
+      access_token: await this.jwtService.signAsync(payload, { secret }),
     };
   }
 } 
