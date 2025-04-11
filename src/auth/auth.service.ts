@@ -28,8 +28,15 @@ export class AuthService {
       ? this.configService.get<string>('BACKOFFICE_JWT_SECRET')
       : this.configService.get<string>('JWT_SECRET');
 
+    if (!secret) {
+      throw new Error('JWT secret not configured');
+    }
+
     return {
-      access_token: await this.jwtService.signAsync(payload, { secret }),
+      access_token: await this.jwtService.signAsync(payload, { 
+        secret,
+        algorithm: 'HS256'
+      }),
     };
   }
 } 
