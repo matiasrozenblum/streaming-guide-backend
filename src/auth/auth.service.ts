@@ -21,22 +21,10 @@ export class AuthService {
     const payload = { 
       sub: isBackoffice ? 'backoffice' : 'public',
       type: isBackoffice ? 'backoffice' : 'public',
-      exp: Math.floor(Date.now() / 1000) + 86400 // 24h
     };
 
-    const secret = isBackoffice 
-      ? this.configService.get<string>('BACKOFFICE_JWT_SECRET')
-      : this.configService.get<string>('JWT_SECRET');
-
-    if (!secret) {
-      throw new Error('JWT secret not configured');
-    }
-
     return {
-      access_token: await this.jwtService.signAsync(payload, { 
-        secret,
-        algorithm: 'HS256'
-      }),
+      access_token: this.jwtService.sign(payload),
     };
   }
 } 
