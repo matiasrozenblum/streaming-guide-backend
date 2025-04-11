@@ -23,7 +23,10 @@ import { AppService } from './app.service';
 @Module({
   imports: [
     ScheduleModule.forRoot(),
-    ConfigModule.forRoot(),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+    }),
     CacheConfigModule,
     TypeOrmModule.forRoot({
       type: 'postgres',
