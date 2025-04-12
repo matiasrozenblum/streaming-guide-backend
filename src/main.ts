@@ -8,7 +8,6 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
-  // Swagger Configuration
   const config = new DocumentBuilder()
     .setTitle('Streaming Guide API')
     .setDescription('API para gestionar canales de streaming y programación')
@@ -23,35 +22,16 @@ async function bootstrap() {
   SwaggerModule.setup('api', app, document);
 
   app.useGlobalPipes(new ValidationPipe());
-  
-  // Configure CORS for Railway
+
   app.enableCors({
     origin: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });
 
-  app.use((req, res, next) => {
-    console.log(`[INCOMING] ${req.method} ${req.url}`);
-    next();
-  });
+  const port = process.env.PORT || 8080;
 
-  // Get port from Railway's PORT environment variable
-  const port = process.env.PORT || 3000;
-  
-  try {
-    setInterval(() => {
-      console.log('💓 App is alive...');
-    }, 10000);
-    await app.listen(port, '0.0.0.0');
-    console.log(`Application is running on port ${port}`);
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`Database URL: ${process.env.DATABASE_URL ? 'Configured' : 'Not configured'}`);
-    console.log(`JWT Secret: ${process.env.JWT_SECRET ? 'Configured' : 'Not configured'}`);
-    console.log(`CORS enabled for all origins`);
-  } catch (error) {
-    console.error('Failed to start server:', error);
-    process.exit(1);
-  }
+  await app.listen(port, '0.0.0.0');
+  console.log(`🚀 Application is running on port ${port}`);
 }
 bootstrap();
