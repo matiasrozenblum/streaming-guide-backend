@@ -31,6 +31,11 @@ async function bootstrap() {
     credentials: true,
   });
 
+  app.use((req, res, next) => {
+    console.log(`[INCOMING] ${req.method} ${req.url}`);
+    next();
+  });
+
   // Get port from Railway's PORT environment variable
   const port = process.env.PORT || 3000;
   

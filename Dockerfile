@@ -17,5 +17,7 @@ RUN npm run build
 # Expone el puerto
 EXPOSE 3000
 
+ENV PORT=8080
+
 # Establece el comando de inicio
 CMD ["node", "dist/main.js"]
