@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-store';
 import { Channel } from './channels/channels.entity';
@@ -28,15 +28,24 @@ import { AppService } from './app.service';
       envFilePath: '.env',
     }),
     CacheConfigModule,
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      url: process.env.DATABASE_URL,
-      ssl: {
-        rejectUnauthorized: false, 
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: async (config: ConfigService) => {
+        const dbUrl = config.get<string>('DATABASE_URL');
+        console.log('🌐 Connecting to DB:', dbUrl);
+    
+        return {
+          type: 'postgres',
+          url: dbUrl,
+          ssl: {
+            rejectUnauthorized: false,
+          },
+          autoLoadEntities: true,
+          synchronize: true, // ⚠️ cambiar a false en producción real
+          logging: true,
+        };
       },
-      autoLoadEntities: true,
-      synchronize: true, // Only for development
-      logging: true, // Enable query logging for debugging
     }),
     CacheModule.register({
       isGlobal: true,
