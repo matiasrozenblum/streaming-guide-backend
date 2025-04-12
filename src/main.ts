@@ -40,6 +40,9 @@ async function bootstrap() {
   const port = process.env.PORT || 3000;
   
   try {
+    setInterval(() => {
+      console.log('💓 App is alive...');
+    }, 10000);
     await app.listen(port, '0.0.0.0');
     console.log(`Application is running on port ${port}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
