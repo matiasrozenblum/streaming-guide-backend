@@ -15,7 +15,7 @@ COPY . .
 RUN npm run build
 
 # Expone el puerto
-EXPOSE 3000
+EXPOSE 8080
 
 ENV PORT=8080
 
