@@ -8,7 +8,7 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ## [Unreleased]
 
 ### Added
-- Added several new endpoints with tests to facilitate a backoffice feature
+- Added login feature for backoffice
 
 ### Changed
 
