@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { CacheModule } from '@nestjs/cache-manager';
+import { redisStore } from 'cache-manager-redis-store';
 import { Channel } from './channels/channels.entity';
 import { Program } from './programs/programs.entity';
 import { Schedule } from './schedules/schedules.entity';
@@ -15,31 +17,53 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ConfigModule as AppConfigModule } from './config/config.module';
 import { Config } from './config/config.entity';
 import { CacheConfigModule } from './cache/cache.module';
+import { AuthModule } from './auth/auth.module';
+import { AppService } from './app.service';
 
 @Module({
   imports: [
     ScheduleModule.forRoot(),
-    ConfigModule.forRoot(),
-    CacheConfigModule,
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      url: process.env.DATABASE_URL,
-      ssl: {
-        rejectUnauthorized: false, 
-      },
-      autoLoadEntities: true,
-      synchronize: true, // Only for development
-      entities: [Channel, Program, Schedule, Panelist, Config],
-      logging: true, // Enable query logging for debugging
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
     }),
-    TypeOrmModule.forFeature([Channel, Program, Schedule, Panelist]),
+    CacheConfigModule,
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: async (config: ConfigService) => {
+        const dbUrl = config.get<string>('DATABASE_URL');
+        console.log('🌐 Connecting to DB:', dbUrl);
+    
+        return {
+          type: 'postgres',
+          url: dbUrl,
+          ssl: {
+            rejectUnauthorized: false,
+          },
+          autoLoadEntities: true,
+          synchronize: true, // ⚠️ cambiar a false en producción real
+          logging: true,
+        };
+      },
+    }),
+    CacheModule.register({
+      isGlobal: true,
+      store: redisStore,
+      host: process.env.REDIS_HOST ?? 'localhost',
+      port: parseInt(process.env.REDIS_PORT ?? '6379', 10),
+      ttl: 3600,
+    }),
+    TypeOrmModule.forFeature([Channel, Program, Schedule, Panelist, Config]),
     ChannelsModule,
     ProgramsModule,
     SchedulesModule,
     PanelistsModule,
     ScraperModule,
     AppConfigModule,
+    AuthModule,
   ],
   controllers: [AppController],
+  providers: [AppService],
 })
 export class AppModule {}
