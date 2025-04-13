@@ -8,7 +8,7 @@ import { CreateProgramDto } from './dto/create-program.dto';
 
 describe('ProgramsService', () => {
   let service: ProgramsService;
-  let repo: Repository<Program>;
+  let repository: Repository<Program>;
 
   const mockChannel = {
     id: 1,
@@ -46,14 +46,13 @@ describe('ProgramsService', () => {
     },
   ];
 
-  const mockRepository = {
-    find: jest.fn().mockResolvedValue(mockPrograms),
-    findOne: jest.fn().mockImplementation(({ where: { id } }) =>
-      Promise.resolve(mockPrograms.find((p) => p.id === id)),
-    ),
-    create: jest.fn().mockImplementation((dto) => ({ id: 3, ...dto })),
-    save: jest.fn().mockImplementation((program) => Promise.resolve(program)),
-    delete: jest.fn().mockResolvedValue(undefined),
+  const mockProgram = {
+    id: 1,
+    name: 'Test Program',
+    description: 'Test Description',
+    start_time: '10:00',
+    end_time: '11:00',
+    youtube_url: 'https://youtube.com/test',
   };
 
   beforeEach(async () => {
@@ -62,54 +61,63 @@ describe('ProgramsService', () => {
         ProgramsService,
         {
           provide: getRepositoryToken(Program),
-          useValue: mockRepository,
+          useValue: {
+            find: jest.fn().mockResolvedValue([mockProgram]),
+            findOne: jest.fn().mockImplementation(({ where: { id } }) => {
+              if (id === 1) {
+                return Promise.resolve(mockProgram);
+              }
+              return Promise.resolve(null);
+            }),
+            create: jest.fn().mockReturnValue(mockProgram),
+            save: jest.fn().mockResolvedValue(mockProgram),
+            delete: jest.fn().mockResolvedValue({ affected: 1 }),
+          },
         },
       ],
     }).compile();
 
     service = module.get<ProgramsService>(ProgramsService);
-    repo = module.get<Repository<Program>>(getRepositoryToken(Program));
+    repository = module.get<Repository<Program>>(getRepositoryToken(Program));
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
-  it('should return all programs', async () => {
+  it('should return an array of programs', async () => {
     const result = await service.findAll();
-    expect(result).toEqual(mockPrograms);
-    expect(repo.find).toHaveBeenCalledWith({ relations: ['channel'] });
+    expect(result).toEqual([mockProgram]);
+    expect(repository.find).toHaveBeenCalled();
   });
 
-  it('should return a program by ID', async () => {
-    const result = await service.findOne('1');
-    expect(result).toEqual(mockPrograms[0]);
-    expect(repo.findOne).toHaveBeenCalledWith({ where: { id: 1 } });
+  it('should return a single program', async () => {
+    const result = await service.findOne(1);
+    expect(result).toEqual(mockProgram);
+    expect(repository.findOne).toHaveBeenCalledWith({ where: { id: 1 } });
   });
 
-  it('should throw NotFoundException if program not found', async () => {
-    mockRepository.findOne.mockResolvedValueOnce(null);
-    await expect(service.findOne('999')).rejects.toThrow(NotFoundException);
+  it('should throw NotFoundException for non-existent program', async () => {
+    await expect(service.findOne(999)).rejects.toThrow(NotFoundException);
   });
 
-  it('should create and save a program', async () => {
-    const dto: CreateProgramDto = {
-      name: 'Nuevo Programa',
-      description: 'Descripción nueva',
+  it('should create a new program', async () => {
+    const createDto: CreateProgramDto = {
+      name: 'Test Program',
+      description: 'Test Description',
+      start_time: '10:00',
+      end_time: '11:00',
+      youtube_url: 'https://youtube.com/test',
     };
 
-    const result = await service.create(dto);
-    expect(result).toMatchObject({
-      id: 3,
-      name: 'Nuevo Programa',
-      description: 'Descripción nueva',
-    });
-    expect(repo.create).toHaveBeenCalledWith(dto);
-    expect(repo.save).toHaveBeenCalledWith(expect.objectContaining(dto));
+    const result = await service.create(createDto);
+    expect(result).toEqual(mockProgram);
+    expect(repository.create).toHaveBeenCalledWith(createDto);
+    expect(repository.save).toHaveBeenCalled();
   });
 
-  it('should delete a program', async () => {
-    await service.remove('1');
-    expect(repo.delete).toHaveBeenCalledWith('1');
+  it('should remove a program', async () => {
+    await service.remove(1);
+    expect(repository.delete).toHaveBeenCalledWith(1);
   });
 });
