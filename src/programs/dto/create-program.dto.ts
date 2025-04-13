@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsTimeZone } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateProgramDto {
@@ -9,8 +9,8 @@ export class CreateProgramDto {
 
   @ApiProperty({ description: 'Descripción del programa' })
   @IsString()
-  @IsNotEmpty()
-  description: string;
+  @IsOptional()
+  description?: string;
 
   @ApiProperty({ description: 'Hora de inicio del programa' })
   @IsString()
@@ -22,7 +22,11 @@ export class CreateProgramDto {
   @IsOptional()
   end_time?: string;
 
-  @IsOptional()
   @IsString()
+  @IsOptional()
+  logo_url?: string;
+
+  @IsString()
+  @IsOptional()
   youtube_url?: string;
 }

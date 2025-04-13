@@ -25,7 +25,7 @@ export class ProgramsController {
   @ApiResponse({ status: 200, description: 'Return the program.' })
   @ApiResponse({ status: 404, description: 'Program not found.' })
   findOne(@Param('id') id: string): Promise<Program> {
-    return this.programsService.findOne(id);
+    return this.programsService.findOne(Number(id));
   }
 
   @Post()
@@ -48,6 +48,6 @@ export class ProgramsController {
   @ApiResponse({ status: 200, description: 'The program has been successfully deleted.' })
   @ApiResponse({ status: 404, description: 'Program not found.' })
   remove(@Param('id') id: string): Promise<void> {
-    return this.programsService.remove(id);
+    return this.programsService.remove(Number(id));
   }
 }
