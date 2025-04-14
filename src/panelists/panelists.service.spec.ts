@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PanelistsService } from './panelists.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Panelist } from './panelists.entity';
+import { Program } from '../programs/programs.entity';
 import { CreatePanelistDto } from './dto/create-panelist.dto';
 import { UpdatePanelistDto } from './dto/update-panelist.dto';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
@@ -10,7 +11,8 @@ import { Repository, UpdateResult, DeleteResult } from 'typeorm';
 
 describe('PanelistsService', () => {
   let service: PanelistsService;
-  let panelistRepository: Repository<Panelist>;
+  let panelistRepository: Partial<Repository<Panelist>>;
+  let programRepository: Partial<Repository<Program>>;
   let cacheManager: any;
 
   const mockPanelist = {
@@ -21,37 +23,49 @@ describe('PanelistsService', () => {
     programs: [],
   };
 
-  const mockCacheManager = {
-    get: jest.fn(),
-    set: jest.fn(),
-    del: jest.fn(),
-  };
-
   beforeEach(async () => {
+    panelistRepository = {
+      find: jest.fn().mockResolvedValue([mockPanelist]),
+      findOne: jest.fn().mockImplementation(({ where: { id } }) => {
+        if (id === 1) {
+          return Promise.resolve(mockPanelist);
+        }
+        return Promise.resolve(null);
+      }),
+      create: jest.fn().mockReturnValue(mockPanelist),
+      save: jest.fn().mockResolvedValue(mockPanelist),
+      delete: jest.fn().mockResolvedValue({ affected: 1, raw: [] } as DeleteResult),
+    };
+
+    programRepository = {
+      findOne: jest.fn(),
+    };
+
+    cacheManager = {
+      get: jest.fn(),
+      set: jest.fn(),
+      del: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PanelistsService,
         {
           provide: getRepositoryToken(Panelist),
-          useValue: {
-            find: jest.fn().mockResolvedValue([mockPanelist]),
-            findOne: jest.fn().mockResolvedValue(mockPanelist),
-            create: jest.fn().mockReturnValue(mockPanelist),
-            save: jest.fn().mockResolvedValue(mockPanelist),
-            update: jest.fn().mockResolvedValue({ affected: 1, raw: [], generatedMaps: [] } as UpdateResult),
-            delete: jest.fn().mockResolvedValue({ affected: 1, raw: [] } as DeleteResult),
-          },
+          useValue: panelistRepository,
+        },
+        {
+          provide: getRepositoryToken(Program),
+          useValue: programRepository,
         },
         {
           provide: CACHE_MANAGER,
-          useValue: mockCacheManager,
+          useValue: cacheManager,
         },
       ],
     }).compile();
 
     service = module.get<PanelistsService>(PanelistsService);
-    panelistRepository = module.get<Repository<Panelist>>(getRepositoryToken(Panelist));
-    cacheManager = module.get(CACHE_MANAGER);
   });
 
   it('should be defined', () => {
@@ -66,7 +80,7 @@ describe('PanelistsService', () => {
     });
 
     it('should return cached panelists if available', async () => {
-      mockCacheManager.get.mockResolvedValueOnce([mockPanelist]);
+      cacheManager.get.mockResolvedValueOnce([mockPanelist]);
       const result = await service.findAll();
       expect(result).toEqual([mockPanelist]);
       expect(cacheManager.get).toHaveBeenCalledWith('panelists:all');
@@ -81,6 +95,7 @@ describe('PanelistsService', () => {
       expect(panelistRepository.findOne).toHaveBeenCalledWith({
         where: { id: 1 },
         relations: ['programs'],
+        loadEagerRelations: true,
       });
     });
 
@@ -120,6 +135,7 @@ describe('PanelistsService', () => {
       expect(panelistRepository.findOne).toHaveBeenCalledWith({
         where: { id: 1 },
         relations: ['programs'],
+        loadEagerRelations: true,
       });
       expect(cacheManager.del).toHaveBeenCalledWith('panelists:all');
       expect(cacheManager.del).toHaveBeenCalledWith('panelists:1');
