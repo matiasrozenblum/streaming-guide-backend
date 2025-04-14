@@ -44,7 +44,7 @@ export class PanelistsController {
     if (!panelist) {
       throw new NotFoundException(`Panelist with ID ${id} not found`);
     }
-    return panelist.programs;
+    return panelist.programs || [];
   }
 
   @Post(':id/programs/:programId')
