@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Patch, NotFoundException } from '@nestjs/common';
 import { PanelistsService } from './panelists.service';
 import { CreatePanelistDto } from './dto/create-panelist.dto';
 import { UpdatePanelistDto } from './dto/update-panelist.dto';
@@ -42,7 +42,7 @@ export class PanelistsController {
     return this.panelistsService.create(createPanelistDto);
   }
 
-  @Put(':id')
+  @Patch(':id')
   @ApiOperation({ summary: 'Actualizar un panelista' })
   @ApiResponse({ status: 200, description: 'Panelista actualizado', type: Panelist })
   async update(
