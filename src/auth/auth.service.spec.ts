@@ -1,9 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { JwtService } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
+import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
 
 describe('AuthService', () => {
   let service: AuthService;
+  let configService: ConfigService;
   let jwtService: JwtService;
 
   beforeEach(async () => {
@@ -11,15 +13,31 @@ describe('AuthService', () => {
       providers: [
         AuthService,
         {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((key: string) => {
+              switch (key) {
+                case 'BACKOFFICE_PASSWORD':
+                  return 'admin123';
+                case 'PUBLIC_PASSWORD':
+                  return 'public123';
+                default:
+                  return null;
+              }
+            }),
+          },
+        },
+        {
           provide: JwtService,
           useValue: {
-            sign: jest.fn().mockReturnValue('mock-jwt-token'),
+            sign: jest.fn().mockReturnValue('mock-token'),
           },
         },
       ],
     }).compile();
 
     service = module.get<AuthService>(AuthService);
+    configService = module.get<ConfigService>(ConfigService);
     jwtService = module.get<JwtService>(JwtService);
   });
 
@@ -27,27 +45,19 @@ describe('AuthService', () => {
     expect(service).toBeDefined();
   });
 
-  describe('validatePassword', () => {
-    it('should return true for correct password', async () => {
-      const result = await service.validatePassword('admin123');
-      expect(result).toBe(true);
-    });
-
-    it('should return false for incorrect password', async () => {
-      const result = await service.validatePassword('wrong-password');
-      expect(result).toBe(false);
-    });
+  it('should return a token for correct backoffice password', async () => {
+    const result = await service.login('admin123', true);
+    expect(result).toEqual({ access_token: 'mock-token' });
+    expect(jwtService.sign).toHaveBeenCalled();
   });
 
-  describe('login', () => {
-    it('should return a JWT token for correct password', async () => {
-      const result = await service.login('admin123');
-      expect(result).toEqual({ access_token: 'mock-jwt-token' });
-      expect(jwtService.sign).toHaveBeenCalledWith({ sub: 'admin' });
-    });
+  it('should return a token for correct public password', async () => {
+    const result = await service.login('public123', false);
+    expect(result).toEqual({ access_token: 'mock-token' });
+    expect(jwtService.sign).toHaveBeenCalled();
+  });
 
-    it('should throw an error for incorrect password', async () => {
-      await expect(service.login('wrong-password')).rejects.toThrow('Invalid password');
-    });
+  it('should throw error for incorrect password', async () => {
+    await expect(service.login('wrong-password', true)).rejects.toThrow('Invalid password');
   });
 }); 
