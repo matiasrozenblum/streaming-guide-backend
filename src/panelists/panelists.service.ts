@@ -53,6 +53,7 @@ export class PanelistsService {
     const panelist = await this.panelistsRepository.findOne({
       where: { id: Number(id) },
       relations: ['programs'],
+      loadEagerRelations: true,
     });
 
     if (!panelist) {
