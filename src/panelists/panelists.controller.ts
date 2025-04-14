@@ -97,4 +97,12 @@ export class PanelistsController {
       throw new NotFoundException(`Panelist with ID ${id} not found`);
     }
   }
+
+  @Post(':id/clear-cache')
+  @ApiOperation({ summary: 'Clear cache for a panelist' })
+  @ApiResponse({ status: 200, description: 'Cache cleared successfully' })
+  async clearCache(@Param('id') id: string): Promise<{ message: string }> {
+    await this.panelistsService.clearCache(id);
+    return { message: 'Cache cleared successfully' };
+  }
 }

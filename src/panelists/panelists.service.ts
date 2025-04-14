@@ -133,6 +133,8 @@ export class PanelistsService {
     if (!panelist.programs.some(p => p.id === program.id)) {
       panelist.programs.push(program);
       await this.panelistsRepository.save(panelist);
+      // Invalidate cache for this panelist
+      await this.cacheManager.del(`panelists:${panelistId}`);
     }
   }
 
@@ -145,6 +147,12 @@ export class PanelistsService {
     if (panelist.programs) {
       panelist.programs = panelist.programs.filter(p => p.id !== Number(programId));
       await this.panelistsRepository.save(panelist);
+      // Invalidate cache for this panelist
+      await this.cacheManager.del(`panelists:${panelistId}`);
     }
+  }
+
+  async clearCache(id: string): Promise<void> {
+    await this.cacheManager.del(`panelists:${id}`);
   }
 }
