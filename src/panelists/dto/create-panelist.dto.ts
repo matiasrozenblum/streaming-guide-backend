@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreatePanelistDto {
@@ -8,7 +8,7 @@ export class CreatePanelistDto {
   name: string;
 
   @ApiProperty({ description: 'Biografía del panelista' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   bio?: string;
 }

@@ -1,9 +1,10 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Patch, NotFoundException } from '@nestjs/common';
 import { PanelistsService } from './panelists.service';
 import { CreatePanelistDto } from './dto/create-panelist.dto';
 import { UpdatePanelistDto } from './dto/update-panelist.dto';
 import { Panelist } from './panelists.entity';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Program } from '../programs/programs.entity';
 
 @ApiTags('panelists')  // Etiqueta para los panelistas
 @Controller('panelists')
@@ -35,6 +36,37 @@ export class PanelistsController {
     return this.panelistsService.findByProgram(programId);
   }
 
+  @Get(':id/programs')
+  @ApiOperation({ summary: 'Obtener programas de un panelista' })
+  @ApiResponse({ status: 200, description: 'Lista de programas del panelista', type: [Program] })
+  async getPanelistPrograms(@Param('id') id: string): Promise<Program[]> {
+    const panelist = await this.panelistsService.findOne(id);
+    if (!panelist) {
+      throw new NotFoundException(`Panelist with ID ${id} not found`);
+    }
+    return panelist.programs || [];
+  }
+
+  @Post(':id/programs/:programId')
+  @ApiOperation({ summary: 'Agregar panelista a un programa' })
+  @ApiResponse({ status: 200, description: 'Panelista agregado al programa' })
+  async addToProgram(
+    @Param('id') id: string,
+    @Param('programId') programId: string,
+  ): Promise<void> {
+    await this.panelistsService.addToProgram(id, programId);
+  }
+
+  @Delete(':id/programs/:programId')
+  @ApiOperation({ summary: 'Remover panelista de un programa' })
+  @ApiResponse({ status: 200, description: 'Panelista removido del programa' })
+  async removeFromProgram(
+    @Param('id') id: string,
+    @Param('programId') programId: string,
+  ): Promise<void> {
+    await this.panelistsService.removeFromProgram(id, programId);
+  }
+
   @Post()
   @ApiOperation({ summary: 'Crear un nuevo panelista' })
   @ApiResponse({ status: 201, description: 'Panelista creado', type: Panelist })
@@ -42,7 +74,7 @@ export class PanelistsController {
     return this.panelistsService.create(createPanelistDto);
   }
 
-  @Put(':id')
+  @Patch(':id')
   @ApiOperation({ summary: 'Actualizar un panelista' })
   @ApiResponse({ status: 200, description: 'Panelista actualizado', type: Panelist })
   async update(
@@ -64,5 +96,13 @@ export class PanelistsController {
     if (!result) {
       throw new NotFoundException(`Panelist with ID ${id} not found`);
     }
+  }
+
+  @Post(':id/clear-cache')
+  @ApiOperation({ summary: 'Clear cache for a panelist' })
+  @ApiResponse({ status: 200, description: 'Cache cleared successfully' })
+  async clearCache(@Param('id') id: string): Promise<{ message: string }> {
+    await this.panelistsService.clearCache(id);
+    return { message: 'Cache cleared successfully' };
   }
 }

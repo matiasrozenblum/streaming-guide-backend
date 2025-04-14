@@ -6,12 +6,15 @@ import { CreatePanelistDto } from './dto/create-panelist.dto';
 import { UpdatePanelistDto } from './dto/update-panelist.dto';
 import { Cache } from 'cache-manager';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Program } from '../programs/programs.entity';
 
 @Injectable()
 export class PanelistsService {
   constructor(
     @InjectRepository(Panelist)
     private panelistsRepository: Repository<Panelist>,
+    @InjectRepository(Program)
+    private programsRepository: Repository<Program>,
     @Inject(CACHE_MANAGER)
     private cacheManager: Cache,
   ) {}
@@ -50,6 +53,7 @@ export class PanelistsService {
     const panelist = await this.panelistsRepository.findOne({
       where: { id: Number(id) },
       relations: ['programs'],
+      loadEagerRelations: true,
     });
 
     if (!panelist) {
@@ -62,18 +66,15 @@ export class PanelistsService {
   }
 
   async findByProgram(programId: string): Promise<Panelist[]> {
-    return this.panelistsRepository.find({
-      where: { programs: { id: Number(programId) } },
-      relations: ['programs'],
-    });
+    return this.panelistsRepository
+      .createQueryBuilder('panelist')
+      .innerJoin('panelist.programs', 'program')
+      .where('program.id = :programId', { programId: Number(programId) })
+      .getMany();
   }
 
   async create(createPanelistDto: CreatePanelistDto): Promise<Panelist> {
-    const panelist = this.panelistsRepository.create({
-      name: createPanelistDto.name,
-      bio: createPanelistDto.bio,
-    });
-
+    const panelist = this.panelistsRepository.create(createPanelistDto);
     const savedPanelist = await this.panelistsRepository.save(panelist);
     
     // Invalidar caché
@@ -87,17 +88,7 @@ export class PanelistsService {
     if (!panelist) {
       throw new NotFoundException(`Panelist with ID ${id} not found`);
     }
-
-    if (updatePanelistDto.name) {
-      panelist.name = updatePanelistDto.name;
-    }
-    if (updatePanelistDto.photo_url) {
-      panelist.photo_url = updatePanelistDto.photo_url;
-    }
-    if (updatePanelistDto.bio) {
-      panelist.bio = updatePanelistDto.bio;
-    }
-
+    Object.assign(panelist, updatePanelistDto);
     const updatedPanelist = await this.panelistsRepository.save(panelist);
     
     // Invalidar caché
@@ -120,5 +111,48 @@ export class PanelistsService {
       return true;
     }
     return false;
+  }
+
+  async addToProgram(panelistId: string, programId: string): Promise<void> {
+    const panelist = await this.findOne(panelistId);
+    if (!panelist) {
+      throw new NotFoundException(`Panelist with ID ${panelistId} not found`);
+    }
+
+    const program = await this.programsRepository.findOne({
+      where: { id: Number(programId) },
+    });
+    if (!program) {
+      throw new NotFoundException(`Program with ID ${programId} not found`);
+    }
+
+    if (!panelist.programs) {
+      panelist.programs = [];
+    }
+
+    if (!panelist.programs.some(p => p.id === program.id)) {
+      panelist.programs.push(program);
+      await this.panelistsRepository.save(panelist);
+      // Invalidate cache for this panelist
+      await this.cacheManager.del(`panelists:${panelistId}`);
+    }
+  }
+
+  async removeFromProgram(panelistId: string, programId: string): Promise<void> {
+    const panelist = await this.findOne(panelistId);
+    if (!panelist) {
+      throw new NotFoundException(`Panelist with ID ${panelistId} not found`);
+    }
+
+    if (panelist.programs) {
+      panelist.programs = panelist.programs.filter(p => p.id !== Number(programId));
+      await this.panelistsRepository.save(panelist);
+      // Invalidate cache for this panelist
+      await this.cacheManager.del(`panelists:${panelistId}`);
+    }
+  }
+
+  async clearCache(id: string): Promise<void> {
+    await this.cacheManager.del(`panelists:${id}`);
   }
 }

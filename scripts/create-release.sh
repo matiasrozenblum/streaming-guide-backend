@@ -17,8 +17,8 @@ echo "🔢 Current version tags:"
 git tag -l | sort -V
 
 read -p "👉 Enter new version (e.g., 1.2.3): " VERSION
-RELEASE_BRANCH="release/v$VERSION"
-TAG="v$VERSION"
+RELEASE_BRANCH="release/$VERSION"
+TAG="$VERSION"
 DATE=$(date +"%Y-%m-%d")
 
 # Create release branch and tag
@@ -35,8 +35,8 @@ if command -v gh &> /dev/null; then
   gh pr create \
     --base main \
     --head "$RELEASE_BRANCH" \
-    --title "Release v$VERSION" \
-    --body "Versión v$VERSION lista para ser publicada. 🚀\n\n> Incluye cambios listados en el CHANGELOG.md."
+    --title "Release $VERSION" \
+    --body "Versión $VERSION lista para ser publicada.
   echo "✅ Pull Request created!"
 else
   echo "⚠️ GitHub CLI not found. PR not created."
