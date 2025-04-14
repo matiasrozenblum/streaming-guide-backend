@@ -8,6 +8,8 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ## [Unreleased]
 
 ### Added
+- Added logic to fetch program-panelist relations
+- Added endpoint toclean cache for specific panelist
 
 ### Changed
 
@@ -16,12 +18,12 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ### Fixed
 - Fixed panelists bio, now it is optional
 
-## [v0.1.1] - 2025-04-06
+## [0.1.1] - 2025-04-06
 
 ### Added
 - Added login feature for backoffice
 
-## [v0.1.0] - 2025-04-06
+## [0.1.0] - 2025-04-06
 
 ### Added
 - Added redis caché service for schedule GETs
