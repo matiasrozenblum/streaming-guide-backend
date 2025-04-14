@@ -8,15 +8,20 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ## [Unreleased]
 
 ### Added
-- Added login feature for backoffice
 
 ### Changed
 
 ### Removed
 
 ### Fixed
+- Fixed panelists bio, now it is optional
 
-## [v0.0.9] - 2025-04-06
+## [v0.1.1] - 2025-04-06
+
+### Added
+- Added login feature for backoffice
+
+## [v0.1.0] - 2025-04-06
 
 ### Added
 - Added redis caché service for schedule GETs
@@ -24,12 +29,12 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ### Removed
 - Removed changelog modification from release script
 
-## [v0.0.9] - 2025-04-06
+## [0.0.9] - 2025-04-06
 
 ### Fixed
 - Fixed cors and 502 errors in prod
 
-## [v0.0.8] - 2025-04-06
+## [0.0.8] - 2025-04-06
 
 ### Added
 - Added coverage check to PRs

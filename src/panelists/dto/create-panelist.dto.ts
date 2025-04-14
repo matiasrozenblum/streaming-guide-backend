@@ -9,6 +9,5 @@ export class CreatePanelistDto {
 
   @ApiProperty({ description: 'Biografía del panelista' })
   @IsString()
-  @IsNotEmpty()
   bio?: string;
 }
