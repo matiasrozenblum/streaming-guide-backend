@@ -4,6 +4,7 @@ import { CreatePanelistDto } from './dto/create-panelist.dto';
 import { UpdatePanelistDto } from './dto/update-panelist.dto';
 import { Panelist } from './panelists.entity';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Program } from '../programs/programs.entity';
 
 @ApiTags('panelists')  // Etiqueta para los panelistas
 @Controller('panelists')
@@ -33,6 +34,37 @@ export class PanelistsController {
   @ApiResponse({ status: 200, description: 'Lista de panelistas del programa', type: [Panelist] })
   findByProgram(@Param('programId') programId: string): Promise<Panelist[]> {
     return this.panelistsService.findByProgram(programId);
+  }
+
+  @Get(':id/programs')
+  @ApiOperation({ summary: 'Obtener programas de un panelista' })
+  @ApiResponse({ status: 200, description: 'Lista de programas del panelista', type: [Program] })
+  async getPanelistPrograms(@Param('id') id: string): Promise<Program[]> {
+    const panelist = await this.panelistsService.findOne(id);
+    if (!panelist) {
+      throw new NotFoundException(`Panelist with ID ${id} not found`);
+    }
+    return panelist.programs;
+  }
+
+  @Post(':id/programs/:programId')
+  @ApiOperation({ summary: 'Agregar panelista a un programa' })
+  @ApiResponse({ status: 200, description: 'Panelista agregado al programa' })
+  async addToProgram(
+    @Param('id') id: string,
+    @Param('programId') programId: string,
+  ): Promise<void> {
+    await this.panelistsService.addToProgram(id, programId);
+  }
+
+  @Delete(':id/programs/:programId')
+  @ApiOperation({ summary: 'Remover panelista de un programa' })
+  @ApiResponse({ status: 200, description: 'Panelista removido del programa' })
+  async removeFromProgram(
+    @Param('id') id: string,
+    @Param('programId') programId: string,
+  ): Promise<void> {
+    await this.panelistsService.removeFromProgram(id, programId);
   }
 
   @Post()
