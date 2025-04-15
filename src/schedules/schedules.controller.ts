@@ -1,9 +1,9 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Put, NotFoundException, Query } from '@nestjs/common';
 import { SchedulesService } from './schedules.service';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { Schedule } from './schedules.entity';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 
 @ApiTags('schedules')  // Etiqueta para los horarios
 @Controller('schedules')
@@ -11,9 +11,13 @@ export class SchedulesController {
   constructor(private readonly schedulesService: SchedulesService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Obtener todos los horarios' })
+  @ApiOperation({ summary: 'Obtener todos los horarios o filtrar por día' })
+  @ApiQuery({ name: 'day', required: false, description: 'Día de la semana para filtrar (ej: monday, tuesday, etc.)' })
   @ApiResponse({ status: 200, description: 'Lista de horarios', type: [Schedule] })
-  findAll(): Promise<{ data: Schedule[]; total: number }> {
+  async findAll(@Query('day') day?: string): Promise<Schedule[]> {
+    if (day) {
+      return this.schedulesService.findByDay(day);
+    }
     return this.schedulesService.findAll();
   }
 
