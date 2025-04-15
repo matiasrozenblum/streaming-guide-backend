@@ -8,12 +8,21 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ## [Unreleased]
 
 ### Added
-- Added logic to fetch program-panelist relations
-- Added endpoint toclean cache for specific panelist
 
 ### Changed
+- Improved loading time
 
 ### Removed
+
+### Fixed
+
+---
+
+## [0.1.3] - 2025-04-06
+
+### Added
+- Added logic to fetch program-panelist relations
+- Added endpoint toclean cache for specific panelist
 
 ### Fixed
 - Fixed panelists bio, now it is optional

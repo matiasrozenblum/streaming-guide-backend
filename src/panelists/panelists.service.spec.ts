@@ -26,7 +26,8 @@ describe('PanelistsService', () => {
   beforeEach(async () => {
     panelistRepository = {
       find: jest.fn().mockResolvedValue([mockPanelist]),
-      findOne: jest.fn().mockImplementation(({ where: { id } }) => {
+      findOne: jest.fn().mockImplementation((options) => {
+        const id = (options?.where as { id: number })?.id;
         if (id === 1) {
           return Promise.resolve(mockPanelist);
         }
@@ -36,6 +37,15 @@ describe('PanelistsService', () => {
       save: jest.fn().mockResolvedValue(mockPanelist),
       delete: jest.fn().mockResolvedValue({ affected: 1, raw: [] } as DeleteResult),
     };
+
+    // Mock the findOne calls to include loadEagerRelations
+    jest.spyOn(panelistRepository, 'findOne').mockImplementation((options) => {
+      const id = (options?.where as { id: number })?.id;
+      if (id === 1) {
+        return Promise.resolve(mockPanelist);
+      }
+      return Promise.resolve(null);
+    });
 
     programRepository = {
       findOne: jest.fn(),
@@ -95,7 +105,6 @@ describe('PanelistsService', () => {
       expect(panelistRepository.findOne).toHaveBeenCalledWith({
         where: { id: 1 },
         relations: ['programs'],
-        loadEagerRelations: true,
       });
     });
 
@@ -135,7 +144,6 @@ describe('PanelistsService', () => {
       expect(panelistRepository.findOne).toHaveBeenCalledWith({
         where: { id: 1 },
         relations: ['programs'],
-        loadEagerRelations: true,
       });
       expect(cacheManager.del).toHaveBeenCalledWith('panelists:all');
       expect(cacheManager.del).toHaveBeenCalledWith('panelists:1');

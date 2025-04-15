@@ -39,19 +39,20 @@ export class PanelistsService {
     return panelists;
   }
 
-  async findOne(id: number): Promise<Panelist> {
+  async findOne(id: string | number): Promise<Panelist> {
+    const startTime = Date.now();
     const cacheKey = `panelists:${id}`;
     console.log(`[Cache] Attempting to get panelist ${id} from cache`);
     
     let panelist = await this.cacheManager.get<Panelist>(cacheKey);
     if (panelist) {
       console.log(`[Cache] Cache HIT for panelist ${id}`);
-      return panelist as Panelist;
+      return panelist;
     }
     
     console.log(`[Cache] Cache MISS for panelist ${id}, fetching from database`);
     panelist = await this.panelistsRepository.findOne({
-      where: { id },
+      where: { id: Number(id) },
       relations: ['programs'],
       loadEagerRelations: true,
     });
@@ -61,7 +62,7 @@ export class PanelistsService {
     }
     
     console.log(`[Cache] Setting cache for panelist ${id}`);
-    await this.cacheManager.set(cacheKey, panelist);
+    await this.cacheManager.set(cacheKey, panelist, 300);
     
     return panelist;
   }
