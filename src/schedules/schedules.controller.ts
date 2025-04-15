@@ -13,7 +13,7 @@ export class SchedulesController {
   @Get()
   @ApiOperation({ summary: 'Obtener todos los horarios' })
   @ApiResponse({ status: 200, description: 'Lista de horarios', type: [Schedule] })
-  findAll(): Promise<Schedule[]> {
+  findAll(): Promise<{ data: Schedule[]; total: number }> {
     return this.schedulesService.findAll();
   }
 
@@ -66,10 +66,11 @@ export class SchedulesController {
   @Delete(':id')
   @ApiOperation({ summary: 'Eliminar un horario por ID' })
   @ApiResponse({ status: 204, description: 'Horario eliminado' })
-  async remove(@Param('id') id: string): Promise<void> {
+  async remove(@Param('id') id: string): Promise<boolean> {
     const result = await this.schedulesService.remove(id);
     if (!result) {
       throw new NotFoundException(`Schedule with ID ${id} not found`);
     }
+    return result;
   }
 }

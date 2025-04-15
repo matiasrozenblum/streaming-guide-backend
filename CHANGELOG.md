@@ -17,7 +17,12 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
-## [0.1.2] - 2025-04-06
+## [0.1.4] - 2025-04-15
+
+### Changed
+- Improved loading time
+
+## [0.1.3] - 2025-04-14
 
 ### Added
 - Added logic to fetch program-panelist relations
@@ -26,7 +31,7 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ### Fixed
 - Fixed panelists bio, now it is optional
 
-## [0.1.1] - 2025-04-06
+## [0.1.1] - 2025-04-13
 
 ### Added
 - Added login feature for backoffice

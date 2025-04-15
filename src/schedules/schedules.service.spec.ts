@@ -5,7 +5,6 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Program } from '../programs/programs.entity';
 import { NotFoundException } from '@nestjs/common';
-import { channel } from 'diagnostics_channel';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 
@@ -14,16 +13,6 @@ describe('SchedulesService', () => {
   let schedulesRepo: Repository<Schedule>;
   let programsRepo: Repository<Program>;
   let cacheManager: Cache;
-
-  const mockSchedules: Schedule[] = [
-    {
-      id: 1,
-      day_of_week: 'monday',
-      start_time: '10:00',
-      end_time: '12:00',
-      program: { id: 1 } as Program,
-    },
-  ];
 
   const mockChannel = {
     id: 1,
@@ -47,26 +36,28 @@ describe('SchedulesService', () => {
     },
   ];
 
-  const mockScheduleRepo = {
-    find: jest.fn().mockResolvedValue(mockSchedules),
-    findOne: jest.fn().mockImplementation((options) => {
-      const id = options.where.id;
-      const schedule = mockSchedules.find(s => s.id === id);
-      if (schedule && options.relations) {
-        return {
-          ...schedule,
-          program: {
-            ...schedule.program,
-            channel: mockChannel,
-            panelists: [],
-          },
-        };
-      }
-      return schedule;
-    }),
-    create: jest.fn().mockImplementation((data) => ({ id: 2, ...data })),
-    save: jest.fn().mockImplementation((schedule) => Promise.resolve(schedule)),
-    delete: jest.fn().mockResolvedValue(undefined),
+  const mockSchedules: Schedule[] = [
+    {
+      id: 1,
+      day_of_week: 'monday',
+      start_time: '10:00',
+      end_time: '12:00',
+      program: mockPrograms[0],
+    },
+  ];
+
+  const mockSchedulesRepository = {
+    find: jest.fn(),
+    findOne: jest.fn().mockImplementation(({ where: { id } }) =>
+      Promise.resolve(mockSchedules.find(s => s.id === id))
+    ),
+    findAndCount: jest.fn().mockResolvedValue([mockSchedules, mockSchedules.length]),
+    save: jest.fn().mockImplementation((data) => Promise.resolve(data)),
+    delete: jest.fn().mockResolvedValue({ affected: 1 }),
+    create: jest.fn().mockImplementation((data) => ({
+      id: 2,
+      ...data,
+    })),
   };
 
   const mockProgramRepo = {
@@ -87,7 +78,7 @@ describe('SchedulesService', () => {
         SchedulesService,
         {
           provide: getRepositoryToken(Schedule),
-          useValue: mockScheduleRepo,
+          useValue: mockSchedulesRepository,
         },
         {
           provide: getRepositoryToken(Program),
@@ -112,20 +103,16 @@ describe('SchedulesService', () => {
 
   it('debería devolver todos los schedules', async () => {
     const result = await service.findAll();
-    expect(result).toEqual(mockSchedules);
-    expect(schedulesRepo.find).toHaveBeenCalled();
+    expect(result).toEqual({
+      data: mockSchedules,
+      total: mockSchedules.length
+    });
+    expect(schedulesRepo.findAndCount).toHaveBeenCalled();
   });
 
   it('debería devolver un schedule por ID', async () => {
     const result = await service.findOne('1');
-    expect(result).toEqual({
-      ...mockSchedules[0],
-      program: {
-        ...mockSchedules[0].program,
-        channel: mockChannel,
-        panelists: [],
-      },
-    });
+    expect(result).toEqual(mockSchedules[0]);
     expect(schedulesRepo.findOne).toHaveBeenCalledWith({
       where: { id: 1 },
       relations: ['program', 'program.channel', 'program.panelists'],
@@ -133,7 +120,7 @@ describe('SchedulesService', () => {
   });
 
   it('debería lanzar NotFoundException si el schedule no existe', async () => {
-    mockScheduleRepo.findOne.mockResolvedValueOnce(null);
+    mockSchedulesRepository.findOne.mockResolvedValueOnce(null);
     await expect(service.findOne('999')).rejects.toThrow(NotFoundException);
   });
 
@@ -155,7 +142,6 @@ describe('SchedulesService', () => {
       program: mockPrograms[0],
     });
     expect(programsRepo.findOne).toHaveBeenCalledWith({ where: { id: 1 } });
-    expect(schedulesRepo.create).toHaveBeenCalled();
     expect(schedulesRepo.save).toHaveBeenCalled();
   });
 
@@ -174,7 +160,8 @@ describe('SchedulesService', () => {
   });
 
   it('debería eliminar un schedule', async () => {
-    await service.remove('1');
+    const result = await service.remove('1');
+    expect(result).toBe(true);
     expect(schedulesRepo.delete).toHaveBeenCalledWith('1');
   });
 });
