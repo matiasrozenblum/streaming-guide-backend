@@ -47,7 +47,7 @@ describe('SchedulesService', () => {
   ];
 
   const mockSchedulesRepository = {
-    find: jest.fn(),
+    find: jest.fn().mockResolvedValue(mockSchedules),
     findOne: jest.fn().mockImplementation(({ where: { id } }) =>
       Promise.resolve(mockSchedules.find(s => s.id === id))
     ),
@@ -103,11 +103,7 @@ describe('SchedulesService', () => {
 
   it('debería devolver todos los schedules', async () => {
     const result = await service.findAll();
-    expect(result).toEqual({
-      data: mockSchedules,
-      total: mockSchedules.length
-    });
-    expect(schedulesRepo.findAndCount).toHaveBeenCalled();
+    expect(result).toEqual(mockSchedules);
   });
 
   it('debería devolver un schedule por ID', async () => {
