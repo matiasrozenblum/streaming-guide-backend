@@ -13,7 +13,7 @@ export class SchedulesController {
   @Get()
   @ApiOperation({ summary: 'Obtener todos los horarios' })
   @ApiResponse({ status: 200, description: 'Lista de horarios', type: [Schedule] })
-  findAll(): Promise<Schedule[]> {
+  findAll(): Promise<{ data: Schedule[]; total: number }> {
     return this.schedulesService.findAll();
   }
 
