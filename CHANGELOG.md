@@ -10,6 +10,7 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ### Added
 
 ### Changed
+- Improved loading time
 
 ### Removed
 
@@ -17,7 +18,7 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
-## [0.1.2] - 2025-04-06
+## [0.1.3] - 2025-04-06
 
 ### Added
 - Added logic to fetch program-panelist relations
