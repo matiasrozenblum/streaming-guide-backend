@@ -29,14 +29,13 @@ export class SchedulesService {
     private cacheManager: Cache,
   ) {}
 
-  async findAll(options: FindAllOptions = {}): Promise<{ data: Schedule[]; total: number }> {
+  async findAll(options: FindAllOptions = {}): Promise<Schedule[]> {
     const startTime = Date.now();
-    const { page = 1, limit = 50, dayOfWeek, relations = ['program', 'program.channel', 'program.panelists'], select } = options;
-    const skip = (page - 1) * limit;
+    const { dayOfWeek, relations = ['program', 'program.channel', 'program.panelists'], select } = options;
 
     // Build cache key based on options
-    const cacheKey = `schedules:all:${page}:${limit}:${dayOfWeek || 'all'}`;
-    const cachedResult = await this.cacheManager.get<{ data: Schedule[]; total: number }>(cacheKey);
+    const cacheKey = `schedules:all:${dayOfWeek || 'all'}`;
+    const cachedResult = await this.cacheManager.get<Schedule[]>(cacheKey);
 
     if (cachedResult) {
       console.log(`Cache HIT for ${cacheKey}. Time: ${Date.now() - startTime}ms`);
@@ -55,8 +54,6 @@ export class SchedulesService {
     const findOptions: FindManyOptions<Schedule> = {
       where,
       relations,
-      skip,
-      take: limit,
       order: {
         start_time: 'ASC',
       },
@@ -69,12 +66,11 @@ export class SchedulesService {
       }, {});
     }
 
-    const [data, total] = await this.schedulesRepository.findAndCount(findOptions);
+    const data = await this.schedulesRepository.find(findOptions);
     
-    const result = { data, total };
-    await this.cacheManager.set(cacheKey, result, 300); // 5 minutes cache
+    await this.cacheManager.set(cacheKey, data, 300); // 5 minutes cache
     console.log(`Database query completed. Total time: ${Date.now() - startTime}ms`);
-    return result;
+    return data;
   }
 
   async findOne(id: string | number, options: { relations?: string[]; select?: string[] } = {}): Promise<Schedule> {
@@ -123,7 +119,10 @@ export class SchedulesService {
   async findByDay(dayOfWeek: string): Promise<Schedule[]> {
     return this.schedulesRepository.find({
       where: { day_of_week: dayOfWeek },
-      relations: ['program'],
+      relations: ['program', 'program.channel', 'program.panelists'],
+      order: {
+        start_time: 'ASC',
+      },
     });
   }
 
