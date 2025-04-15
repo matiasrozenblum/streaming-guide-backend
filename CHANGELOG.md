@@ -12,8 +12,10 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ### Changed
 
 ### Removed
+- Removed pagination logic
 
 ### Fixed
+- Fixed contract with frontend
 
 ---
 
