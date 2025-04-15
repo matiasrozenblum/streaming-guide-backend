@@ -20,7 +20,12 @@ describe('PanelistsController', () => {
 
   const mockPanelistsService = {
     findAll: jest.fn().mockResolvedValue([mockPanelist]),
-    findOne: jest.fn().mockResolvedValue(mockPanelist),
+    findOne: jest.fn().mockImplementation((id) => {
+      if (id === 1) {
+        return Promise.resolve(mockPanelist);
+      }
+      return Promise.reject(new NotFoundException());
+    }),
     findByProgram: jest.fn().mockResolvedValue([mockPanelist]),
     create: jest.fn().mockResolvedValue(mockPanelist),
     update: jest.fn().mockResolvedValue(mockPanelist),
@@ -55,15 +60,14 @@ describe('PanelistsController', () => {
   });
 
   describe('findOne', () => {
-    it('should return a single panelist', async () => {
-      const result = await controller.findOne('1');
+    it('should return a panelist by id', async () => {
+      const result = await controller.findOne(1);
       expect(result).toEqual(mockPanelist);
-      expect(service.findOne).toHaveBeenCalledWith('1');
+      expect(service.findOne).toHaveBeenCalledWith(1);
     });
 
-    it('should throw NotFoundException when panelist does not exist', async () => {
-      mockPanelistsService.findOne.mockResolvedValueOnce(null);
-      await expect(controller.findOne('999')).rejects.toThrow(NotFoundException);
+    it('should throw NotFoundException if panelist not found', async () => {
+      await expect(controller.findOne(999)).rejects.toThrow(NotFoundException);
     });
   });
 

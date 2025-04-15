@@ -33,6 +33,7 @@ import { AppService } from './app.service';
       inject: [ConfigService],
       useFactory: async (config: ConfigService) => {
         const dbUrl = config.get<string>('DATABASE_URL');
+        const isProduction = config.get<string>('NODE_ENV') === 'production';
         console.log('🌐 Connecting to DB:', dbUrl);
     
         return {
@@ -42,8 +43,21 @@ import { AppService } from './app.service';
             rejectUnauthorized: false,
           },
           autoLoadEntities: true,
-          synchronize: true, // ⚠️ cambiar a false en producción real
-          logging: true,
+          synchronize: !isProduction, // Disable in production
+          logging: !isProduction, // Disable in production
+          // Connection pooling
+          extra: {
+            max: 20, // Maximum number of connections in the pool
+            connectionTimeoutMillis: 2000, // Connection timeout
+            idleTimeoutMillis: 30000, // Idle connection timeout
+            // Enable prepared statements
+            statement_timeout: 10000, // Statement timeout in ms
+            query_timeout: 10000, // Query timeout in ms
+          },
+          // Cache queries
+          cache: {
+            duration: 30000, // 30 seconds
+          },
         };
       },
     }),
