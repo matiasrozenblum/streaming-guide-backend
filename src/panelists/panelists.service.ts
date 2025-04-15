@@ -39,29 +39,29 @@ export class PanelistsService {
     return panelists;
   }
 
-  async findOne(id: string): Promise<Panelist> {
-    const startTime = Date.now();
+  async findOne(id: number): Promise<Panelist> {
     const cacheKey = `panelists:${id}`;
-    const cachedPanelist = await this.cacheManager.get<Panelist>(cacheKey);
-
-    if (cachedPanelist) {
-      console.log(`Cache HIT for ${cacheKey}. Time: ${Date.now() - startTime}ms`);
-      return cachedPanelist;
+    console.log(`[Cache] Attempting to get panelist ${id} from cache`);
+    
+    let panelist = await this.cacheManager.get<Panelist>(cacheKey);
+    if (panelist) {
+      console.log(`[Cache] Cache HIT for panelist ${id}`);
+      return panelist as Panelist;
     }
-
-    console.log(`Cache MISS for ${cacheKey}`);
-    const panelist = await this.panelistsRepository.findOne({
-      where: { id: Number(id) },
+    
+    console.log(`[Cache] Cache MISS for panelist ${id}, fetching from database`);
+    panelist = await this.panelistsRepository.findOne({
+      where: { id },
       relations: ['programs'],
-      loadEagerRelations: true,
     });
-
+    
     if (!panelist) {
       throw new NotFoundException(`Panelist with ID ${id} not found`);
     }
-
+    
+    console.log(`[Cache] Setting cache for panelist ${id}`);
     await this.cacheManager.set(cacheKey, panelist);
-    console.log(`Database query completed. Total time: ${Date.now() - startTime}ms`);
+    
     return panelist;
   }
 
@@ -84,7 +84,7 @@ export class PanelistsService {
   }
 
   async update(id: string, updatePanelistDto: UpdatePanelistDto): Promise<Panelist> {
-    const panelist = await this.findOne(id);
+    const panelist = await this.findOne(Number(id));
     if (!panelist) {
       throw new NotFoundException(`Panelist with ID ${id} not found`);
     }
@@ -113,7 +113,7 @@ export class PanelistsService {
     return false;
   }
 
-  async addToProgram(panelistId: string, programId: string): Promise<void> {
+  async addToProgram(panelistId: number, programId: number): Promise<void> {
     const panelist = await this.findOne(panelistId);
     if (!panelist) {
       throw new NotFoundException(`Panelist with ID ${panelistId} not found`);
@@ -133,12 +133,12 @@ export class PanelistsService {
     if (!panelist.programs.some(p => p.id === program.id)) {
       panelist.programs.push(program);
       await this.panelistsRepository.save(panelist);
-      // Invalidate cache for this panelist
+      console.log(`[Cache] Invalidating cache for panelist ${panelistId} after adding to program ${programId}`);
       await this.cacheManager.del(`panelists:${panelistId}`);
     }
   }
 
-  async removeFromProgram(panelistId: string, programId: string): Promise<void> {
+  async removeFromProgram(panelistId: number, programId: number): Promise<void> {
     const panelist = await this.findOne(panelistId);
     if (!panelist) {
       throw new NotFoundException(`Panelist with ID ${panelistId} not found`);
@@ -147,7 +147,7 @@ export class PanelistsService {
     if (panelist.programs) {
       panelist.programs = panelist.programs.filter(p => p.id !== Number(programId));
       await this.panelistsRepository.save(panelist);
-      // Invalidate cache for this panelist
+      console.log(`[Cache] Invalidating cache for panelist ${panelistId} after removing from program ${programId}`);
       await this.cacheManager.del(`panelists:${panelistId}`);
     }
   }

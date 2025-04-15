@@ -21,7 +21,7 @@ export class PanelistsController {
   @Get(':id')
   @ApiOperation({ summary: 'Obtener un panelista por ID' })
   @ApiResponse({ status: 200, description: 'Panelista encontrado', type: Panelist })
-  async findOne(@Param('id') id: string): Promise<Panelist> {
+  async findOne(@Param('id') id: number): Promise<Panelist> {
     const panelist = await this.panelistsService.findOne(id);
     if (!panelist) {
       throw new NotFoundException(`Panelist with ID ${id} not found`);
@@ -39,7 +39,7 @@ export class PanelistsController {
   @Get(':id/programs')
   @ApiOperation({ summary: 'Obtener programas de un panelista' })
   @ApiResponse({ status: 200, description: 'Lista de programas del panelista', type: [Program] })
-  async getPanelistPrograms(@Param('id') id: string): Promise<Program[]> {
+  async getPanelistPrograms(@Param('id') id: number): Promise<Program[]> {
     const panelist = await this.panelistsService.findOne(id);
     if (!panelist) {
       throw new NotFoundException(`Panelist with ID ${id} not found`);
@@ -51,8 +51,8 @@ export class PanelistsController {
   @ApiOperation({ summary: 'Agregar panelista a un programa' })
   @ApiResponse({ status: 200, description: 'Panelista agregado al programa' })
   async addToProgram(
-    @Param('id') id: string,
-    @Param('programId') programId: string,
+    @Param('id') id: number,
+    @Param('programId') programId: number,
   ): Promise<void> {
     await this.panelistsService.addToProgram(id, programId);
   }
@@ -61,8 +61,8 @@ export class PanelistsController {
   @ApiOperation({ summary: 'Remover panelista de un programa' })
   @ApiResponse({ status: 200, description: 'Panelista removido del programa' })
   async removeFromProgram(
-    @Param('id') id: string,
-    @Param('programId') programId: string,
+    @Param('id') id: number,
+    @Param('programId') programId: number,
   ): Promise<void> {
     await this.panelistsService.removeFromProgram(id, programId);
   }

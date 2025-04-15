@@ -36,7 +36,7 @@ if command -v gh &> /dev/null; then
     --base main \
     --head "$RELEASE_BRANCH" \
     --title "Release $VERSION" \
-    --body "Versión $VERSION lista para ser publicada.
+    --body "Versión $VERSION lista para ser publicada."
   echo "✅ Pull Request created!"
 else
   echo "⚠️ GitHub CLI not found. PR not created."
