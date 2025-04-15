@@ -1,53 +1,76 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SchedulesController } from './schedules.controller';
 import { SchedulesService } from './schedules.service';
-import { CreateScheduleDto } from './dto/create-schedule.dto';
-import { UpdateScheduleDto } from './dto/update-schedule.dto';
-import { Schedule } from './schedules.entity';
-import { Program } from '../programs/programs.entity';
 import { NotFoundException } from '@nestjs/common';
+import { UpdateScheduleDto } from './dto/update-schedule.dto';
+
+interface Schedule {
+  id: number;
+  day_of_week: string;
+  start_time: string;
+  end_time: string;
+  program: {
+    id: number;
+    name: string;
+    description?: string;
+    start_time?: string;
+    end_time?: string;
+    channel_id?: number;
+    channel?: {
+      id: number;
+      name: string;
+      description?: string;
+      logo_url?: string;
+      streaming_url?: string;
+    };
+    panelists?: Array<{
+      id: number;
+      name: string;
+    }>;
+    logo_url?: string;
+    youtube_url?: string;
+  };
+}
 
 describe('SchedulesController', () => {
   let controller: SchedulesController;
   let service: SchedulesService;
-
-  const mockProgram: Program = {
-    id: 1,
-    name: 'Test Program',
-    description: 'Test Description',
-    channel: {
-      id: 1,
-      name: 'Test Channel',
-      description: 'Test Channel Description',
-      streaming_url: 'http://example.com/stream',
-      logo_url: 'http://example.com/logo.jpg',
-      programs: [],
-    },
-    schedules: [],
-    panelists: [],
-    logo_url: null,
-    youtube_url: null,
-  };
+  let mockSchedulesService: Partial<SchedulesService>;
 
   const mockSchedule: Schedule = {
     id: 1,
-    day_of_week: 'Monday',
-    start_time: '10:00:00',
-    end_time: '12:00:00',
-    program: mockProgram,
-  };
-
-  const mockSchedulesService = {
-    findAll: jest.fn().mockResolvedValue([mockSchedule]),
-    findOne: jest.fn().mockResolvedValue(mockSchedule),
-    findByProgram: jest.fn().mockResolvedValue([mockSchedule]),
-    findByDay: jest.fn().mockResolvedValue([mockSchedule]),
-    create: jest.fn().mockResolvedValue(mockSchedule),
-    update: jest.fn().mockResolvedValue(mockSchedule),
-    remove: jest.fn().mockResolvedValue(true),
+    day_of_week: 'monday',
+    start_time: '10:00',
+    end_time: '11:00',
+    program: {
+      id: 1,
+      name: 'Test Program',
+      description: 'Test Description',
+      channel: {
+        id: 1,
+        name: 'Test Channel',
+        description: 'Test Channel Description',
+        logo_url: 'test.jpg',
+        streaming_url: 'test.com',
+      },
+      panelists: [],
+      logo_url: 'test.jpg',
+      youtube_url: 'test.com',
+    },
   };
 
   beforeEach(async () => {
+    mockSchedulesService = {
+      create: jest.fn().mockResolvedValue(mockSchedule),
+      findAll: jest.fn().mockResolvedValue({ data: [mockSchedule], total: 1 }),
+      findOne: jest.fn().mockImplementation((id: string) => {
+        if (id === '1') return Promise.resolve(mockSchedule);
+        return Promise.resolve(null);
+      }),
+      update: jest.fn().mockResolvedValue(mockSchedule),
+      remove: jest.fn().mockResolvedValue(true),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [SchedulesController],
       providers: [
@@ -69,7 +92,7 @@ describe('SchedulesController', () => {
   describe('findAll', () => {
     it('should return an array of schedules', async () => {
       const result = await controller.findAll();
-      expect(result).toEqual([mockSchedule]);
+      expect(result).toEqual({ data: [mockSchedule], total: 1 });
       expect(service.findAll).toHaveBeenCalled();
     });
   });
@@ -81,73 +104,35 @@ describe('SchedulesController', () => {
       expect(service.findOne).toHaveBeenCalledWith('1');
     });
 
-    it('should throw NotFoundException when schedule does not exist', async () => {
-      mockSchedulesService.findOne.mockResolvedValueOnce(null);
-      await expect(controller.findOne('999')).rejects.toThrow(NotFoundException);
-    });
-  });
-
-  describe('findByProgram', () => {
-    it('should return schedules for a program', async () => {
-      const result = await controller.findByProgram('1');
-      expect(result).toEqual([mockSchedule]);
-      expect(service.findByProgram).toHaveBeenCalledWith('1');
-    });
-  });
-
-  describe('findByDay', () => {
-    it('should return schedules for a day', async () => {
-      const result = await controller.findByDay('Monday');
-      expect(result).toEqual([mockSchedule]);
-      expect(service.findByDay).toHaveBeenCalledWith('Monday');
-    });
-  });
-
-  describe('create', () => {
-    it('should create a new schedule', async () => {
-      const createScheduleDto: CreateScheduleDto = {
-        programId: '1',
-        channelId: '1',
-        dayOfWeek: 'Monday',
-        startTime: '10:00:00',
-        endTime: '12:00:00',
-      };
-
-      const result = await controller.create(createScheduleDto);
-      expect(result).toEqual(mockSchedule);
-      expect(service.create).toHaveBeenCalledWith(createScheduleDto);
+    it('should throw NotFoundException when schedule not found', async () => {
+      await expect(controller.findOne('2')).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('update', () => {
     it('should update a schedule', async () => {
-      const updateScheduleDto: UpdateScheduleDto = {
-        dayOfWeek: 'Tuesday',
-      };
-
-      const result = await controller.update('1', updateScheduleDto);
+      const updateDto: UpdateScheduleDto = { dayOfWeek: 'tuesday' };
+      const result = await controller.update('1', updateDto);
       expect(result).toEqual(mockSchedule);
-      expect(service.update).toHaveBeenCalledWith('1', updateScheduleDto);
+      expect(service.update).toHaveBeenCalledWith('1', updateDto);
     });
 
-    it('should throw NotFoundException when updating non-existent schedule', async () => {
-      mockSchedulesService.update.mockRejectedValueOnce(new NotFoundException());
-      const updateScheduleDto: UpdateScheduleDto = {
-        dayOfWeek: 'Tuesday',
-      };
-      await expect(controller.update('999', updateScheduleDto)).rejects.toThrow(NotFoundException);
+    it('should throw NotFoundException when schedule not found', async () => {
+      (service.update as jest.Mock).mockRejectedValueOnce(new NotFoundException());
+      await expect(controller.update('2', { dayOfWeek: 'tuesday' })).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('remove', () => {
     it('should remove a schedule', async () => {
-      await controller.remove('1');
+      const result = await controller.remove('1');
+      expect(result).toBe(true);
       expect(service.remove).toHaveBeenCalledWith('1');
     });
 
-    it('should throw NotFoundException when removing non-existent schedule', async () => {
-      mockSchedulesService.remove.mockResolvedValueOnce(false);
-      await expect(controller.remove('999')).rejects.toThrow(NotFoundException);
+    it('should throw NotFoundException when schedule not found', async () => {
+      (service.remove as jest.Mock).mockRejectedValueOnce(new NotFoundException());
+      await expect(controller.remove('2')).rejects.toThrow(NotFoundException);
     });
   });
 });

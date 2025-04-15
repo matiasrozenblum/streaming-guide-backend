@@ -77,7 +77,7 @@ export class SchedulesService {
     return result;
   }
 
-  async findOne(id: string, options: { relations?: string[]; select?: string[] } = {}): Promise<Schedule> {
+  async findOne(id: string | number, options: { relations?: string[]; select?: string[] } = {}): Promise<Schedule> {
     const startTime = Date.now();
     const { relations = ['program', 'program.channel', 'program.panelists'], select } = options;
     const cacheKey = `schedules:${id}:${relations.join(',')}`;
@@ -108,7 +108,7 @@ export class SchedulesService {
       throw new NotFoundException(`Schedule with ID ${id} not found`);
     }
 
-    await this.cacheManager.set(cacheKey, schedule, 300); // 5 minutes cache
+    await this.cacheManager.set(cacheKey, schedule, 300);
     console.log(`Database query completed. Total time: ${Date.now() - startTime}ms`);
     return schedule;
   }
