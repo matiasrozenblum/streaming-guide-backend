@@ -12,12 +12,24 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ### Changed
 
 ### Removed
+
+### Fixed
+
+---
+
+## [0.1.6] - 2025-04-15
+
+### Fixed
+- Fixed scrapers in railway environments
+- Fixed program creation, description is now correctly handled as optional
+
+## [0.1.5] - 2025-04-15
+
+### Removed
 - Removed pagination logic
 
 ### Fixed
 - Fixed contract with frontend
-
----
 
 ## [0.1.4] - 2025-04-15
 
