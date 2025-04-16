@@ -7,10 +7,10 @@ export class CreateProgramDto {
   @IsNotEmpty()
   name: string;
 
-  @ApiProperty({ description: 'Descripción del programa' })
+  @ApiProperty({ description: 'Descripción del programa', required: false })
   @IsString()
-  @IsNotEmpty()
-  description: string;
+  @IsOptional()
+  description?: string;
 
   @ApiProperty({ description: 'Hora de inicio del programa' })
   @IsString()

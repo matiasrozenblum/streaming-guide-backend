@@ -22,13 +22,11 @@ describe('CreateProgramDto', () => {
     expect(nameError!.constraints).toHaveProperty('isNotEmpty');
   });
 
-  it('should fail if description is missing', async () => {
+  it('should allow description to be missing', async () => {
     const dto = new CreateProgramDto();
     dto.name = 'Test Program';
     const errors = await validate(dto);
-    const descriptionError = errors.find(e => e.property === 'description');
-    expect(descriptionError).toBeDefined();
-    expect(descriptionError!.constraints).toHaveProperty('isNotEmpty');
+    expect(errors).toHaveLength(0);
   });
 
   it('should allow optional fields to be missing', async () => {
