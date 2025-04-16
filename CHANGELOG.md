@@ -13,8 +13,10 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 - Improved loading time
 
 ### Removed
+- Removed pagination logic
 
 ### Fixed
+- Fixed contract with frontend
 
 ---
 
