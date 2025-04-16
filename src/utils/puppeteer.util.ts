@@ -1,32 +1,28 @@
 // src/utils/puppeteer.util.ts
-import { launch } from 'puppeteer-core';
-import chrome from 'chrome-aws-lambda';
+import puppeteer from 'puppeteer';
 
 export async function getBrowser() {
-  const isProduction = process.env.NODE_ENV === 'production';
+  const env = process.env.NODE_ENV || 'development';
 
-  if (isProduction) {
-    const executablePath = await chrome.executablePath;
-    console.log('🚀 Launching puppeteer in PRODUCTION mode.');
-    console.log('📍 Executable path:', executablePath);
-
-    const options = {
-      args: chrome.args,
-      executablePath,
-      headless: chrome.headless,
-      ignoreHTTPSErrors: true,
-    };
-
-    return await launch(options);
+  if (env === 'production' || env === 'staging') {
+    console.log(`🚀 Launching puppeteer in ${env.toUpperCase()} mode`);
+    return await puppeteer.launch({
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--disable-gpu',
+        '--window-size=1920x1080',
+      ],
+      headless: true,
+    });
   }
 
-  const devExecutablePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-  console.log('🚀 Launching puppeteer in DEVELOPMENT mode.');
-  console.log('📍 Executable path:', devExecutablePath);
-
-  return await launch({
+  console.log('🚀 Launching puppeteer in DEVELOPMENT mode');
+  return await puppeteer.launch({
     headless: false,
-    executablePath: devExecutablePath,
+    executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: [],
   });
 }
