@@ -4,31 +4,48 @@ import axios from 'axios';
 @Injectable()
 export class YoutubeDiscoveryService {
   private readonly apiKey = process.env.YOUTUBE_API_KEY;
-  private readonly apiUrl = 'https://www.googleapis.com/youtube/v3';
 
-  async getChannelIdsFromLiveUrls(urls: string[]): Promise<Record<string, string>> {
-    const results: Record<string, string> = {};
-    
+  async getChannelIdFromHandle(handle: string): Promise<{
+    channelId: string;
+    title: string;
+  } | null> {
+    const query = handle.startsWith('@') ? handle : `@${handle}`;
+
+    const response = await axios.get('https://www.googleapis.com/youtube/v3/search', {
+      params: {
+        part: 'snippet',
+        q: query,
+        type: 'channel',
+        key: this.apiKey,
+        maxResults: 1,
+      },
+    });
+
+    const item = response.data.items?.[0];
+    if (!item) return null;
+
+    return {
+      channelId: item.snippet.channelId,
+      title: item.snippet.title,
+    };
+  }
+
+  async getChannelIdsFromLiveUrls(urls: string[]): Promise<
+    { handle: string; channelId: string; title: string }[]
+  > {
+    const results: { handle: string; channelId: string; title: string }[] = [];
+
     for (const url of urls) {
-      const handle = url.split('@')[1].split('/')[0];
-      try {
-        const response = await axios.get(`${this.apiUrl}/search`, {
-          params: {
-            part: 'snippet',
-            q: handle,
-            type: 'channel',
-            key: this.apiKey,
-          },
-        });
-        
-        if (response.data.items?.[0]?.id?.channelId) {
-          results[url] = response.data.items[0].id.channelId;
-        }
-      } catch (error) {
-        console.error(`Error fetching channel ID for ${handle}:`, error);
+      const match = url.match(/youtube\.com\/@([^/]+)\/live/);
+      if (!match) continue;
+
+      const handle = `@${match[1]}`;
+      const channel = await this.getChannelIdFromHandle(handle);
+      if (channel) {
+        results.push({ handle, ...channel });
       }
     }
-    
+
     return results;
   }
-} 
+}
