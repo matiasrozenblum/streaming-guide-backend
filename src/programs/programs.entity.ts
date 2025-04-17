@@ -39,6 +39,6 @@ export class Program {
   @Column({ nullable: true })
   is_live: boolean;
 
-  @Column({ nullable: true })
+  @Column({ type: 'text', nullable: true })
   stream_url: string | null;
 }
