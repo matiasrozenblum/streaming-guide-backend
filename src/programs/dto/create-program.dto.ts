@@ -7,7 +7,7 @@ export class CreateProgramDto {
   @IsNotEmpty()
   name: string;
 
-  @ApiProperty({ description: 'Descripción del programa' })
+  @ApiProperty({ description: 'Descripción del programa', required: false })
   @IsString()
   @IsOptional()
   description?: string;
