@@ -13,10 +13,11 @@ describe('ChannelsController', () => {
   const mockChannel: Channel = {
     id: 1,
     name: 'Test Channel',
-    streaming_url: 'https://test.com/stream',
+    streaming_url: 'https://test.com',
     logo_url: 'https://test.com/logo.png',
     description: 'Test Description',
     programs: [],
+    youtube_channel_id: 'test-channel-id',
   };
 
   const mockChannelsService = {

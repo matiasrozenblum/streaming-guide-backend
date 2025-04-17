@@ -7,6 +7,10 @@ import { Program } from '../programs/programs.entity';
 import { Cache } from 'cache-manager';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
+import * as dayjs from 'dayjs';
+import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
+import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
+import { YoutubeLiveService } from '../youtube/youtube-live.service';
 
 interface FindAllOptions {
   page?: number;
@@ -27,13 +31,17 @@ export class SchedulesService {
 
     @Inject(CACHE_MANAGER)
     private cacheManager: Cache,
-  ) {}
 
-  async findAll(options: FindAllOptions = {}): Promise<Schedule[]> {
+    private readonly youtubeLiveService: YoutubeLiveService,
+  ) {
+    dayjs.extend(isSameOrAfter);
+    dayjs.extend(isSameOrBefore);
+  }
+
+  async findAll(options: FindAllOptions = {}): Promise<any[]> {
     const startTime = Date.now();
     const { dayOfWeek, relations = ['program', 'program.channel', 'program.panelists'], select } = options;
 
-    // Build cache key based on options
     const cacheKey = `schedules:all:${dayOfWeek || 'all'}`;
     const cachedResult = await this.cacheManager.get<Schedule[]>(cacheKey);
 
@@ -43,14 +51,12 @@ export class SchedulesService {
     }
 
     console.log(`Cache MISS for ${cacheKey}`);
-    
-    // Build where clause
+
     const where: FindOptionsWhere<Schedule> = {};
     if (dayOfWeek) {
       where.day_of_week = dayOfWeek;
     }
 
-    // Build find options
     const findOptions: FindManyOptions<Schedule> = {
       where,
       relations,
@@ -67,10 +73,71 @@ export class SchedulesService {
     }
 
     const data = await this.schedulesRepository.find(findOptions);
-    
-    await this.cacheManager.set(cacheKey, data, 300); // 5 minutes cache
+
+    const now = dayjs().format('HH:mm');
+    const currentDay = dayjs().format('dddd').toLowerCase();
+    console.log('Current day:', currentDay);
+    console.log('Current time:', now);
+
+    const timeToNumber = (time: string) => {
+      const [hours, minutes] = time.split(':').map(Number);
+      return hours * 100 + minutes;
+    };
+
+    const enriched = await Promise.all(
+      data.map(async (schedule) => {
+        const start = dayjs(schedule.start_time, 'HH:mm');
+        const end = dayjs(schedule.end_time, 'HH:mm');
+
+        let isLive = false;
+        let streamUrl = schedule.program.youtube_url;
+
+        const currentTime = timeToNumber(now);
+        const startTime = timeToNumber(schedule.start_time);
+        const endTime = timeToNumber(schedule.end_time);
+
+        if (
+          schedule.day_of_week === currentDay &&
+          currentTime >= startTime &&
+          currentTime <= endTime
+        ) {
+          isLive = true;
+          console.log(`${schedule.program.name} is LIVE!`);
+
+          const channelId = schedule.program.channel.youtube_channel_id;
+          if (channelId) {
+            const videoId = await this.youtubeLiveService.getLiveVideoId(channelId);
+            if (videoId) {
+              streamUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+            }
+          }
+        } else {
+          console.log(`${schedule.program.name} is NOT live because:`);
+          if (schedule.day_of_week !== currentDay) {
+            console.log(`- Schedule day (${schedule.day_of_week}) doesn't match current day (${currentDay})`);
+          }
+          if (currentTime < startTime) {
+            console.log(`- Current time (${now}) is before start time (${schedule.start_time})`);
+          }
+          if (currentTime > endTime) {
+            console.log(`- Current time (${now}) is after end time (${schedule.end_time})`);
+          }
+        }
+
+        return {
+          ...schedule,
+          program: {
+            ...schedule.program,
+            is_live: isLive,
+            stream_url: streamUrl,
+          },
+        };
+      })
+    );
+
+    await this.cacheManager.set(cacheKey, enriched, 300);
     console.log(`Database query completed. Total time: ${Date.now() - startTime}ms`);
-    return data;
+    return enriched;
   }
 
   async findOne(id: string | number, options: { relations?: string[]; select?: string[] } = {}): Promise<Schedule> {
@@ -85,7 +152,7 @@ export class SchedulesService {
     }
 
     console.log(`Cache MISS for ${cacheKey}`);
-    
+
     const findOptions: FindOneOptions<Schedule> = {
       where: { id: Number(id) },
       relations,
@@ -117,36 +184,104 @@ export class SchedulesService {
   }
 
   async findByDay(dayOfWeek: string): Promise<Schedule[]> {
-    return this.schedulesRepository.find({
+    const data = await this.schedulesRepository.find({
       where: { day_of_week: dayOfWeek },
       relations: ['program', 'program.channel', 'program.panelists'],
       order: {
         start_time: 'ASC',
       },
     });
+
+    const now = dayjs().format('HH:mm');
+    const currentDay = dayjs().format('dddd').toLowerCase();
+    console.log('Current day:', currentDay);
+    console.log('Current time:', now);
+
+    const timeToNumber = (time: string) => {
+      const [hours, minutes] = time.split(':').map(Number);
+      return hours * 100 + minutes;
+    };
+
+    return Promise.all(
+      data.map(async (schedule) => {
+        console.log("SCHEDULE", schedule);
+        console.log("schedule.start_time", schedule.start_time);
+        console.log("schedule.end_time", schedule.end_time);
+        
+        let isLive = false;
+        let streamUrl = schedule.program.youtube_url;
+
+        console.log(`Checking program: ${schedule.program.name}`);
+        console.log(`Schedule day: ${schedule.day_of_week}`);
+        console.log(`Start time: ${schedule.start_time}`);
+        console.log(`End time: ${schedule.end_time}`);
+        console.log("now", now);
+
+        const currentTime = timeToNumber(now);
+        const startTime = timeToNumber(schedule.start_time);
+        const endTime = timeToNumber(schedule.end_time);
+
+        if (
+          schedule.day_of_week === currentDay &&
+          currentTime >= startTime &&
+          currentTime <= endTime
+        ) {
+          isLive = true;
+          console.log(`${schedule.program.name} is LIVE!`);
+
+          const channelId = schedule.program.channel.youtube_channel_id;
+          if (channelId) {
+            const videoId = await this.youtubeLiveService.getLiveVideoId(channelId);
+            if (videoId) {
+              streamUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+            }
+          }
+        } else {
+          console.log("isLive", isLive);
+          console.log(`${schedule.program.name} is NOT live because:`);
+          if (schedule.day_of_week !== currentDay) {
+            console.log(`- Schedule day (${schedule.day_of_week}) doesn't match current day (${currentDay})`);
+          }
+          if (currentTime < startTime) {
+            console.log(`- Current time (${now}) is before start time (${schedule.start_time})`);
+          }
+          if (currentTime > endTime) {
+            console.log(`- Current time (${now}) is after end time (${schedule.end_time})`);
+          }
+        }
+
+        return {
+          ...schedule,
+          program: {
+            ...schedule.program,
+            is_live: isLive,
+            stream_url: streamUrl,
+          },
+        };
+      })
+    );
   }
 
   async create(createScheduleDto: CreateScheduleDto): Promise<Schedule> {
     const program = await this.programsRepository.findOne({
       where: { id: parseInt(createScheduleDto.programId, 10) },
     });
-  
+
     if (!program) {
       throw new NotFoundException(`Program with ID ${createScheduleDto.programId} not found`);
     }
-  
+
     const schedule = this.schedulesRepository.create({
       day_of_week: createScheduleDto.dayOfWeek,
       start_time: createScheduleDto.startTime,
       end_time: createScheduleDto.endTime,
       program,
     });
-  
+
     const savedSchedule = await this.schedulesRepository.save(schedule);
-    
-    // Invalidar caché
+
     await this.cacheManager.del('schedules:all');
-    
+
     return savedSchedule;
   }
 

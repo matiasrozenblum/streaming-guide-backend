@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.1.7] - 2025-04-15
+
+### Added
+- Added youtube live integration and stream url for live streamings
+
 ## [0.1.6] - 2025-04-15
 
 ### Fixed
