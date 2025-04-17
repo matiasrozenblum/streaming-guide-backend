@@ -7,14 +7,10 @@ import { Program } from '../programs/programs.entity';
 import { Cache } from 'cache-manager';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
-import dayjs from 'dayjs';
-import 'dayjs/plugin/utc';
-import 'dayjs/plugin/timezone';
+import * as dayjs from 'dayjs';
+import * as utc from 'dayjs/plugin/utc';
+import * as timezone from 'dayjs/plugin/timezone';
 import { YoutubeLiveService } from '../youtube/youtube-live.service';
-
-// Initialize dayjs plugins
-dayjs.extend(require('dayjs/plugin/utc'));
-dayjs.extend(require('dayjs/plugin/timezone'));
 
 interface FindAllOptions {
   page?: number;
@@ -26,6 +22,8 @@ interface FindAllOptions {
 
 @Injectable()
 export class SchedulesService {
+  private dayjs: typeof dayjs;
+
   constructor(
     @InjectRepository(Schedule)
     private schedulesRepository: Repository<Schedule>,
@@ -37,7 +35,11 @@ export class SchedulesService {
     private cacheManager: Cache,
 
     private readonly youtubeLiveService: YoutubeLiveService,
-  ) {}
+  ) {
+    this.dayjs = dayjs;
+    this.dayjs.extend(utc);
+    this.dayjs.extend(timezone);
+  }
 
   async findAll(options: FindAllOptions = {}): Promise<any[]> {
     const startTime = Date.now();
@@ -76,8 +78,8 @@ export class SchedulesService {
     const data = await this.schedulesRepository.find(findOptions);
 
     // Get current time in Argentina timezone
-    const now = dayjs().tz('America/Argentina/Buenos_Aires').format('HH:mm');
-    const currentDay = dayjs().tz('America/Argentina/Buenos_Aires').format('dddd').toLowerCase();
+    const now = this.dayjs().tz('America/Argentina/Buenos_Aires').format('HH:mm');
+    const currentDay = this.dayjs().tz('America/Argentina/Buenos_Aires').format('dddd').toLowerCase();
     console.log('Current day:', currentDay);
     console.log('Current time:', now);
 
