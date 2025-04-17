@@ -8,7 +8,13 @@ import { Cache } from 'cache-manager';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import * as dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
 import { YoutubeLiveService } from '../youtube/youtube-live.service';
+
+// Initialize dayjs plugins
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 interface FindAllOptions {
   page?: number;
@@ -69,8 +75,9 @@ export class SchedulesService {
 
     const data = await this.schedulesRepository.find(findOptions);
 
-    const now = dayjs().format('HH:mm');
-    const currentDay = dayjs().format('dddd').toLowerCase();
+    // Get current time in Argentina timezone
+    const now = dayjs().tz('America/Argentina/Buenos_Aires').format('HH:mm');
+    const currentDay = dayjs().tz('America/Argentina/Buenos_Aires').format('dddd').toLowerCase();
     console.log('Current day:', currentDay);
     console.log('Current time:', now);
 
