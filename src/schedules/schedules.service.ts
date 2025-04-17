@@ -7,9 +7,14 @@ import { Program } from '../programs/programs.entity';
 import { Cache } from 'cache-manager';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
-import dayjs from 'dayjs';
+import * as dayjs from 'dayjs';
+import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
+import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
 import { YoutubeLiveService } from '../youtube/youtube-live.service';
 
+// Initialize dayjs plugins
+dayjs.extend(isSameOrAfter);
+dayjs.extend(isSameOrBefore);
 
 interface FindAllOptions {
   page?: number;
@@ -82,7 +87,6 @@ export class SchedulesService {
 
     const enriched = await Promise.all(
       data.map(async (schedule) => {
-
         let isLive = false;
         let streamUrl = schedule.program.youtube_url;
 
