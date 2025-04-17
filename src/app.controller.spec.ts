@@ -6,6 +6,7 @@ import { Schedule } from './schedules/schedules.entity';
 import { Panelist } from './panelists/panelists.entity';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
+import { YoutubeDiscoveryService } from './youtube/youtube-discovery.service';
 
 describe('AppController', () => {
   let controller: AppController;
@@ -31,6 +32,10 @@ describe('AppController', () => {
     save: jest.fn(),
   };
 
+  const mockDataSource = {
+    // Mock vacío si no se usa directamente
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AppController],
@@ -39,7 +44,8 @@ describe('AppController', () => {
         { provide: getRepositoryToken(Program), useValue: mockProgramRepo },
         { provide: getRepositoryToken(Schedule), useValue: mockScheduleRepo },
         { provide: getRepositoryToken(Panelist), useValue: mockPanelistRepo },
-        { provide: DataSource, useValue: {} }, // Mock vacío si no se usa directamente
+        { provide: DataSource, useValue: mockDataSource },
+        { provide: YoutubeDiscoveryService, useValue: { getChannelIdsFromLiveUrls: jest.fn() } },
       ],
     }).compile();
 

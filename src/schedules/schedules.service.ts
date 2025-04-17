@@ -7,6 +7,10 @@ import { Program } from '../programs/programs.entity';
 import { Cache } from 'cache-manager';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
+import * as dayjs from 'dayjs';
+import * as utc from 'dayjs/plugin/utc';
+import * as timezone from 'dayjs/plugin/timezone';
+import { YoutubeLiveService } from '../youtube/youtube-live.service';
 
 interface FindAllOptions {
   page?: number;
@@ -18,6 +22,8 @@ interface FindAllOptions {
 
 @Injectable()
 export class SchedulesService {
+  private dayjs: typeof dayjs;
+
   constructor(
     @InjectRepository(Schedule)
     private schedulesRepository: Repository<Schedule>,
@@ -27,13 +33,18 @@ export class SchedulesService {
 
     @Inject(CACHE_MANAGER)
     private cacheManager: Cache,
-  ) {}
 
-  async findAll(options: FindAllOptions = {}): Promise<Schedule[]> {
+    private readonly youtubeLiveService: YoutubeLiveService,
+  ) {
+    this.dayjs = dayjs;
+    this.dayjs.extend(utc);
+    this.dayjs.extend(timezone);
+  }
+
+  async findAll(options: FindAllOptions = {}): Promise<any[]> {
     const startTime = Date.now();
     const { dayOfWeek, relations = ['program', 'program.channel', 'program.panelists'], select } = options;
 
-    // Build cache key based on options
     const cacheKey = `schedules:all:${dayOfWeek || 'all'}`;
     const cachedResult = await this.cacheManager.get<Schedule[]>(cacheKey);
 
@@ -43,14 +54,12 @@ export class SchedulesService {
     }
 
     console.log(`Cache MISS for ${cacheKey}`);
-    
-    // Build where clause
+
     const where: FindOptionsWhere<Schedule> = {};
     if (dayOfWeek) {
       where.day_of_week = dayOfWeek;
     }
 
-    // Build find options
     const findOptions: FindManyOptions<Schedule> = {
       where,
       relations,
@@ -67,25 +76,69 @@ export class SchedulesService {
     }
 
     const data = await this.schedulesRepository.find(findOptions);
-    
-    await this.cacheManager.set(cacheKey, data, 300); // 5 minutes cache
-    console.log(`Database query completed. Total time: ${Date.now() - startTime}ms`);
-    return data;
+
+    // Get current time in Argentina timezone
+    const now = this.dayjs().tz('America/Argentina/Buenos_Aires').format('HH:mm');
+    const currentDay = this.dayjs().tz('America/Argentina/Buenos_Aires').format('dddd').toLowerCase();
+    console.log('Current day:', currentDay);
+    console.log('Current time:', now);
+
+    const timeToNumber = (time: string) => {
+      const [hours, minutes] = time.split(':').map(Number);
+      return hours * 100 + minutes;
+    };
+
+    const enriched = await Promise.all(
+      data.map(async (schedule) => {
+        let isLive = false;
+        let streamUrl = schedule.program.youtube_url;
+
+        const currentTime = timeToNumber(now);
+        const startTime = timeToNumber(schedule.start_time);
+        const endTime = timeToNumber(schedule.end_time);
+
+        if (
+          schedule.day_of_week === currentDay &&
+          currentTime >= startTime &&
+          currentTime <= endTime
+        ) {
+          isLive = true;
+          if (schedule.program.youtube_url) {
+            const channelId = schedule.program.channel.youtube_channel_id;
+            if (channelId) {
+              const videoId = await this.youtubeLiveService.getLiveVideoId(channelId);
+              if (videoId) {
+                streamUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+              }
+            }
+          }
+        }
+
+        return {
+          ...schedule,
+          program: {
+            ...schedule.program,
+            is_live: isLive,
+            stream_url: streamUrl,
+          },
+        };
+      })
+    );
+
+    await this.cacheManager.set(cacheKey, enriched, 30000); // Cache for 30 seconds
+    return enriched;
   }
 
   async findOne(id: string | number, options: { relations?: string[]; select?: string[] } = {}): Promise<Schedule> {
-    const startTime = Date.now();
     const { relations = ['program', 'program.channel', 'program.panelists'], select } = options;
-    const cacheKey = `schedules:${id}:${relations.join(',')}`;
-    const cachedSchedule = await this.cacheManager.get<Schedule>(cacheKey);
 
-    if (cachedSchedule) {
-      console.log(`Cache HIT for ${cacheKey}. Time: ${Date.now() - startTime}ms`);
-      return cachedSchedule;
+    const cacheKey = `schedules:${id}`;
+    const cachedResult = await this.cacheManager.get<Schedule>(cacheKey);
+
+    if (cachedResult) {
+      return cachedResult;
     }
 
-    console.log(`Cache MISS for ${cacheKey}`);
-    
     const findOptions: FindOneOptions<Schedule> = {
       where: { id: Number(id) },
       relations,
@@ -99,54 +152,49 @@ export class SchedulesService {
     }
 
     const schedule = await this.schedulesRepository.findOne(findOptions);
-
     if (!schedule) {
       throw new NotFoundException(`Schedule with ID ${id} not found`);
     }
 
-    await this.cacheManager.set(cacheKey, schedule, 300);
-    console.log(`Database query completed. Total time: ${Date.now() - startTime}ms`);
+    await this.cacheManager.set(cacheKey, schedule, 30000); // Cache for 30 seconds
     return schedule;
   }
 
   async findByProgram(programId: string): Promise<Schedule[]> {
     return this.schedulesRepository.find({
       where: { program: { id: Number(programId) } },
-      relations: ['program'],
+      relations: ['program', 'program.channel', 'program.panelists'],
+      order: {
+        day_of_week: 'ASC',
+        start_time: 'ASC',
+      },
     });
   }
 
   async findByDay(dayOfWeek: string): Promise<Schedule[]> {
-    return this.schedulesRepository.find({
-      where: { day_of_week: dayOfWeek },
-      relations: ['program', 'program.channel', 'program.panelists'],
-      order: {
-        start_time: 'ASC',
-      },
-    });
+    return this.findAll({ dayOfWeek });
   }
 
   async create(createScheduleDto: CreateScheduleDto): Promise<Schedule> {
     const program = await this.programsRepository.findOne({
       where: { id: parseInt(createScheduleDto.programId, 10) },
     });
-  
+
     if (!program) {
       throw new NotFoundException(`Program with ID ${createScheduleDto.programId} not found`);
     }
-  
+
     const schedule = this.schedulesRepository.create({
       day_of_week: createScheduleDto.dayOfWeek,
       start_time: createScheduleDto.startTime,
       end_time: createScheduleDto.endTime,
       program,
     });
-  
+
     const savedSchedule = await this.schedulesRepository.save(schedule);
-    
-    // Invalidar caché
+
     await this.cacheManager.del('schedules:all');
-    
+
     return savedSchedule;
   }
 

@@ -24,10 +24,25 @@ describe('CreateChannelDto', () => {
   it('should fail if streaming_url is missing', async () => {
     const dto = new CreateChannelDto();
     dto.name = 'Test Channel';
+    dto.logo_url = 'https://example.com/logo.png';
+    // streaming_url is not set at all
+
     const errors = await validate(dto);
-    const streamingUrlError = errors.find(e => e.property === 'streaming_url');
-    expect(streamingUrlError).toBeDefined();
-    expect(streamingUrlError!.constraints).toHaveProperty('isNotEmpty');
+    expect(errors).toHaveLength(1);
+    expect(errors[0].property).toBe('streaming_url');
+    expect(errors[0].constraints).toHaveProperty('isNotEmpty');
+  });
+
+  it('should fail if streaming_url is empty', async () => {
+    const dto = new CreateChannelDto();
+    dto.name = 'Test Channel';
+    dto.logo_url = 'https://example.com/logo.png';
+    dto.streaming_url = '';
+
+    const errors = await validate(dto);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].property).toBe('streaming_url');
+    expect(errors[0].constraints).toHaveProperty('isNotEmpty');
   });
 
   it('should allow description and logo_url to be optional', async () => {

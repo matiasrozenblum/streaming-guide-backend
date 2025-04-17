@@ -19,6 +19,8 @@ import { Config } from './config/config.entity';
 import { CacheConfigModule } from './cache/cache.module';
 import { AuthModule } from './auth/auth.module';
 import { AppService } from './app.service';
+import { YoutubeDiscoveryService } from './youtube/youtube-discovery.service';
+import { YoutubeLiveModule } from './youtube/youtube-live.module';
 
 @Module({
   imports: [
@@ -76,8 +78,12 @@ import { AppService } from './app.service';
     ScraperModule,
     AppConfigModule,
     AuthModule,
+    YoutubeLiveModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    YoutubeDiscoveryService,
+  ],
 })
 export class AppModule {}

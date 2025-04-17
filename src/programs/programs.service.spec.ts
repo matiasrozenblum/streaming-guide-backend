@@ -19,6 +19,7 @@ describe('ProgramsService', () => {
     logo_url: 'https://logo.com/luzu.png',
     streaming_url: 'https://youtube.com/luzu',
     programs: [],
+    youtube_channel_id: 'test-channel-id',
   };
 
   const mockPrograms: Program[] = [
@@ -33,6 +34,8 @@ describe('ProgramsService', () => {
       panelists: [],
       logo_url: null,
       youtube_url: null,
+      is_live: false,
+      stream_url: null,
     },
     {
       id: 2,
@@ -45,6 +48,8 @@ describe('ProgramsService', () => {
       panelists: [],
       logo_url: null,
       youtube_url: null,
+      is_live: false,
+      stream_url: null, 
     },
   ];
 
@@ -54,7 +59,13 @@ describe('ProgramsService', () => {
     description: 'Test Description',
     start_time: '10:00',
     end_time: '11:00',
+    channel: mockChannel,
+    schedules: [],
+    panelists: [],
+    logo_url: null,
     youtube_url: 'https://youtube.com/test',
+    is_live: false,
+    stream_url: null,
   };
 
   beforeEach(async () => {
