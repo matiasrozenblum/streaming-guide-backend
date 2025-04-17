@@ -12,8 +12,8 @@ describe('ChannelsService', () => {
   let repo: Repository<Channel>;
 
   const mockChannels: Channel[] = [
-    { id: 1, name: 'Luzu TV', logo_url: 'https://logo1.png', streaming_url: 'https://stream1.com', programs: [], description: 'Luzu TV is a streaming channel.' },
-    { id: 2, name: 'Olga', logo_url: 'https://logo2.png', streaming_url: 'https://stream2.com', programs: [], description: 'Olga is a streaming channel.' },
+    { id: 1, name: 'Luzu TV', logo_url: 'https://logo1.png', streaming_url: 'https://stream1.com', programs: [], description: 'Luzu TV is a streaming channel.', youtube_channel_id: 'channel1' },
+    { id: 2, name: 'Olga', logo_url: 'https://logo2.png', streaming_url: 'https://stream2.com', programs: [], description: 'Olga is a streaming channel.', youtube_channel_id: 'channel2' },
   ];
 
   const mockRepository = {

@@ -35,4 +35,10 @@ export class Program {
 
   @Column({ type: 'text', nullable: true })
   youtube_url: string | null;
+
+  @Column({ nullable: true })
+  is_live: boolean;
+
+  @Column({ type: 'text', nullable: true })
+  stream_url: string | null;
 }
