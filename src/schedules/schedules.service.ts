@@ -7,14 +7,14 @@ import { Program } from '../programs/programs.entity';
 import { Cache } from 'cache-manager';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
-import * as dayjs from 'dayjs';
-import utc from 'dayjs/plugin/utc';
-import timezone from 'dayjs/plugin/timezone';
+import dayjs from 'dayjs';
+import 'dayjs/plugin/utc';
+import 'dayjs/plugin/timezone';
 import { YoutubeLiveService } from '../youtube/youtube-live.service';
 
 // Initialize dayjs plugins
-dayjs.extend(utc);
-dayjs.extend(timezone);
+dayjs.extend(require('dayjs/plugin/utc'));
+dayjs.extend(require('dayjs/plugin/timezone'));
 
 interface FindAllOptions {
   page?: number;
