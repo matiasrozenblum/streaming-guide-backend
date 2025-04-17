@@ -7,10 +7,14 @@ import { Program } from '../programs/programs.entity';
 import { Cache } from 'cache-manager';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
-import * as dayjs from 'dayjs';
+import dayjs from 'dayjs';
 import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
 import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
 import { YoutubeLiveService } from '../youtube/youtube-live.service';
+
+// Initialize dayjs plugins
+dayjs.extend(isSameOrAfter);
+dayjs.extend(isSameOrBefore);
 
 interface FindAllOptions {
   page?: number;
@@ -33,10 +37,7 @@ export class SchedulesService {
     private cacheManager: Cache,
 
     private readonly youtubeLiveService: YoutubeLiveService,
-  ) {
-    dayjs.extend(isSameOrAfter);
-    dayjs.extend(isSameOrBefore);
-  }
+  ) {}
 
   async findAll(options: FindAllOptions = {}): Promise<any[]> {
     const startTime = Date.now();
@@ -102,25 +103,14 @@ export class SchedulesService {
           currentTime <= endTime
         ) {
           isLive = true;
-          console.log(`${schedule.program.name} is LIVE!`);
-
-          const channelId = schedule.program.channel.youtube_channel_id;
-          if (channelId) {
-            const videoId = await this.youtubeLiveService.getLiveVideoId(channelId);
-            if (videoId) {
-              streamUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+          if (schedule.program.youtube_url) {
+            const channelId = schedule.program.channel.youtube_channel_id;
+            if (channelId) {
+              const videoId = await this.youtubeLiveService.getLiveVideoId(channelId);
+              if (videoId) {
+                streamUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+              }
             }
-          }
-        } else {
-          console.log(`${schedule.program.name} is NOT live because:`);
-          if (schedule.day_of_week !== currentDay) {
-            console.log(`- Schedule day (${schedule.day_of_week}) doesn't match current day (${currentDay})`);
-          }
-          if (currentTime < startTime) {
-            console.log(`- Current time (${now}) is before start time (${schedule.start_time})`);
-          }
-          if (currentTime > endTime) {
-            console.log(`- Current time (${now}) is after end time (${schedule.end_time})`);
           }
         }
 
@@ -135,23 +125,19 @@ export class SchedulesService {
       })
     );
 
-    await this.cacheManager.set(cacheKey, enriched, 300);
-    console.log(`Database query completed. Total time: ${Date.now() - startTime}ms`);
+    await this.cacheManager.set(cacheKey, enriched, 30000); // Cache for 30 seconds
     return enriched;
   }
 
   async findOne(id: string | number, options: { relations?: string[]; select?: string[] } = {}): Promise<Schedule> {
-    const startTime = Date.now();
     const { relations = ['program', 'program.channel', 'program.panelists'], select } = options;
-    const cacheKey = `schedules:${id}:${relations.join(',')}`;
-    const cachedSchedule = await this.cacheManager.get<Schedule>(cacheKey);
 
-    if (cachedSchedule) {
-      console.log(`Cache HIT for ${cacheKey}. Time: ${Date.now() - startTime}ms`);
-      return cachedSchedule;
+    const cacheKey = `schedules:${id}`;
+    const cachedResult = await this.cacheManager.get<Schedule>(cacheKey);
+
+    if (cachedResult) {
+      return cachedResult;
     }
-
-    console.log(`Cache MISS for ${cacheKey}`);
 
     const findOptions: FindOneOptions<Schedule> = {
       where: { id: Number(id) },
@@ -166,100 +152,27 @@ export class SchedulesService {
     }
 
     const schedule = await this.schedulesRepository.findOne(findOptions);
-
     if (!schedule) {
       throw new NotFoundException(`Schedule with ID ${id} not found`);
     }
 
-    await this.cacheManager.set(cacheKey, schedule, 300);
-    console.log(`Database query completed. Total time: ${Date.now() - startTime}ms`);
+    await this.cacheManager.set(cacheKey, schedule, 30000); // Cache for 30 seconds
     return schedule;
   }
 
   async findByProgram(programId: string): Promise<Schedule[]> {
     return this.schedulesRepository.find({
       where: { program: { id: Number(programId) } },
-      relations: ['program'],
+      relations: ['program', 'program.channel', 'program.panelists'],
+      order: {
+        day_of_week: 'ASC',
+        start_time: 'ASC',
+      },
     });
   }
 
   async findByDay(dayOfWeek: string): Promise<Schedule[]> {
-    const data = await this.schedulesRepository.find({
-      where: { day_of_week: dayOfWeek },
-      relations: ['program', 'program.channel', 'program.panelists'],
-      order: {
-        start_time: 'ASC',
-      },
-    });
-
-    const now = dayjs().format('HH:mm');
-    const currentDay = dayjs().format('dddd').toLowerCase();
-    console.log('Current day:', currentDay);
-    console.log('Current time:', now);
-
-    const timeToNumber = (time: string) => {
-      const [hours, minutes] = time.split(':').map(Number);
-      return hours * 100 + minutes;
-    };
-
-    return Promise.all(
-      data.map(async (schedule) => {
-        console.log("SCHEDULE", schedule);
-        console.log("schedule.start_time", schedule.start_time);
-        console.log("schedule.end_time", schedule.end_time);
-        
-        let isLive = false;
-        let streamUrl = schedule.program.youtube_url;
-
-        console.log(`Checking program: ${schedule.program.name}`);
-        console.log(`Schedule day: ${schedule.day_of_week}`);
-        console.log(`Start time: ${schedule.start_time}`);
-        console.log(`End time: ${schedule.end_time}`);
-        console.log("now", now);
-
-        const currentTime = timeToNumber(now);
-        const startTime = timeToNumber(schedule.start_time);
-        const endTime = timeToNumber(schedule.end_time);
-
-        if (
-          schedule.day_of_week === currentDay &&
-          currentTime >= startTime &&
-          currentTime <= endTime
-        ) {
-          isLive = true;
-          console.log(`${schedule.program.name} is LIVE!`);
-
-          const channelId = schedule.program.channel.youtube_channel_id;
-          if (channelId) {
-            const videoId = await this.youtubeLiveService.getLiveVideoId(channelId);
-            if (videoId) {
-              streamUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1`;
-            }
-          }
-        } else {
-          console.log("isLive", isLive);
-          console.log(`${schedule.program.name} is NOT live because:`);
-          if (schedule.day_of_week !== currentDay) {
-            console.log(`- Schedule day (${schedule.day_of_week}) doesn't match current day (${currentDay})`);
-          }
-          if (currentTime < startTime) {
-            console.log(`- Current time (${now}) is before start time (${schedule.start_time})`);
-          }
-          if (currentTime > endTime) {
-            console.log(`- Current time (${now}) is after end time (${schedule.end_time})`);
-          }
-        }
-
-        return {
-          ...schedule,
-          program: {
-            ...schedule.program,
-            is_live: isLive,
-            stream_url: streamUrl,
-          },
-        };
-      })
-    );
+    return this.findAll({ dayOfWeek });
   }
 
   async create(createScheduleDto: CreateScheduleDto): Promise<Schedule> {
