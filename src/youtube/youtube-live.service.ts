@@ -6,6 +6,7 @@ import { getRepository } from 'typeorm';
 import { Program } from '../programs/programs.entity';
 import { LessThanOrEqual, MoreThan } from 'typeorm';
 import dayjs from 'dayjs';
+import { SchedulesService } from '../schedules/schedules.service';
 
 @Injectable()
 export class YoutubeLiveService {
@@ -13,7 +14,9 @@ export class YoutubeLiveService {
   private readonly apiUrl = 'https://www.googleapis.com/youtube/v3';
   private readonly redisClient = redis.createClient();
 
-  constructor() {
+  constructor(
+    private readonly schedulesService: SchedulesService,
+  ) {
     // Schedule the task to run every 30 minutes
     cron.schedule('0,30 * * * *', () => this.fetchLiveVideoIds());
   }
@@ -38,28 +41,29 @@ export class YoutubeLiveService {
   }
 
   private async fetchLiveVideoIds() {
-    const programRepository = getRepository(Program);
-    const now = dayjs().format('HH:mm:ss');
+    const currentDay = dayjs().tz('America/Argentina/Buenos_Aires').format('dddd').toLowerCase();
 
-    // Get live programs
-    const livePrograms = await programRepository.find({
-      where: {
-        is_live: true,
-        start_time: LessThanOrEqual(now),
-        end_time: MoreThan(now),
-      },
-    });
+    // Fetch today's schedule
+    const schedules = await this.schedulesService.findByDay(currentDay);
 
-    for (const program of livePrograms) {
+    // Filter live programs using is_live property
+    const liveSchedules = schedules.filter(schedule => schedule.program.is_live);
+
+    for (const schedule of liveSchedules) {
       try {
-        const videoId = await this.getLiveVideoId(program.channel.youtube_channel_id);
+        const videoId = await this.getLiveVideoId(schedule.program.channel.youtube_channel_id);
         if (videoId) {
           // Cache the video ID
-          this.redisClient.setEx(`videoId:${program.id}`, 1800, videoId); // Cache for 30 minutes
+          this.redisClient.setEx(`videoId:${schedule.program.id}`, 1800, videoId); // Cache for 30 minutes
         }
       } catch (error) {
-        console.error(`Failed to fetch video ID for program ${program.id}:`, error);
+        console.error(`Failed to fetch video ID for program ${schedule.program.id}:`, error);
       }
     }
+  }
+
+  private timeToNumber(time: string): number {
+    const [hours, minutes] = time.split(':').map(Number);
+    return hours * 100 + minutes;
   }
 } 

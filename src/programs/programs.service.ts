@@ -17,9 +17,7 @@ export class ProgramsService {
 
   async create(createProgramDto: CreateProgramDto): Promise<Program> {
     const program = this.programsRepository.create({
-      ...createProgramDto,
-      start_time: createProgramDto.start_time || null,
-      end_time: createProgramDto.end_time || null,
+      ...createProgramDto
     });
     return await this.programsRepository.save(program);
   }

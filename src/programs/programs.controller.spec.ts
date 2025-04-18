@@ -45,9 +45,7 @@ describe('ProgramsController', () => {
   it('should create a new program', async () => {
     const createProgramDto: CreateProgramDto = { 
       name: 'Programa 1',
-      description: 'Descripción del programa',
-      start_time: "10:00",
-      end_time: "12:00"
+      description: 'Descripción del programa'
     };
     const result = await controller.create(createProgramDto);
     expect(result).toEqual({ name: 'Programa 1', description: 'Descripción del programa' });
