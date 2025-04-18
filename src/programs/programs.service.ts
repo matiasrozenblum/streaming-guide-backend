@@ -5,6 +5,7 @@ import { Program } from './programs.entity';
 import { CreateProgramDto } from './dto/create-program.dto';
 import { UpdateProgramDto } from './dto/update-program.dto';
 import { Panelist } from '../panelists/panelists.entity';
+import { Channel } from '../channels/channels.entity';
 
 @Injectable()
 export class ProgramsService {
@@ -13,11 +14,24 @@ export class ProgramsService {
     private programsRepository: Repository<Program>,
     @InjectRepository(Panelist)
     private panelistsRepository: Repository<Panelist>,
+    @InjectRepository(Channel)
+    private channelsRepository: Repository<Channel>,
   ) {}
 
   async create(createProgramDto: CreateProgramDto): Promise<Program> {
+    const channelId = createProgramDto.channel_id;
+    if (isNaN(channelId)) {
+      throw new NotFoundException(`Invalid channel ID: ${createProgramDto.channel_id}`);
+    }
+
+    const channel = await this.channelsRepository.findOne({ where: { id: channelId } });
+    if (!channel) {
+      throw new NotFoundException(`Channel with ID ${channelId} not found`);
+    }
+
     const program = this.programsRepository.create({
-      ...createProgramDto
+      ...createProgramDto,
+      channel,
     });
     return await this.programsRepository.save(program);
   }
