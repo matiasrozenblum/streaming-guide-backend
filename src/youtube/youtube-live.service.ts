@@ -1,10 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import axios from 'axios';
 import * as cron from 'node-cron';
 import * as redis from 'redis';
-import { getRepository } from 'typeorm';
-import { Program } from '../programs/programs.entity';
-import { LessThanOrEqual, MoreThan } from 'typeorm';
 import dayjs from 'dayjs';
 import { SchedulesService } from '../schedules/schedules.service';
 
@@ -15,6 +12,7 @@ export class YoutubeLiveService {
   private readonly redisClient = redis.createClient();
 
   constructor(
+    @Inject(forwardRef(() => SchedulesService))
     private readonly schedulesService: SchedulesService,
   ) {
     // Schedule the task to run every 30 minutes
