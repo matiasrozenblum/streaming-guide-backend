@@ -20,7 +20,7 @@ export class CreateChannelDto {
 
   @ApiProperty({ description: 'Link al canal de Youtube del canal' })
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @IsUrl()
   streaming_url?: string;
 }

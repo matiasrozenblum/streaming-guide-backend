@@ -21,6 +21,9 @@ export class Channel {
   @Column({ type: 'text', nullable: true })
   youtube_channel_id: string;
 
+  @Column({ type: 'int', nullable: true })
+  order: number;
+
   @OneToMany(() => Program, (program) => program.channel)
   programs: Program[];
 }
