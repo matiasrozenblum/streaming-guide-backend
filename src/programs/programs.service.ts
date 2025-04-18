@@ -32,7 +32,14 @@ export class ProgramsService {
     });
     const savedProgram = await this.programsRepository.save(program);
     return {
-      ...savedProgram,
+      id: savedProgram.id,
+      name: savedProgram.name,
+      description: savedProgram.description,
+      panelists: savedProgram.panelists,
+      logo_url: savedProgram.logo_url,
+      youtube_url: savedProgram.youtube_url,
+      is_live: savedProgram.is_live,
+      stream_url: savedProgram.stream_url,
       channel_id: savedProgram.channel?.id,
     };
   }
@@ -40,7 +47,14 @@ export class ProgramsService {
   async findAll(): Promise<any[]> {
     const programs = await this.programsRepository.find({ relations: ['panelists', 'channel'] });
     return programs.map(program => ({
-      ...program,
+      id: program.id,
+      name: program.name,
+      description: program.description,
+      panelists: program.panelists,
+      logo_url: program.logo_url,
+      youtube_url: program.youtube_url,
+      is_live: program.is_live,
+      stream_url: program.stream_url,
       channel_id: program.channel?.id,
     }));
   }
@@ -54,7 +68,14 @@ export class ProgramsService {
       throw new NotFoundException(`Program with ID ${id} not found`);
     }
     return {
-      ...program,
+      id: program.id,
+      name: program.name,
+      description: program.description,
+      panelists: program.panelists,
+      logo_url: program.logo_url,
+      youtube_url: program.youtube_url,
+      is_live: program.is_live,
+      stream_url: program.stream_url,
       channel_id: program.channel?.id,
     };
   }
@@ -67,7 +88,14 @@ export class ProgramsService {
     Object.assign(program, updateProgramDto);
     const updatedProgram = await this.programsRepository.save(program);
     return {
-      ...updatedProgram,
+      id: updatedProgram.id,
+      name: updatedProgram.name,
+      description: updatedProgram.description,
+      panelists: updatedProgram.panelists,
+      logo_url: updatedProgram.logo_url,
+      youtube_url: updatedProgram.youtube_url,
+      is_live: updatedProgram.is_live,
+      stream_url: updatedProgram.stream_url,
       channel_id: updatedProgram.channel?.id,
     };
   }
