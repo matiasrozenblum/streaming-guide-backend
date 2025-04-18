@@ -106,9 +106,13 @@ export class SchedulesService {
           if (schedule.program.youtube_url) {
             const channelId = schedule.program.channel.youtube_channel_id;
             if (channelId) {
-              const videoId = await this.youtubeLiveService.getLiveVideoId(channelId);
-              if (videoId) {
-                streamUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+              // Check cache for video ID
+              const cachedVideoId = await this.cacheManager.get<string>(`videoId:${schedule.program.id}`);
+              if (cachedVideoId) {
+                streamUrl = `https://www.youtube.com/embed/${cachedVideoId}?autoplay=1`;
+              } else {
+                // Optionally log or handle the case where the video ID is not cached
+                console.warn(`Video ID not cached for program ${schedule.program.id}`);
               }
             }
           }

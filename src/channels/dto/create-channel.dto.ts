@@ -22,5 +22,5 @@ export class CreateChannelDto {
   @IsString()
   @IsNotEmpty()
   @IsUrl()
-  streaming_url: string;
+  streaming_url?: string;
 }
