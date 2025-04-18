@@ -18,11 +18,8 @@ export class ProgramsService {
     private channelsRepository: Repository<Channel>,
   ) {}
 
-  async create(createProgramDto: CreateProgramDto): Promise<Program> {
+  async create(createProgramDto: CreateProgramDto): Promise<any> {
     const channelId = createProgramDto.channel_id;
-    if (isNaN(channelId)) {
-      throw new NotFoundException(`Invalid channel ID: ${createProgramDto.channel_id}`);
-    }
 
     const channel = await this.channelsRepository.findOne({ where: { id: channelId } });
     if (!channel) {
@@ -33,31 +30,46 @@ export class ProgramsService {
       ...createProgramDto,
       channel,
     });
-    return await this.programsRepository.save(program);
+    const savedProgram = await this.programsRepository.save(program);
+    return {
+      ...savedProgram,
+      channel_id: savedProgram.channel?.id,
+    };
   }
 
-  async findAll(): Promise<Program[]> {
-    return await this.programsRepository.find({ relations: ['panelists'] });
+  async findAll(): Promise<any[]> {
+    const programs = await this.programsRepository.find({ relations: ['panelists', 'channel'] });
+    return programs.map(program => ({
+      ...program,
+      channel_id: program.channel?.id,
+    }));
   }
 
-  async findOne(id: number): Promise<Program> {
+  async findOne(id: number): Promise<any> {
     const program = await this.programsRepository.findOne({
       where: { id },
-      relations: ['panelists'],
+      relations: ['panelists', 'channel'],
     });
     if (!program) {
       throw new NotFoundException(`Program with ID ${id} not found`);
     }
-    return program;
+    return {
+      ...program,
+      channel_id: program.channel?.id,
+    };
   }
 
-  async update(id: number, updateProgramDto: UpdateProgramDto): Promise<Program> {
+  async update(id: number, updateProgramDto: UpdateProgramDto): Promise<any> {
     const program = await this.findOne(id);
     if (!program) {
       throw new NotFoundException(`Program with ID ${id} not found`);
     }
     Object.assign(program, updateProgramDto);
-    return this.programsRepository.save(program);
+    const updatedProgram = await this.programsRepository.save(program);
+    return {
+      ...updatedProgram,
+      channel_id: updatedProgram.channel?.id,
+    };
   }
 
   async remove(id: number): Promise<void> {
