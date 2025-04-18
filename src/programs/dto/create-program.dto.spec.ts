@@ -7,6 +7,7 @@ describe('CreateProgramDto', () => {
     dto.name = 'Programa de Prueba';
     dto.description = 'Una descripción';
     dto.youtube_url = 'https://youtube.com/test';
+    dto.channel_id = 1;
 
     const errors = await validate(dto);
     expect(errors.length).toBe(0);
@@ -23,6 +24,7 @@ describe('CreateProgramDto', () => {
   it('should allow description to be missing', async () => {
     const dto = new CreateProgramDto();
     dto.name = 'Test Program';
+    dto.channel_id = 1;
     const errors = await validate(dto);
     expect(errors).toHaveLength(0);
   });
@@ -31,6 +33,7 @@ describe('CreateProgramDto', () => {
     const dto = new CreateProgramDto();
     dto.name = 'Test Program';
     dto.description = 'Test Description';
+    dto.channel_id = 1;
     const errors = await validate(dto);
     expect(errors).toHaveLength(0);
   });
@@ -40,6 +43,7 @@ describe('CreateProgramDto', () => {
     dto.name = 'Test Program';
     dto.description = 'Test Description';
     dto.youtube_url = 'https://youtube.com/test';
+    dto.channel_id = 1;
     const errors = await validate(dto);
     expect(errors).toHaveLength(0);
   });
@@ -49,6 +53,7 @@ describe('CreateProgramDto', () => {
     dto.name = 'Test Program';
     dto.description = 'Test Description';
     dto.youtube_url = 789 as any;
+    dto.channel_id = 1;
     const errors = await validate(dto);
     expect(errors.some(e => e.property === 'youtube_url')).toBe(true);
   });
