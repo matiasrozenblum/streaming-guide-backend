@@ -17,6 +17,15 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.1.10] - 2025-04-18
+
+### Changed
+- Renamed program column channelId to channel_id
+
+### Fixed
+- Now creating a program with channel id works as expected
+- Now getting an existing program returns the channel id as well
+
 ## [0.1.9] - 2025-04-18
 
 ### Removed
