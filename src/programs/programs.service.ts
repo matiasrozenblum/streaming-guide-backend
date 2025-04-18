@@ -26,10 +26,8 @@ export class ProgramsService {
       throw new NotFoundException(`Channel with ID ${channelId} not found`);
     }
 
-    const program = this.programsRepository.create({
-      ...createProgramDto,
-      channel,
-    });
+    const program = this.programsRepository.create(createProgramDto);
+    program.channel = channel;
     const savedProgram = await this.programsRepository.save(program);
     return {
       id: savedProgram.id,
