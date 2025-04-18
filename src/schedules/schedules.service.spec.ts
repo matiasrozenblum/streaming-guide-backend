@@ -171,7 +171,12 @@ describe('SchedulesService', () => {
       } as unknown as Schedule;
 
       jest.spyOn(schedulesRepo, 'find').mockResolvedValue([testSchedule]);
-      jest.spyOn(youtubeLiveService, 'getLiveVideoId').mockResolvedValue('live-video-id');
+      jest.spyOn(cacheManager, 'get').mockImplementation((key) => {
+        if (key === 'videoId:1') {
+          return Promise.resolve('live-video-id');
+        }
+        return Promise.resolve(null);
+      });
 
       currentTime = '11:00';
       currentDay = 'monday';
@@ -196,7 +201,12 @@ describe('SchedulesService', () => {
       } as unknown as Schedule;
 
       jest.spyOn(schedulesRepo, 'find').mockResolvedValue([testSchedule]);
-      jest.spyOn(youtubeLiveService, 'getLiveVideoId').mockResolvedValue(null);
+      jest.spyOn(cacheManager, 'get').mockImplementation((key) => {
+        if (key === 'videoId:1') {
+          return Promise.resolve('live-video-id');
+        }
+        return Promise.resolve(null);
+      });
 
       // Set the current time to 15:00
       currentTime = '15:00';
@@ -214,7 +224,12 @@ describe('SchedulesService', () => {
       const mockSchedules = [mockSchedule] as unknown as Schedule[];
 
       jest.spyOn(schedulesRepo, 'find').mockResolvedValue(mockSchedules);
-      jest.spyOn(youtubeLiveService, 'getLiveVideoId').mockResolvedValue(null);
+      jest.spyOn(cacheManager, 'get').mockImplementation((key) => {
+        if (key === 'videoId:1') {
+          return Promise.resolve('live-video-id');
+        }
+        return Promise.resolve(null);
+      });
 
       currentTime = '11:00';
       currentDay = 'tuesday';
