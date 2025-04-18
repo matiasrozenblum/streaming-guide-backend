@@ -6,11 +6,13 @@ import { Panelist } from '../panelists/panelists.entity';
 import { Repository } from 'typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { CreateProgramDto } from './dto/create-program.dto';
+import { Channel } from '../channels/channels.entity';
 
 describe('ProgramsService', () => {
   let service: ProgramsService;
   let programRepository: Partial<Repository<Program>>;
   let panelistRepository: Partial<Repository<Panelist>>;
+  let channelRepository: Partial<Repository<Channel>>;
 
   const mockChannel = {
     id: 1,
@@ -22,39 +24,11 @@ describe('ProgramsService', () => {
     youtube_channel_id: 'test-channel-id',
   };
 
-  const mockPrograms: Program[] = [
-    {
-      id: 1,
-      name: 'Programa 1',
-      description: 'Descripción 1',
-      channel: mockChannel,
-      schedules: [],
-      panelists: [],
-      logo_url: null,
-      youtube_url: null,
-      is_live: false,
-      stream_url: null,
-    },
-    {
-      id: 2,
-      name: 'Programa 2',
-      description: 'Descripción 2',
-      channel: mockChannel,
-      schedules: [],
-      panelists: [],
-      logo_url: null,
-      youtube_url: null,
-      is_live: false,
-      stream_url: null, 
-    },
-  ];
-
   const mockProgram = {
     id: 1,
     name: 'Test Program',
     description: 'Test Description',
-    channel: mockChannel,
-    schedules: [],
+    channel_id: 1,
     panelists: [],
     logo_url: null,
     youtube_url: 'https://youtube.com/test',
@@ -62,22 +36,58 @@ describe('ProgramsService', () => {
     stream_url: null,
   };
 
+  const mockProgramWithChannel = {
+    id: 1,
+    name: 'Test Program',
+    description: 'Test Description',
+    channel: {
+      id: 1,
+      name: 'Luzu TV',
+      description: 'Canal de streaming',
+      logo_url: 'https://logo.com/luzu.png',
+      streaming_url: 'https://youtube.com/luzu',
+      programs: [],
+      youtube_channel_id: 'test-channel-id',
+    },
+    panelists: [],
+    logo_url: null,
+    youtube_url: 'https://youtube.com/test',
+    is_live: false,
+    stream_url: null,
+  };
+
+  const mockProgramResponse = {
+    id: 1,
+    name: 'Test Program',
+    description: 'Test Description',
+    panelists: [],
+    logo_url: null,
+    youtube_url: 'https://youtube.com/test',
+    is_live: false,
+    stream_url: null,
+    channel_id: 1,
+  };
+
   beforeEach(async () => {
     programRepository = {
-      find: jest.fn().mockResolvedValue([mockProgram]),
+      find: jest.fn().mockResolvedValue([mockProgramWithChannel]),
       findOne: jest.fn().mockImplementation(({ where: { id } }) => {
         if (id === 1) {
-          return Promise.resolve(mockProgram);
+          return Promise.resolve(mockProgramWithChannel);
         }
         return Promise.resolve(null);
       }),
-      create: jest.fn().mockReturnValue(mockProgram),
-      save: jest.fn().mockResolvedValue(mockProgram),
+      create: jest.fn().mockReturnValue(mockProgramWithChannel),
+      save: jest.fn().mockResolvedValue(mockProgramWithChannel),
       delete: jest.fn().mockResolvedValue({ affected: 1 }),
     };
 
     panelistRepository = {
       findOne: jest.fn(),
+    };
+
+    channelRepository = {
+      findOne: jest.fn().mockResolvedValue(mockChannel),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -91,6 +101,10 @@ describe('ProgramsService', () => {
           provide: getRepositoryToken(Panelist),
           useValue: panelistRepository,
         },
+        {
+          provide: getRepositoryToken(Channel),
+          useValue: channelRepository,
+        },
       ],
     }).compile();
 
@@ -103,16 +117,16 @@ describe('ProgramsService', () => {
 
   it('should return an array of programs', async () => {
     const result = await service.findAll();
-    expect(result).toEqual([mockProgram]);
+    expect(result).toEqual([mockProgramResponse]);
     expect(programRepository.find).toHaveBeenCalled();
   });
 
   it('should return a single program', async () => {
     const result = await service.findOne(1);
-    expect(result).toEqual(mockProgram);
+    expect(result).toEqual(mockProgramResponse);
     expect(programRepository.findOne).toHaveBeenCalledWith({
       where: { id: 1 },
-      relations: ['panelists'],
+      relations: ['panelists', 'channel'],
     });
   });
 
@@ -125,10 +139,11 @@ describe('ProgramsService', () => {
       name: 'Test Program',
       description: 'Test Description',
       youtube_url: 'https://youtube.com/test',
+      channel_id: 1,
     };
 
     const result = await service.create(createDto);
-    expect(result).toEqual(mockProgram);
+    expect(result).toEqual(mockProgramResponse);
     expect(programRepository.create).toHaveBeenCalledWith(createDto);
     expect(programRepository.save).toHaveBeenCalled();
   });

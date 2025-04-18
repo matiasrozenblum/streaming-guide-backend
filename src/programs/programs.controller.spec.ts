@@ -45,7 +45,8 @@ describe('ProgramsController', () => {
   it('should create a new program', async () => {
     const createProgramDto: CreateProgramDto = { 
       name: 'Programa 1',
-      description: 'Descripción del programa'
+      description: 'Descripción del programa',
+      channel_id: 1,
     };
     const result = await controller.create(createProgramDto);
     expect(result).toEqual({ name: 'Programa 1', description: 'Descripción del programa' });
