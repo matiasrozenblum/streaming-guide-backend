@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SchedulesController } from './schedules.controller';
 import { SchedulesService } from './schedules.service';
@@ -10,9 +10,10 @@ import { YoutubeLiveModule } from '../youtube/youtube-live.module';
   imports: [
     TypeOrmModule.forFeature([Schedule, Program]),
     CacheModule.register(),
-    YoutubeLiveModule,
+    forwardRef(() => YoutubeLiveModule),
   ],
   controllers: [SchedulesController],
   providers: [SchedulesService],
+  exports: [SchedulesService],
 })
 export class SchedulesModule {}

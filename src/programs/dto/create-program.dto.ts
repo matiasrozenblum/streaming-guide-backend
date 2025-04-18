@@ -12,16 +12,6 @@ export class CreateProgramDto {
   @IsOptional()
   description?: string;
 
-  @ApiProperty({ description: 'Hora de inicio del programa' })
-  @IsString()
-  @IsOptional()
-  start_time?: string;
-
-  @ApiProperty({ description: 'Hora de fin del programa' })
-  @IsString()
-  @IsOptional()
-  end_time?: string;
-
   @IsString()
   @IsOptional()
   logo_url?: string;

@@ -131,8 +131,6 @@ export class AppController {
           days.map(day => ({
             program,
             day_of_week: day,
-            start_time: program.start_time,
-            end_time: program.end_time,
           }))
         )
       );
