@@ -19,4 +19,8 @@ export class CreateProgramDto {
   @IsString()
   @IsOptional()
   youtube_url?: string;
+
+  @ApiProperty({ description: 'ID del canal asociado al programa' })
+  @IsNotEmpty()
+  channel_id: number;
 }

@@ -125,6 +125,7 @@ describe('ProgramsService', () => {
       name: 'Test Program',
       description: 'Test Description',
       youtube_url: 'https://youtube.com/test',
+      channel_id: 1,
     };
 
     const result = await service.create(createDto);

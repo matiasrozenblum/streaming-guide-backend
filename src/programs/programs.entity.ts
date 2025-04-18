@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, ManyToMany, JoinTable } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, ManyToMany, JoinTable, JoinColumn } from 'typeorm';
 import { Channel } from '../channels/channels.entity';
 import { Schedule } from '../schedules/schedules.entity';
 import { Panelist } from '../panelists/panelists.entity';
@@ -15,6 +15,7 @@ export class Program {
   description: string;
 
   @ManyToOne(() => Channel, (channel) => channel.programs)
+  @JoinColumn({ name: 'channel_id' })
   channel: Channel;
 
   @OneToMany(() => Schedule, (schedule) => schedule.program)
