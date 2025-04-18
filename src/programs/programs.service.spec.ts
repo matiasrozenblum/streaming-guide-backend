@@ -27,8 +27,6 @@ describe('ProgramsService', () => {
       id: 1,
       name: 'Programa 1',
       description: 'Descripción 1',
-      start_time: '10:00',
-      end_time: '12:00',
       channel: mockChannel,
       schedules: [],
       panelists: [],
@@ -41,8 +39,6 @@ describe('ProgramsService', () => {
       id: 2,
       name: 'Programa 2',
       description: 'Descripción 2',
-      start_time: '14:00',
-      end_time: '16:00',
       channel: mockChannel,
       schedules: [],
       panelists: [],
@@ -57,8 +53,6 @@ describe('ProgramsService', () => {
     id: 1,
     name: 'Test Program',
     description: 'Test Description',
-    start_time: '10:00',
-    end_time: '11:00',
     channel: mockChannel,
     schedules: [],
     panelists: [],
@@ -130,8 +124,6 @@ describe('ProgramsService', () => {
     const createDto: CreateProgramDto = {
       name: 'Test Program',
       description: 'Test Description',
-      start_time: '10:00',
-      end_time: '11:00',
       youtube_url: 'https://youtube.com/test',
     };
 
