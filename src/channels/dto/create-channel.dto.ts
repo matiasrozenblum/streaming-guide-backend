@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsUrl, ValidateIf } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsUrl } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateChannelDto {
@@ -15,14 +15,12 @@ export class CreateChannelDto {
   @ApiProperty({ description: 'Logo del canal' })
   @IsString()
   @IsOptional()
-  @ValidateIf(o => o.logo_url !== '')
   @IsUrl()
   logo_url?: string;
 
   @ApiProperty({ description: 'Link al canal de Youtube del canal' })
   @IsString()
-  @IsOptional()
-  @ValidateIf(o => o.streaming_url !== '')
+  @IsNotEmpty()
   @IsUrl()
   streaming_url?: string;
 }

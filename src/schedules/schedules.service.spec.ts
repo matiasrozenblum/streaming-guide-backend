@@ -7,6 +7,13 @@ import { Program } from '../programs/programs.entity';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { YoutubeLiveService } from '../youtube/youtube-live.service';
+import * as dayjs from 'dayjs';
+import * as utc from 'dayjs/plugin/utc';
+import * as timezone from 'dayjs/plugin/timezone';
+
+// Initialize dayjs plugins for tests
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 let currentTime = '15:00';
 let currentDay = 'monday';
@@ -58,6 +65,7 @@ jest.mock('dayjs', () => {
         const [otherHours, otherMinutes] = other.format('HH:mm').split(':').map(Number);
         return otherHours <= thisHours || (otherHours === thisHours && otherMinutes <= thisMinutes);
       }),
+      tz: jest.fn().mockReturnThis(),
     };
     return mock;
   };
