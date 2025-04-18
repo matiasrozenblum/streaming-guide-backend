@@ -13,7 +13,9 @@ export class ChannelsService {
   ) {}
 
   async findAll(): Promise<Channel[]> {
-    return this.channelsRepository.find();
+    return this.channelsRepository.find({
+      order: { order: 'ASC' },
+    });
   }
 
   async findOne(id: string): Promise<Channel> {
@@ -28,7 +30,19 @@ export class ChannelsService {
   }
 
   async create(createChannelDto: CreateChannelDto): Promise<Channel> {
-    const channel = this.channelsRepository.create(createChannelDto);
+    const lastChannel = await this.channelsRepository
+      .createQueryBuilder('channel')
+      .where('channel.order IS NOT NULL')
+      .orderBy('channel.order', 'DESC')
+      .getOne();
+  
+    const newOrder = lastChannel ? (lastChannel.order || 0) + 1 : 1;
+  
+    const channel = this.channelsRepository.create({
+      ...createChannelDto,
+      order: newOrder,
+    });
+  
     return this.channelsRepository.save(channel);
   }
 
