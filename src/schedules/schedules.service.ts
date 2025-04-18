@@ -44,22 +44,22 @@ export class SchedulesService {
   async findAll(options: FindAllOptions = {}): Promise<any[]> {
     const startTime = Date.now();
     const { dayOfWeek, relations = ['program', 'program.channel', 'program.panelists'], select } = options;
-
+  
     const cacheKey = `schedules:all:${dayOfWeek || 'all'}`;
     const cachedResult = await this.cacheManager.get<Schedule[]>(cacheKey);
-
+  
     if (cachedResult) {
       console.log(`Cache HIT for ${cacheKey}. Time: ${Date.now() - startTime}ms`);
       return cachedResult;
     }
-
+  
     console.log(`Cache MISS for ${cacheKey}`);
-
+  
     const where: FindOptionsWhere<Schedule> = {};
     if (dayOfWeek) {
       where.day_of_week = dayOfWeek;
     }
-
+  
     const findOptions: FindManyOptions<Schedule> = {
       where,
       relations,
@@ -67,36 +67,43 @@ export class SchedulesService {
         start_time: 'ASC',
       },
     };
-
+  
     if (select) {
       findOptions.select = select.reduce((acc, field) => {
         acc[field] = true;
         return acc;
       }, {});
     }
-
-    const data = await this.schedulesRepository.find(findOptions);
-
-    // Get current time in Argentina timezone
+  
+    let data = await this.schedulesRepository.find(findOptions);
+  
+    // 🧹 Ordenar primero por channel.order, después por start_time
+    data = data.sort((a, b) => {
+      const orderA = a.program?.channel?.order ?? 999;
+      const orderB = b.program?.channel?.order ?? 999;
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+      return a.start_time.localeCompare(b.start_time);
+    });
+  
     const now = this.dayjs().tz('America/Argentina/Buenos_Aires').format('HH:mm');
     const currentDay = this.dayjs().tz('America/Argentina/Buenos_Aires').format('dddd').toLowerCase();
-    console.log('Current day:', currentDay);
-    console.log('Current time:', now);
-
+  
     const timeToNumber = (time: string) => {
       const [hours, minutes] = time.split(':').map(Number);
       return hours * 100 + minutes;
     };
-
+  
     const enriched = await Promise.all(
       data.map(async (schedule) => {
         let isLive = false;
         let streamUrl = schedule.program.youtube_url;
-
+  
         const currentTime = timeToNumber(now);
         const startTime = timeToNumber(schedule.start_time);
         const endTime = timeToNumber(schedule.end_time);
-
+  
         if (
           schedule.day_of_week === currentDay &&
           currentTime >= startTime &&
@@ -106,18 +113,16 @@ export class SchedulesService {
           if (schedule.program.youtube_url) {
             const channelId = schedule.program.channel.youtube_channel_id;
             if (channelId) {
-              // Check cache for video ID
               const cachedVideoId = await this.cacheManager.get<string>(`videoId:${schedule.program.id}`);
               if (cachedVideoId) {
                 streamUrl = `https://www.youtube.com/embed/${cachedVideoId}?autoplay=1`;
               } else {
-                // Optionally log or handle the case where the video ID is not cached
                 console.warn(`Video ID not cached for program ${schedule.program.id}`);
               }
             }
           }
         }
-
+  
         return {
           ...schedule,
           program: {
@@ -128,8 +133,8 @@ export class SchedulesService {
         };
       })
     );
-
-    await this.cacheManager.set(cacheKey, enriched, 30000); // Cache for 30 seconds
+  
+    await this.cacheManager.set(cacheKey, enriched, 30000);
     return enriched;
   }
 

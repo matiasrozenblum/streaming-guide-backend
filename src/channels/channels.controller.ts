@@ -1,12 +1,15 @@
-import { Controller, Get, Post, Body, Param, Delete, Patch } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Patch, UseGuards } from '@nestjs/common';
 import { ChannelsService } from './channels.service';
 import { CreateChannelDto } from './dto/create-channel.dto';
 import { UpdateChannelDto } from './dto/update-channel.dto';
 import { Channel } from './channels.entity';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('channels')  // Etiqueta para los canales
 @Controller('channels')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
 export class ChannelsController {
   constructor(private readonly channelsService: ChannelsService) {}
 
@@ -43,5 +46,11 @@ export class ChannelsController {
   @ApiResponse({ status: 204, description: 'Canal eliminado' })
   remove(@Param('id') id: string): Promise<void> {
     return this.channelsService.remove(id);
+  }
+
+  @Post('reorder')
+  async reorder(@Body() body: { ids: number[] }) {
+    await this.channelsService.reorderChannels(body.ids);
+    return { message: 'Channels reordered successfully' };
   }
 }

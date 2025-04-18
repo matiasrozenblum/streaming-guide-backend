@@ -1,13 +1,16 @@
-import { Controller, Get, Post, Body, Param, Delete, Patch, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Patch, NotFoundException, UseGuards } from '@nestjs/common';
 import { PanelistsService } from './panelists.service';
 import { CreatePanelistDto } from './dto/create-panelist.dto';
 import { UpdatePanelistDto } from './dto/update-panelist.dto';
 import { Panelist } from './panelists.entity';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Program } from '../programs/programs.entity';
 
 @ApiTags('panelists')  // Etiqueta para los panelistas
 @Controller('panelists')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
 export class PanelistsController {
   constructor(private readonly panelistsService: PanelistsService) {}
 
