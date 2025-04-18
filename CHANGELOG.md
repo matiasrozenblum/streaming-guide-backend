@@ -8,14 +8,21 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ## [Unreleased]
 
 ### Added
+- Added order column to channel table
+- Now when creating a channel, order autoincrements by 1
+- Added order to all channel endpoints's responses
 
 ### Changed
+- Secured all controllers with JWT
 
 ### Removed
 
 ### Fixed
 
 ---
+
+## [0.1.11] - 2025-04-18
+
 
 ## [0.1.10] - 2025-04-18
 
