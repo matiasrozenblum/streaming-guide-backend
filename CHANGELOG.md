@@ -10,13 +10,17 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ### Added
 
 ### Changed
-- Improved loading time
 
 ### Removed
 
 ### Fixed
 
 ---
+
+## [0.1.8] - 2025-04-17
+
+### Fixed
+- Fixed youtube api fetch, now caching response and fetching every 30 minutes for each live program
 
 ## [0.1.7] - 2025-04-17
 
