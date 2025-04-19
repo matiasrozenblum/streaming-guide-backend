@@ -6,15 +6,22 @@ import { Repository, DeleteResult } from 'typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { CreateChannelDto } from './dto/create-channel.dto';
 import { UpdateChannelDto } from './dto/update-channel.dto';
+import { DataSource } from 'typeorm';
 
 describe('ChannelsService', () => {
   let service: ChannelsService;
   let repo: Repository<Channel>;
 
   const mockChannels: Channel[] = [
-    { id: 1, name: 'Luzu TV', logo_url: 'https://logo1.png', streaming_url: 'https://stream1.com', programs: [], description: 'Luzu TV is a streaming channel.', youtube_channel_id: 'channel1' },
-    { id: 2, name: 'Olga', logo_url: 'https://logo2.png', streaming_url: 'https://stream2.com', programs: [], description: 'Olga is a streaming channel.', youtube_channel_id: 'channel2' },
+    { id: 1, name: 'Luzu TV', logo_url: 'https://logo1.png', streaming_url: 'https://stream1.com', programs: [], description: 'Luzu TV is a streaming channel.', youtube_channel_id: 'channel1', order: 1 },
+    { id: 2, name: 'Olga', logo_url: 'https://logo2.png', streaming_url: 'https://stream2.com', programs: [], description: 'Olga is a streaming channel.', youtube_channel_id: 'channel2', order: 2 },
   ];
+
+  const mockQueryBuilder = {
+    where: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
+    getOne: jest.fn().mockResolvedValue(null),
+  };
 
   const mockRepository = {
     find: jest.fn().mockResolvedValue(mockChannels),
@@ -24,6 +31,21 @@ describe('ChannelsService', () => {
     create: jest.fn().mockImplementation((dto) => ({ id: 3, ...dto, programs: [] })),
     save: jest.fn().mockImplementation((channel) => Promise.resolve(channel)),
     delete: jest.fn().mockResolvedValue({ affected: 1, raw: [] } as DeleteResult),
+    createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
+  };
+
+  const mockDataSource = {
+    createQueryRunner: jest.fn().mockReturnValue({
+      connect: jest.fn(),
+      release: jest.fn(),
+      startTransaction: jest.fn(),
+      commitTransaction: jest.fn(),
+      rollbackTransaction: jest.fn(),
+      manager: {
+        save: jest.fn(),
+        findOne: jest.fn(),
+      },
+    }),
   };
 
   beforeEach(async () => {
@@ -33,6 +55,10 @@ describe('ChannelsService', () => {
         {
           provide: getRepositoryToken(Channel),
           useValue: mockRepository,
+        },
+        {
+          provide: DataSource,
+          useValue: mockDataSource,
         },
       ],
     }).compile();
@@ -72,14 +98,18 @@ describe('ChannelsService', () => {
       logo_url: 'https://logo3.png',
       streaming_url: 'https://stream3.com',
     };
+    const mockWithOrder = {
+      ...dto,
+      order: 1,
+    };
 
     const result = await service.create(dto);
     expect(result).toMatchObject({
       id: 3,
       ...dto,
     });
-    expect(repo.create).toHaveBeenCalledWith(dto);
-    expect(repo.save).toHaveBeenCalledWith(expect.objectContaining(dto));
+    expect(repo.create).toHaveBeenCalledWith(mockWithOrder);
+    expect(repo.save).toHaveBeenCalledWith(expect.objectContaining(mockWithOrder));
   });
 
   it('should delete a channel', async () => {
