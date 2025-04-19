@@ -34,7 +34,10 @@ export class AuthService {
     };
 
     return {
-      access_token: this.jwtService.sign(payload),
+      access_token: this.jwtService.sign(payload, {
+        secret: this.configService.get<string>('JWT_SECRET') || 'default_secret_key_for_development',
+        expiresIn: '7d', // o el tiempo que quieras
+      }),
     };
   }
 } 
