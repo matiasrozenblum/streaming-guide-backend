@@ -66,6 +66,7 @@ describe('ProgramsService', () => {
     is_live: false,
     stream_url: null,
     channel_id: 1,
+    channel_name: 'Luzu TV',
   };
 
   beforeEach(async () => {
