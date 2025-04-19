@@ -17,6 +17,10 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.1.14] - 2025-04-19
+
+### Fixed
+- Fixed JWT sign
 
 ## [0.1.13] - 2025-04-19
 
