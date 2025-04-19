@@ -14,7 +14,7 @@ export class Program {
   @Column({ type: 'text', nullable: true })
   description: string;
 
-  @ManyToOne(() => Channel, (channel) => channel.programs)
+  @ManyToOne(() => Channel, (channel) => channel.programs, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'channel_id' })
   channel: Channel;
 
