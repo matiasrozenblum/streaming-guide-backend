@@ -24,6 +24,6 @@ export class Channel {
   @Column({ type: 'int', nullable: true })
   order: number;
 
-  @OneToMany(() => Program, (program) => program.channel)
+  @OneToMany(() => Program, (program) => program.channel, { cascade: true, onDelete: 'CASCADE' })
   programs: Program[];
 }

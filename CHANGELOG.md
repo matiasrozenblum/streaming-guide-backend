@@ -8,12 +8,8 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ## [Unreleased]
 
 ### Added
-- Added order column to channel table
-- Now when creating a channel, order autoincrements by 1
-- Added order to all channel endpoints's responses
 
 ### Changed
-- Secured all controllers with JWT
 
 ### Removed
 
@@ -21,8 +17,20 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.1.12] - 2025-04-18
+
+### Changed
+- Now Deletes cascade through relations
+
 ## [0.1.11] - 2025-04-18
 
+### Added
+- Added order column to channel table
+- Now when creating a channel, order autoincrements by 1
+- Added order to all channel endpoints's responses
+
+### Changed
+- Secured all controllers with JWT
 
 ## [0.1.10] - 2025-04-18
 

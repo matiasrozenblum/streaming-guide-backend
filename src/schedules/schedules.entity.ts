@@ -15,7 +15,7 @@ export class Schedule {
   @Column({ type: 'time' })
   end_time: string;
 
-  @ManyToOne(() => Program, (program) => program.schedules)
+  @ManyToOne(() => Program, (program) => program.schedules, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'program_id' })
   program: Program;
 }
