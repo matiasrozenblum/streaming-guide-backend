@@ -39,6 +39,7 @@ export class ProgramsService {
       is_live: savedProgram.is_live,
       stream_url: savedProgram.stream_url,
       channel_id: savedProgram.channel?.id,
+      channel_name: savedProgram.channel?.name || null,
     };
   }
 
@@ -76,6 +77,7 @@ export class ProgramsService {
       is_live: program.is_live,
       stream_url: program.stream_url,
       channel_id: program.channel?.id,
+      channel_name: program.channel?.name || null,
     };
   }
 
