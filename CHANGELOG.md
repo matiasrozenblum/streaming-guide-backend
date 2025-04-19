@@ -17,7 +17,17 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
-## [0.1.12] - 2025-04-18
+## [0.1.14] - 2025-04-19
+
+### Fixed
+- Fixed JWT sign
+
+## [0.1.13] - 2025-04-19
+
+### Added
+- Added update and delete functionality to configs
+
+## [0.1.12] - 2025-04-19
 
 ### Changed
 - Now Deletes cascade through relations
