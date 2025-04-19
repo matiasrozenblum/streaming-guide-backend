@@ -42,4 +42,8 @@ export class ConfigService {
       order: { updated_at: 'DESC' },
     });
   }
+
+  async remove(key: string): Promise<void> {
+    await this.configRepository.delete({ key });
+  }
 }
