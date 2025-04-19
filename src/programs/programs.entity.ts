@@ -18,7 +18,7 @@ export class Program {
   @JoinColumn({ name: 'channel_id' })
   channel: Channel;
 
-  @OneToMany(() => Schedule, (schedule) => schedule.program)
+  @OneToMany(() => Schedule, (schedule) => schedule.program, { cascade: true, onDelete: 'CASCADE' })
   schedules: Schedule[];
 
   @ManyToMany(() => Panelist, (panelist) => panelist.programs)
