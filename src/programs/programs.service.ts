@@ -54,6 +54,7 @@ export class ProgramsService {
       is_live: program.is_live,
       stream_url: program.stream_url,
       channel_id: program.channel?.id,
+      channel_name: program.channel?.name || null,
     }));
   }
 
