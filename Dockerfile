@@ -19,20 +19,22 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 ENV NODE_ENV=production
 ENV PORT=8080
 
-# Directorio de trabajo
 WORKDIR /app
 
-# Copiar dependencias y paquetes
+# Copiar package.json y package-lock.json
 COPY package*.json ./
 
-# Instalar solo las dependencias de producción
-RUN npm install --only=production
+# Instalar todas las dependencias (PROD + DEV)
+RUN npm install
 
-# Copiar el resto del código
+# Copiar el resto del proyecto
 COPY . .
 
-# Build del proyecto
+# Compilar el proyecto Nest.js
 RUN npm run build
+
+# Eliminar devDependencies para la imagen final
+RUN npm prune --production
 
 # Exponer el puerto
 EXPOSE 8080
