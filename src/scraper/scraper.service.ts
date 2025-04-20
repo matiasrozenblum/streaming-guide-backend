@@ -8,6 +8,8 @@ import { VorterixProgram, scrapeVorterixSchedule } from './vorterix.scraper';
 import { scrapeGelatinaSchedule, GelatinaProgram } from './gelatina.scraper';
 import { scrapeUrbanaPlaySchedule, UrbanaProgram } from './urbana.scraper';
 import { Injectable } from '@nestjs/common';
+import { ProposedChangesService } from '../proposed-changes/proposed-changes.service';
+import { EmailService } from '../email/email.service'; // << Agregado
 
 @Injectable()
 export class ScraperService {
@@ -18,6 +20,8 @@ export class ScraperService {
     private readonly programRepo: Repository<Program>,
     @InjectRepository(Schedule)
     private readonly scheduleRepo: Repository<Schedule>,
+    private readonly proposedChangesService: ProposedChangesService,
+    private readonly emailService: EmailService,
   ) {}
 
   @Cron(CronExpression.EVERY_WEEK)
@@ -35,68 +39,68 @@ export class ScraperService {
   }
 
   @Cron(CronExpression.EVERY_WEEK)
-async handleWeeklyUrbanaUpdate() {
-  console.log('⏰ Ejecutando actualización semanal de Urbana Play...');
-  await this.insertUrbanaSchedule();
-  console.log('✅ Actualización semanal de Urbana completada');
-}
+  async handleWeeklyUrbanaUpdate() {
+    console.log('⏰ Ejecutando actualización semanal de Urbana Play...');
+    await this.insertUrbanaSchedule();
+    console.log('✅ Actualización semanal de Urbana completada');
+  }
 
   async insertVorterixSchedule() {
     const data: VorterixProgram[] = await scrapeVorterixSchedule();
-
     const channelName = 'Vorterix';
 
     let channel = await this.channelRepo.findOne({ where: { name: channelName } });
-
     if (!channel) {
       channel = this.channelRepo.create({ name: channelName });
       await this.channelRepo.save(channel);
     }
 
     for (const item of data) {
-      let program = await this.programRepo.findOne({ where: { name: item.name, channel: { id: channel.id } }, relations: ['channel'] });
+      let program = await this.programRepo.findOne({
+        where: { name: item.name, channel: { id: channel.id } },
+        relations: ['channel'],
+      });
 
       if (!program) {
-        program = this.programRepo.create({
-          name: item.name,
-          channel,
-          logo_url: null, // si en algún momento tenés logos, podés setearlo acá
+        await this.proposedChangesService.createProposedChange({
+          entityType: 'program',
+          action: 'create',
+          channelName: channel.name,
+          programName: item.name,
+          before: null,
+          after: {
+            name: item.name,
+            channelId: channel.id,
+            logo_url: null,
+          },
         });
-        await this.programRepo.save(program);
       }
 
       for (const day of item.days) {
-        const dayTranslations: Record<string, string> = {
-          lunes: 'monday',
-          martes: 'tuesday',
-          miércoles: 'wednesday',
-          miercoles: 'wednesday',
-          jueves: 'thursday',
-          viernes: 'friday',
-          sábado: 'saturday',
-          sabado: 'saturday',
-          domingo: 'sunday',
-        };
-
-        const dayLower = dayTranslations[day.toLowerCase()] || day.toLowerCase();
+        const dayLower = this.translateDay(day);
         const existingSchedule = await this.scheduleRepo.findOne({
-          where: {
-            program: { id: program.id },
-            day_of_week: dayLower,
-          },
+          where: { program: { id: program?.id || -1 }, day_of_week: dayLower },
           relations: ['program'],
         });
 
         if (!existingSchedule) {
-          await this.scheduleRepo.save({
-            program,
-            day_of_week: dayLower,
-            start_time: item.startTime,
-            end_time: item.endTime,
+          await this.proposedChangesService.createProposedChange({
+            entityType: 'schedule',
+            action: 'create',
+            channelName: channel.name,
+            programName: item.name,
+            before: null,
+            after: {
+              day_of_week: dayLower,
+              start_time: item.startTime,
+              end_time: item.endTime,
+            },
           });
         }
       }
     }
+
+    await this.sendReportEmail(); // << Agregado
 
     return { success: true };
   }
@@ -104,71 +108,70 @@ async handleWeeklyUrbanaUpdate() {
   async insertGelatinaSchedule() {
     const data: GelatinaProgram[] = await scrapeGelatinaSchedule();
     const channelName = 'Gelatina';
-  
+
     let channel = await this.channelRepo.findOne({ where: { name: channelName } });
     if (!channel) {
-      channel = this.channelRepo.create({ name: channelName, logo_url: 'https://gelatina.com.ar/wp-content/uploads/2025/02/Gelatina-2025.png' });
+      channel = this.channelRepo.create({
+        name: channelName,
+        logo_url: 'https://gelatina.com.ar/wp-content/uploads/2025/02/Gelatina-2025.png',
+      });
       await this.channelRepo.save(channel);
     }
-  
+
     for (const item of data) {
-      let program = await this.programRepo.findOne({ where: { name: item.name, channel: { id: channel.id } }, relations: ['channel'] });
-  
-      console.log('Program:', program);
+      let program = await this.programRepo.findOne({
+        where: { name: item.name, channel: { id: channel.id } },
+        relations: ['channel'],
+      });
+
       if (!program) {
-        program = this.programRepo.create({
-          name: item.name,
-          channel,
-          logo_url: item.logoUrl || null,
-          panelists: [], // Podés asociar entidades más adelante
-        });
-        await this.programRepo.save(program);
-      } else {
-
-      }
-  
-      for (const day of item.days) {
-        const dayTranslations: Record<string, string> = {
-          lunes: 'monday',
-          martes: 'tuesday',
-          miércoles: 'wednesday',
-          miercoles: 'wednesday',
-          jueves: 'thursday',
-          viernes: 'friday',
-          sábado: 'saturday',
-          sabado: 'saturday',
-          domingo: 'sunday',
-        };
-
-        const dayLower = dayTranslations[day.toLowerCase()] || day.toLowerCase();
-        const exists = await this.scheduleRepo.findOne({
-          where: {
-            program: { id: program.id },
-            day_of_week: dayLower,
+        await this.proposedChangesService.createProposedChange({
+          entityType: 'program',
+          action: 'create',
+          channelName: channel.name,
+          programName: item.name,
+          before: null,
+          after: {
+            name: item.name,
+            channelId: channel.id,
+            logo_url: item.logoUrl || null,
           },
+        });
+      }
+
+      for (const day of item.days) {
+        const dayLower = this.translateDay(day);
+        const exists = await this.scheduleRepo.findOne({
+          where: { program: { id: program?.id || -1 }, day_of_week: dayLower },
           relations: ['program'],
         });
 
-        console.log('Schedule:', exists);
-  
         if (!exists) {
-          await this.scheduleRepo.save({
-            program,
-            day_of_week: dayLower,
-            start_time: item.startTime,
-            end_time: item.endTime,
+          await this.proposedChangesService.createProposedChange({
+            entityType: 'schedule',
+            action: 'create',
+            channelName: channel.name,
+            programName: item.name,
+            before: null,
+            after: {
+              day_of_week: dayLower,
+              start_time: item.startTime,
+              end_time: item.endTime,
+            },
           });
         }
       }
     }
-  
+
+    await this.sendReportEmail(); // << Agregado
+
     return { success: true };
   }
 
   async insertUrbanaSchedule() {
     const data: UrbanaProgram[] = await scrapeUrbanaPlaySchedule();
     const channelName = 'Urbana Play';
-  
+
     let channel = await this.channelRepo.findOne({ where: { name: channelName } });
     if (!channel) {
       channel = this.channelRepo.create({
@@ -177,57 +180,74 @@ async handleWeeklyUrbanaUpdate() {
       });
       await this.channelRepo.save(channel);
     }
-  
+
     for (const item of data) {
       let program = await this.programRepo.findOne({
         where: { name: item.name, channel: { id: channel.id } },
         relations: ['channel'],
       });
-  
+
       if (!program) {
-        program = this.programRepo.create({
-          name: item.name,
-          channel,
-          logo_url: item.logoUrl || null,
-          panelists: [], // se pueden asociar luego si querés como entidades
-        });
-        await this.programRepo.save(program);
-      }
-  
-      for (const day of item.days) {
-        const dayTranslations: Record<string, string> = {
-          lunes: 'monday',
-          martes: 'tuesday',
-          miércoles: 'wednesday',
-          miercoles: 'wednesday',
-          jueves: 'thursday',
-          viernes: 'friday',
-          sábado: 'saturday',
-          sabado: 'saturday',
-          domingo: 'sunday',
-        };
-  
-        const dayLower = dayTranslations[day.toLowerCase()] || day.toLowerCase();
-  
-        const exists = await this.scheduleRepo.findOne({
-          where: {
-            program: { id: program.id },
-            day_of_week: dayLower,
+        await this.proposedChangesService.createProposedChange({
+          entityType: 'program',
+          action: 'create',
+          channelName: channel.name,
+          programName: item.name,
+          before: null,
+          after: {
+            name: item.name,
+            channelId: channel.id,
+            logo_url: item.logoUrl || null,
           },
+        });
+      }
+
+      for (const day of item.days) {
+        const dayLower = this.translateDay(day);
+        const exists = await this.scheduleRepo.findOne({
+          where: { program: { id: program?.id || -1 }, day_of_week: dayLower },
           relations: ['program'],
         });
-  
+
         if (!exists) {
-          await this.scheduleRepo.save({
-            program,
-            day_of_week: dayLower,
-            start_time: item.startTime.replace('.', ':'), // convertir 13.00 → 13:00
-            end_time: item.endTime.replace('.', ':'),
+          await this.proposedChangesService.createProposedChange({
+            entityType: 'schedule',
+            action: 'create',
+            channelName: channel.name,
+            programName: item.name,
+            before: null,
+            after: {
+              day_of_week: dayLower,
+              start_time: item.startTime.replace('.', ':'),
+              end_time: item.endTime.replace('.', ':'),
+            },
           });
         }
       }
     }
-  
+
+    await this.sendReportEmail(); // << Agregado
+
     return { success: true };
+  }
+
+  private translateDay(day: string): string {
+    const translations: Record<string, string> = {
+      lunes: 'monday',
+      martes: 'tuesday',
+      miércoles: 'wednesday',
+      miercoles: 'wednesday',
+      jueves: 'thursday',
+      viernes: 'friday',
+      sábado: 'saturday',
+      sabado: 'saturday',
+      domingo: 'sunday',
+    };
+    return translations[day.toLowerCase()] || day.toLowerCase();
+  }
+
+  private async sendReportEmail() {
+    const pendingChanges = await this.proposedChangesService.getPendingChanges();
+    await this.emailService.sendProposedChangesReport(pendingChanges);
   }
 }
