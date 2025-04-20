@@ -61,6 +61,8 @@ export class ScraperService {
       await this.channelRepo.save(channel);
     }
 
+    await this.proposedChangesService.clearPendingChangesForChannel(channel.name);
+
     for (const item of scrapedData) {
       let program = await this.programRepo.findOne({
         where: { name: item.name, channel: { id: channel.id } },
@@ -90,8 +92,8 @@ export class ScraperService {
           relations: ['program'],
         });
 
-        const startTime = (item.startTime || '').replace('.', ':');
-        const endTime = (item.endTime || '').replace('.', ':');
+        const startTimeNormalized = this.normalizeTime(item.startTime);
+        const endTimeNormalized = this.normalizeTime(item.endTime);
 
         if (!existingSchedule) {
           changes.push({
@@ -102,13 +104,16 @@ export class ScraperService {
             before: null,
             after: {
               day_of_week: dayLower,
-              start_time: this.normalizeTime(startTime),
-              end_time: this.normalizeTime(endTime),
+              start_time: startTimeNormalized,
+              end_time: endTimeNormalized,
             },
           });
         } else {
-          const startMatches = this.normalizeTime(existingSchedule.start_time) === this.normalizeTime(item.startTime);
-          const endMatches = this.normalizeTime(existingSchedule.end_time) === this.normalizeTime(item.endTime);
+          const dbStartTime = this.normalizeTime(existingSchedule.start_time);
+          const dbEndTime = this.normalizeTime(existingSchedule.end_time);
+
+          const startMatches = dbStartTime === startTimeNormalized;
+          const endMatches = dbEndTime === endTimeNormalized;
 
           if (!startMatches || !endMatches) {
             changes.push({
@@ -118,14 +123,14 @@ export class ScraperService {
               programName: item.name,
               before: {
                 day_of_week: existingSchedule.day_of_week,
-                start_time: existingSchedule.start_time,
-                end_time: existingSchedule.end_time,
+                start_time: dbStartTime,
+                end_time: dbEndTime,
               },
               after: {
                 day_of_week: dayLower,
-                start_time: this.normalizeTime(startTime),
-                end_time: this.normalizeTime(endTime),
-              }
+                start_time: startTimeNormalized,
+                end_time: endTimeNormalized,
+              },
             });
           }
         }
@@ -170,23 +175,26 @@ export class ScraperService {
     return translations[day.toLowerCase()] || day.toLowerCase();
   }
 
+  private normalizeTime(time?: string): string {
+    if (!time) return '';
+    
+    const parts = time.split(':');
+
+    if (parts.length >= 2) {
+      return `${parts[0]}:${parts[1].padStart(2, '0')}`;
+    }
+
+    if (parts.length === 1) {
+      return `${parts[0]}:00`;
+    }
+
+    return time;
+  }
+
   private async sendReportEmail() {
     const pendingChanges = await this.proposedChangesService.getPendingChanges();
     if (pendingChanges.length) {
       await this.emailService.sendProposedChangesReport(pendingChanges);
     }
-  }
-
-  private normalizeTime(time?: string): string {
-    if (!time) return '';
-  
-    const [hours, minutes] = time.split(':');
-  
-    if (minutes === undefined) {
-      return `${hours}:00`; // ejemplo: "10" -> "10:00"
-    }
-  
-    // Si venía con segundos (HH:MM:SS), ignorarlos
-    return `${hours}:${minutes.padEnd(2, '0')}`; // ejemplo: "10:00:00" -> "10:00"
   }
 }

@@ -65,4 +65,8 @@ export class ProposedChangesService {
       where: { status: 'pending' },
     });
   }
+
+  async clearPendingChangesForChannel(channelName: string) {
+    await this.proposedChangeRepo.delete({ channelName, status: 'pending' });
+  }
 }
