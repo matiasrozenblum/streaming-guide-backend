@@ -1,4 +1,3 @@
-// src/utils/puppeteer.util.ts
 import puppeteer from 'puppeteer';
 
 export async function getBrowser() {
@@ -7,15 +6,20 @@ export async function getBrowser() {
   if (env === 'production' || env === 'staging') {
     console.log(`🚀 Launching puppeteer in ${env.toUpperCase()} mode`);
     return await puppeteer.launch({
+      headless: true, // 👈 clásico headless
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-accelerated-2d-canvas',
         '--disable-gpu',
+        '--no-zygote',
+        '--single-process',
         '--window-size=1920x1080',
       ],
-      headless: true,
+      protocolTimeout: 60000, // 👈 para evitar timeouts
+      pipe: true,             // 👈 recomendado en servidores
+      dumpio: true,            // 👈 para que puedas ver errores de Chrome en Railway
     });
   }
 
