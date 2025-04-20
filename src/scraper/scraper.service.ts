@@ -107,8 +107,8 @@ export class ScraperService {
             },
           });
         } else {
-          const startMatches = existingSchedule.start_time === startTime;
-          const endMatches = existingSchedule.end_time === endTime;
+          const startMatches = existingSchedule.start_time === this.normalizeTime(startTime);
+          const endMatches = existingSchedule.end_time === this.normalizeTime(endTime);
 
           if (!startMatches || !endMatches) {
             changes.push({
@@ -175,5 +175,10 @@ export class ScraperService {
     if (pendingChanges.length) {
       await this.emailService.sendProposedChangesReport(pendingChanges);
     }
+  }
+
+  private normalizeTime(time: string): string {
+    if (!time) return '';
+    return time.includes(':') ? time.padEnd(5, ':00') : `${time}:00`;
   }
 }
