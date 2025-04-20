@@ -6,11 +6,13 @@ import { Channel } from '../channels/channels.entity';
 import { Program } from '../programs/programs.entity';
 import { Schedule } from '../schedules/schedules.entity';
 import { ProposedChangesModule } from '@/proposed-changes/proposed-changes.module';
+import { EmailModule } from '@/email/email.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Channel, Program, Schedule]),
     ProposedChangesModule,
+    EmailModule,
   ],
   controllers: [ScraperController],
   providers: [ScraperService],
