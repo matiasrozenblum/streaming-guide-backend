@@ -102,8 +102,8 @@ export class ScraperService {
             before: null,
             after: {
               day_of_week: dayLower,
-              start_time: startTime,
-              end_time: endTime,
+              start_time: this.normalizeTime(startTime),
+              end_time: this.normalizeTime(endTime),
             },
           });
         } else {
@@ -123,9 +123,9 @@ export class ScraperService {
               },
               after: {
                 day_of_week: dayLower,
-                start_time: startTime,
-                end_time: endTime,
-              },
+                start_time: this.normalizeTime(startTime),
+                end_time: this.normalizeTime(endTime),
+              }
             });
           }
         }
