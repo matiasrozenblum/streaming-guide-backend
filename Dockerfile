@@ -13,27 +13,28 @@ RUN apk add --no-cache \
     yarn \
     bash
 
-# Variables de entorno
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
-ENV NODE_ENV=production
-ENV PORT=8080
-
 WORKDIR /app
 
 # Copiar package.json y package-lock.json
 COPY package*.json ./
 
-# Instalar todas las dependencias (PROD + DEV)
+# 👉🏻 Acá todavía NO seteamos NODE_ENV
+# Instalamos TODO (dependencias de producción + desarrollo)
 RUN npm install
 
 # Copiar el resto del proyecto
 COPY . .
 
-# Compilar el proyecto Nest.js
+# Build del proyecto Nest.js
 RUN npm run build
 
-# Eliminar devDependencies para la imagen final
+# 👉🏻 recién acá seteamos NODE_ENV=production
+ENV NODE_ENV=production
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+ENV PORT=8080
+
+# Limpiamos devDependencies
 RUN npm prune --production
 
 # Exponer el puerto
