@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Param, Body, ParseIntPipe } from '@nestjs/common';
 import { ProposedChangesService } from './proposed-changes.service';
 import { ProposedChange } from './proposed-changes.entity';
+import { CreateProposedChangeInput } from './dto/create-proposed-change-input';
 
 @Controller('proposed-changes')
 export class ProposedChangesController {
@@ -12,14 +13,7 @@ export class ProposedChangesController {
   }
 
   @Post()
-  async createProposedChange(@Body() data: {
-    entityType: 'program' | 'schedule';
-    action: 'create' | 'update' | 'delete';
-    channelName: string;
-    programName: string;
-    before?: any;
-    after: any;
-  }) {
+  async createProposedChange(@Body() data: CreateProposedChangeInput) {
     return this.proposedChangesService.createProposedChange(data);
   }
 
