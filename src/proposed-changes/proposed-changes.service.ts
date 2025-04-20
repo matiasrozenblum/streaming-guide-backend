@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ProposedChange } from './proposed-changes.entity';
+import { Schedule } from '@/schedules/schedules.entity';
+import { Program } from '@/programs/programs.entity';
 
 interface CreateProposedChangeInput {
   entityType: 'program' | 'schedule';
@@ -17,6 +19,10 @@ export class ProposedChangesService {
   constructor(
     @InjectRepository(ProposedChange)
     private readonly proposedChangeRepo: Repository<ProposedChange>,
+    @InjectRepository(Program)
+    private readonly programRepo: Repository<Program>,
+    @InjectRepository(Schedule)
+    private readonly scheduleRepo: Repository<Schedule>,
   ) {}
 
   async createProposedChange(data: CreateProposedChangeInput | CreateProposedChangeInput[]) {
@@ -45,11 +51,52 @@ export class ProposedChangesService {
   }
 
   async approveChange(id: number) {
-    const change = await this.proposedChangeRepo.findOneBy({ id });
-    if (!change) throw new Error('ProposedChange not found');
-
+    const change = await this.proposedChangeRepo.findOne({ where: { id } });
+  
+    if (!change) {
+      throw new Error('Proposed change not found');
+    }
+  
+    if (change.status !== 'pending') {
+      throw new Error('Only pending changes can be approved');
+    }
+  
+    // Impactar el cambio en la tabla real
+    if (change.entityType === 'program') {
+      await this.programRepo.update(
+        { name: change.programName }, // Buscar por nombre (o podrías usar id si lo guardáramos)
+        {
+          name: change.after.name,
+          logo_url: change.after.logo_url,
+          // Podrías agregar más campos si en el futuro cambian más propiedades
+        }
+      );
+    } else if (change.entityType === 'schedule') {
+      const schedule = await this.scheduleRepo.findOne({
+        where: {
+          program: { name: change.programName },
+          day_of_week: change.before.day_of_week,
+          start_time: change.before.start_time,
+          end_time: change.before.end_time,
+        },
+        relations: ['program'],
+      });
+  
+      if (!schedule) {
+        throw new Error('Schedule not found for update');
+      }
+  
+      schedule.day_of_week = change.after.day_of_week;
+      schedule.start_time = change.after.start_time;
+      schedule.end_time = change.after.end_time;
+      await this.scheduleRepo.save(schedule);
+    }
+  
+    // Actualizar estado a aprobado
     change.status = 'approved';
-    return this.proposedChangeRepo.save(change);
+    await this.proposedChangeRepo.save(change);
+  
+    return { success: true };
   }
 
   async rejectChange(id: number) {
