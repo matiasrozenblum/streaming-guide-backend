@@ -17,6 +17,15 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.1.15] - 2025-04-20
+
+### Changed
+- Now scrapers dont directly modify the DB, instead they send an email with proposed changes.
+- This proposed changes will then be accepted or rejected from the backoffice
+
+### Fixed
+- Fixed scrapers execution in Railway environment
+
 ## [0.1.14] - 2025-04-19
 
 ### Fixed
