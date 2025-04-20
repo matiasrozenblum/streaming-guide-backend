@@ -6,6 +6,7 @@ import { ProposedChange } from './proposed-changes.entity';
 @Module({
   imports: [TypeOrmModule.forFeature([ProposedChange])],
   providers: [ProposedChangesService],
-  controllers: [ProposedChangesController]
+  controllers: [ProposedChangesController],
+  exports: [ProposedChangesService],
 })
 export class ProposedChangesModule {}
