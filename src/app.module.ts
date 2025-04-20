@@ -21,6 +21,8 @@ import { AuthModule } from './auth/auth.module';
 import { AppService } from './app.service';
 import { YoutubeDiscoveryService } from './youtube/youtube-discovery.service';
 import { YoutubeLiveModule } from './youtube/youtube-live.module';
+import { ProposedChangesModule } from './proposed-changes/proposed-changes.module';
+import { EmailModule } from './email/email.module';
 
 @Module({
   imports: [
@@ -79,6 +81,8 @@ import { YoutubeLiveModule } from './youtube/youtube-live.module';
     AppConfigModule,
     AuthModule,
     YoutubeLiveModule,
+    ProposedChangesModule,
+    EmailModule,
   ],
   controllers: [AppController],
   providers: [
