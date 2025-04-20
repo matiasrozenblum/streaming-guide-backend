@@ -1,6 +1,6 @@
 FROM node:22-alpine
 
-# Install dependencies required by Puppeteer
+# Instalar Chromium + dependencias necesarias
 RUN apk add --no-cache \
     chromium \
     nss \
@@ -10,20 +10,32 @@ RUN apk add --no-cache \
     ca-certificates \
     ttf-freefont \
     nodejs \
-    yarn
+    yarn \
+    bash
 
-# Set environment variables for Puppeteer
+# Variables de entorno
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+ENV NODE_ENV=production
+ENV PORT=8080
 
+# Directorio de trabajo
 WORKDIR /app
 
+# Copiar dependencias y paquetes
 COPY package*.json ./
-RUN npm install
 
+# Instalar solo las dependencias de producción
+RUN npm install --only=production
+
+# Copiar el resto del código
 COPY . .
 
+# Build del proyecto
 RUN npm run build
 
+# Exponer el puerto
 EXPOSE 8080
+
+# Comando de arranque
 CMD ["node", "dist/main.js"]
