@@ -9,7 +9,7 @@ import { scrapeGelatinaSchedule, GelatinaProgram } from './gelatina.scraper';
 import { scrapeUrbanaPlaySchedule, UrbanaProgram } from './urbana.scraper';
 import { Injectable } from '@nestjs/common';
 import { ProposedChangesService } from '../proposed-changes/proposed-changes.service';
-import { EmailService } from '../email/email.service'; // << Agregado
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class ScraperService {
@@ -78,6 +78,7 @@ export class ScraperService {
 
       for (const day of item.days) {
         const dayLower = this.translateDay(day);
+
         const existingSchedule = await this.scheduleRepo.findOne({
           where: { program: { id: program?.id || -1 }, day_of_week: dayLower },
           relations: ['program'],
@@ -96,12 +97,33 @@ export class ScraperService {
               end_time: item.endTime,
             },
           });
+        } else {
+          const startTimeMatches = existingSchedule.start_time === item.startTime;
+          const endTimeMatches = existingSchedule.end_time === item.endTime;
+
+          if (!startTimeMatches || !endTimeMatches) {
+            await this.proposedChangesService.createProposedChange({
+              entityType: 'schedule',
+              action: 'update',
+              channelName: channel.name,
+              programName: item.name,
+              before: {
+                day_of_week: existingSchedule.day_of_week,
+                start_time: existingSchedule.start_time,
+                end_time: existingSchedule.end_time,
+              },
+              after: {
+                day_of_week: dayLower,
+                start_time: item.startTime,
+                end_time: item.endTime,
+              },
+            });
+          }
         }
       }
     }
 
-    await this.sendReportEmail(); // << Agregado
-
+    await this.sendReportEmail();
     return { success: true };
   }
 
@@ -141,12 +163,13 @@ export class ScraperService {
 
       for (const day of item.days) {
         const dayLower = this.translateDay(day);
-        const exists = await this.scheduleRepo.findOne({
+
+        const existingSchedule = await this.scheduleRepo.findOne({
           where: { program: { id: program?.id || -1 }, day_of_week: dayLower },
           relations: ['program'],
         });
 
-        if (!exists) {
+        if (!existingSchedule) {
           await this.proposedChangesService.createProposedChange({
             entityType: 'schedule',
             action: 'create',
@@ -159,12 +182,33 @@ export class ScraperService {
               end_time: item.endTime,
             },
           });
+        } else {
+          const startTimeMatches = existingSchedule.start_time === item.startTime;
+          const endTimeMatches = existingSchedule.end_time === item.endTime;
+
+          if (!startTimeMatches || !endTimeMatches) {
+            await this.proposedChangesService.createProposedChange({
+              entityType: 'schedule',
+              action: 'update',
+              channelName: channel.name,
+              programName: item.name,
+              before: {
+                day_of_week: existingSchedule.day_of_week,
+                start_time: existingSchedule.start_time,
+                end_time: existingSchedule.end_time,
+              },
+              after: {
+                day_of_week: dayLower,
+                start_time: item.startTime,
+                end_time: item.endTime,
+              },
+            });
+          }
         }
       }
     }
 
-    await this.sendReportEmail(); // << Agregado
-
+    await this.sendReportEmail();
     return { success: true };
   }
 
@@ -204,12 +248,13 @@ export class ScraperService {
 
       for (const day of item.days) {
         const dayLower = this.translateDay(day);
-        const exists = await this.scheduleRepo.findOne({
+
+        const existingSchedule = await this.scheduleRepo.findOne({
           where: { program: { id: program?.id || -1 }, day_of_week: dayLower },
           relations: ['program'],
         });
 
-        if (!exists) {
+        if (!existingSchedule) {
           await this.proposedChangesService.createProposedChange({
             entityType: 'schedule',
             action: 'create',
@@ -222,12 +267,33 @@ export class ScraperService {
               end_time: item.endTime.replace('.', ':'),
             },
           });
+        } else {
+          const startTimeMatches = existingSchedule.start_time === item.startTime.replace('.', ':');
+          const endTimeMatches = existingSchedule.end_time === item.endTime.replace('.', ':');
+
+          if (!startTimeMatches || !endTimeMatches) {
+            await this.proposedChangesService.createProposedChange({
+              entityType: 'schedule',
+              action: 'update',
+              channelName: channel.name,
+              programName: item.name,
+              before: {
+                day_of_week: existingSchedule.day_of_week,
+                start_time: existingSchedule.start_time,
+                end_time: existingSchedule.end_time,
+              },
+              after: {
+                day_of_week: dayLower,
+                start_time: item.startTime.replace('.', ':'),
+                end_time: item.endTime.replace('.', ':'),
+              },
+            });
+          }
         }
       }
     }
 
-    await this.sendReportEmail(); // << Agregado
-
+    await this.sendReportEmail();
     return { success: true };
   }
 
