@@ -1,5 +1,4 @@
 import { getBrowser } from '@/utils/puppeteer.util';
-import { Page } from 'puppeteer-core';
 
 export interface VorterixProgram {
   name: string;
