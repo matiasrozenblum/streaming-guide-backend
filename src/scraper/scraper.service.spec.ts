@@ -7,6 +7,8 @@ import { Schedule } from '../schedules/schedules.entity';
 import * as VorterixModule from './vorterix.scraper';
 import * as GelatinaModule from './gelatina.scraper';
 import * as UrbanaModule from './urbana.scraper';
+import { ProposedChangesService } from '../proposed-changes/proposed-changes.service';
+import { EmailService } from '../email/email.service';
 
 describe('ScraperService', () => {
   let service: ScraperService;
@@ -28,6 +30,14 @@ describe('ScraperService', () => {
     save: jest.fn(),
   };
 
+  const mockProposedChangesService = {
+    // Mock service methods here
+    someMethod: jest.fn(),
+    clearPendingChangesForChannel: jest.fn(),
+    createProposedChange: jest.fn(),
+    getPendingChanges: jest.fn().mockResolvedValue([]),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -35,6 +45,17 @@ describe('ScraperService', () => {
         { provide: getRepositoryToken(Channel), useValue: mockChannelRepo },
         { provide: getRepositoryToken(Program), useValue: mockProgramRepo },
         { provide: getRepositoryToken(Schedule), useValue: mockScheduleRepo },
+        {
+          provide: ProposedChangesService,
+          useValue: mockProposedChangesService,
+        },
+        {
+          provide: EmailService,
+          useValue: {
+            // Mock email service methods here
+            sendProposedChangesReport: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -46,7 +67,8 @@ describe('ScraperService', () => {
   });
 
   describe('insertVorterixSchedule', () => {
-    it('should scrape and insert Vorterix schedule', async () => {
+    it('should propose changes for Vorterix schedule', async () => {
+      // Mock de la función que scrapea
       jest.spyOn(VorterixModule, 'scrapeVorterixSchedule').mockResolvedValue([
         {
           name: 'Demo Show',
@@ -55,24 +77,58 @@ describe('ScraperService', () => {
           endTime: '12:00',
         },
       ]);
-
+    
+      // Mocks de repositorios
       mockChannelRepo.findOne.mockResolvedValue(null);
       mockChannelRepo.create.mockReturnValue({ name: 'Vorterix' });
       mockChannelRepo.save.mockResolvedValue({ id: 1, name: 'Vorterix' });
-
+    
       mockProgramRepo.findOne.mockResolvedValue(null);
       mockProgramRepo.create.mockReturnValue({ name: 'Demo Show' });
       mockProgramRepo.save.mockResolvedValue({ id: 1, name: 'Demo Show' });
-
+    
       mockScheduleRepo.findOne.mockResolvedValue(null);
-      mockScheduleRepo.save.mockResolvedValue({});
-
+    
+      // Mock de proposedChangesService
+      mockProposedChangesService.clearPendingChangesForChannel = jest.fn().mockResolvedValue(undefined);
+      mockProposedChangesService.createProposedChange = jest.fn().mockResolvedValue(undefined);
+    
+      // Ejecutar
       const result = await service.insertVorterixSchedule();
+    
+      // Verificaciones
       expect(result).toEqual({ success: true });
       expect(mockChannelRepo.create).toHaveBeenCalled();
-      expect(mockProgramRepo.create).toHaveBeenCalled();
-      expect(mockScheduleRepo.save).toHaveBeenCalled();
+      expect(mockProposedChangesService.clearPendingChangesForChannel).toHaveBeenCalledWith('Vorterix');
+    
+      expect(mockProposedChangesService.createProposedChange).toHaveBeenCalledWith([
+        {
+          entityType: 'program',
+          action: 'create',
+          channelName: 'Vorterix',
+          programName: 'Demo Show',
+          before: null,
+          after: {
+            name: 'Demo Show',
+            channelId: undefined,
+            logo_url: null,
+          },
+        },
+        {
+          entityType: 'schedule',
+          action: 'create',
+          channelName: 'Vorterix',
+          programName: 'Demo Show',
+          before: null,
+          after: {
+            day_of_week: 'monday',
+            start_time: '10:00',
+            end_time: '12:00',
+          },
+        },
+      ]);
     });
+    
   });
 
   describe('insertGelatinaSchedule', () => {
