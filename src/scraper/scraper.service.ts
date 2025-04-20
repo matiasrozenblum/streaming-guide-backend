@@ -107,8 +107,8 @@ export class ScraperService {
             },
           });
         } else {
-          const startMatches = existingSchedule.start_time === this.normalizeTime(startTime);
-          const endMatches = existingSchedule.end_time === this.normalizeTime(endTime);
+          const startMatches = this.normalizeTime(existingSchedule.start_time) === this.normalizeTime(item.startTime);
+          const endMatches = this.normalizeTime(existingSchedule.end_time) === this.normalizeTime(item.endTime);
 
           if (!startMatches || !endMatches) {
             changes.push({
@@ -177,8 +177,16 @@ export class ScraperService {
     }
   }
 
-  private normalizeTime(time: string): string {
+  private normalizeTime(time?: string): string {
     if (!time) return '';
-    return time.includes(':') ? time.padEnd(5, ':00') : `${time}:00`;
+  
+    const [hours, minutes] = time.split(':');
+  
+    if (minutes === undefined) {
+      return `${hours}:00`; // ejemplo: "10" -> "10:00"
+    }
+  
+    // Si venía con segundos (HH:MM:SS), ignorarlos
+    return `${hours}:${minutes.padEnd(2, '0')}`; // ejemplo: "10:00:00" -> "10:00"
   }
 }
