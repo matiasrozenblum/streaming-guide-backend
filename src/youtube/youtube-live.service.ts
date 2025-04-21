@@ -18,6 +18,7 @@ export class YoutubeLiveService {
     @Inject(CACHE_MANAGER)
     private readonly cacheManager: Cache,
   ) {
+    console.log('🚀 CACHE MANAGER STORE:', this.cacheManager['store']);
     // Schedule the task to run every 30 minutes
     cron.schedule('0,30 * * * *', () => this.fetchLiveVideoIds());
   }
