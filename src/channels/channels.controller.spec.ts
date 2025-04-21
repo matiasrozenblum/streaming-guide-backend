@@ -58,9 +58,9 @@ describe('ChannelsController', () => {
 
   describe('findOne', () => {
     it('should return a single channel', async () => {
-      const result = await controller.findOne('1');
+      const result = await controller.findOne(1);
       expect(result).toEqual(mockChannel);
-      expect(service.findOne).toHaveBeenCalledWith('1');
+      expect(service.findOne).toHaveBeenCalledWith(1);
     });
   });
 
@@ -86,9 +86,9 @@ describe('ChannelsController', () => {
         description: 'Updated Description',
       };
 
-      const result = await controller.update('1', updateDto);
+      const result = await controller.update(1, updateDto);
       expect(result).toEqual(mockChannel);
-      expect(service.update).toHaveBeenCalledWith('1', updateDto);
+      expect(service.update).toHaveBeenCalledWith(1, updateDto);
     });
 
     it('should handle partial updates', async () => {
@@ -96,17 +96,17 @@ describe('ChannelsController', () => {
         name: 'Updated Channel',
       };
 
-      const result = await controller.update('1', updateDto);
+      const result = await controller.update(1, updateDto);
       expect(result).toEqual(mockChannel);
-      expect(service.update).toHaveBeenCalledWith('1', updateDto);
+      expect(service.update).toHaveBeenCalledWith(1, updateDto);
     });
   });
 
   describe('remove', () => {
     it('should remove a channel', async () => {
-      const result = await controller.remove('1');
+      const result = await controller.remove(1);
       expect(result).toBeUndefined();
-      expect(service.remove).toHaveBeenCalledWith('1');
+      expect(service.remove).toHaveBeenCalledWith(1);
     });
   });
 });
