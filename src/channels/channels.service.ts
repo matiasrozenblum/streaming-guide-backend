@@ -156,7 +156,7 @@ export class ChannelsService {
           stream_url: schedule.program.stream_url,
           is_live: schedule.program.is_live,
           panelists: schedule.program.panelists?.map((p) => ({
-            id: p.id,
+            id: p.id.toString(),
             name: p.name,
           })) || [],
         },
