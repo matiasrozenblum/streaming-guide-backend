@@ -31,6 +31,16 @@ import { EmailModule } from './email/email.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    CacheModule.registerAsync({
+      isGlobal: true,
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: async (config: ConfigService) => ({
+        store: redisStore as any,
+        url: config.get<string>('REDIS_URL'),
+        ttl: 3600,
+      }),
+    }),
     CacheConfigModule,
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],

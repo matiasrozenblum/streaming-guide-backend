@@ -99,11 +99,11 @@ export class SchedulesService {
       data.map(async (schedule) => {
         let isLive = false;
         let streamUrl = schedule.program.youtube_url;
-  
+    
         const currentTime = timeToNumber(now);
         const startTime = timeToNumber(schedule.start_time);
         const endTime = timeToNumber(schedule.end_time);
-  
+    
         if (
           schedule.day_of_week === currentDay &&
           currentTime >= startTime &&
@@ -113,16 +113,29 @@ export class SchedulesService {
           if (schedule.program.youtube_url) {
             const channelId = schedule.program.channel.youtube_channel_id;
             if (channelId) {
-              const cachedVideoId = await this.cacheManager.get<string>(`videoId:${schedule.program.id}`);
+              let cachedVideoId = await this.cacheManager.get<string>(`videoId:${schedule.program.id}`);
+              
+              // 👉 Si no está en cache, buscarlo en vivo
+              if (!cachedVideoId) {
+                console.warn(`Video ID not cached for program ${schedule.program.id}, fetching from YouTube...`);
+                const liveVideoId = await this.youtubeLiveService.getLiveVideoId(channelId);
+    
+                if (liveVideoId) {
+                  await this.cacheManager.set(`videoId:${schedule.program.id}`, liveVideoId, 1800);
+                  cachedVideoId = liveVideoId;
+                  console.log(`Fetched and cached video ID for program ${schedule.program.id}: ${liveVideoId}`);
+                } else {
+                  console.warn(`No live video found for program ${schedule.program.id}`);
+                }
+              }
+    
               if (cachedVideoId) {
                 streamUrl = `https://www.youtube.com/embed/${cachedVideoId}?autoplay=1`;
-              } else {
-                console.warn(`Video ID not cached for program ${schedule.program.id}`);
               }
             }
           }
         }
-  
+    
         return {
           ...schedule,
           program: {
@@ -133,6 +146,7 @@ export class SchedulesService {
         };
       })
     );
+    
   
     await this.cacheManager.set(cacheKey, enriched, 30000);
     return enriched;
