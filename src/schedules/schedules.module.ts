@@ -1,6 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { CacheModule } from '@nestjs/cache-manager';
 
 import { SchedulesController } from './schedules.controller';
 import { SchedulesService } from './schedules.service';
@@ -11,7 +10,6 @@ import { YoutubeLiveModule } from '../youtube/youtube-live.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Schedule, Program]),
-    CacheModule,
     forwardRef(() => YoutubeLiveModule),
   ],
   controllers: [SchedulesController],
