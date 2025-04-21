@@ -20,6 +20,12 @@ export class ChannelsController {
     return this.channelsService.findAll();
   }
 
+
+  @Get('with-schedules')
+  async getChannelsWithSchedules(@Query('day') day?: string) {
+    return this.channelsService.getChannelsWithSchedules(day);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Obtener un canal por ID' })
   @ApiResponse({ status: 200, description: 'Canal encontrado', type: Channel })
@@ -44,7 +50,7 @@ export class ChannelsController {
   @Delete(':id')
   @ApiOperation({ summary: 'Eliminar un canal por ID' })
   @ApiResponse({ status: 204, description: 'Canal eliminado' })
-  remove(@Param('id') id: string): Promise<void> {
+  remove(@Param('id') id: number): Promise<void> {
     return this.channelsService.remove(id);
   }
 
@@ -52,10 +58,5 @@ export class ChannelsController {
   async reorder(@Body() body: { ids: number[] }) {
     await this.channelsService.reorderChannels(body.ids);
     return { message: 'Channels reordered successfully' };
-  }
-
-  @Get('with-schedules')
-  async getChannelsWithSchedules(@Query('day') day?: string) {
-    return this.channelsService.getChannelsWithSchedules(day);
   }
 }
