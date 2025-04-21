@@ -6,7 +6,7 @@ import { Program } from './programs/programs.entity';
 import { Schedule } from './schedules/schedules.entity';
 import { Panelist } from './panelists/panelists.entity';
 import { YoutubeDiscoveryService } from './youtube/youtube-discovery.service';
-
+import { YoutubeLiveService } from './youtube/youtube-live.service';
 @Controller()
 export class AppController {
   constructor(
@@ -20,6 +20,7 @@ export class AppController {
     private readonly panelistsRepository: Repository<Panelist>,
     private readonly dataSource: DataSource,
     private readonly youtubeDiscoveryService: YoutubeDiscoveryService,
+    private readonly youtubeLiveService: YoutubeLiveService,
   ) {}
 
   @Post('seed')
@@ -157,5 +158,11 @@ export class AppController {
     ];
 
     return this.youtubeDiscoveryService.getChannelIdsFromLiveUrls(urls);
+  }
+
+  @Post('youtube/fetch-live-ids')
+  async fetchYoutubeLiveIds() {
+    await this.youtubeLiveService.fetchLiveVideoIds();
+    return { message: 'YouTube live video IDs fetched successfully.' };
   }
 }

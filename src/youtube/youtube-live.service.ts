@@ -3,7 +3,7 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import axios from 'axios';
 import * as cron from 'node-cron';
-import dayjs from 'dayjs';
+import * as dayjs from 'dayjs';
 import { SchedulesService } from '../schedules/schedules.service';
 
 @Injectable()
@@ -41,7 +41,7 @@ export class YoutubeLiveService {
     }
   }
 
-  private async fetchLiveVideoIds() {
+  async fetchLiveVideoIds() {
     const currentDay = dayjs().tz('America/Argentina/Buenos_Aires').format('dddd').toLowerCase();
 
     // Fetch today's schedule
