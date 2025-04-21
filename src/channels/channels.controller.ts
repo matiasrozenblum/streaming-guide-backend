@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete, Patch, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Patch, UseGuards, Query } from '@nestjs/common';
 import { ChannelsService } from './channels.service';
 import { CreateChannelDto } from './dto/create-channel.dto';
 import { UpdateChannelDto } from './dto/update-channel.dto';
@@ -52,5 +52,10 @@ export class ChannelsController {
   async reorder(@Body() body: { ids: number[] }) {
     await this.channelsService.reorderChannels(body.ids);
     return { message: 'Channels reordered successfully' };
+  }
+
+  @Get('with-schedules')
+  async getChannelsWithSchedules(@Query('day') day?: string) {
+    return this.channelsService.getChannelsWithSchedules(day);
   }
 }
