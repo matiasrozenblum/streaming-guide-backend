@@ -150,6 +150,10 @@ export class AppController {
       'https://www.youtube.com/@Bondi_liveok/live',
       'https://www.youtube.com/@olgaenvivo_/live',
       'https://www.youtube.com/@SomosGelatina/live',
+      'https://www.youtube.com/@Updr/live',
+      'https://www.youtube.com/@CarajoStream/live',
+      'https://www.youtube.com/@republicaz/live',
+      'https://www.youtube.com/@futurock/live'
     ];
 
     return this.youtubeDiscoveryService.getChannelIdsFromLiveUrls(urls);
