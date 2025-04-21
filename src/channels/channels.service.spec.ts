@@ -113,13 +113,13 @@ describe('ChannelsService', () => {
   });
 
   it('should delete a channel', async () => {
-    await service.remove('1');
+    await service.remove(1);
     expect(repo.delete).toHaveBeenCalledWith('1');
   });
 
   it('should throw NotFoundException when deleting non-existent channel', async () => {
     jest.spyOn(repo, 'delete').mockResolvedValueOnce({ affected: 0, raw: [] } as DeleteResult);
-    await expect(service.remove('999')).rejects.toThrow(NotFoundException);
+    await expect(service.remove(999)).rejects.toThrow(NotFoundException);
   });
 
   describe('update', () => {

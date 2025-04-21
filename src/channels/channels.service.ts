@@ -88,7 +88,7 @@ export class ChannelsService {
     return this.channelsRepository.save(channel);
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: number): Promise<void> {
     const result = await this.channelsRepository.delete(id);
     if (result.affected === 0) {
       throw new NotFoundException(`Channel with ID ${id} not found`);
