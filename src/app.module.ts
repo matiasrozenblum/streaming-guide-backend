@@ -28,7 +28,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 @Module({
   imports: [
     ScheduleModule.forRoot(),
-    ConfigModule.forRoot({   // 🔥 Este es el CONFIG_MODULE de NestJS, el global
+    ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
     }),
@@ -37,7 +37,7 @@ import { ScheduleModule } from '@nestjs/schedule';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: async (config: ConfigService) => ({
-        store: redisStore as any,
+        store: redisStore,
         url: config.get<string>('REDIS_URL'),
         ttl: 3600,
       }),
