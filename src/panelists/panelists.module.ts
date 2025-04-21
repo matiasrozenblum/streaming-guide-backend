@@ -9,7 +9,7 @@ import { CacheModule } from '@nestjs/cache-manager';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Panelist, Program]),
-    CacheModule.register(),
+    CacheModule,
   ],
   controllers: [PanelistsController],
   providers: [PanelistsService],
