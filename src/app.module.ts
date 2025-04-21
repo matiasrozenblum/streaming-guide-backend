@@ -16,7 +16,6 @@ import { AppController } from './app.controller';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ConfigModule as AppConfigModule } from './config/config.module';
 import { Config } from './config/config.entity';
-import { CacheConfigModule } from './cache/cache.module';
 import { AuthModule } from './auth/auth.module';
 import { AppService } from './app.service';
 import { YoutubeDiscoveryService } from './youtube/youtube-discovery.service';
@@ -37,11 +36,10 @@ import { EmailModule } from './email/email.module';
       inject: [ConfigService],
       useFactory: async (config: ConfigService) => ({
         store: redisStore as any,
-        url: config.get<string>('REDIS_URL'),
-        ttl: 3600,
+        url: config.get<string>('REDIS_URL'), // ⚡ Usamos REDIS_URL de Railway
+        ttl: 3600, // 1 hora
       }),
     }),
-    CacheConfigModule,
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -53,34 +51,20 @@ import { EmailModule } from './email/email.module';
         return {
           type: 'postgres',
           url: dbUrl,
-          ssl: {
-            rejectUnauthorized: false,
-          },
+          ssl: { rejectUnauthorized: false },
           autoLoadEntities: true,
-          synchronize: !isProduction, // Disable in production
-          logging: !isProduction, // Disable in production
-          // Connection pooling
+          synchronize: !isProduction,
+          logging: !isProduction,
           extra: {
-            max: 20, // Maximum number of connections in the pool
-            connectionTimeoutMillis: 2000, // Connection timeout
-            idleTimeoutMillis: 30000, // Idle connection timeout
-            // Enable prepared statements
-            statement_timeout: 10000, // Statement timeout in ms
-            query_timeout: 10000, // Query timeout in ms
+            max: 20,
+            connectionTimeoutMillis: 2000,
+            idleTimeoutMillis: 30000,
+            statement_timeout: 10000,
+            query_timeout: 10000,
           },
-          // Cache queries
-          cache: {
-            duration: 30000, // 30 seconds
-          },
+          cache: { duration: 30000 },
         };
       },
-    }),
-    CacheModule.register({
-      isGlobal: true,
-      store: redisStore,
-      host: process.env.REDIS_HOST ?? 'localhost',
-      port: parseInt(process.env.REDIS_PORT ?? '6379', 10),
-      ttl: 3600,
     }),
     TypeOrmModule.forFeature([Channel, Program, Schedule, Panelist, Config]),
     ChannelsModule,
@@ -95,9 +79,7 @@ import { EmailModule } from './email/email.module';
     EmailModule,
   ],
   controllers: [AppController],
-  providers: [
-    AppService,
-    YoutubeDiscoveryService,
-  ],
+  providers: [AppService, YoutubeDiscoveryService],
 })
 export class AppModule {}
+
