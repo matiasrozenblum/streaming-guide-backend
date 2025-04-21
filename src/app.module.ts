@@ -37,12 +37,13 @@ import { ScheduleModule } from '@nestjs/schedule';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: async (config: ConfigService) => ({
-        store: redisStore,
-        host: config.get<string>('REDIS_HOST'),
-        port: config.get<number>('REDIS_PORT'),
-        username: 'default',
-        password: config.get<string>('REDIS_PASSWORD'),
-        ttl: 3600,
+        store: await redisStore.create({
+          host: config.get<string>('REDIS_HOST'),
+          port: config.get<number>('REDIS_PORT'),
+          username: 'default',
+          password: config.get<string>('REDIS_PASSWORD'),
+          ttl: 3600,
+        }),
       }),
     }),
     TypeOrmModule.forRootAsync({
