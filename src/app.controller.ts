@@ -19,9 +19,9 @@ export class AppController {
     @InjectRepository(Schedule)
     private readonly schedulesRepository: Repository<Schedule>,
     @InjectRepository(Panelist)
+    private readonly panelistsRepository: Repository<Panelist>,
     @Inject(CACHE_MANAGER)
     private readonly cacheManager: Cache,
-    private readonly panelistsRepository: Repository<Panelist>,
     private readonly dataSource: DataSource,
     private readonly youtubeDiscoveryService: YoutubeDiscoveryService,
     private readonly youtubeLiveService: YoutubeLiveService,
