@@ -61,20 +61,36 @@ export class ProposedChangesService {
       throw new Error('Only pending changes can be approved');
     }
   
-    // Impactar el cambio en la tabla real
     if (change.entityType === 'program') {
-      await this.programRepo.update(
-        { name: change.programName }, // Buscar por nombre (o podrías usar id si lo guardáramos)
-        {
+      let program = await this.programRepo.findOne({ where: { name: change.programName } });
+  
+      if (!program) {
+        // No existe -> Crear
+        program = this.programRepo.create({
           name: change.after.name,
           logo_url: change.after.logo_url,
-          // Podrías agregar más campos si en el futuro cambian más propiedades
-        }
-      );
+        });
+        await this.programRepo.save(program);
+      } else {
+        // Existe -> Actualizar
+        await this.programRepo.update(
+          { id: program.id },
+          {
+            name: change.after.name,
+            logo_url: change.after.logo_url,
+          }
+        );
+      }
     } else if (change.entityType === 'schedule') {
+      const program = await this.programRepo.findOne({ where: { name: change.programName } });
+  
+      if (!program) {
+        throw new Error(`Program "${change.programName}" not found when approving schedule`);
+      }
+  
       const schedule = await this.scheduleRepo.findOne({
         where: {
-          program: { name: change.programName },
+          program: { id: program.id },
           day_of_week: change.before.day_of_week,
           start_time: change.before.start_time,
           end_time: change.before.end_time,
@@ -83,13 +99,21 @@ export class ProposedChangesService {
       });
   
       if (!schedule) {
-        throw new Error('Schedule not found for update');
+        // No existe schedule -> Crear nuevo
+        const newSchedule = this.scheduleRepo.create({
+          program,
+          day_of_week: change.after.day_of_week,
+          start_time: change.after.start_time,
+          end_time: change.after.end_time,
+        });
+        await this.scheduleRepo.save(newSchedule);
+      } else {
+        // Existe -> Actualizar
+        schedule.day_of_week = change.after.day_of_week;
+        schedule.start_time = change.after.start_time;
+        schedule.end_time = change.after.end_time;
+        await this.scheduleRepo.save(schedule);
       }
-  
-      schedule.day_of_week = change.after.day_of_week;
-      schedule.start_time = change.after.start_time;
-      schedule.end_time = change.after.end_time;
-      await this.scheduleRepo.save(schedule);
     }
   
     // Actualizar estado a aprobado
