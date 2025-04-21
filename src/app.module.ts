@@ -3,30 +3,33 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-store';
+
 import { Channel } from './channels/channels.entity';
 import { Program } from './programs/programs.entity';
 import { Schedule } from './schedules/schedules.entity';
 import { Panelist } from './panelists/panelists.entity';
+import { Config } from './config/config.entity';
+
 import { ChannelsModule } from './channels/channels.module';
 import { ProgramsModule } from './programs/programs.module';
 import { SchedulesModule } from './schedules/schedules.module';
 import { PanelistsModule } from './panelists/panelists.module';
 import { ScraperModule } from './scraper/scraper.module';
-import { AppController } from './app.controller';
-import { ScheduleModule } from '@nestjs/schedule';
-import { ConfigModule as AppConfigModule } from './config/config.module';
-import { Config } from './config/config.entity';
+import { ProposedChangesModule } from './proposed-changes/proposed-changes.module';
 import { AuthModule } from './auth/auth.module';
+import { YoutubeLiveModule } from './youtube/youtube-live.module';
+import { EmailModule } from './email/email.module';
+import { ConfigModule as AppConfigModule } from './config/config.module'; // 🔥 Esta línea estaba MAL antes
+
+import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { YoutubeDiscoveryService } from './youtube/youtube-discovery.service';
-import { YoutubeLiveModule } from './youtube/youtube-live.module';
-import { ProposedChangesModule } from './proposed-changes/proposed-changes.module';
-import { EmailModule } from './email/email.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
     ScheduleModule.forRoot(),
-    ConfigModule.forRoot({
+    ConfigModule.forRoot({   // 🔥 Este es el CONFIG_MODULE de NestJS, el global
       isGlobal: true,
       envFilePath: '.env',
     }),
@@ -36,8 +39,8 @@ import { EmailModule } from './email/email.module';
       inject: [ConfigService],
       useFactory: async (config: ConfigService) => ({
         store: redisStore as any,
-        url: config.get<string>('REDIS_URL'), // ⚡ Usamos REDIS_URL de Railway
-        ttl: 3600, // 1 hora
+        url: config.get<string>('REDIS_URL'),
+        ttl: 3600,
       }),
     }),
     TypeOrmModule.forRootAsync({
@@ -47,7 +50,7 @@ import { EmailModule } from './email/email.module';
         const dbUrl = config.get<string>('DATABASE_URL');
         const isProduction = config.get<string>('NODE_ENV') === 'production';
         console.log('🌐 Connecting to DB:', dbUrl);
-    
+
         return {
           type: 'postgres',
           url: dbUrl,
@@ -62,7 +65,7 @@ import { EmailModule } from './email/email.module';
             statement_timeout: 10000,
             query_timeout: 10000,
           },
-          cache: { duration: 30000 },
+          cache: { duration: 30000 }, // 30s cache interno de consultas
         };
       },
     }),
@@ -72,14 +75,16 @@ import { EmailModule } from './email/email.module';
     SchedulesModule,
     PanelistsModule,
     ScraperModule,
-    AppConfigModule,
+    ConfigModule,          // <-- 🔥 Usá ConfigModule, no AppConfigModule
     AuthModule,
     YoutubeLiveModule,
     ProposedChangesModule,
     EmailModule,
   ],
   controllers: [AppController],
-  providers: [AppService, YoutubeDiscoveryService],
+  providers: [
+    AppService,
+    YoutubeDiscoveryService,
+  ],
 })
 export class AppModule {}
-

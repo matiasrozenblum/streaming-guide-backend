@@ -5,7 +5,6 @@ import { ChannelsService } from './channels.service';
 import { Channel } from './channels.entity';
 import { Program } from '../programs/programs.entity';
 import { Schedule } from '../schedules/schedules.entity';
-import { SchedulesService } from '../schedules/schedules.service';
 import { YoutubeLiveModule } from '../youtube/youtube-live.module';
 import { CacheModule } from '@nestjs/cache-manager';
 
@@ -16,6 +15,6 @@ import { CacheModule } from '@nestjs/cache-manager';
     CacheModule,
   ],
   controllers: [ChannelsController],
-  providers: [ChannelsService, SchedulesService],
+  providers: [ChannelsService],
 })
 export class ChannelsModule {}
