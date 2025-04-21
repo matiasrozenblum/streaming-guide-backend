@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.1.18] - 2025-04-20
+
+### Fixed
+- Fixed create schedule from proposed change
+
 ## [0.1.17] - 2025-04-20
 
 ### Fixed
