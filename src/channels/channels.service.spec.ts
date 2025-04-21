@@ -78,7 +78,7 @@ describe('ChannelsService', () => {
   });
 
   it('should return a channel by ID', async () => {
-    const result = await service.findOne('1');
+    const result = await service.findOne(1);
     expect(result).toEqual(mockChannels[0]);
     expect(repo.findOne).toHaveBeenCalledWith({
       where: { id: 1 },
@@ -88,7 +88,7 @@ describe('ChannelsService', () => {
 
   it('should throw NotFoundException if channel not found', async () => {
     mockRepository.findOne.mockResolvedValueOnce(null);
-    await expect(service.findOne('999')).rejects.toThrow(NotFoundException);
+    await expect(service.findOne(999)).rejects.toThrow(NotFoundException);
   });
 
   it('should create and save a channel', async () => {
@@ -129,7 +129,7 @@ describe('ChannelsService', () => {
         description: 'Updated Description',
       };
 
-      const result = await service.update('1', updateDto);
+      const result = await service.update(1, updateDto);
       expect(result).toEqual(mockChannels[0]);
       expect(repo.save).toHaveBeenCalled();
     });
@@ -139,14 +139,14 @@ describe('ChannelsService', () => {
         name: 'Updated Channel',
       };
 
-      const result = await service.update('1', updateDto);
+      const result = await service.update(1, updateDto);
       expect(result).toEqual(mockChannels[0]);
       expect(repo.save).toHaveBeenCalled();
     });
 
     it('should throw NotFoundException when channel is not found', async () => {
       jest.spyOn(repo, 'findOne').mockResolvedValueOnce(null);
-      await expect(service.update('1', { name: 'Updated Channel' })).rejects.toThrow(NotFoundException);
+      await expect(service.update(1, { name: 'Updated Channel' })).rejects.toThrow(NotFoundException);
     });
   });
 });

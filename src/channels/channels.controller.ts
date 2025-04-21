@@ -23,7 +23,7 @@ export class ChannelsController {
   @Get(':id')
   @ApiOperation({ summary: 'Obtener un canal por ID' })
   @ApiResponse({ status: 200, description: 'Canal encontrado', type: Channel })
-  findOne(@Param('id') id: string): Promise<Channel> {
+  findOne(@Param('id') id: number): Promise<Channel> {
     return this.channelsService.findOne(id);
   }
 
@@ -37,7 +37,7 @@ export class ChannelsController {
   @Patch(':id')
   @ApiOperation({ summary: 'Actualizar un canal' })
   @ApiResponse({ status: 200, description: 'Canal actualizado', type: Channel })
-  update(@Param('id') id: string, @Body() updateChannelDto: UpdateChannelDto): Promise<Channel> {
+  update(@Param('id') id: number, @Body() updateChannelDto: UpdateChannelDto): Promise<Channel> {
     return this.channelsService.update(id, updateChannelDto);
   }
 
