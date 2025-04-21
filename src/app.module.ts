@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
-import { redisStore } from 'cache-manager-ioredis';
+import redisStore from 'cache-manager-redis-store';
 
 import { Channel } from './channels/channels.entity';
 import { Program } from './programs/programs.entity';
@@ -37,9 +37,8 @@ import { ScheduleModule } from '@nestjs/schedule';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: async (config: ConfigService) => ({
-        store: await redisStore({
-          url: config.get<string>('REDIS_URL'),
-        }),
+        store: redisStore,
+        url: config.get<string>('REDIS_URL'),
         ttl: 3600,
       }),
     }),
