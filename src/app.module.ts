@@ -19,7 +19,6 @@ import { ProposedChangesModule } from './proposed-changes/proposed-changes.modul
 import { AuthModule } from './auth/auth.module';
 import { YoutubeLiveModule } from './youtube/youtube-live.module';
 import { EmailModule } from './email/email.module';
-import { ConfigModule as AppConfigModule } from './config/config.module'; // 🔥 Esta línea estaba MAL antes
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';

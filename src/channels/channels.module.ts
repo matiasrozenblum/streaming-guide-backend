@@ -6,13 +6,11 @@ import { Channel } from './channels.entity';
 import { Program } from '../programs/programs.entity';
 import { Schedule } from '../schedules/schedules.entity';
 import { YoutubeLiveModule } from '../youtube/youtube-live.module';
-import { CacheModule } from '@nestjs/cache-manager';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Channel, Program, Schedule]),
     forwardRef(() => YoutubeLiveModule),
-    CacheModule,
   ],
   controllers: [ChannelsController],
   providers: [ChannelsService],
