@@ -7,6 +7,8 @@ import { NotFoundException } from '@nestjs/common';
 import { CreateChannelDto } from './dto/create-channel.dto';
 import { UpdateChannelDto } from './dto/update-channel.dto';
 import { DataSource } from 'typeorm';
+import { Program } from '../programs/programs.entity';
+import { Schedule } from '../schedules/schedules.entity';
 
 describe('ChannelsService', () => {
   let service: ChannelsService;
@@ -34,6 +36,20 @@ describe('ChannelsService', () => {
     createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
   };
 
+  const mockProgramRepository = {
+    find: jest.fn(),
+    findOne: jest.fn(),
+    save: jest.fn(),
+    create: jest.fn(),
+  };
+
+  const mockScheduleRepository = {
+    find: jest.fn(),
+    findOne: jest.fn(),
+    save: jest.fn(),
+    create: jest.fn(),
+  };
+
   const mockDataSource = {
     createQueryRunner: jest.fn().mockReturnValue({
       connect: jest.fn(),
@@ -55,6 +71,14 @@ describe('ChannelsService', () => {
         {
           provide: getRepositoryToken(Channel),
           useValue: mockRepository,
+        },
+        {
+          provide: getRepositoryToken(Program),
+          useValue: mockProgramRepository,
+        },
+        {
+          provide: getRepositoryToken(Schedule),
+          useValue: mockScheduleRepository,
         },
         {
           provide: DataSource,
@@ -114,7 +138,7 @@ describe('ChannelsService', () => {
 
   it('should delete a channel', async () => {
     await service.remove(1);
-    expect(repo.delete).toHaveBeenCalledWith('1');
+    expect(repo.delete).toHaveBeenCalledWith(1);
   });
 
   it('should throw NotFoundException when deleting non-existent channel', async () => {
