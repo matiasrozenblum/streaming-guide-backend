@@ -36,17 +36,13 @@ import { ScheduleModule } from '@nestjs/schedule';
       isGlobal: true,
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: async (config: ConfigService) => {
-        const redisUrl = config.get<string>('REDIS_URL');
-        console.log('🚀 REDIS_URL que lee Nest:', redisUrl);
-    
-        return {
-          store: await redisStore.create({
-            url: redisUrl,
-          }),
-          ttl: 3600,
-        };
-      },
+      useFactory: async (config: ConfigService) => ({
+        store: redisStore,
+        options: {
+          url: config.get<string>('REDIS_URL'),
+        },
+        ttl: 3600,
+      }),
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
