@@ -126,7 +126,7 @@ export class ChannelsService {
 
     const todaySchedules = await this.scheduleRepo.find({
       where: day ? { day_of_week: day.toLowerCase() } : {},
-      relations: ['program', 'program.channel'],
+      relations: ['program', 'program.channel', 'program.panelists'],
     });
 
     const schedulesGroupedByChannelId = todaySchedules.reduce((acc, schedule) => {
@@ -155,6 +155,10 @@ export class ChannelsService {
           description: schedule.program.description,
           stream_url: schedule.program.stream_url,
           is_live: schedule.program.is_live,
+          panelists: schedule.program.panelists?.map((p) => ({
+            id: p.id,
+            name: p.name,
+          })) || [],
         },
       })),
     }));
