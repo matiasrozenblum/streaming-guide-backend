@@ -37,8 +37,9 @@ import { ScheduleModule } from '@nestjs/schedule';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: async (config: ConfigService) => ({
-        store: redisStore,
-        url: config.get<string>('REDIS_URL'),
+        store: await redisStore({
+          url: config.get<string>('REDIS_URL'),
+        }),
         ttl: 3600,
       }),
     }),
