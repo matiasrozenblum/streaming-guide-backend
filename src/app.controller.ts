@@ -1,4 +1,6 @@
-import { Controller, Post, Get } from '@nestjs/common';
+import { Controller, Post, Get, Inject } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Channel } from './channels/channels.entity';
@@ -17,6 +19,8 @@ export class AppController {
     @InjectRepository(Schedule)
     private readonly schedulesRepository: Repository<Schedule>,
     @InjectRepository(Panelist)
+    @Inject(CACHE_MANAGER)
+    private readonly cacheManager: Cache,
     private readonly panelistsRepository: Repository<Panelist>,
     private readonly dataSource: DataSource,
     private readonly youtubeDiscoveryService: YoutubeDiscoveryService,
@@ -164,5 +168,29 @@ export class AppController {
   async fetchYoutubeLiveIds() {
     await this.youtubeLiveService.fetchLiveVideoIds();
     return { message: 'YouTube live video IDs fetched successfully.' };
+  }
+
+  @Post('cache-test')
+  async cacheTestSet() {
+    const key = 'test:mykey';
+    const value = { hello: 'world', timestamp: Date.now() };
+    const ttl = 300; // 5 minutos
+
+    console.log(`📝 [cache-test] Setting key ${key} with value`, value);
+    await this.cacheManager.set(key, value, ttl);
+    console.log(`✅ [cache-test] Key ${key} set successfully.`);
+
+    return { message: 'Cache set!', key, value, ttl };
+  }
+
+  @Get('cache-test')
+  async cacheTestGet() {
+    const key = 'test:mykey';
+    
+    console.log(`🔎 [cache-test] Getting key ${key} from cache...`);
+    const cachedValue = await this.cacheManager.get(key);
+    console.log(`📦 [cache-test] Retrieved value for key ${key}:`, cachedValue);
+
+    return { key, cachedValue };
   }
 }
