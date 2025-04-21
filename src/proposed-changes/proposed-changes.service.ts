@@ -61,35 +61,60 @@ export class ProposedChangesService {
       throw new Error('Only pending changes can be approved');
     }
   
-    // Impactar el cambio en la tabla real
     if (change.entityType === 'program') {
-      await this.programRepo.update(
-        { name: change.programName }, // Buscar por nombre (o podrías usar id si lo guardáramos)
-        {
+      let program = await this.programRepo.findOne({ where: { name: change.programName } });
+  
+      if (!program) {
+        program = this.programRepo.create({
           name: change.after.name,
           logo_url: change.after.logo_url,
-          // Podrías agregar más campos si en el futuro cambian más propiedades
-        }
-      );
+        });
+        await this.programRepo.save(program);
+      } else {
+        await this.programRepo.update(
+          { id: program.id },
+          {
+            name: change.after.name,
+            logo_url: change.after.logo_url,
+          }
+        );
+      }
     } else if (change.entityType === 'schedule') {
-      const schedule = await this.scheduleRepo.findOne({
-        where: {
-          program: { name: change.programName },
-          day_of_week: change.before.day_of_week,
-          start_time: change.before.start_time,
-          end_time: change.before.end_time,
-        },
-        relations: ['program'],
-      });
+      const program = await this.programRepo.findOne({ where: { name: change.programName } });
   
-      if (!schedule) {
-        throw new Error('Schedule not found for update');
+      if (!program) {
+        throw new Error(`Program "${change.programName}" not found when approving schedule`);
       }
   
-      schedule.day_of_week = change.after.day_of_week;
-      schedule.start_time = change.after.start_time;
-      schedule.end_time = change.after.end_time;
-      await this.scheduleRepo.save(schedule);
+      if (!change.before) {
+        // 🔥 Caso especial: no hay horario previo, simplemente CREAR el nuevo schedule
+        const newSchedule = this.scheduleRepo.create({
+          program,
+          day_of_week: change.after.day_of_week,
+          start_time: change.after.start_time,
+          end_time: change.after.end_time,
+        });
+        await this.scheduleRepo.save(newSchedule);
+      } else {
+        const schedule = await this.scheduleRepo.findOne({
+          where: {
+            program: { id: program.id },
+            day_of_week: change.before.day_of_week,
+            start_time: change.before.start_time,
+            end_time: change.before.end_time,
+          },
+          relations: ['program'],
+        });
+  
+        if (!schedule) {
+          throw new Error('Schedule to update not found');
+        }
+  
+        schedule.day_of_week = change.after.day_of_week;
+        schedule.start_time = change.after.start_time;
+        schedule.end_time = change.after.end_time;
+        await this.scheduleRepo.save(schedule);
+      }
     }
   
     // Actualizar estado a aprobado

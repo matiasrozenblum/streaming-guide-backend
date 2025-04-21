@@ -4,12 +4,40 @@ import { Repository, DataSource } from 'typeorm';
 import { Channel } from './channels.entity';
 import { CreateChannelDto } from './dto/create-channel.dto';
 import { UpdateChannelDto } from './dto/update-channel.dto';
+import { Program } from '@/programs/programs.entity';
+import { Schedule } from '@/schedules/schedules.entity';
+
+type ChannelWithSchedules = {
+  channel: {
+    id: number;
+    name: string;
+    logo_url: string | null;
+  };
+  schedules: Array<{
+    id: number;
+    day_of_week: string;
+    start_time: string;
+    end_time: string;
+    program: {
+      id: number;
+      name: string;
+      logo_url: string | null;
+      description: string;
+      stream_url: string | null;
+      is_live: boolean;
+    };
+  }>;
+};
 
 @Injectable()
 export class ChannelsService {
   constructor(
     @InjectRepository(Channel)
     private readonly channelsRepository: Repository<Channel>,
+    @InjectRepository(Program)
+    private readonly programsRepository: Repository<Program>,
+    @InjectRepository(Schedule)
+    private readonly scheduleRepo: Repository<Schedule>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -86,5 +114,51 @@ export class ChannelsService {
         await manager.save(channel);
       }
     });
+  }
+
+  async getChannelsWithSchedules(day?: string): Promise<ChannelWithSchedules[]> {
+    const channels = await this.channelsRepository.find({
+      order: {
+        order: 'ASC',
+      },
+      relations: ['programs'],
+    });
+
+    const todaySchedules = await this.scheduleRepo.find({
+      where: day ? { day_of_week: day.toLowerCase() } : {},
+      relations: ['program', 'program.channel'],
+    });
+
+    const schedulesGroupedByChannelId = todaySchedules.reduce((acc, schedule) => {
+      const channelId = schedule.program?.channel?.id;
+      if (!channelId) return acc;
+      if (!acc[channelId]) acc[channelId] = [];
+      acc[channelId].push(schedule);
+      return acc;
+    }, {} as Record<number, Schedule[]>);
+
+    const result: ChannelWithSchedules[] = channels.map((channel) => ({
+      channel: {
+        id: channel.id,
+        name: channel.name,
+        logo_url: channel.logo_url,
+      },
+      schedules: (schedulesGroupedByChannelId[channel.id] || []).map((schedule) => ({
+        id: schedule.id,
+        day_of_week: schedule.day_of_week,
+        start_time: schedule.start_time,
+        end_time: schedule.end_time,
+        program: {
+          id: schedule.program.id,
+          name: schedule.program.name,
+          logo_url: schedule.program.logo_url,
+          description: schedule.program.description,
+          stream_url: schedule.program.stream_url,
+          is_live: schedule.program.is_live,
+        },
+      })),
+    }));
+
+    return result;
   }
 }

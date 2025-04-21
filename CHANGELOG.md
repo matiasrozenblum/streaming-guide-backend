@@ -17,6 +17,21 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.1.18] - 2025-04-20
+
+### Fixed
+- Fixed create schedule from proposed change
+
+## [0.1.17] - 2025-04-20
+
+### Fixed
+- If a proposed change is to create a program, it is now created instead of updating nothing.
+
+## [0.1.16] - 2025-04-20
+
+### Added
+- Now applying changes to tables when accepted
+
 ## [0.1.15] - 2025-04-20
 
 ### Changed
