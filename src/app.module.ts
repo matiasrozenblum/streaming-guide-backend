@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
-import * as redisStore from 'cache-manager-redis-store';
+import { redisStore } from 'cache-manager-ioredis';
 
 import { Channel } from './channels/channels.entity';
 import { Program } from './programs/programs.entity';
