@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete, Patch, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Patch, UseGuards, Query } from '@nestjs/common';
 import { ChannelsService } from './channels.service';
 import { CreateChannelDto } from './dto/create-channel.dto';
 import { UpdateChannelDto } from './dto/update-channel.dto';
@@ -20,10 +20,16 @@ export class ChannelsController {
     return this.channelsService.findAll();
   }
 
+
+  @Get('with-schedules')
+  async getChannelsWithSchedules(@Query('day') day?: string) {
+    return this.channelsService.getChannelsWithSchedules(day);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Obtener un canal por ID' })
   @ApiResponse({ status: 200, description: 'Canal encontrado', type: Channel })
-  findOne(@Param('id') id: string): Promise<Channel> {
+  findOne(@Param('id') id: number): Promise<Channel> {
     return this.channelsService.findOne(id);
   }
 
@@ -37,14 +43,14 @@ export class ChannelsController {
   @Patch(':id')
   @ApiOperation({ summary: 'Actualizar un canal' })
   @ApiResponse({ status: 200, description: 'Canal actualizado', type: Channel })
-  update(@Param('id') id: string, @Body() updateChannelDto: UpdateChannelDto): Promise<Channel> {
+  update(@Param('id') id: number, @Body() updateChannelDto: UpdateChannelDto): Promise<Channel> {
     return this.channelsService.update(id, updateChannelDto);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Eliminar un canal por ID' })
   @ApiResponse({ status: 204, description: 'Canal eliminado' })
-  remove(@Param('id') id: string): Promise<void> {
+  remove(@Param('id') id: number): Promise<void> {
     return this.channelsService.remove(id);
   }
 
