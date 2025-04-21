@@ -47,9 +47,9 @@ export class ChannelsService {
     });
   }
 
-  async findOne(id: string): Promise<Channel> {
+  async findOne(id: number): Promise<Channel> {
     const channel = await this.channelsRepository.findOne({
-      where: { id: parseInt(id) },
+      where: { id: id },
       relations: ['programs'],
     });
     if (!channel) {
@@ -75,7 +75,7 @@ export class ChannelsService {
     return this.channelsRepository.save(channel);
   }
 
-  async update(id: string, updateChannelDto: UpdateChannelDto): Promise<Channel> {
+  async update(id: number, updateChannelDto: UpdateChannelDto): Promise<Channel> {
     const channel = await this.findOne(id);
     
     // Only update fields that are provided
