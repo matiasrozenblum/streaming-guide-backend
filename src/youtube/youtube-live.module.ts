@@ -10,11 +10,7 @@ import * as redisStore from 'cache-manager-redis-store';
   imports: [
     ConfigModule,
     forwardRef(() => SchedulesModule),
-    CacheModule.register({
-      store: redisStore as any,
-      url: process.env.REDIS_URL,
-      ttl: 1800,
-    }),
+    CacheModule,
   ],
   providers: [YoutubeLiveService],
   exports: [YoutubeLiveService],
