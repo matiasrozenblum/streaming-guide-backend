@@ -42,83 +42,88 @@ export class SchedulesService {
   async findAll(options: FindAllOptions = {}): Promise<any[]> {
     const startTime = Date.now();
     const { dayOfWeek, relations = ['program', 'program.channel', 'program.panelists'], select } = options;
-
+  
     const cacheKey = `schedules:all:${dayOfWeek || 'all'}`;
-    const cachedResult = await this.redisService.get<any[]>(cacheKey);
-
-    if (cachedResult) {
+    let schedules = await this.redisService.get<Schedule[]>(cacheKey);
+  
+    if (!schedules) {
+      console.log(`Cache MISS for ${cacheKey}`);
+  
+      const where: FindOptionsWhere<Schedule> = {};
+      if (dayOfWeek) {
+        where.day_of_week = dayOfWeek;
+      }
+  
+      const findOptions: FindManyOptions<Schedule> = {
+        where,
+        relations,
+        order: { start_time: 'ASC' },
+      };
+  
+      if (select) {
+        findOptions.select = select.reduce((acc, field) => {
+          acc[field] = true;
+          return acc;
+        }, {} as any);
+      }
+  
+      schedules = await this.schedulesRepository.find(findOptions);
+  
+      schedules = schedules.sort((a, b) => {
+        const orderA = a.program?.channel?.order ?? 999;
+        const orderB = b.program?.channel?.order ?? 999;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.start_time.localeCompare(b.start_time);
+      });
+  
+      await this.redisService.set(cacheKey, schedules, 1800);
+      console.log(`Database query and cache SET. Total time: ${Date.now() - startTime}ms`);
+    } else {
       console.log(`Cache HIT for ${cacheKey}. Time: ${Date.now() - startTime}ms`);
-      return cachedResult;
     }
+  
+    return this.enrichSchedules(schedules ?? []);
+  }
+  
 
-    console.log(`Cache MISS for ${cacheKey}`);
-
-    const where: FindOptionsWhere<Schedule> = {};
-    if (dayOfWeek) {
-      where.day_of_week = dayOfWeek;
-    }
-
-    const findOptions: FindManyOptions<Schedule> = {
-      where,
-      relations,
-      order: { start_time: 'ASC' },
-    };
-
-    if (select) {
-      findOptions.select = select.reduce((acc, field) => {
-        acc[field] = true;
-        return acc;
-      }, {} as any);
-    }
-
-    let data = await this.schedulesRepository.find(findOptions);
-
-    data = data.sort((a, b) => {
-      const orderA = a.program?.channel?.order ?? 999;
-      const orderB = b.program?.channel?.order ?? 999;
-      if (orderA !== orderB) return orderA - orderB;
-      return a.start_time.localeCompare(b.start_time);
-    });
-
+  async enrichSchedules(schedules: Schedule[]): Promise<any[]> {
     const now = this.dayjs().tz('America/Argentina/Buenos_Aires');
     const currentTimeNum = now.hour() * 100 + now.minute();
     const currentDay = now.format('dddd').toLowerCase();
-
-    const enriched = await Promise.all(
-      data.map(async (schedule) => {
+  
+    return Promise.all(
+      schedules.map(async (schedule) => {
+        const program = schedule.program;
         let isLive = false;
-        let streamUrl = schedule.program.youtube_url;
-
+        let streamUrl = program.youtube_url;
+  
         const startTimeNum = this.convertTimeToNumber(schedule.start_time);
         const endTimeNum = this.convertTimeToNumber(schedule.end_time);
-
+  
         if (schedule.day_of_week === currentDay && currentTimeNum >= startTimeNum && currentTimeNum <= endTimeNum) {
           isLive = true;
-          if (schedule.program.youtube_url && schedule.program.channel?.youtube_channel_id) {
-            const cachedVideoId = await this.redisService.get<string>(`videoId:${schedule.program.id}`);
+          if (program.channel?.youtube_channel_id) {
+            const cachedVideoId = await this.redisService.get<string>(`videoId:${program.id}`);
             if (cachedVideoId) {
               streamUrl = `https://www.youtube.com/embed/${cachedVideoId}?autoplay=1`;
             } else {
-              console.warn(`[SchedulesService] No cached video ID for program ${schedule.program.id}`);
+              console.warn(`[SchedulesService] No cached video ID for program ${program.id}`);
             }
           }
         }
-
+  
         return {
           ...schedule,
           program: {
-            ...schedule.program,
+            ...program,
             is_live: isLive,
             stream_url: streamUrl,
           },
         };
       })
     );
-
-    await this.redisService.set(cacheKey, enriched, 1800); // TTL de 30 minutos
-    console.log(`Cached schedules in Redis under key ${cacheKey}`);
-    return enriched;
   }
+  
 
   private convertTimeToNumber(time: string): number {
     const [hours, minutes] = time.split(':').map(Number);
@@ -162,7 +167,7 @@ export class SchedulesService {
     });
   }
 
-  async findByDay(dayOfWeek: string): Promise<Schedule[]> {
+  async findByDay(dayOfWeek: string): Promise<any[]> {
     return this.findAll({ dayOfWeek });
   }
 
