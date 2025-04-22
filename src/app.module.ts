@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
-import * as redisStore from 'cache-manager-ioredis';
+import { redisStore } from 'cache-manager-redis-store';
 
 import { Channel } from './channels/channels.entity';
 import { Program } from './programs/programs.entity';
@@ -38,16 +38,13 @@ import { ScheduleModule } from '@nestjs/schedule';
       inject: [ConfigService],
       useFactory: async (config: ConfigService) => {
         const redisUrl = config.get<string>('REDIS_URL');
-        console.log('🚀 REDIS_URL leído en app.module.ts:', redisUrl);
-        console.log('🔧 Configurando cache con store:', redisStore);
+        console.log('🚀 REDIS_URL usado:', redisUrl);
 
         return {
-          store: redisStore, // 👈 sin await, solo ponelo así
-          url: redisUrl,      // 👈 usamos el REDIS_URL completo
-          ttl: 3600,          // 1 hora
-          socket: {
-            reconnectStrategy: () => 1000, // retry reconexión a redis
-          },
+          store: await redisStore({
+            url: redisUrl,
+            ttl: 3600, // segundos
+          }),
         };
       },
     }),
