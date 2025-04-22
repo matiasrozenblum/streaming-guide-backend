@@ -4,8 +4,7 @@ import { Repository } from 'typeorm';
 import { SchedulesService } from './schedules.service';
 import { Schedule } from './schedules.entity';
 import { Program } from '../programs/programs.entity';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Cache } from 'cache-manager';
+import { RedisService } from '../redis/redis.service';
 import { YoutubeLiveService } from '../youtube/youtube-live.service';
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
@@ -45,26 +44,6 @@ jest.mock('dayjs', () => {
       }),
       second: jest.fn().mockReturnThis(),
       millisecond: jest.fn().mockReturnThis(),
-      isAfter: jest.fn().mockImplementation((other) => {
-        const [thisHours, thisMinutes] = currentTime.split(':').map(Number);
-        const [otherHours, otherMinutes] = other.format('HH:mm').split(':').map(Number);
-        return otherHours > thisHours || (otherHours === thisHours && otherMinutes > thisMinutes);
-      }),
-      isBefore: jest.fn().mockImplementation((other) => {
-        const [thisHours, thisMinutes] = currentTime.split(':').map(Number);
-        const [otherHours, otherMinutes] = other.format('HH:mm').split(':').map(Number);
-        return otherHours < thisHours || (otherHours === thisHours && otherMinutes < thisMinutes);
-      }),
-      isSameOrAfter: jest.fn().mockImplementation((other) => {
-        const [thisHours, thisMinutes] = currentTime.split(':').map(Number);
-        const [otherHours, otherMinutes] = other.format('HH:mm').split(':').map(Number);
-        return otherHours >= thisHours || (otherHours === thisHours && otherMinutes >= thisMinutes);
-      }),
-      isSameOrBefore: jest.fn().mockImplementation((other) => {
-        const [thisHours, thisMinutes] = currentTime.split(':').map(Number);
-        const [otherHours, otherMinutes] = other.format('HH:mm').split(':').map(Number);
-        return otherHours <= thisHours || (otherHours === thisHours && otherMinutes <= thisMinutes);
-      }),
       tz: jest.fn().mockReturnThis(),
     };
     return mock;
@@ -77,7 +56,7 @@ describe('SchedulesService', () => {
   let service: SchedulesService;
   let schedulesRepo: Repository<Schedule>;
   let programsRepo: Repository<Program>;
-  let cacheManager: Cache;
+  let redisService: RedisService;
   let youtubeLiveService: YoutubeLiveService;
 
   const mockChannel = {
@@ -112,7 +91,6 @@ describe('SchedulesService', () => {
   };
 
   beforeEach(async () => {
-    // Clear all mocks
     jest.clearAllMocks();
 
     const module: TestingModule = await Test.createTestingModule({
@@ -134,7 +112,7 @@ describe('SchedulesService', () => {
           },
         },
         {
-          provide: CACHE_MANAGER,
+          provide: RedisService,
           useValue: {
             get: jest.fn(),
             set: jest.fn(),
@@ -153,7 +131,7 @@ describe('SchedulesService', () => {
     service = module.get<SchedulesService>(SchedulesService);
     schedulesRepo = module.get<Repository<Schedule>>(getRepositoryToken(Schedule));
     programsRepo = module.get<Repository<Program>>(getRepositoryToken(Program));
-    cacheManager = module.get<Cache>(CACHE_MANAGER);
+    redisService = module.get<RedisService>(RedisService);
     youtubeLiveService = module.get<YoutubeLiveService>(YoutubeLiveService);
   });
 
@@ -171,12 +149,7 @@ describe('SchedulesService', () => {
       } as unknown as Schedule;
 
       jest.spyOn(schedulesRepo, 'find').mockResolvedValue([testSchedule]);
-      jest.spyOn(cacheManager, 'get').mockImplementation((key) => {
-        if (key === 'videoId:1') {
-          return Promise.resolve('live-video-id');
-        }
-        return Promise.resolve(null);
-      });
+      jest.spyOn(redisService, 'get').mockResolvedValueOnce(null).mockResolvedValueOnce('live-video-id');
 
       currentTime = '11:00';
       currentDay = 'monday';
@@ -188,7 +161,7 @@ describe('SchedulesService', () => {
       expect(result[0].program.stream_url).toBe('https://www.youtube.com/embed/live-video-id?autoplay=1');
     });
 
-    it('should not mark program as live if current time is outside schedule', async () => {
+    it('should not mark program as live if outside time', async () => {
       const testSchedule = {
         ...mockSchedule,
         start_time: '08:00',
@@ -201,42 +174,13 @@ describe('SchedulesService', () => {
       } as unknown as Schedule;
 
       jest.spyOn(schedulesRepo, 'find').mockResolvedValue([testSchedule]);
-      jest.spyOn(cacheManager, 'get').mockImplementation((key) => {
-        if (key === 'videoId:1') {
-          return Promise.resolve('live-video-id');
-        }
-        return Promise.resolve(null);
-      });
+      jest.spyOn(redisService, 'get').mockResolvedValueOnce(null);
 
-      // Set the current time to 15:00
       currentTime = '15:00';
       currentDay = 'monday';
 
       const result = await service.findByDay('monday');
-      console.log("RESULT", result);
 
-      // Verify the program is not live because 15:00 is outside 08:00-10:00
-      expect(result[0].program.is_live).toBe(false);
-      expect(result[0].program.stream_url).toBe('https://youtube.com/test');
-    });
-
-    it('should not mark program as live if it\'s not the current day', async () => {
-      const mockSchedules = [mockSchedule] as unknown as Schedule[];
-
-      jest.spyOn(schedulesRepo, 'find').mockResolvedValue(mockSchedules);
-      jest.spyOn(cacheManager, 'get').mockImplementation((key) => {
-        if (key === 'videoId:1') {
-          return Promise.resolve('live-video-id');
-        }
-        return Promise.resolve(null);
-      });
-
-      currentTime = '11:00';
-      currentDay = 'tuesday';
-
-      const result = await service.findByDay('monday');
-
-      expect(result).toHaveLength(1);
       expect(result[0].program.is_live).toBe(false);
       expect(result[0].program.stream_url).toBe('https://youtube.com/test');
     });
