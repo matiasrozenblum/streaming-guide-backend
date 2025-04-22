@@ -41,9 +41,9 @@ import { ScheduleModule } from '@nestjs/schedule';
         console.log('🚀 REDIS_URL usado:', redisUrl);
 
         return {
-          store: await redisStore({
+          store: redisStore({
             url: redisUrl,
-            ttl: 3600, // segundos
+            ttl: 3600,
           }),
         };
       },
