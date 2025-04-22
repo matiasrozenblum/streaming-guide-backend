@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.2.1] - 2025-04-22
+
+### Fixed
+- Now not storing stream_url and video_id in schedules cache.
+
 ## [0.2.0] - 2025-04-22
 
 ### Changed

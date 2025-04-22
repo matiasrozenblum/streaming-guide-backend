@@ -41,29 +41,52 @@ export class YoutubeLiveService {
   }
 
   async fetchLiveVideoIds() {
-    const currentDay = dayjs().tz('America/Argentina/Buenos_Aires').format('dddd').toLowerCase();
-
+    const now = dayjs().tz('America/Argentina/Buenos_Aires');
+    const currentDay = now.format('dddd').toLowerCase();
+  
     const schedules = await this.schedulesService.findByDay(currentDay);
-    const liveSchedules = schedules.filter(schedule => schedule.program.is_live);
-
-    for (const schedule of liveSchedules) {
+  
+    if (!schedules) {
+      console.warn('⚠️ No schedules found for today.');
+      return;
+    }
+  
+    // 🔥 Enriquecemos los schedules para que tengan is_live bien seteado
+    const enrichedSchedules = await this.schedulesService.enrichSchedules(schedules);
+  
+    // 🔥 Filtramos solo los que están efectivamente en vivo ahora
+    const liveNowSchedules = enrichedSchedules.filter(schedule => schedule.program.is_live);
+  
+    console.log(`🎯 Found ${liveNowSchedules.length} programs live right now.`);
+  
+    const channelsProcessed = new Set<string>();
+  
+    for (const schedule of liveNowSchedules) {
+      const channelId = schedule.program.channel?.youtube_channel_id;
+      if (!channelId) {
+        console.warn(`⚠️ Program ${schedule.program.id} has no YouTube channel ID.`);
+        continue;
+      }
+  
+      if (channelsProcessed.has(channelId)) {
+        console.log(`🔄 Skipping duplicate channel ${channelId}`);
+        continue;
+      }
+  
+      channelsProcessed.add(channelId);
+  
       try {
-        const channelId = schedule.program.channel?.youtube_channel_id;
-        if (!channelId) {
-          console.warn(`Program ${schedule.program.id} has no YouTube channel ID.`);
-          continue;
-        }
-
         const videoId = await this.getLiveVideoId(channelId);
         if (videoId) {
-          await this.redisService.set(`videoId:${schedule.program.id}`, videoId, 1800); // TTL de 30 min
-          console.log(`✅ Cached live video ID for program ${schedule.program.id}: ${videoId}`);
+          await this.redisService.set(`videoId:${schedule.program.id}`, videoId, 1800); // 30 min TTL
+          console.log(`✅ Cached video ID for program ${schedule.program.id}: ${videoId}`);
         } else {
           console.warn(`⚠️ No live video ID found for program ${schedule.program.id}`);
         }
       } catch (error) {
-        console.error(`Error caching live video ID for program ${schedule.program.id}:`, error);
+        console.error(`❌ Error fetching video ID for program ${schedule.program.id}:`, error);
       }
     }
   }
+  
 }
