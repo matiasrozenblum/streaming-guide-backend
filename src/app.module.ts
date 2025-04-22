@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
-import { redisStore } from 'cache-manager-redis-store';
+import * as redisStore from 'cache-manager-redis-store'; // <-- CORRECTO
 
 import { Channel } from './channels/channels.entity';
 import { Program } from './programs/programs.entity';
@@ -36,17 +36,11 @@ import { ScheduleModule } from '@nestjs/schedule';
       isGlobal: true,
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: async (config: ConfigService) => {
-        const redisUrl = config.get<string>('REDIS_URL');
-        console.log('🚀 REDIS_URL usado:', redisUrl);
-
-        return {
-          store: redisStore({
-            url: redisUrl,
-            ttl: 3600,
-          }),
-        };
-      },
+      useFactory: async (config: ConfigService) => ({
+        store: redisStore,
+        url: config.get<string>('REDIS_URL'),
+        ttl: 3600, // en segundos
+      }),
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -70,7 +64,7 @@ import { ScheduleModule } from '@nestjs/schedule';
             statement_timeout: 10000,
             query_timeout: 10000,
           },
-          cache: { duration: 30000 }, // 30s cache interno de consultas
+          cache: { duration: 30000 },
         };
       },
     }),
@@ -80,7 +74,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     SchedulesModule,
     PanelistsModule,
     ScraperModule,
-    ConfigModule,          // <-- 🔥 Usá ConfigModule, no AppConfigModule
+    ConfigModule,
     AuthModule,
     YoutubeLiveModule,
     ProposedChangesModule,
