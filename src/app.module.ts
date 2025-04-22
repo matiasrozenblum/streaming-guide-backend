@@ -36,23 +36,19 @@ import { ScheduleModule } from '@nestjs/schedule';
       isGlobal: true,
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: async (config: ConfigService) => ({
-        store: redisStore as any,
-        options: {
-          url: config.get<string>('REDIS_URL'),
-          ttl: 3600,
-          serializer: {
-            serialize: (value) => JSON.stringify(value),
-            deserialize: (value) => {
-              try {
-                return JSON.parse(value);
-              } catch {
-                return value;
-              }
-            },
+      useFactory: async (config: ConfigService) => {
+        const redisUrl = config.get<string>('REDIS_URL');
+        console.log('🚀 REDIS_URL leído en app.module.ts:', redisUrl);
+
+        return {
+          store: redisStore, // 👈 sin await, solo ponelo así
+          url: redisUrl,      // 👈 usamos el REDIS_URL completo
+          ttl: 3600,          // 1 hora
+          socket: {
+            reconnectStrategy: () => 1000, // retry reconexión a redis
           },
-        },
-      }),
+        };
+      },
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
