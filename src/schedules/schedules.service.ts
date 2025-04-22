@@ -1,12 +1,12 @@
-import { Injectable, NotFoundException, Inject } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, FindOneOptions, FindManyOptions, FindOptionsWhere } from 'typeorm';
-import { CACHE_MANAGER, Cache } from '@nestjs/cache-manager';
 import { Schedule } from './schedules.entity';
 import { Program } from '../programs/programs.entity';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { YoutubeLiveService } from '../youtube/youtube-live.service';
+import { RedisService } from '../redis/redis.service'; // 🔥 Usamos RedisService
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
@@ -30,8 +30,7 @@ export class SchedulesService {
     @InjectRepository(Program)
     private programsRepository: Repository<Program>,
 
-    @Inject(CACHE_MANAGER)
-    private cacheManager: Cache,
+    private readonly redisService: RedisService,
 
     private readonly youtubeLiveService: YoutubeLiveService,
   ) {
@@ -45,7 +44,7 @@ export class SchedulesService {
     const { dayOfWeek, relations = ['program', 'program.channel', 'program.panelists'], select } = options;
 
     const cacheKey = `schedules:all:${dayOfWeek || 'all'}`;
-    const cachedResult = await this.cacheManager.get<any[]>(cacheKey);
+    const cachedResult = await this.redisService.get<any[]>(cacheKey);
 
     if (cachedResult) {
       console.log(`Cache HIT for ${cacheKey}. Time: ${Date.now() - startTime}ms`);
@@ -96,7 +95,7 @@ export class SchedulesService {
         if (schedule.day_of_week === currentDay && currentTimeNum >= startTimeNum && currentTimeNum <= endTimeNum) {
           isLive = true;
           if (schedule.program.youtube_url && schedule.program.channel?.youtube_channel_id) {
-            const cachedVideoId = await this.cacheManager.get<string>(`videoId:${schedule.program.id}`);
+            const cachedVideoId = await this.redisService.get<string>(`videoId:${schedule.program.id}`);
             if (cachedVideoId) {
               streamUrl = `https://www.youtube.com/embed/${cachedVideoId}?autoplay=1`;
             } else {
@@ -116,7 +115,7 @@ export class SchedulesService {
       })
     );
 
-    await this.cacheManager.set(cacheKey, enriched, 1800); // 30 min TTL
+    await this.redisService.set(cacheKey, enriched, 1800); // TTL de 30 minutos
     console.log(`Cached schedules in Redis under key ${cacheKey}`);
     return enriched;
   }
@@ -130,7 +129,7 @@ export class SchedulesService {
     const { relations = ['program', 'program.channel', 'program.panelists'], select } = options;
 
     const cacheKey = `schedules:${id}`;
-    const cached = await this.cacheManager.get<Schedule>(cacheKey);
+    const cached = await this.redisService.get<Schedule>(cacheKey);
     if (cached) return cached;
 
     const findOptions: FindOneOptions<Schedule> = {
@@ -148,7 +147,7 @@ export class SchedulesService {
     const schedule = await this.schedulesRepository.findOne(findOptions);
     if (!schedule) throw new NotFoundException(`Schedule with ID ${id} not found`);
 
-    await this.cacheManager.set(cacheKey, schedule, 1800);
+    await this.redisService.set(cacheKey, schedule, 1800);
     return schedule;
   }
 
@@ -183,7 +182,7 @@ export class SchedulesService {
 
     const saved = await this.schedulesRepository.save(schedule);
 
-    await this.cacheManager.del('schedules:all');
+    await this.redisService.del('schedules:all');
     return saved;
   }
 
@@ -201,12 +200,11 @@ export class SchedulesService {
     const result = await this.schedulesRepository.delete(id);
     if ((result?.affected ?? 0) > 0) {
       await Promise.all([
-        this.cacheManager.del('schedules:all'),
-        this.cacheManager.del(`schedules:${id}`),
+        this.redisService.del('schedules:all'),
+        this.redisService.del(`schedules:${id}`),
       ]);
       return true;
     }
     return false;
   }
 }
-

@@ -1,15 +1,11 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { CacheModule } from '@nestjs/cache-manager';
-import * as redisStore from 'cache-manager-redis-store'; // <-- CORRECTO
-
 import { Channel } from './channels/channels.entity';
 import { Program } from './programs/programs.entity';
 import { Schedule } from './schedules/schedules.entity';
 import { Panelist } from './panelists/panelists.entity';
 import { Config } from './config/config.entity';
-
 import { ChannelsModule } from './channels/channels.module';
 import { ProgramsModule } from './programs/programs.module';
 import { SchedulesModule } from './schedules/schedules.module';
@@ -19,10 +15,10 @@ import { ProposedChangesModule } from './proposed-changes/proposed-changes.modul
 import { AuthModule } from './auth/auth.module';
 import { YoutubeLiveModule } from './youtube/youtube-live.module';
 import { EmailModule } from './email/email.module';
-
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { YoutubeDiscoveryService } from './youtube/youtube-discovery.service';
+import { RedisService } from './redis/redis.service'; // 🔥 Agregado
 import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
@@ -31,16 +27,6 @@ import { ScheduleModule } from '@nestjs/schedule';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
-    }),
-    CacheModule.registerAsync({
-      isGlobal: true,
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: async (config: ConfigService) => ({
-        store: redisStore,
-        url: config.get<string>('REDIS_URL'),
-        ttl: 3600, // en segundos
-      }),
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -84,6 +70,7 @@ import { ScheduleModule } from '@nestjs/schedule';
   providers: [
     AppService,
     YoutubeDiscoveryService,
+    RedisService, // 🔥 Agregado
   ],
 })
 export class AppModule {}
