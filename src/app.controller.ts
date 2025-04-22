@@ -25,7 +25,10 @@ export class AppController {
     private readonly dataSource: DataSource,
     private readonly youtubeDiscoveryService: YoutubeDiscoveryService,
     private readonly youtubeLiveService: YoutubeLiveService,
-  ) {}
+  ) {
+    console.log('🚀 typeof cacheManager.store:', typeof (this.cacheManager as any).store);
+  console.log('🚀 cacheManager.store.constructor.name:', (this.cacheManager as any).store?.constructor?.name);
+  }
 
   @Post('seed')
   async seed() {

@@ -39,6 +39,7 @@ import { ScheduleModule } from '@nestjs/schedule';
       useFactory: async (config: ConfigService) => {
         const redisUrl = config.get<string>('REDIS_URL');
         console.log('🚀 REDIS_URL leído en app.module.ts:', redisUrl);
+        console.log('🔧 Configurando cache con store:', redisStore);
 
         return {
           store: redisStore, // 👈 sin await, solo ponelo así
