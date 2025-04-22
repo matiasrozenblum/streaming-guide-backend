@@ -10,7 +10,6 @@ import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
 
-// Initialize dayjs plugins for tests
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
@@ -19,36 +18,39 @@ let currentDay = 'monday';
 
 jest.mock('dayjs', () => {
   const actualDayjs = jest.requireActual('dayjs');
+
   const mockDayjs = (date?: string | number | Date) => {
-    if (typeof date === 'string' && date.includes(':')) {
-      const [hours, minutes] = date.split(':').map(Number);
-      currentTime = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-    }
     const instance = actualDayjs(date);
-    const mock = {
+    return {
       ...instance,
-      format: jest.fn().mockImplementation((format: string) => {
-        if (format === 'dddd') return currentDay;
-        if (format === 'HH:mm') return currentTime;
-        return currentTime;
-      }),
-      hour: jest.fn().mockImplementation((hours) => {
-        const [_, currentMinutes] = currentTime.split(':').map(Number);
-        currentTime = `${hours.toString().padStart(2, '0')}:${currentMinutes.toString().padStart(2, '0')}`;
-        return mock;
-      }),
-      minute: jest.fn().mockImplementation((minutes) => {
-        const [currentHours] = currentTime.split(':').map(Number);
-        currentTime = `${currentHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-        return mock;
-      }),
-      second: jest.fn().mockReturnThis(),
-      millisecond: jest.fn().mockReturnThis(),
-      tz: jest.fn().mockReturnThis(),
+      format: (formatString: string) => {
+        if (formatString === 'dddd') return currentDay;
+        if (formatString === 'HH:mm') return currentTime;
+        return instance.format(formatString);
+      },
+      hour: (hour?: number) => {
+        if (typeof hour === 'number') {
+          const [_, m] = (currentTime ?? '00:00').split(':');
+          currentTime = `${hour.toString().padStart(2, '0')}:${m}`;
+          return mockDayjs();
+        }
+        const [h] = (currentTime ?? '00:00').split(':');
+        return parseInt(h);
+      },
+      minute: (minute?: number) => {
+        if (typeof minute === 'number') {
+          const [h] = (currentTime ?? '00:00').split(':');
+          currentTime = `${h}:${minute.toString().padStart(2, '0')}`;
+          return mockDayjs();
+        }
+        const [, m] = (currentTime ?? '00:00').split(':');
+        return parseInt(m);
+      },
+      tz: () => mockDayjs(),
     };
-    return mock;
   };
-  mockDayjs.extend = jest.fn();
+
+  mockDayjs.extend = actualDayjs.extend;
   return mockDayjs;
 });
 
@@ -148,8 +150,8 @@ describe('SchedulesService', () => {
         }
       } as unknown as Schedule;
 
-      jest.spyOn(schedulesRepo, 'find').mockResolvedValue([testSchedule]);
       jest.spyOn(redisService, 'get').mockResolvedValueOnce(null).mockResolvedValueOnce('live-video-id');
+      jest.spyOn(schedulesRepo, 'find').mockResolvedValue([testSchedule]);
 
       currentTime = '11:00';
       currentDay = 'monday';
@@ -173,10 +175,10 @@ describe('SchedulesService', () => {
         }
       } as unknown as Schedule;
 
-      jest.spyOn(schedulesRepo, 'find').mockResolvedValue([testSchedule]);
       jest.spyOn(redisService, 'get').mockResolvedValueOnce(null);
+      jest.spyOn(schedulesRepo, 'find').mockResolvedValue([testSchedule]);
 
-      currentTime = '15:00';
+      currentTime = '15:00'; // fuera de rango
       currentDay = 'monday';
 
       const result = await service.findByDay('monday');
