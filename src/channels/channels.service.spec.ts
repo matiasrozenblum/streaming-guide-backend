@@ -9,6 +9,7 @@ import { UpdateChannelDto } from './dto/update-channel.dto';
 import { DataSource } from 'typeorm';
 import { Program } from '../programs/programs.entity';
 import { Schedule } from '../schedules/schedules.entity';
+import { SchedulesService } from '../schedules/schedules.service';
 
 describe('ChannelsService', () => {
   let service: ChannelsService;
@@ -64,6 +65,10 @@ describe('ChannelsService', () => {
     }),
   };
 
+  const mockSchedulesService = {
+    someMethod: jest.fn(), // Add methods as needed
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -83,6 +88,10 @@ describe('ChannelsService', () => {
         {
           provide: DataSource,
           useValue: mockDataSource,
+        },
+        {
+          provide: SchedulesService,
+          useValue: mockSchedulesService,
         },
       ],
     }).compile();

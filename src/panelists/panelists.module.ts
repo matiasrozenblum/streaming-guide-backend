@@ -4,12 +4,12 @@ import { PanelistsController } from './panelists.controller';
 import { PanelistsService } from './panelists.service';
 import { Panelist } from './panelists.entity';
 import { Program } from '../programs/programs.entity';
-import { CacheModule } from '@nestjs/cache-manager';
+import { RedisModule } from '../redis/redis.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Panelist, Program]),
-    CacheModule.register(),
+    RedisModule,
   ],
   controllers: [PanelistsController],
   providers: [PanelistsService],

@@ -17,6 +17,16 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.2.0] - 2025-04-22
+
+### Changed
+- Now using Redis Cache directly
+
+## [0.1.20] - 2025-04-20
+
+### Fixed
+- Fixed youtube live cron
+
 ## [0.1.19] - 2025-04-20
 
 ### Changed

@@ -6,6 +6,7 @@ import { CreateChannelDto } from './dto/create-channel.dto';
 import { UpdateChannelDto } from './dto/update-channel.dto';
 import { Program } from '@/programs/programs.entity';
 import { Schedule } from '@/schedules/schedules.entity';
+import { SchedulesService } from '@/schedules/schedules.service'; // <--- Importar el service
 
 type ChannelWithSchedules = {
   channel: {
@@ -22,9 +23,10 @@ type ChannelWithSchedules = {
       id: number;
       name: string;
       logo_url: string | null;
-      description: string;
+      description: string | null;
       stream_url: string | null;
       is_live: boolean;
+      panelists: { id: string; name: string }[];
     };
   }>;
 };
@@ -39,6 +41,7 @@ export class ChannelsService {
     @InjectRepository(Schedule)
     private readonly scheduleRepo: Repository<Schedule>,
     private readonly dataSource: DataSource,
+    private readonly schedulesService: SchedulesService, // <--- Inyectar SchedulesService
   ) {}
 
   async findAll(): Promise<Channel[]> {
@@ -78,7 +81,6 @@ export class ChannelsService {
   async update(id: number, updateChannelDto: UpdateChannelDto): Promise<Channel> {
     const channel = await this.findOne(id);
     
-    // Only update fields that are provided
     Object.keys(updateChannelDto).forEach((key) => {
       if (updateChannelDto[key] !== undefined) {
         channel[key] = updateChannelDto[key];
@@ -100,7 +102,6 @@ export class ChannelsService {
       throw new Error('No channel IDs provided for reordering.');
     }
 
-    // Transactional update
     await this.dataSource.transaction(async (manager) => {
       for (let i = 0; i < newOrderIds.length; i++) {
         const id = newOrderIds[i];
@@ -110,7 +111,7 @@ export class ChannelsService {
           throw new NotFoundException(`Channel with ID ${id} not found`);
         }
 
-        channel.order = i + 1; // Primero recibe order=1, segundo order=2, etc
+        channel.order = i + 1;
         await manager.save(channel);
       }
     });
@@ -121,21 +122,20 @@ export class ChannelsService {
       order: {
         order: 'ASC',
       },
-      relations: ['programs'],
     });
 
-    const todaySchedules = await this.scheduleRepo.find({
-      where: day ? { day_of_week: day.toLowerCase() } : {},
-      relations: ['program', 'program.channel', 'program.panelists'],
+    // ✨ ACA USAMOS schedulesService.findAll en vez de scheduleRepo.find directamente
+    const schedules = await this.schedulesService.findAll({
+      dayOfWeek: day ? day.toLowerCase() : undefined,
     });
 
-    const schedulesGroupedByChannelId = todaySchedules.reduce((acc, schedule) => {
+    const schedulesGroupedByChannelId = schedules.reduce((acc, schedule) => {
       const channelId = schedule.program?.channel?.id;
       if (!channelId) return acc;
       if (!acc[channelId]) acc[channelId] = [];
       acc[channelId].push(schedule);
       return acc;
-    }, {} as Record<number, Schedule[]>);
+    }, {} as Record<number, any[]>);
 
     const result: ChannelWithSchedules[] = channels.map((channel) => ({
       channel: {

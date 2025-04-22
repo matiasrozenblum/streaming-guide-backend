@@ -1,20 +1,22 @@
-import { Inject, Injectable, forwardRef } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import axios from 'axios';
 import * as cron from 'node-cron';
-import * as redis from 'redis';
-import dayjs from 'dayjs';
+import * as dayjs from 'dayjs';
 import { SchedulesService } from '../schedules/schedules.service';
+import { RedisService } from '../redis/redis.service'; // 🔥 Nuevo
 
 @Injectable()
 export class YoutubeLiveService {
   private readonly apiKey = process.env.YOUTUBE_API_KEY;
   private readonly apiUrl = 'https://www.googleapis.com/youtube/v3';
-  private readonly redisClient = redis.createClient();
 
   constructor(
     @Inject(forwardRef(() => SchedulesService))
     private readonly schedulesService: SchedulesService,
+
+    private readonly redisService: RedisService, // 🔥
   ) {
+    console.log('🚀 YoutubeLiveService initialized');
     // Schedule the task to run every 30 minutes
     cron.schedule('0,30 * * * *', () => this.fetchLiveVideoIds());
   }
@@ -38,30 +40,30 @@ export class YoutubeLiveService {
     }
   }
 
-  private async fetchLiveVideoIds() {
+  async fetchLiveVideoIds() {
     const currentDay = dayjs().tz('America/Argentina/Buenos_Aires').format('dddd').toLowerCase();
 
-    // Fetch today's schedule
     const schedules = await this.schedulesService.findByDay(currentDay);
-
-    // Filter live programs using is_live property
     const liveSchedules = schedules.filter(schedule => schedule.program.is_live);
 
     for (const schedule of liveSchedules) {
       try {
-        const videoId = await this.getLiveVideoId(schedule.program.channel.youtube_channel_id);
+        const channelId = schedule.program.channel?.youtube_channel_id;
+        if (!channelId) {
+          console.warn(`Program ${schedule.program.id} has no YouTube channel ID.`);
+          continue;
+        }
+
+        const videoId = await this.getLiveVideoId(channelId);
         if (videoId) {
-          // Cache the video ID
-          this.redisClient.setEx(`videoId:${schedule.program.id}`, 1800, videoId); // Cache for 30 minutes
+          await this.redisService.set(`videoId:${schedule.program.id}`, videoId, 1800); // TTL de 30 min
+          console.log(`✅ Cached live video ID for program ${schedule.program.id}: ${videoId}`);
+        } else {
+          console.warn(`⚠️ No live video ID found for program ${schedule.program.id}`);
         }
       } catch (error) {
-        console.error(`Failed to fetch video ID for program ${schedule.program.id}:`, error);
+        console.error(`Error caching live video ID for program ${schedule.program.id}:`, error);
       }
     }
   }
-
-  private timeToNumber(time: string): number {
-    const [hours, minutes] = time.split(':').map(Number);
-    return hours * 100 + minutes;
-  }
-} 
+}
