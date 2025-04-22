@@ -17,6 +17,14 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.2.2] - 2025-04-22
+
+### Added
+- Added on demand fetch when youtube video id is not found in cache.
+
+### Changed
+- Now fetching youtube every 1 hour, video id ttl updated to program duration.
+
 ## [0.2.1] - 2025-04-22
 
 ### Fixed

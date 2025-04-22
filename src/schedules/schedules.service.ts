@@ -6,7 +6,7 @@ import { Program } from '../programs/programs.entity';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { YoutubeLiveService } from '../youtube/youtube-live.service';
-import { RedisService } from '../redis/redis.service'; // 🔥 Usamos RedisService
+import { RedisService } from '../redis/redis.service';
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
@@ -31,7 +31,6 @@ export class SchedulesService {
     private programsRepository: Repository<Program>,
 
     private readonly redisService: RedisService,
-
     private readonly youtubeLiveService: YoutubeLiveService,
   ) {
     this.dayjs = dayjs;
@@ -42,76 +41,87 @@ export class SchedulesService {
   async findAll(options: FindAllOptions = {}): Promise<any[]> {
     const startTime = Date.now();
     const { dayOfWeek, relations = ['program', 'program.channel', 'program.panelists'], select } = options;
-  
+
     const cacheKey = `schedules:all:${dayOfWeek || 'all'}`;
     let schedules = await this.redisService.get<Schedule[]>(cacheKey);
-  
+
     if (!schedules) {
       console.log(`Cache MISS for ${cacheKey}`);
-  
+
       const where: FindOptionsWhere<Schedule> = {};
       if (dayOfWeek) {
         where.day_of_week = dayOfWeek;
       }
-  
+
       const findOptions: FindManyOptions<Schedule> = {
         where,
         relations,
         order: { start_time: 'ASC' },
       };
-  
+
       if (select) {
         findOptions.select = select.reduce((acc, field) => {
           acc[field] = true;
           return acc;
         }, {} as any);
       }
-  
+
       schedules = await this.schedulesRepository.find(findOptions);
-  
+
       schedules = schedules.sort((a, b) => {
         const orderA = a.program?.channel?.order ?? 999;
         const orderB = b.program?.channel?.order ?? 999;
         if (orderA !== orderB) return orderA - orderB;
         return a.start_time.localeCompare(b.start_time);
       });
-  
+
       await this.redisService.set(cacheKey, schedules, 1800);
       console.log(`Database query and cache SET. Total time: ${Date.now() - startTime}ms`);
     } else {
       console.log(`Cache HIT for ${cacheKey}. Time: ${Date.now() - startTime}ms`);
     }
-  
+
     return this.enrichSchedules(schedules ?? []);
   }
-  
 
   async enrichSchedules(schedules: Schedule[]): Promise<any[]> {
     const now = this.dayjs().tz('America/Argentina/Buenos_Aires');
     const currentTimeNum = now.hour() * 100 + now.minute();
     const currentDay = now.format('dddd').toLowerCase();
-  
+
     return Promise.all(
       schedules.map(async (schedule) => {
         const program = schedule.program;
         let isLive = false;
         let streamUrl = program.youtube_url;
-  
+
         const startTimeNum = this.convertTimeToNumber(schedule.start_time);
         const endTimeNum = this.convertTimeToNumber(schedule.end_time);
-  
+
         if (schedule.day_of_week === currentDay && currentTimeNum >= startTimeNum && currentTimeNum <= endTimeNum) {
           isLive = true;
+
           if (program.channel?.youtube_channel_id) {
-            const cachedVideoId = await this.redisService.get<string>(`videoId:${program.id}`);
+            let cachedVideoId = await this.redisService.get<string>(`videoId:${program.id}`);
+            
+            if (!cachedVideoId) {
+              console.warn(`[SchedulesService] No cached video ID for program ${program.id}, fetching on-demand...`);
+              const videoId = await this.youtubeLiveService.getLiveVideoId(program.channel.youtube_channel_id);
+              if (videoId) {
+                const ttlSeconds = this.calculateProgramTTL(schedule.start_time, schedule.end_time);
+                await this.redisService.set(`videoId:${program.id}`, videoId, ttlSeconds);
+                cachedVideoId = videoId;
+              } else {
+                console.warn(`[SchedulesService] No live video ID found on-demand for program ${program.id}`);
+              }
+            }
+
             if (cachedVideoId) {
               streamUrl = `https://www.youtube.com/embed/${cachedVideoId}?autoplay=1`;
-            } else {
-              console.warn(`[SchedulesService] No cached video ID for program ${program.id}`);
             }
           }
         }
-  
+
         return {
           ...schedule,
           program: {
@@ -123,11 +133,30 @@ export class SchedulesService {
       })
     );
   }
-  
 
   private convertTimeToNumber(time: string): number {
     const [hours, minutes] = time.split(':').map(Number);
     return hours * 100 + minutes;
+  }
+
+  private convertTimeToMinutes(time: string): number {
+    const [hours, minutes] = time.split(':').map(Number);
+    return hours * 60 + minutes;
+  }
+
+  private calculateProgramTTL(startTime: string, endTime: string): number {
+    const start = this.convertTimeToMinutes(startTime);
+    const end = this.convertTimeToMinutes(endTime);
+
+    let durationMinutes: number;
+    if (end >= start) {
+      durationMinutes = end - start;
+    } else {
+      durationMinutes = (24 * 60 - start) + end; // programa que cruza medianoche
+    }
+
+    const ttlMinutes = durationMinutes + 60; // duración + 1 hora
+    return ttlMinutes * 60; // lo devolvemos en segundos para Redis
   }
 
   async findOne(id: string | number, options: { relations?: string[]; select?: string[] } = {}): Promise<Schedule> {

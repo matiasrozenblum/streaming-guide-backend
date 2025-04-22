@@ -124,7 +124,6 @@ export class ChannelsService {
       },
     });
 
-    // ✨ ACA USAMOS schedulesService.findAll en vez de scheduleRepo.find directamente
     const schedules = await this.schedulesService.findAll({
       dayOfWeek: day ? day.toLowerCase() : undefined,
     });
