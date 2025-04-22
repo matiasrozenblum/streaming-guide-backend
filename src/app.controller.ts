@@ -190,6 +190,8 @@ export class AppController {
     console.log(`🔎 [cache-test] Getting key ${key} from cache...`);
     const cachedValue = await this.cacheManager.get(key);
     console.log(`📦 [cache-test] Retrieved value for key ${key}:`, cachedValue);
+    const cachedValue2 = await this.cacheManager.get('asd');
+    console.log(`📦 [cache-test] Retrieved value for key asd:`, cachedValue2);
 
     return { key, cachedValue };
   }
