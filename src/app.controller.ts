@@ -28,11 +28,6 @@ export class AppController {
     console.log('🚀 AppController initialized');
   }
 
-  @Post('seed')
-  async seed() {
-    // acá todo igual, no cambia
-  }
-
   @Get('youtube/resolve-handles')
   async getChannelsFromHandles() {
     return this.youtubeDiscoveryService.getChannelIdsFromLiveUrls([
