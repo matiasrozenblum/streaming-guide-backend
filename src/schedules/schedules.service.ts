@@ -109,7 +109,7 @@ export class SchedulesService {
               await this.redisService.incr(`youtube:onDemand:${program.id}:${this.dayjs().format('YYYY-MM-DD')}`);
               await this.redisService.incr(`youtube:onDemand:total:${this.dayjs().format('YYYY-MM-DD')}`);
 
-              const videoId = await this.youtubeLiveService.getLiveVideoId(program.channel.youtube_channel_id, program.id, false);
+              const videoId = await this.youtubeLiveService.getLiveVideoId(program.channel.youtube_channel_id, program.id, 'onDemand');
               
               if (videoId && videoId !== '__SKIPPED__') {
                 const ttlSeconds = this.calculateProgramTTL(schedule.start_time, schedule.end_time);
