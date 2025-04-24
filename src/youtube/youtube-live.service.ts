@@ -36,8 +36,6 @@ export class YoutubeLiveService {
       return '__SKIPPED__';
     }
 
-    await this.incrementRequestCount(programId, isCron);
-
     try {
       const response = await axios.get(`${this.apiUrl}/search`, {
         params: {
