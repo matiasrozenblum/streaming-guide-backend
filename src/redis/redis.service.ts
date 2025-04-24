@@ -27,4 +27,8 @@ export class RedisService {
   async del(key: string): Promise<void> {
     await this.client.del(key);
   }
+
+  async incr(key: string): Promise<number> {
+    return await this.client.incr(key);
+  }
 }

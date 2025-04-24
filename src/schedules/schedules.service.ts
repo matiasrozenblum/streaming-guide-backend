@@ -97,7 +97,7 @@ export class SchedulesService {
 
         const startTimeNum = this.convertTimeToNumber(schedule.start_time);
         const endTimeNum = this.convertTimeToNumber(schedule.end_time);
-
+  
         if (schedule.day_of_week === currentDay && currentTimeNum >= startTimeNum && currentTimeNum <= endTimeNum) {
           isLive = true;
 
@@ -106,12 +106,16 @@ export class SchedulesService {
             
             if (!cachedVideoId) {
               console.warn(`[SchedulesService] No cached video ID for program ${program.id}, fetching on-demand...`);
-              const videoId = await this.youtubeLiveService.getLiveVideoId(program.channel.youtube_channel_id);
-              if (videoId) {
+              await this.redisService.incr(`youtube:onDemand:${program.id}:${this.dayjs().format('YYYY-MM-DD')}`);
+              await this.redisService.incr(`youtube:onDemand:total:${this.dayjs().format('YYYY-MM-DD')}`);
+
+              const videoId = await this.youtubeLiveService.getLiveVideoId(program.channel.youtube_channel_id, program.id, false);
+              
+              if (videoId && videoId !== '__SKIPPED__') {
                 const ttlSeconds = this.calculateProgramTTL(schedule.start_time, schedule.end_time);
                 await this.redisService.set(`videoId:${program.id}`, videoId, ttlSeconds);
                 cachedVideoId = videoId;
-              } else {
+              } else if (videoId !== '__SKIPPED__') {
                 console.warn(`[SchedulesService] No live video ID found on-demand for program ${program.id}`);
               }
             }
