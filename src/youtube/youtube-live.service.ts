@@ -20,13 +20,26 @@ export class YoutubeLiveService {
     cron.schedule('0 * * * *', () => this.fetchLiveVideoIds());
   }
 
-  async getLiveVideoId(channelId: string): Promise<string | null> {
+  private async incrementRequestCount(programId: number, isCron: boolean) {
+    const prefix = isCron ? 'cron' : 'onDemand';
+    const date = dayjs().format('YYYY-MM-DD');
+    const globalKey = `${prefix}:${date}:count`;
+    const programKey = `${prefix}:${date}:program:${programId}:count`;
+    await Promise.all([
+      this.redisService.incr(globalKey),
+      this.redisService.incr(programKey),
+    ]);
+  }
+
+  async getLiveVideoId(channelId: string, programId: number, isCron: boolean): Promise<string | null> {
     const notFoundKey = `videoIdNotFound:${channelId}`;
     const alreadyNotFound = await this.redisService.get<string>(notFoundKey);
     if (alreadyNotFound) {
       console.log(`🚫 Skipping fetch for channel ${channelId}, marked as not-found`);
-      return null;
+      return '__SKIPPED__';
     }
+
+    await this.incrementRequestCount(programId, isCron);
 
     try {
       const response = await axios.get(`${this.apiUrl}/search`, {
@@ -42,15 +55,14 @@ export class YoutubeLiveService {
       const videoId = response.data.items?.[0]?.id?.videoId || null;
 
       if (!videoId) {
-        await this.redisService.set(notFoundKey, '1', 900); // 15 min TTL for not-found
+        await this.redisService.set(notFoundKey, '1', 900); // 15 min TTL
         return null;
       }
 
-      // Guardamos el primer videoId visto para este canal
       const liveVideoKey = `liveVideoIdByChannel:${channelId}`;
       const cachedVideoId = await this.redisService.get<string>(liveVideoKey);
       if (!cachedVideoId) {
-        await this.redisService.set(liveVideoKey, videoId, 86400); // TTL 1 día
+        await this.redisService.set(liveVideoKey, videoId, 86400); // 1 día
         console.log(`📌 Stored first live video ID for channel ${channelId}: ${videoId}`);
       } else if (cachedVideoId !== videoId) {
         console.log(`🔁 Channel ${channelId} changed video ID from ${cachedVideoId} to ${videoId}`);
@@ -89,9 +101,11 @@ export class YoutubeLiveService {
     const channelsProcessed = new Set<string>();
 
     for (const schedule of liveOrSoonSchedules) {
-      const channelId = schedule.program.channel?.youtube_channel_id;
+      const program = schedule.program;
+      const channelId = program.channel?.youtube_channel_id;
+
       if (!channelId) {
-        console.warn(`⚠️ Program ${schedule.program.id} has no YouTube channel ID.`);
+        console.warn(`⚠️ Program ${program.id} has no YouTube channel ID.`);
         continue;
       }
 
@@ -103,19 +117,17 @@ export class YoutubeLiveService {
       channelsProcessed.add(channelId);
 
       try {
-        const videoId = await this.getLiveVideoId(channelId);
-        if (videoId) {
+        const videoId = await this.getLiveVideoId(channelId, program.id, true);
+        if (videoId && videoId !== '__SKIPPED__') {
           const start = this.convertTimeToMinutes(schedule.start_time);
           const end = this.convertTimeToMinutes(schedule.end_time);
           const durationMinutes = end >= start ? end - start : (24 * 60 - start + end);
           const ttl = durationMinutes + 60;
-          await this.redisService.set(`videoId:${schedule.program.id}`, videoId, ttl * 60);
-          console.log(`✅ Cached video ID for program ${schedule.program.id}: ${videoId}`);
-        } else {
-          console.warn(`⚠️ No live video ID found for program ${schedule.program.id}`);
+          await this.redisService.set(`videoId:${program.id}`, videoId, ttl * 60);
+          console.log(`✅ Cached video ID for program ${program.id}: ${videoId}`);
         }
       } catch (error) {
-        console.error(`❌ Error fetching video ID for program ${schedule.program.id}:`, error);
+        console.error(`❌ Error fetching video ID for program ${program.id}:`, error);
       }
     }
   }
