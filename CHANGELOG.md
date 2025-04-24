@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.2.3] - 2025-04-22
+
+### Fixed
+- Now storing failed fetches to youtube in cache to avoid re-fetching programs with no live stream.
+
 ## [0.2.2] - 2025-04-22
 
 ### Added
