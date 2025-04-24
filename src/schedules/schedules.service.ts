@@ -88,55 +88,75 @@ export class SchedulesService {
     const now = this.dayjs().tz('America/Argentina/Buenos_Aires');
     const currentTimeNum = now.hour() * 100 + now.minute();
     const currentDay = now.format('dddd').toLowerCase();
-
-    return Promise.all(
-      schedules.map(async (schedule) => {
-        const program = schedule.program;
-        let isLive = false;
-        let streamUrl = program.youtube_url;
-
-        const startTimeNum = this.convertTimeToNumber(schedule.start_time);
-        const endTimeNum = this.convertTimeToNumber(schedule.end_time);
   
-        if (schedule.day_of_week === currentDay && currentTimeNum >= startTimeNum && currentTimeNum <= endTimeNum) {
-          isLive = true;
-
-          if (program.channel?.youtube_channel_id) {
-            let cachedVideoId = await this.redisService.get<string>(`videoId:${program.id}`);
-            
-            if (!cachedVideoId) {
-              console.warn(`[SchedulesService] No cached video ID for program ${program.id}, fetching on-demand...`);
-              await this.redisService.incr(`youtube:onDemand:${program.id}:${this.dayjs().format('YYYY-MM-DD')}`);
-              await this.redisService.incr(`youtube:onDemand:total:${this.dayjs().format('YYYY-MM-DD')}`);
-
-              const videoId = await this.youtubeLiveService.getLiveVideoId(program.channel.youtube_channel_id, program.id, 'onDemand');
-              
-              if (videoId && videoId !== '__SKIPPED__') {
-                const ttlSeconds = this.calculateProgramTTL(schedule.start_time, schedule.end_time);
-                await this.redisService.set(`videoId:${program.id}`, videoId, ttlSeconds);
-                cachedVideoId = videoId;
-              } else if (videoId !== '__SKIPPED__') {
-                console.warn(`[SchedulesService] No live video ID found on-demand for program ${program.id}`);
-              }
-            }
-
-            if (cachedVideoId) {
-              streamUrl = `https://www.youtube.com/embed/${cachedVideoId}?autoplay=1`;
+    // Detectamos bloques continuos de programación
+    const enriched: any[] = [];
+    let lastEndTimeNum = -1;
+    let lastChannelId: string | null = null;
+  
+    for (const schedule of schedules) {
+      const program = schedule.program;
+      const channelId = program.channel?.youtube_channel_id;
+      const startTimeNum = this.convertTimeToNumber(schedule.start_time);
+      const endTimeNum = this.convertTimeToNumber(schedule.end_time);
+      let isLive = false;
+      let streamUrl = program.youtube_url;
+      let useSameVideoId = false;
+  
+      if (lastChannelId === channelId && lastEndTimeNum !== -1) {
+        const gap = startTimeNum - lastEndTimeNum;
+        if (gap >= 0 && gap < 2) {
+          useSameVideoId = true;
+        }
+      }
+  
+      if (schedule.day_of_week === currentDay && currentTimeNum >= startTimeNum && currentTimeNum <= endTimeNum) {
+        isLive = true;
+  
+        if (channelId) {
+          let cachedVideoId = await this.redisService.get<string>(`liveVideoIdByChannel:${channelId}`);
+  
+          if (!cachedVideoId) {
+            console.warn(`[SchedulesService] No cached channel video ID for program ${program.id}, fetching on-demand...`);
+  
+            // Contador diario
+            const date = this.dayjs().format('YYYY-MM-DD');
+            await this.redisService.incr(`youtube:onDemand:${program.id}:${date}`);
+            await this.redisService.incr(`youtube:onDemand:total:${date}`);
+  
+            const videoId = await this.youtubeLiveService.getLiveVideoId(channelId, program.id, 'onDemand');
+            if (videoId && videoId !== '__SKIPPED__') {
+              const ttlSeconds = this.calculateProgramTTL(schedule.start_time, schedule.end_time);
+              await this.redisService.set(`videoId:${program.id}`, videoId, ttlSeconds);
+              await this.redisService.set(`liveVideoIdByChannel:${channelId}`, videoId, 86400); // 1 día
+              cachedVideoId = videoId;
+            } else if (videoId !== '__SKIPPED__') {
+              console.warn(`[SchedulesService] No live video ID found on-demand for program ${program.id}`);
             }
           }
+  
+          if (cachedVideoId) {
+            streamUrl = `https://www.youtube.com/embed/${cachedVideoId}?autoplay=1`;
+          }
         }
-
-        return {
-          ...schedule,
-          program: {
-            ...program,
-            is_live: isLive,
-            stream_url: streamUrl,
-          },
-        };
-      })
-    );
+      }
+  
+      enriched.push({
+        ...schedule,
+        program: {
+          ...program,
+          is_live: isLive,
+          stream_url: streamUrl,
+        },
+      });
+  
+      lastEndTimeNum = this.convertTimeToNumber(schedule.end_time);
+      lastChannelId = program.channel?.youtube_channel_id || null;
+    }
+  
+    return enriched;
   }
+  
 
   private convertTimeToNumber(time: string): number {
     const [hours, minutes] = time.split(':').map(Number);
