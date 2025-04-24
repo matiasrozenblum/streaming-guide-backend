@@ -97,7 +97,7 @@ export class SchedulesService {
 
         const startTimeNum = this.convertTimeToNumber(schedule.start_time);
         const endTimeNum = this.convertTimeToNumber(schedule.end_time);
-  
+
         if (schedule.day_of_week === currentDay && currentTimeNum >= startTimeNum && currentTimeNum <= endTimeNum) {
           isLive = true;
 
