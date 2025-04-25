@@ -119,16 +119,10 @@ export class SchedulesService {
           if (!cachedVideoId) {
             console.warn(`[SchedulesService] No cached channel video ID for program ${program.id}, fetching on-demand...`);
   
-            // Contador diario
-            const date = this.dayjs().format('YYYY-MM-DD');
-            await this.redisService.incr(`youtube:onDemand:${program.id}:${date}`);
-            await this.redisService.incr(`youtube:onDemand:total:${date}`);
-  
-            const videoId = await this.youtubeLiveService.getLiveVideoId(channelId, program.id, 'onDemand');
+            const videoId = await this.youtubeLiveService.getLiveVideoId(channelId, 'onDemand');
             if (videoId && videoId !== '__SKIPPED__') {
               const ttlSeconds = this.calculateProgramTTL(schedule.start_time, schedule.end_time);
               await this.redisService.set(`videoId:${program.id}`, videoId, ttlSeconds);
-              await this.redisService.set(`liveVideoIdByChannel:${channelId}`, videoId, 86400); // 1 día
               cachedVideoId = videoId;
             } else if (videoId !== '__SKIPPED__') {
               console.warn(`[SchedulesService] No live video ID found on-demand for program ${program.id}`);

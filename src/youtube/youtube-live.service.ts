@@ -19,16 +19,14 @@ export class YoutubeLiveService {
     cron.schedule('0 * * * *', () => this.fetchLiveVideoIds());
   }
 
-  private async incrementCounter(type: 'cron' | 'onDemand', programId: number, videoId: string) {
+  private async incrementCounter(type: 'cron' | 'onDemand') {
     const date = dayjs().format('YYYY-MM-DD');
     const generalKey = `${type}:count:${date}`;
-    const programKey = `${type}:${programId}:${videoId}:${date}:count`;
 
     await this.redisService.incr(generalKey);
-    await this.redisService.incr(programKey);
   }
 
-  async getLiveVideoId(channelId: string, programId: number, context: 'cron' | 'onDemand'): Promise<string | null | '__SKIPPED__'> {
+  async getLiveVideoId(channelId: string, context: 'cron' | 'onDemand'): Promise<string | null | '__SKIPPED__'> {
     const notFoundKey = `videoIdNotFound:${channelId}`;
     const alreadyNotFound = await this.redisService.get<string>(notFoundKey);
     if (alreadyNotFound) {
@@ -57,13 +55,16 @@ export class YoutubeLiveService {
       const liveVideoKey = `liveVideoIdByChannel:${channelId}`;
       const cached = await this.redisService.get<string>(liveVideoKey);
       if (!cached) {
-        await this.redisService.set(liveVideoKey, videoId, 86400);
-        console.log(`📌 Stored first live video ID for channel ${channelId}: ${videoId}`);
+        const firstLiveVideoKey = `firstLiveVideoIdByChannel:${channelId}`;
+        await this.redisService.set(firstLiveVideoKey, videoId, 86400);
+        console.log(`📌 Stored first live video ID for channel ${channelId}: ${videoId} by ${context}`);
       } else if (cached !== videoId) {
-        console.log(`🔁 Channel ${channelId} changed video ID from ${cached} to ${videoId}`);
+        console.log(`🔁 Channel ${channelId} changed video ID from ${cached} to ${videoId} by ${context}`);
       }
+      await this.redisService.set(liveVideoKey, videoId, 86400);
+      console.log(`📌 Stored current live video ID for channel ${channelId}: ${videoId} by ${context}`);
 
-      await this.incrementCounter(context, programId, videoId);
+      await this.incrementCounter(context);
       return videoId;
     } catch (error) {
       const errData = error?.response?.data || error.message || error;
@@ -114,7 +115,7 @@ export class YoutubeLiveService {
         const hasGap = lastEnd ? startNum - this.convertTimeToMinutes(lastEnd) >= 2 : true;
 
         if (!currentVideoId || hasGap) {
-          currentVideoId = await this.getLiveVideoId(channelId, schedule.program.id, 'cron');
+          currentVideoId = await this.getLiveVideoId(channelId, 'cron');
         }
 
         if (currentVideoId && currentVideoId !== '__SKIPPED__') {
