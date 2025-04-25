@@ -59,9 +59,8 @@ export class YoutubeLiveService {
       const videoId = data.items?.[0]?.id?.videoId || null;
 
       if (!videoId) {
-        console.log(`🚫 No live video ID for ${channelId} by ${context}`);
-        // Marcar no encontrado por 15 min
-        await this.redisService.set(notFoundKey, '1', 15 * 60);
+        console.log(`🚫 No live video ID found for channel ${channelId} by ${context}`);
+        await this.redisService.set(notFoundKey, '1', 900);
         return null;
       }
 
@@ -69,7 +68,9 @@ export class YoutubeLiveService {
       if (!cached) {
         console.log(`📌 First live video ID for ${channelId}: ${videoId}`);
       } else if (cached !== videoId) {
-        console.log(`🔁 ${channelId} changed from ${cached} to ${videoId}`);
+        console.log(`🔁 Channel ${channelId} changed video ID from ${cached} to ${videoId} by ${context}`);
+      } else if (cached === videoId) {
+        console.log(`🔁 Channel ${channelId} has the same video ID ${videoId} by ${context}`);
       }
 
       // Guardar hasta fin del día
