@@ -110,7 +110,7 @@ export class SchedulesService {
         }
       }
   
-      if (schedule.day_of_week === currentDay && currentTimeNum >= startTimeNum && currentTimeNum <= endTimeNum) {
+      if (schedule.day_of_week === currentDay && currentTimeNum >= startTimeNum && currentTimeNum < endTimeNum) {
         isLive = true;
   
         if (channelId) {
