@@ -98,12 +98,8 @@ export class YoutubeLiveService {
     for (const sched of schedules) {
       const cid = sched.program.channel?.youtube_channel_id;
       if (!cid) continue;
-      const start = this.convertTimeToNumber(sched.start_time);
-      const end = this.convertTimeToNumber(sched.end_time);
-      const nowNum = dayjs().tz('America/Argentina/Buenos_Aires').hour() * 100 + dayjs().minute();
       const live = sched.program.is_live;
-      const soon = start > nowNum && start <= nowNum + 30;
-      if (live || soon) {
+      if (live) {
         groups.set(cid, true);
       }
     }
@@ -112,10 +108,5 @@ export class YoutubeLiveService {
     for (const cid of groups.keys()) {
       await this.getLiveVideoId(cid, 'cron');
     }
-  }
-
-  private convertTimeToNumber(time: string): number {
-    const [h, m] = time.split(':').map(Number);
-    return h * 100 + m;
   }
 }
