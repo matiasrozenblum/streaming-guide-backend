@@ -62,6 +62,8 @@ export class YoutubeLiveService {
         console.log(`📌 Stored first live video ID for channel ${channelId}: ${videoId} by ${context}`);
       } else if (cached !== videoId) {
         console.log(`🔁 Channel ${channelId} changed video ID from ${cached} to ${videoId} by ${context}`);
+      } else if (cached === videoId) {
+        console.log(`🔁 Channel ${channelId} has the same video ID ${videoId} by ${context}`);
       }
       await this.redisService.set(liveVideoKey, videoId, 86400);
       console.log(`📌 Stored current live video ID for channel ${channelId}: ${videoId} by ${context}`);
