@@ -19,11 +19,13 @@ export class YoutubeLiveService {
     cron.schedule('0 * * * *', () => this.fetchLiveVideoIds());
   }
 
-  private async incrementCounter(type: 'cron' | 'onDemand') {
+  private async incrementCounter(channelId: string, type: 'cron' | 'onDemand') {
     const date = dayjs().format('YYYY-MM-DD');
     const generalKey = `${type}:count:${date}`;
+    const channelKey = `${type}:${channelId}:count:${date}`;
 
     await this.redisService.incr(generalKey);
+    await this.redisService.incr(channelKey);
   }
 
   async getLiveVideoId(channelId: string, context: 'cron' | 'onDemand'): Promise<string | null | '__SKIPPED__'> {
@@ -64,7 +66,7 @@ export class YoutubeLiveService {
       await this.redisService.set(liveVideoKey, videoId, 86400);
       console.log(`📌 Stored current live video ID for channel ${channelId}: ${videoId} by ${context}`);
 
-      await this.incrementCounter(context);
+      await this.incrementCounter(channelId, context);
       return videoId;
     } catch (error) {
       const errData = error?.response?.data || error.message || error;
