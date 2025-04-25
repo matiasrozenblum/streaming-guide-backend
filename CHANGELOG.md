@@ -17,7 +17,13 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
-## [0.2.6] - 2025-04-22
+## [0.2.7] - 2025-04-26
+
+### Changed
+- Now storing channel video if until the end of the live transmission.
+- Cron will not execute fetch for specific channel if that channel has a video id cached.
+
+## [0.2.6] - 2025-04-25
 
 ### Changed
 - Now storing channel video id until end of day, updating it by cron or on-demand
@@ -25,7 +31,7 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ### Removed
 - Removed video id cache entry by program since it's no longer used
 
-## [0.2.5] - 2025-04-22
+## [0.2.5] - 2025-04-24
 
 ### Changed
 - Now using video id for all the channel's live stream without cuts

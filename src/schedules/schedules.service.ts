@@ -10,6 +10,7 @@ import { RedisService } from '../redis/redis.service';
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
+import { getCurrentBlockTTL } from '@/utils/getBlockTTL.util';
 
 interface FindAllOptions {
   page?: number;
@@ -118,8 +119,8 @@ export class SchedulesService {
   
           if (!cachedVideoId) {
             console.warn(`[SchedulesService] No cached channel video ID for program ${program.id}, fetching on-demand...`);
-  
-            const videoId = await this.youtubeLiveService.getLiveVideoId(channelId, 'onDemand');
+            const blockTTL = await getCurrentBlockTTL(channelId, schedules);
+            const videoId = await this.youtubeLiveService.getLiveVideoId(channelId, blockTTL, 'onDemand');
             if (videoId && videoId !== '__SKIPPED__') {
               cachedVideoId = videoId;
             } else if (videoId !== '__SKIPPED__') {

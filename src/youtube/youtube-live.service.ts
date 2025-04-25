@@ -4,6 +4,7 @@ import * as cron from 'node-cron';
 import * as dayjs from 'dayjs';
 import { SchedulesService } from '../schedules/schedules.service';
 import { RedisService } from '../redis/redis.service';
+import { getCurrentBlockTTL } from '@/utils/getBlockTTL.util';
 
 @Injectable()
 export class YoutubeLiveService {
@@ -36,7 +37,7 @@ export class YoutubeLiveService {
     return end.diff(now, 'second');
   }
 
-  async getLiveVideoId(channelId: string, context: 'cron' | 'onDemand'): Promise<string | null | '__SKIPPED__'> {
+  async getLiveVideoId(channelId: string, blockTTL: number, context: 'cron' | 'onDemand'): Promise<string | null | '__SKIPPED__'> {
     const liveKey = `liveVideoIdByChannel:${channelId}`;
     const notFoundKey = `videoIdNotFound:${channelId}`;
 
@@ -44,6 +45,13 @@ export class YoutubeLiveService {
     if (await this.redisService.get<string>(notFoundKey)) {
       console.log(`🚫 Skipping fetch for ${channelId}, marked as not-found`);
       return '__SKIPPED__';
+    }
+
+    // Si ya está cacheado, devolvemos sin llamar a YouTube
+    const cached = await this.redisService.get<string>(liveKey);
+    if (cached) {
+      console.log(`🔁 Skipping fetch for ${channelId}, already cached until block end`);
+      return cached;
     }
 
     try {
@@ -64,19 +72,9 @@ export class YoutubeLiveService {
         return null;
       }
 
-      const cached = await this.redisService.get<string>(liveKey);
-      if (!cached) {
-        console.log(`📌 First live video ID for ${channelId}: ${videoId}`);
-      } else if (cached !== videoId) {
-        console.log(`🔁 Channel ${channelId} changed video ID from ${cached} to ${videoId} by ${context}`);
-      } else if (cached === videoId) {
-        console.log(`🔁 Channel ${channelId} has the same video ID ${videoId} by ${context}`);
-      }
-
-      // Guardar hasta fin del día
-      const ttl = this.getEndOfDayTTL();
-      await this.redisService.set(liveKey, videoId, ttl);
-      console.log(`📌 Stored liveVideoIdByChannel:${channelId} = ${videoId} (TTL ${ttl}s)`);
+      // Calcular TTL según duración del bloque ininterrumpido
+      await this.redisService.set(liveKey, videoId, blockTTL);
+      console.log(`📌 Stored liveVideoIdByChannel:${channelId} = ${videoId} (TTL ${blockTTL}s)`);
 
       await this.incrementCounter(channelId, context);
       return videoId;
@@ -107,7 +105,8 @@ export class YoutubeLiveService {
 
     console.log(`🎯 Channels to refresh: ${groups.size}`);
     for (const cid of groups.keys()) {
-      await this.getLiveVideoId(cid, 'cron');
+      const blockTTL = await getCurrentBlockTTL(cid, schedules);
+      await this.getLiveVideoId(cid, blockTTL, 'cron');
     }
   }
 }
