@@ -17,6 +17,14 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.2.6] - 2025-04-22
+
+### Changed
+- Now storing channel video id until end of day, updating it by cron or on-demand
+
+### Removed
+- Removed video id cache entry by program since it's no longer used
+
 ## [0.2.5] - 2025-04-22
 
 ### Changed
