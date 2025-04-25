@@ -10,6 +10,7 @@ import { RedisService } from '../redis/redis.service';
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
+import { getCurrentBlockTTL } from '@/utils/getBlockTTL.util';
 
 interface FindAllOptions {
   page?: number;
@@ -110,7 +111,7 @@ export class SchedulesService {
         }
       }
   
-      if (schedule.day_of_week === currentDay && currentTimeNum >= startTimeNum && currentTimeNum <= endTimeNum) {
+      if (schedule.day_of_week === currentDay && currentTimeNum >= startTimeNum && currentTimeNum < endTimeNum) {
         isLive = true;
   
         if (channelId) {
@@ -118,11 +119,9 @@ export class SchedulesService {
   
           if (!cachedVideoId) {
             console.warn(`[SchedulesService] No cached channel video ID for program ${program.id}, fetching on-demand...`);
-  
-            const videoId = await this.youtubeLiveService.getLiveVideoId(channelId, 'onDemand');
+            const blockTTL = await getCurrentBlockTTL(channelId, schedules);
+            const videoId = await this.youtubeLiveService.getLiveVideoId(channelId, blockTTL, 'onDemand');
             if (videoId && videoId !== '__SKIPPED__') {
-              const ttlSeconds = this.calculateProgramTTL(schedule.start_time, schedule.end_time);
-              await this.redisService.set(`videoId:${program.id}`, videoId, ttlSeconds);
               cachedVideoId = videoId;
             } else if (videoId !== '__SKIPPED__') {
               console.warn(`[SchedulesService] No live video ID found on-demand for program ${program.id}`);
