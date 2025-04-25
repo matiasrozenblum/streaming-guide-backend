@@ -50,6 +50,7 @@ export class YoutubeLiveService {
       const videoId = response.data.items?.[0]?.id?.videoId || null;
 
       if (!videoId) {
+        console.log(`🚫 No live video ID found for channel ${channelId} by ${context}`);
         await this.redisService.set(notFoundKey, '1', 900);
         return null;
       }
