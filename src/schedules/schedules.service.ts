@@ -121,8 +121,6 @@ export class SchedulesService {
   
             const videoId = await this.youtubeLiveService.getLiveVideoId(channelId, 'onDemand');
             if (videoId && videoId !== '__SKIPPED__') {
-              const ttlSeconds = this.calculateProgramTTL(schedule.start_time, schedule.end_time);
-              await this.redisService.set(`videoId:${program.id}`, videoId, ttlSeconds);
               cachedVideoId = videoId;
             } else if (videoId !== '__SKIPPED__') {
               console.warn(`[SchedulesService] No live video ID found on-demand for program ${program.id}`);
