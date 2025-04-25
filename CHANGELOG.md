@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.2.5] - 2025-04-22
+
+### Changed
+- Now using video id for all the channel's live stream without cuts
+
 ## [0.2.4] - 2025-04-22
 
 ### Added

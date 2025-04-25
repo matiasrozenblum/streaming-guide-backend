@@ -13,33 +13,26 @@ export class YoutubeLiveService {
   constructor(
     @Inject(forwardRef(() => SchedulesService))
     private readonly schedulesService: SchedulesService,
-
     private readonly redisService: RedisService,
   ) {
     console.log('🚀 YoutubeLiveService initialized');
     cron.schedule('0 * * * *', () => this.fetchLiveVideoIds());
   }
 
-  private async incrementRequestCount(programId: number, isCron: boolean) {
-    const prefix = isCron ? 'cron' : 'onDemand';
+  private async incrementCounter(type: 'cron' | 'onDemand') {
     const date = dayjs().format('YYYY-MM-DD');
-    const globalKey = `${prefix}:${date}:count`;
-    const programKey = `${prefix}:${date}:program:${programId}:count`;
-    await Promise.all([
-      this.redisService.incr(globalKey),
-      this.redisService.incr(programKey),
-    ]);
+    const generalKey = `${type}:count:${date}`;
+
+    await this.redisService.incr(generalKey);
   }
 
-  async getLiveVideoId(channelId: string, programId: number, isCron: boolean): Promise<string | null> {
+  async getLiveVideoId(channelId: string, context: 'cron' | 'onDemand'): Promise<string | null | '__SKIPPED__'> {
     const notFoundKey = `videoIdNotFound:${channelId}`;
     const alreadyNotFound = await this.redisService.get<string>(notFoundKey);
     if (alreadyNotFound) {
       console.log(`🚫 Skipping fetch for channel ${channelId}, marked as not-found`);
       return '__SKIPPED__';
     }
-
-    await this.incrementRequestCount(programId, isCron);
 
     try {
       const response = await axios.get(`${this.apiUrl}/search`, {
@@ -55,19 +48,23 @@ export class YoutubeLiveService {
       const videoId = response.data.items?.[0]?.id?.videoId || null;
 
       if (!videoId) {
-        await this.redisService.set(notFoundKey, '1', 900); // 15 min TTL
+        await this.redisService.set(notFoundKey, '1', 900);
         return null;
       }
 
       const liveVideoKey = `liveVideoIdByChannel:${channelId}`;
-      const cachedVideoId = await this.redisService.get<string>(liveVideoKey);
-      if (!cachedVideoId) {
-        await this.redisService.set(liveVideoKey, videoId, 86400); // 1 día
-        console.log(`📌 Stored first live video ID for channel ${channelId}: ${videoId}`);
-      } else if (cachedVideoId !== videoId) {
-        console.log(`🔁 Channel ${channelId} changed video ID from ${cachedVideoId} to ${videoId}`);
+      const cached = await this.redisService.get<string>(liveVideoKey);
+      if (!cached) {
+        const firstLiveVideoKey = `firstLiveVideoIdByChannel:${channelId}`;
+        await this.redisService.set(firstLiveVideoKey, videoId, 86400);
+        console.log(`📌 Stored first live video ID for channel ${channelId}: ${videoId} by ${context}`);
+      } else if (cached !== videoId) {
+        console.log(`🔁 Channel ${channelId} changed video ID from ${cached} to ${videoId} by ${context}`);
       }
+      await this.redisService.set(liveVideoKey, videoId, 86400);
+      console.log(`📌 Stored current live video ID for channel ${channelId}: ${videoId} by ${context}`);
 
+      await this.incrementCounter(context);
       return videoId;
     } catch (error) {
       const errData = error?.response?.data || error.message || error;
@@ -82,7 +79,7 @@ export class YoutubeLiveService {
     const currentDay = now.format('dddd').toLowerCase();
 
     const schedules = await this.schedulesService.findByDay(currentDay);
-    if (!schedules || schedules.length === 0) {
+    if (!schedules?.length) {
       console.warn('⚠️ No schedules found for today.');
       return;
     }
@@ -98,36 +95,36 @@ export class YoutubeLiveService {
 
     console.log(`🎯 Found ${liveOrSoonSchedules.length} programs live or starting soon.`);
 
-    const channelsProcessed = new Set<string>();
+    const programsByChannel = new Map<string, any[]>();
 
     for (const schedule of liveOrSoonSchedules) {
-      const program = schedule.program;
-      const channelId = program.channel?.youtube_channel_id;
+      const channelId = schedule.program.channel?.youtube_channel_id;
+      if (!channelId) continue;
+      if (!programsByChannel.has(channelId)) programsByChannel.set(channelId, []);
+      programsByChannel.get(channelId)!.push(schedule);
+    }
 
-      if (!channelId) {
-        console.warn(`⚠️ Program ${program.id} has no YouTube channel ID.`);
-        continue;
-      }
+    for (const [channelId, programGroup] of programsByChannel.entries()) {
+      let lastEnd: string | null = null;
+      let currentVideoId: string | null | '__SKIPPED__' = null;
 
-      if (channelsProcessed.has(channelId)) {
-        console.log(`🔄 Skipping duplicate channel ${channelId}`);
-        continue;
-      }
+      for (const schedule of programGroup.sort((a, b) => a.start_time.localeCompare(b.start_time))) {
+        const startNum = this.convertTimeToMinutes(schedule.start_time);
+        const endNum = this.convertTimeToMinutes(schedule.end_time);
 
-      channelsProcessed.add(channelId);
+        const hasGap = lastEnd ? startNum - this.convertTimeToMinutes(lastEnd) >= 2 : true;
 
-      try {
-        const videoId = await this.getLiveVideoId(channelId, program.id, true);
-        if (videoId && videoId !== '__SKIPPED__') {
-          const start = this.convertTimeToMinutes(schedule.start_time);
-          const end = this.convertTimeToMinutes(schedule.end_time);
-          const durationMinutes = end >= start ? end - start : (24 * 60 - start + end);
-          const ttl = durationMinutes + 60;
-          await this.redisService.set(`videoId:${program.id}`, videoId, ttl * 60);
-          console.log(`✅ Cached video ID for program ${program.id}: ${videoId}`);
+        if (!currentVideoId || hasGap) {
+          currentVideoId = await this.getLiveVideoId(channelId, 'cron');
         }
-      } catch (error) {
-        console.error(`❌ Error fetching video ID for program ${program.id}:`, error);
+
+        if (currentVideoId && currentVideoId !== '__SKIPPED__') {
+          const ttl = (endNum >= startNum ? endNum - startNum : (24 * 60 - startNum + endNum)) + 60;
+          await this.redisService.set(`videoId:${schedule.program.id}`, currentVideoId, ttl * 60);
+          console.log(`✅ Cached video ID for program ${schedule.program.id}: ${currentVideoId}`);
+        }
+
+        lastEnd = schedule.end_time;
       }
     }
   }
