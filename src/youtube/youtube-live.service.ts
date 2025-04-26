@@ -47,12 +47,20 @@ export class YoutubeLiveService {
       return '__SKIPPED__';
     }
 
-    // Si ya está cacheado, devolvemos sin llamar a YouTube
-    const cached = await this.redisService.get<string>(liveKey);
-    if (cached) {
-      console.log(`🔁 Skipping fetch for ${channelId}, already cached until block end`);
-      return cached;
+   // 1) Intento leer de cache
+  let videoId = await this.redisService.get< string >(`liveVideoIdByChannel:${channelId}`);
+  
+  if (videoId) {
+    // 2) Verifico si sigue público
+    const isPrivate = await this.isPrivateVideo(videoId);
+    if (!isPrivate) {
+      // sigue bueno, lo devuelvo
+      return videoId;
     }
+    // si está privado, lo borro de cache
+    await this.redisService.del(`liveVideoIdByChannel:${channelId}`);
+  }
+
 
     try {
       const { data } = await axios.get(`${this.apiUrl}/search`, {
@@ -107,6 +115,21 @@ export class YoutubeLiveService {
     for (const cid of groups.keys()) {
       const blockTTL = await getCurrentBlockTTL(cid, schedules);
       await this.getLiveVideoId(cid, blockTTL, 'cron');
+    }
+  }
+
+  private async isPrivateVideo(videoId: string): Promise<boolean> {
+    try {
+      const resp = await axios.get(
+        `${this.apiUrl}/videos`,
+        { params: { part: 'status', id: videoId, key: this.apiKey } }
+      );
+      const items = resp.data.items as any[];
+      if (!items || items.length === 0) return true;
+      return items[0].status.privacyStatus !== 'public';
+    } catch {
+      // ante cualquier fallo, forzamos re-fetch
+      return true;
     }
   }
 }
