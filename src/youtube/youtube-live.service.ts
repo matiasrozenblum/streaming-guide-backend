@@ -4,6 +4,7 @@ import * as cron from 'node-cron';
 import * as dayjs from 'dayjs';
 import { SchedulesService } from '../schedules/schedules.service';
 import { RedisService } from '../redis/redis.service';
+import { getCurrentBlockTTL } from '@/utils/getBlockTTL.util';
 
 @Injectable()
 export class YoutubeLiveService {
@@ -36,7 +37,7 @@ export class YoutubeLiveService {
     return end.diff(now, 'second');
   }
 
-  async getLiveVideoId(channelId: string, context: 'cron' | 'onDemand'): Promise<string | null | '__SKIPPED__'> {
+  async getLiveVideoId(channelId: string, blockTTL: number, context: 'cron' | 'onDemand'): Promise<string | null | '__SKIPPED__'> {
     const liveKey = `liveVideoIdByChannel:${channelId}`;
     const notFoundKey = `videoIdNotFound:${channelId}`;
 
@@ -45,6 +46,23 @@ export class YoutubeLiveService {
       console.log(`🚫 Skipping fetch for ${channelId}, marked as not-found`);
       return '__SKIPPED__';
     }
+
+   // 1) Intento leer de cache
+  let videoId = await this.redisService.get< string >(`liveVideoIdByChannel:${channelId}`);
+  
+  if (videoId) {
+    // 2) Verifico si sigue público
+    const isPrivate = await this.isPrivateVideo(videoId);
+    if (!isPrivate) {
+      console.log(`🔁 Skipping fetch for ${channelId}, already cached until block end and it's public`);
+      // sigue bueno, lo devuelvo
+      return videoId;
+    }
+    // si está privado, lo borro de cache
+    console.log(`🔁 Deleting cached videoId for ${channelId} because it's private`);
+    await this.redisService.del(`liveVideoIdByChannel:${channelId}`);
+  }
+
 
     try {
       const { data } = await axios.get(`${this.apiUrl}/search`, {
@@ -64,19 +82,9 @@ export class YoutubeLiveService {
         return null;
       }
 
-      const cached = await this.redisService.get<string>(liveKey);
-      if (!cached) {
-        console.log(`📌 First live video ID for ${channelId}: ${videoId}`);
-      } else if (cached !== videoId) {
-        console.log(`🔁 Channel ${channelId} changed video ID from ${cached} to ${videoId} by ${context}`);
-      } else if (cached === videoId) {
-        console.log(`🔁 Channel ${channelId} has the same video ID ${videoId} by ${context}`);
-      }
-
-      // Guardar hasta fin del día
-      const ttl = this.getEndOfDayTTL();
-      await this.redisService.set(liveKey, videoId, ttl);
-      console.log(`📌 Stored liveVideoIdByChannel:${channelId} = ${videoId} (TTL ${ttl}s)`);
+      // Calcular TTL según duración del bloque ininterrumpido
+      await this.redisService.set(liveKey, videoId, blockTTL);
+      console.log(`📌 Stored liveVideoIdByChannel:${channelId} = ${videoId} (TTL ${blockTTL}s)`);
 
       await this.incrementCounter(channelId, context);
       return videoId;
@@ -107,7 +115,23 @@ export class YoutubeLiveService {
 
     console.log(`🎯 Channels to refresh: ${groups.size}`);
     for (const cid of groups.keys()) {
-      await this.getLiveVideoId(cid, 'cron');
+      const blockTTL = await getCurrentBlockTTL(cid, schedules);
+      await this.getLiveVideoId(cid, blockTTL, 'cron');
+    }
+  }
+
+  private async isPrivateVideo(videoId: string): Promise<boolean> {
+    try {
+      const resp = await axios.get(
+        `${this.apiUrl}/videos`,
+        { params: { part: 'status', id: videoId, key: this.apiKey } }
+      );
+      const items = resp.data.items as any[];
+      if (!items || items.length === 0) return true;
+      return items[0].status.privacyStatus !== 'public';
+    } catch {
+      // ante cualquier fallo, forzamos re-fetch
+      return true;
     }
   }
 }
