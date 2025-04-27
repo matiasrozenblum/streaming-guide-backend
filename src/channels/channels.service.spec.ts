@@ -10,6 +10,7 @@ import { DataSource } from 'typeorm';
 import { Program } from '../programs/programs.entity';
 import { Schedule } from '../schedules/schedules.entity';
 import { SchedulesService } from '../schedules/schedules.service';
+import { RedisService } from '../redis/redis.service';
 
 describe('ChannelsService', () => {
   let service: ChannelsService;
@@ -92,6 +93,15 @@ describe('ChannelsService', () => {
         {
           provide: SchedulesService,
           useValue: mockSchedulesService,
+        },
+        {
+          provide: RedisService,
+          useValue: {
+            get: jest.fn(),
+            set: jest.fn(),
+            del: jest.fn(),
+            delByPattern: jest.fn(),
+          },
         },
       ],
     }).compile();

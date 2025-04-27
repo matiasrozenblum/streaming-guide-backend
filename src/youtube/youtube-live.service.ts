@@ -54,10 +54,12 @@ export class YoutubeLiveService {
     // 2) Verifico si sigue público
     const isPrivate = await this.isPrivateVideo(videoId);
     if (!isPrivate) {
+      console.log(`🔁 Skipping fetch for ${channelId}, already cached until block end and it's public`);
       // sigue bueno, lo devuelvo
       return videoId;
     }
     // si está privado, lo borro de cache
+    console.log(`🔁 Deleting cached videoId for ${channelId} because it's private`);
     await this.redisService.del(`liveVideoIdByChannel:${channelId}`);
   }
 
