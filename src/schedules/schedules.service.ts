@@ -13,11 +13,10 @@ import * as timezone from 'dayjs/plugin/timezone';
 import { getCurrentBlockTTL } from '@/utils/getBlockTTL.util';
 
 interface FindAllOptions {
-  page?: number;
-  limit?: number;
   dayOfWeek?: string;
   relations?: string[];
   select?: string[];
+  skipCache?: boolean;
 }
 
 @Injectable()
@@ -41,10 +40,14 @@ export class SchedulesService {
 
   async findAll(options: FindAllOptions = {}): Promise<any[]> {
     const startTime = Date.now();
-    const { dayOfWeek, relations = ['program', 'program.channel', 'program.panelists'], select } = options;
+    const { dayOfWeek, relations = ['program', 'program.channel', 'program.panelists'], select, skipCache = false } = options;
 
     const cacheKey = `schedules:all:${dayOfWeek || 'all'}`;
-    let schedules = await this.redisService.get<Schedule[]>(cacheKey);
+    let schedules: Schedule[] | null = null;
+    if (!skipCache) {
+      schedules = await this.redisService.get<Schedule[]>(cacheKey);
+    }
+    
 
     if (!schedules) {
       console.log(`Cache MISS for ${cacheKey}`);

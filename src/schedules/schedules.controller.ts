@@ -17,11 +17,12 @@ export class SchedulesController {
   @ApiOperation({ summary: 'Obtener todos los horarios o filtrar por día' })
   @ApiQuery({ name: 'day', required: false, description: 'Día de la semana para filtrar (ej: monday, tuesday, etc.)' })
   @ApiResponse({ status: 200, description: 'Lista de horarios', type: [Schedule] })
-  async findAll(@Query('day') day?: string): Promise<Schedule[]> {
-    if (day) {
-      return this.schedulesService.findByDay(day);
-    }
-    return this.schedulesService.findAll();
+  async findAll(@Query('day') day?: string, @Query('live_status') liveStatus?: string,): Promise<Schedule[]> {
+    const skipCache = liveStatus === 'true';
+    return this.schedulesService.findAll({
+      dayOfWeek: day?.toLowerCase(),
+      skipCache,
+    });
   }
 
   @Get(':id')
