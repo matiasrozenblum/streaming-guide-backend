@@ -104,10 +104,7 @@ export class SchedulesService {
       const startTimeNum = this.convertTimeToNumber(schedule.start_time);
       const endTimeNum = this.convertTimeToNumber(schedule.end_time);
       let isLive = false;
-      let streamUrl: string | null = null;
-      if (program.youtube_url) {
-        streamUrl = await this.youtubeLiveService.fetchLatestVideoUrl(program.youtube_url);
-      }
+      let streamUrl = program.youtube_url;
       let useSameVideoId = false;
   
       if (lastChannelId === channelId && lastEndTimeNum !== -1) {
