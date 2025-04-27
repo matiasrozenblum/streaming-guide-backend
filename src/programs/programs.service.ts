@@ -6,6 +6,7 @@ import { CreateProgramDto } from './dto/create-program.dto';
 import { UpdateProgramDto } from './dto/update-program.dto';
 import { Panelist } from '../panelists/panelists.entity';
 import { Channel } from '../channels/channels.entity';
+import { RedisService } from '../redis/redis.service';
 
 @Injectable()
 export class ProgramsService {
@@ -16,6 +17,7 @@ export class ProgramsService {
     private panelistsRepository: Repository<Panelist>,
     @InjectRepository(Channel)
     private channelsRepository: Repository<Channel>,
+    private redisService: RedisService,
   ) {}
 
   async create(createProgramDto: CreateProgramDto): Promise<any> {
@@ -29,6 +31,7 @@ export class ProgramsService {
     const program = this.programsRepository.create(createProgramDto);
     program.channel = channel;
     const savedProgram = await this.programsRepository.save(program);
+    await this.redisService.delByPattern('schedules:all:*');
     return {
       id: savedProgram.id,
       name: savedProgram.name,
@@ -88,6 +91,7 @@ export class ProgramsService {
     }
     Object.assign(program, updateProgramDto);
     const updatedProgram = await this.programsRepository.save(program);
+    await this.redisService.delByPattern('schedules:all:*');
     return {
       id: updatedProgram.id,
       name: updatedProgram.name,
@@ -106,6 +110,7 @@ export class ProgramsService {
     if (result.affected === 0) {
       throw new NotFoundException(`Program with ID ${id} not found`);
     }
+    await this.redisService.delByPattern('schedules:all:*');
   }
 
   async addPanelist(programId: number, panelistId: number): Promise<void> {
@@ -129,6 +134,7 @@ export class ProgramsService {
       program.panelists.push(panelist);
       await this.programsRepository.save(program);
     }
+    await this.redisService.delByPattern('schedules:all:*');
   }
 
   async removePanelist(programId: number, panelistId: number): Promise<void> {
@@ -141,5 +147,6 @@ export class ProgramsService {
       program.panelists = program.panelists.filter(p => p.id !== panelistId);
       await this.programsRepository.save(program);
     }
+    await this.redisService.delByPattern('schedules:all:*');
   }
 }

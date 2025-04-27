@@ -127,6 +127,7 @@ export class PanelistsService {
       await this.panelistsRepository.save(panelist);
       console.log(`[Cache] Invalidating cache for panelist ${panelistId} after adding to program ${programId}`);
       await this.redisService.del(`panelists:${panelistId}`);
+      await this.redisService.delByPattern('schedules:all:*');
     }
   }
 
@@ -138,6 +139,7 @@ export class PanelistsService {
       await this.panelistsRepository.save(panelist);
       console.log(`[Cache] Invalidating cache for panelist ${panelistId} after removing from program ${programId}`);
       await this.redisService.del(`panelists:${panelistId}`);
+      await this.redisService.delByPattern('schedules:all:*');
     }
   }
 
