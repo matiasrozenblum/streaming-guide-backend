@@ -7,6 +7,7 @@ import { UpdateChannelDto } from './dto/update-channel.dto';
 import { Program } from '@/programs/programs.entity';
 import { Schedule } from '@/schedules/schedules.entity';
 import { SchedulesService } from '@/schedules/schedules.service'; // <--- Importar el service
+import { RedisService } from '@/redis/redis.service';
 
 type ChannelWithSchedules = {
   channel: {
@@ -42,6 +43,7 @@ export class ChannelsService {
     private readonly scheduleRepo: Repository<Schedule>,
     private readonly dataSource: DataSource,
     private readonly schedulesService: SchedulesService, // <--- Inyectar SchedulesService
+    private readonly redisService: RedisService,
   ) {}
 
   async findAll(): Promise<Channel[]> {
@@ -75,6 +77,7 @@ export class ChannelsService {
       order: newOrder,
     });
   
+    await this.redisService.delByPattern('schedules:all:*');
     return this.channelsRepository.save(channel);
   }
 
@@ -87,6 +90,7 @@ export class ChannelsService {
       }
     });
 
+    await this.redisService.delByPattern('schedules:all:*');
     return this.channelsRepository.save(channel);
   }
 
@@ -95,6 +99,7 @@ export class ChannelsService {
     if (result.affected === 0) {
       throw new NotFoundException(`Channel with ID ${id} not found`);
     }
+    await this.redisService.delByPattern('schedules:all:*');
   }
 
   async reorderChannels(newOrderIds: number[]): Promise<void> {

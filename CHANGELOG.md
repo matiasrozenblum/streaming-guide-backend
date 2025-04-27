@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.2.8] - 2025-04-26
+
+### Added
+- Now cleaning schedules and panelists cache when creating, updating or deleting entites from the backoffice
+
 ## [0.2.7] - 2025-04-26
 
 ### Changed
