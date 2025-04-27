@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.2.9] - 2025-04-26
+
+### Changed
+- Improved live periodic fetch
+
 ## [0.2.8] - 2025-04-26
 
 ### Added
