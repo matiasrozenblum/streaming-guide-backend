@@ -7,6 +7,7 @@ import { Repository } from 'typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { CreateProgramDto } from './dto/create-program.dto';
 import { Channel } from '../channels/channels.entity';
+import { RedisService } from '../redis/redis.service';
 
 describe('ProgramsService', () => {
   let service: ProgramsService;
@@ -105,6 +106,15 @@ describe('ProgramsService', () => {
         {
           provide: getRepositoryToken(Channel),
           useValue: channelRepository,
+        },
+        {
+          provide: RedisService,
+          useValue: {
+            get: jest.fn(),
+            set: jest.fn(),
+            del: jest.fn(),
+            delByPattern: jest.fn(),
+          },
         },
       ],
     }).compile();

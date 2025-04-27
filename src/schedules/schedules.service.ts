@@ -233,7 +233,7 @@ export class SchedulesService {
 
     const saved = await this.schedulesRepository.save(schedule);
 
-    await this.redisService.del('schedules:all');
+    await this.redisService.delByPattern('schedules:all:*');
     return saved;
   }
 
@@ -244,16 +244,16 @@ export class SchedulesService {
     if (updateScheduleDto.startTime) schedule.start_time = updateScheduleDto.startTime;
     if (updateScheduleDto.endTime) schedule.end_time = updateScheduleDto.endTime;
 
-    return this.schedulesRepository.save(schedule);
+    const saved = await this.schedulesRepository.save(schedule);
+
+    await this.redisService.delByPattern('schedules:all:*');
+    return saved;
   }
 
   async remove(id: string): Promise<boolean> {
     const result = await this.schedulesRepository.delete(id);
     if ((result?.affected ?? 0) > 0) {
-      await Promise.all([
-        this.redisService.del('schedules:all'),
-        this.redisService.del(`schedules:${id}`),
-      ]);
+      await this.redisService.delByPattern('schedules:all:*');
       return true;
     }
     return false;
