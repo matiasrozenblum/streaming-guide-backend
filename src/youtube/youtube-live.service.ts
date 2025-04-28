@@ -1,10 +1,11 @@
-import { Injectable, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Inject, forwardRef, HttpStatus, HttpException } from '@nestjs/common';
 import axios from 'axios';
 import * as cron from 'node-cron';
 import * as dayjs from 'dayjs';
 import { SchedulesService } from '../schedules/schedules.service';
 import { RedisService } from '../redis/redis.service';
 import { getCurrentBlockTTL } from '@/utils/getBlockTTL.util';
+import { parseStringPromise } from 'xml2js';
 
 @Injectable()
 export class YoutubeLiveService {
@@ -51,15 +52,15 @@ export class YoutubeLiveService {
   let videoId = await this.redisService.get< string >(`liveVideoIdByChannel:${channelId}`);
   
   if (videoId) {
-    // 2) Verifico si sigue público
-    const isPrivate = await this.isPrivateVideo(videoId);
-    if (!isPrivate) {
-      console.log(`🔁 Skipping fetch for ${channelId}, already cached until block end and it's public`);
-      // sigue bueno, lo devuelvo
+    // 2) Verifico si sigue en vivo
+    const isLive = await this.isVideoLive(videoId);
+    if (isLive) {
+      console.log(`🔁 Skipping fetch for ${channelId}, already cached until block end and it's still live`);
+      // sigue en vivo, lo devuelvo
       return videoId;
     }
-    // si está privado, lo borro de cache
-    console.log(`🔁 Deleting cached videoId for ${channelId} because it's private`);
+    // si ya no está en vivo, lo borro de cache
+    console.log(`🔁 Deleting cached videoId for ${channelId} because it's not live anymore`);
     await this.redisService.del(`liveVideoIdByChannel:${channelId}`);
   }
 
@@ -120,18 +121,22 @@ export class YoutubeLiveService {
     }
   }
 
-  private async isPrivateVideo(videoId: string): Promise<boolean> {
+  private async isVideoLive(videoId: string): Promise<boolean> {
     try {
-      const resp = await axios.get(
-        `${this.apiUrl}/videos`,
-        { params: { part: 'status', id: videoId, key: this.apiKey } }
-      );
-      const items = resp.data.items as any[];
-      if (!items || items.length === 0) return true;
-      return items[0].status.privacyStatus !== 'public';
-    } catch {
-      // ante cualquier fallo, forzamos re-fetch
-      return true;
+      const resp = await axios.get(`${this.apiUrl}/videos`, {
+        params: {
+          part: 'snippet',
+          id: videoId,
+          key: this.apiKey,
+        },
+      });
+      const items = resp.data.items as Array<{ snippet?: { liveBroadcastContent?: string } }>;
+      if (!items?.length) return false;
+      console.log(`🔁 isVideoLive: ${items[0].snippet?.liveBroadcastContent}`);
+      return items[0].snippet?.liveBroadcastContent === 'live';
+    } catch (err) {
+      // En caso de error (red, parsing, etc.) devolvemos false para forzar re-fetch
+      return false;
     }
   }
 }

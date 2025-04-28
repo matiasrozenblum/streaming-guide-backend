@@ -19,6 +19,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ## [0.2.9] - 2025-04-26
 
+### Fixed
+- Now consulting if cached video id is live instead of private
+
+## [0.2.9] - 2025-04-26
+
 ### Changed
 - Improved live periodic fetch
 
