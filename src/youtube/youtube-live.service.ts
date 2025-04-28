@@ -53,14 +53,14 @@ export class YoutubeLiveService {
   
   if (videoId) {
     // 2) Verifico si sigue en vivo
-    const isPrivate = await this.isVideoLive(videoId);
-    if (!isPrivate) {
+    const isLive = await this.isVideoLive(videoId);
+    if (!isLive) {
       console.log(`🔁 Skipping fetch for ${channelId}, already cached until block end and it's still live`);
       // sigue en vivo, lo devuelvo
       return videoId;
     }
     // si ya no está en vivo, lo borro de cache
-    console.log(`🔁 Deleting cached videoId for ${channelId} because it's private`);
+    console.log(`🔁 Deleting cached videoId for ${channelId} because it's not live anymore`);
     await this.redisService.del(`liveVideoIdByChannel:${channelId}`);
   }
 
@@ -132,6 +132,7 @@ export class YoutubeLiveService {
       });
       const items = resp.data.items as Array<{ snippet?: { liveBroadcastContent?: string } }>;
       if (!items?.length) return false;
+      console.log(`🔁 isVideoLive ${videoId}: ${items[0].snippet?.liveBroadcastContent}`);
       return items[0].snippet?.liveBroadcastContent === 'live';
     } catch (err) {
       // En caso de error (red, parsing, etc.) devolvemos false para forzar re-fetch
