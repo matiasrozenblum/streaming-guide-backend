@@ -20,7 +20,7 @@ describe('ProgramsService', () => {
     name: 'Luzu TV',
     description: 'Canal de streaming',
     logo_url: 'https://logo.com/luzu.png',
-    streaming_url: 'https://youtube.com/luzu',
+    handle: 'luzu',
     programs: [],
     youtube_channel_id: 'test-channel-id',
   };
@@ -46,7 +46,7 @@ describe('ProgramsService', () => {
       name: 'Luzu TV',
       description: 'Canal de streaming',
       logo_url: 'https://logo.com/luzu.png',
-      streaming_url: 'https://youtube.com/luzu',
+      handle: 'luzu',
       programs: [],
       youtube_channel_id: 'test-channel-id',
     },
