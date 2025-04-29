@@ -8,6 +8,7 @@ import { Schedule } from '../schedules/schedules.entity';
 import { YoutubeLiveModule } from '../youtube/youtube-live.module';
 import { SchedulesModule } from '../schedules/schedules.module';
 import { RedisModule } from '../redis/redis.module';
+import { YoutubeDiscoveryModule } from '../youtube/youtube-discovery.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { RedisModule } from '../redis/redis.module';
     forwardRef(() => YoutubeLiveModule),
     forwardRef(() => SchedulesModule),
     RedisModule,
+    YoutubeDiscoveryModule,
   ],
   controllers: [ChannelsController],
   providers: [ChannelsService],
