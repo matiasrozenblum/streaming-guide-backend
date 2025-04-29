@@ -66,7 +66,7 @@ describe('SchedulesService', () => {
     name: 'Test Channel',
     description: 'Test Description',
     logo_url: 'test-logo.png',
-    streaming_url: 'test-stream.com',
+    handle: 'test',
     youtube_channel_id: 'test-channel-id',
     programs: [],
   };

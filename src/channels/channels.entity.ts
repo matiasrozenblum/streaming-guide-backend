@@ -10,7 +10,7 @@ export class Channel {
   name: string;
 
   @Column({ type: 'text', nullable: true })
-  streaming_url: string;
+  handle: string;
 
   @Column({ type: 'text', nullable: true })
   logo_url: string | null;

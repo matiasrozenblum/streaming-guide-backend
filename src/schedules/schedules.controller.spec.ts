@@ -19,7 +19,7 @@ interface Schedule {
       name: string;
       description?: string;
       logo_url?: string;
-      streaming_url?: string;
+      handle?: string;
     };
     panelists?: Array<{
       id: number;
@@ -49,7 +49,7 @@ describe('SchedulesController', () => {
         name: 'Test Channel',
         description: 'Test Channel Description',
         logo_url: 'test.jpg',
-        streaming_url: 'test.com',
+        handle: 'test',
       },
       panelists: [],
       logo_url: 'test.jpg',
