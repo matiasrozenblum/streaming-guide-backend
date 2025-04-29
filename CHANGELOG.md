@@ -17,12 +17,17 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
-## [0.2.9] - 2025-04-26
+## [0.2.11] - 2025-04-28
+
+### Changed
+- Replaced channel streaming_url field for handle field
+
+## [0.2.10] - 2025-04-28
 
 ### Fixed
 - Now consulting if cached video id is live instead of private
 
-## [0.2.9] - 2025-04-26
+## [0.2.9] - 2025-04-27
 
 ### Changed
 - Improved live periodic fetch
