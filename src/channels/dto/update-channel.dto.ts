@@ -7,12 +7,10 @@ export class UpdateChannelDto {
   @IsOptional()
   name?: string;
 
-  @ApiProperty({ required: false })
+  @ApiProperty({ required: false, description: 'Handle de YouTube, sin arroba ni prefijo' })
   @IsString()
   @IsOptional()
-  @ValidateIf(o => o.streaming_url !== '')
-  @IsUrl()
-  streaming_url?: string;
+  handle?: string;
 
   @ApiProperty({ required: false })
   @IsString()

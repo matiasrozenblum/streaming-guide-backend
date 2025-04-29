@@ -11,14 +11,15 @@ import { Program } from '../programs/programs.entity';
 import { Schedule } from '../schedules/schedules.entity';
 import { SchedulesService } from '../schedules/schedules.service';
 import { RedisService } from '../redis/redis.service';
+import { YoutubeDiscoveryService } from '../youtube/youtube-discovery.service';
 
 describe('ChannelsService', () => {
   let service: ChannelsService;
   let repo: Repository<Channel>;
 
   const mockChannels: Channel[] = [
-    { id: 1, name: 'Luzu TV', logo_url: 'https://logo1.png', streaming_url: 'https://stream1.com', programs: [], description: 'Luzu TV is a streaming channel.', youtube_channel_id: 'channel1', order: 1 },
-    { id: 2, name: 'Olga', logo_url: 'https://logo2.png', streaming_url: 'https://stream2.com', programs: [], description: 'Olga is a streaming channel.', youtube_channel_id: 'channel2', order: 2 },
+    { id: 1, name: 'Luzu TV', logo_url: 'https://logo1.png', handle: 'stream1', programs: [], description: 'Luzu TV is a streaming channel.', youtube_channel_id: 'channel1', order: 1 },
+    { id: 2, name: 'Olga', logo_url: 'https://logo2.png', handle: 'stream2', programs: [], description: 'Olga is a streaming channel.', youtube_channel_id: 'channel2', order: 2 },
   ];
 
   const mockQueryBuilder = {
@@ -70,6 +71,10 @@ describe('ChannelsService', () => {
     someMethod: jest.fn(), // Add methods as needed
   };
 
+  const mockYoutubeDiscoveryService = {
+    getChannelIdFromHandle: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -93,6 +98,10 @@ describe('ChannelsService', () => {
         {
           provide: SchedulesService,
           useValue: mockSchedulesService,
+        },
+        {
+          provide: YoutubeDiscoveryService,
+          useValue: mockYoutubeDiscoveryService,
         },
         {
           provide: RedisService,
@@ -139,7 +148,7 @@ describe('ChannelsService', () => {
       name: 'Nueva Señal',
       description: 'This is a new channel.',
       logo_url: 'https://logo3.png',
-      streaming_url: 'https://stream3.com',
+      handle: 'stream3',
     };
     const mockWithOrder = {
       ...dto,

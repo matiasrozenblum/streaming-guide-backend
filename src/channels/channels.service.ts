@@ -6,8 +6,9 @@ import { CreateChannelDto } from './dto/create-channel.dto';
 import { UpdateChannelDto } from './dto/update-channel.dto';
 import { Program } from '@/programs/programs.entity';
 import { Schedule } from '@/schedules/schedules.entity';
-import { SchedulesService } from '@/schedules/schedules.service'; // <--- Importar el service
+import { SchedulesService } from '@/schedules/schedules.service';
 import { RedisService } from '@/redis/redis.service';
+import { YoutubeDiscoveryService } from '@/youtube/youtube-discovery.service';
 
 type ChannelWithSchedules = {
   channel: {
@@ -42,8 +43,9 @@ export class ChannelsService {
     @InjectRepository(Schedule)
     private readonly scheduleRepo: Repository<Schedule>,
     private readonly dataSource: DataSource,
-    private readonly schedulesService: SchedulesService, // <--- Inyectar SchedulesService
+    private readonly schedulesService: SchedulesService,
     private readonly redisService: RedisService,
+    private readonly youtubeDiscovery: YoutubeDiscoveryService,
   ) {}
 
   async findAll(): Promise<Channel[]> {
@@ -78,7 +80,15 @@ export class ChannelsService {
     });
   
     await this.redisService.delByPattern('schedules:all:*');
-    return this.channelsRepository.save(channel);
+    const saved = await this.channelsRepository.save(channel);
+
+    const info = await this.youtubeDiscovery.getChannelIdFromHandle(createChannelDto.handle);
+    if (info) {
+      saved.youtube_channel_id = info.channelId;
+      await this.channelsRepository.save(saved);
+    }
+
+    return saved;
   }
 
   async update(id: number, updateChannelDto: UpdateChannelDto): Promise<Channel> {
