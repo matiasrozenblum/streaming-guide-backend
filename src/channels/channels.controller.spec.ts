@@ -13,7 +13,7 @@ describe('ChannelsController', () => {
   const mockChannel: Channel = {
     id: 1,
     name: 'Test Channel',
-    streaming_url: 'https://test.com',
+    handle: 'test',
     logo_url: 'https://test.com/logo.png',
     description: 'Test Description',
     programs: [],
@@ -68,7 +68,7 @@ describe('ChannelsController', () => {
     it('should create a new channel', async () => {
       const createDto: CreateChannelDto = {
         name: 'New Channel',
-        streaming_url: 'https://test.com/new-stream',
+        handle: 'new-stream',
         logo_url: 'https://test.com/new-logo.png',
         description: 'New Description',
       };

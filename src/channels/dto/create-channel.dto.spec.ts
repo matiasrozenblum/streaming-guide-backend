@@ -7,7 +7,7 @@ describe('CreateChannelDto', () => {
     dto.name = 'Canal de Prueba';
     dto.description = 'Una descripción opcional';
     dto.logo_url = 'https://logo.com/logo.png';
-    dto.streaming_url = 'https://youtube.com/live';
+    dto.handle = 'live';
 
     const errors = await validate(dto);
     expect(errors.length).toBe(0);
@@ -21,32 +21,34 @@ describe('CreateChannelDto', () => {
     expect(nameError!.constraints).toHaveProperty('isNotEmpty');
   });
 
-  it('should allow if streaming_url is missing', async () => {
+  it('should fail if handle is missing', async () => {
     const dto = new CreateChannelDto();
     dto.name = 'Test Channel';
     dto.logo_url = 'https://example.com/logo.png';
-    // streaming_url is not set at all
+    // handle is not set at all
 
     const errors = await validate(dto);
-    expect(errors).toHaveLength(0);
+    const handleError = errors.find(e => e.property === 'handle');
+    expect(handleError).toBeDefined();
+    expect(handleError!.constraints).toHaveProperty('isNotEmpty');
   });
 
-  it('should fail if streaming_url is empty', async () => {
+  it('should fail if handle is empty', async () => {
     const dto = new CreateChannelDto();
     dto.name = 'Test Channel';
     dto.logo_url = 'https://example.com/logo.png';
-    dto.streaming_url = '';
+    dto.handle = '';
 
     const errors = await validate(dto);
     expect(errors).toHaveLength(1);
-    expect(errors[0].property).toBe('streaming_url');
-    expect(errors[0].constraints).toEqual({ isUrl: 'streaming_url must be a URL address' });
+    expect(errors[0].property).toBe('handle');
+    expect(errors[0].constraints).toEqual({ isNotEmpty: 'handle should not be empty' });
   });
 
   it('should allow description and logo_url to be optional', async () => {
     const dto = new CreateChannelDto();
     dto.name = 'Test Channel';
-    dto.streaming_url = 'https://example.com/stream';
+    dto.handle = 'stream';
     const errors = await validate(dto);
     expect(errors).toHaveLength(0);
   });
@@ -54,7 +56,7 @@ describe('CreateChannelDto', () => {
   it('should validate with all fields', async () => {
     const dto = new CreateChannelDto();
     dto.name = 'Test Channel';
-    dto.streaming_url = 'https://example.com/stream';
+    dto.handle = 'stream';
     dto.description = 'Test Description';
     dto.logo_url = 'https://example.com/logo.png';
     const errors = await validate(dto);

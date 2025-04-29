@@ -18,9 +18,8 @@ export class CreateChannelDto {
   @IsUrl()
   logo_url?: string;
 
-  @ApiProperty({ description: 'Link al canal de Youtube del canal' })
+  @ApiProperty({ description: 'Handle de YouTube, sin arroba ni prefijo' })
   @IsString()
-  @IsOptional()
-  @IsUrl()
-  streaming_url?: string;
+  @IsNotEmpty()
+  handle: string;
 }
