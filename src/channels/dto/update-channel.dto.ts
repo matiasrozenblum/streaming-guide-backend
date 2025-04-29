@@ -15,7 +15,7 @@ export class UpdateChannelDto {
   @ApiProperty({ required: false })
   @IsString()
   @IsOptional()
-  @ValidateIf(o => o.streaming_url !== '')
+  @ValidateIf(o => o.logo_url !== '')
   @IsUrl()
   logo_url?: string;
 
