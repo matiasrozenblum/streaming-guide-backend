@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.2.12] - 2025-04-28
+
+### Added
+- Added stats endpoint
+
 ## [0.2.11] - 2025-04-28
 
 ### Changed
