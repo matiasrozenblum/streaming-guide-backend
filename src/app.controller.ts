@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Inject } from '@nestjs/common';
+import { Controller, Post, Get, Inject, UseGuards } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Channel } from './channels/channels.entity';
@@ -8,6 +8,7 @@ import { Panelist } from './panelists/panelists.entity';
 import { YoutubeDiscoveryService } from './youtube/youtube-discovery.service';
 import { YoutubeLiveService } from './youtube/youtube-live.service';
 import { RedisService } from './redis/redis.service'; // 🔥
+import { AuthGuard } from '@nestjs/passport';
 
 @Controller()
 export class AppController {
@@ -74,5 +75,33 @@ export class AppController {
     console.log(`📦 Retrieved value for key ${key}:`, cachedValue);
 
     return { key, cachedValue };
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Get('stats')
+  async getStats(): Promise<{
+    channels: number;
+    programs: number;
+    panelists: number;
+    schedules: number;
+  }> {
+    const [
+      channelsCount,
+      programsCount,
+      panelistsCount,
+      schedulesCount,
+    ] = await Promise.all([
+      this.channelsRepository.count(),
+      this.programsRepository.count(),
+      this.panelistsRepository.count(),
+      this.schedulesRepository.count(),
+    ]);
+
+    return {
+      channels: channelsCount,
+      programs: programsCount,
+      panelists: panelistsCount,
+      schedules: schedulesCount,
+    };
   }
 }
