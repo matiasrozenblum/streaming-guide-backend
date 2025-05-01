@@ -47,9 +47,9 @@ export class ConfigService {
     await this.configRepository.delete({ key });
   }
 
-  async isYoutubeFetchEnabledFor(slug: string): Promise<boolean> {
+  async isYoutubeFetchEnabledFor(handle: string): Promise<boolean> {
     // checkeo específico de canal
-    const perChannel = await this.get(`youtube.fetch_enabled.${slug}`);
+    const perChannel = await this.get(`youtube.fetch_enabled.${handle}`);
     if (perChannel != null) return perChannel === 'true';
 
     // fallback al global
