@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.2.13] - 2025-04-28
+
+### Added
+- Added feature flags for turning youtube fech on and off
+
 ## [0.2.12] - 2025-04-28
 
 ### Added
