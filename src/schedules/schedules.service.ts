@@ -123,7 +123,7 @@ export class SchedulesService {
           if (!cachedVideoId) {
             console.warn(`[SchedulesService] No cached channel video ID for program ${program.id}, fetching on-demand...`);
             const blockTTL = await getCurrentBlockTTL(channelId, schedules);
-            const videoId = await this.youtubeLiveService.getLiveVideoId(channelId, program.channel.name, blockTTL, 'onDemand');
+            const videoId = await this.youtubeLiveService.getLiveVideoId(channelId, program.channel.handle, blockTTL, 'onDemand');
             if (videoId && videoId !== '__SKIPPED__') {
               cachedVideoId = videoId;
             } else if (videoId !== '__SKIPPED__') {
