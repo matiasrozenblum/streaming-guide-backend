@@ -1,70 +1,95 @@
-import { Injectable, Inject, forwardRef, HttpStatus, HttpException } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import axios from 'axios';
 import * as cron from 'node-cron';
 import * as dayjs from 'dayjs';
+import * as utc from 'dayjs/plugin/utc';
+import * as timezone from 'dayjs/plugin/timezone';
+import * as DateHolidays from 'date-holidays';
+
 import { SchedulesService } from '../schedules/schedules.service';
 import { RedisService } from '../redis/redis.service';
+import { ConfigService } from '../config/config.service';
 import { getCurrentBlockTTL } from '@/utils/getBlockTTL.util';
-import { parseStringPromise } from 'xml2js';
+
+const HolidaysClass = (DateHolidays as any).default ?? DateHolidays;
 
 @Injectable()
 export class YoutubeLiveService {
   private readonly apiKey = process.env.YOUTUBE_API_KEY;
   private readonly apiUrl = 'https://www.googleapis.com/youtube/v3';
+  private readonly hd = new HolidaysClass('AR');
 
   constructor(
+    private readonly configService: ConfigService,
     @Inject(forwardRef(() => SchedulesService))
     private readonly schedulesService: SchedulesService,
     private readonly redisService: RedisService,
   ) {
+    dayjs.extend(utc);
+    dayjs.extend(timezone);
+
     console.log('🚀 YoutubeLiveService initialized');
-    // Se ejecuta cada hora al minuto 0
-    cron.schedule('0 * * * *', () => this.fetchLiveVideoIds(), { timezone: 'America/Argentina/Buenos_Aires' });
+    cron.schedule('0 * * * *', () => this.fetchLiveVideoIds(), {
+      timezone: 'America/Argentina/Buenos_Aires',
+    });
   }
 
   private async incrementCounter(channelId: string, type: 'cron' | 'onDemand') {
     const date = dayjs().format('YYYY-MM-DD');
-    const generalKey = `${type}:count:${date}`;
-    const channelKey = `${type}:${channelId}:count:${date}`;
-
-    await this.redisService.incr(generalKey);
-    await this.redisService.incr(channelKey);
+    await this.redisService.incr(`${type}:count:${date}`);
+    await this.redisService.incr(`${type}:${channelId}:count:${date}`);
   }
 
-  private getEndOfDayTTL(): number {
-    // Segundos desde ahora hasta fin de día (23:59:59)
-    const now = dayjs();
-    const end = now.endOf('day');
-    return end.diff(now, 'second');
-  }
+  /**
+   * Devuelve:
+   * - videoId si hay que usarlo
+   * - null si no se encontró
+   * - '__SKIPPED__' si la llamada fue deshabilitada por flag/feriado
+   */
+  async getLiveVideoId(
+    channelId: string,
+    slug: string,
+    blockTTL: number,
+    context: 'cron' | 'onDemand',
+  ): Promise<string | null | '__SKIPPED__'> {
+    // 0) gating: feature-flag por canal y feriado
+    const enabled = await this.configService.isYoutubeFetchEnabledFor(slug);
+    if (!enabled) {
+      console.log(`[YouTube] fetch disabled by config for ${slug}`);
+      return '__SKIPPED__';
+    }
+    const isHoliday = !!this.hd.isHoliday(new Date());
+    if (isHoliday) {
+      console.log(`[YouTube] hoy es feriado en Argentina`);
+      const override = await this.configService.getBoolean(`youtube.fetch_override_holiday.${slug}`);
+      if (!override) {
+        console.log(`[YouTube] hoy es feriado en AR, skipping ${slug}`);
+        return '__SKIPPED__';
+      }
+    }
 
-  async getLiveVideoId(channelId: string, blockTTL: number, context: 'cron' | 'onDemand'): Promise<string | null | '__SKIPPED__'> {
     const liveKey = `liveVideoIdByChannel:${channelId}`;
     const notFoundKey = `videoIdNotFound:${channelId}`;
 
-    // Si ya marcamos como no encontrado recientemente, omitir
+    // 1) si marcamos no-found, skip rápido
     if (await this.redisService.get<string>(notFoundKey)) {
-      console.log(`🚫 Skipping fetch for ${channelId}, marked as not-found`);
+      console.log(`🚫 Skipping ${slug}, marked as not-found`);
       return '__SKIPPED__';
     }
 
-   // 1) Intento leer de cache
-  let videoId = await this.redisService.get< string >(`liveVideoIdByChannel:${channelId}`);
-  
-  if (videoId) {
-    // 2) Verifico si sigue en vivo
-    const isLive = await this.isVideoLive(videoId);
-    if (isLive) {
-      console.log(`🔁 Skipping fetch for ${channelId}, already cached until block end and it's still live`);
-      // sigue en vivo, lo devuelvo
-      return videoId;
+    // 2) cache-hit: reuse si sigue vivo
+    const cachedId = await this.redisService.get<string>(liveKey);
+    if (cachedId) {
+      const stillLive = await this.isVideoLive(cachedId);
+      if (stillLive) {
+        console.log(`🔁 Reusing cached videoId for ${slug}`);
+        return cachedId;
+      }
+      await this.redisService.del(liveKey);
+      console.log(`🗑️ Deleted cached videoId for ${slug} (no longer live)`);
     }
-    // si ya no está en vivo, lo borro de cache
-    console.log(`🔁 Deleting cached videoId for ${channelId} because it's not live anymore`);
-    await this.redisService.del(`liveVideoIdByChannel:${channelId}`);
-  }
 
-
+    // 3) fetch a YouTube
     try {
       const { data } = await axios.get(`${this.apiUrl}/search`, {
         params: {
@@ -78,65 +103,55 @@ export class YoutubeLiveService {
       const videoId = data.items?.[0]?.id?.videoId || null;
 
       if (!videoId) {
-        console.log(`🚫 No live video ID found for channel ${channelId} by ${context}`);
+        console.log(`🚫 No live video for ${slug} (${context})`);
         await this.redisService.set(notFoundKey, '1', 900);
         return null;
       }
 
-      // Calcular TTL según duración del bloque ininterrumpido
       await this.redisService.set(liveKey, videoId, blockTTL);
-      console.log(`📌 Stored liveVideoIdByChannel:${channelId} = ${videoId} (TTL ${blockTTL}s)`);
+      console.log(`📌 Cached ${slug} → ${videoId} (TTL ${blockTTL}s)`);
 
       await this.incrementCounter(channelId, context);
       return videoId;
     } catch (err) {
-      console.error(`❌ Error fetching live video ID for ${channelId}:`, err.message || err);
+      console.error(`❌ Error fetching live video for ${slug}:`, err.message || err);
       return null;
-    }
-  }
-
-  async fetchLiveVideoIds() {
-    const today = dayjs().tz('America/Argentina/Buenos_Aires').format('dddd').toLowerCase();
-    const schedules = await this.schedulesService.findByDay(today);
-    if (!schedules.length) {
-      console.warn('⚠️ No schedules today');
-      return;
-    }
-
-    // Agrupar por canal y verificar en vivo o próximo
-    const groups = new Map<string, boolean>();
-    for (const sched of schedules) {
-      const cid = sched.program.channel?.youtube_channel_id;
-      if (!cid) continue;
-      const live = sched.program.is_live;
-      if (live) {
-        groups.set(cid, true);
-      }
-    }
-
-    console.log(`🎯 Channels to refresh: ${groups.size}`);
-    for (const cid of groups.keys()) {
-      const blockTTL = await getCurrentBlockTTL(cid, schedules);
-      await this.getLiveVideoId(cid, blockTTL, 'cron');
     }
   }
 
   private async isVideoLive(videoId: string): Promise<boolean> {
     try {
       const resp = await axios.get(`${this.apiUrl}/videos`, {
-        params: {
-          part: 'snippet',
-          id: videoId,
-          key: this.apiKey,
-        },
+        params: { part: 'snippet', id: videoId, key: this.apiKey },
       });
-      const items = resp.data.items as Array<{ snippet?: { liveBroadcastContent?: string } }>;
-      if (!items?.length) return false;
-      console.log(`🔁 isVideoLive: ${items[0].snippet?.liveBroadcastContent}`);
-      return items[0].snippet?.liveBroadcastContent === 'live';
-    } catch (err) {
-      // En caso de error (red, parsing, etc.) devolvemos false para forzar re-fetch
+      return resp.data.items?.[0]?.snippet?.liveBroadcastContent === 'live';
+    } catch {
       return false;
+    }
+  }
+
+  /** Solo agrupa canales y delega a getLiveVideoId */
+  async fetchLiveVideoIds() {
+    const today = dayjs().tz('America/Argentina/Buenos_Aires').format('dddd').toLowerCase();
+    const schedules = await this.schedulesService.findByDay(today);
+    if (!schedules.length) {
+      console.warn('⚠️ No schedules for today');
+      return;
+    }
+
+    // map<channelId,slug>
+    const map = new Map<string,string>();
+    for (const s of schedules) {
+      const ch = s.program.channel;
+      if (ch?.youtube_channel_id && ch.slug) {
+        map.set(ch.youtube_channel_id, ch.slug);
+      }
+    }
+
+    console.log(`🎯 Channels to refresh: ${map.size}`);
+    for (const [cid, slug] of map.entries()) {
+      const ttl = await getCurrentBlockTTL(cid, schedules);
+      await this.getLiveVideoId(cid, slug, ttl, 'cron');
     }
   }
 }

@@ -9,9 +9,13 @@ import { YoutubeDiscoveryService } from './youtube/youtube-discovery.service';
 import { YoutubeLiveService } from './youtube/youtube-live.service';
 import { RedisService } from './redis/redis.service'; // 🔥
 import { AuthGuard } from '@nestjs/passport';
+import * as DateHolidays from 'date-holidays';
+
+const HolidaysClass = (DateHolidays as any).default ?? DateHolidays;
 
 @Controller()
 export class AppController {
+  private hd = new HolidaysClass('AR');
   constructor(
     @InjectRepository(Channel)
     private readonly channelsRepository: Repository<Channel>,
@@ -103,5 +107,11 @@ export class AppController {
       panelists: panelistsCount,
       schedules: schedulesCount,
     };
+  }
+  
+  @Get('holiday')
+  isHoliday() {
+    const today = new Date();
+    return { holiday: !!this.hd.isHoliday(today) };
   }
 }
