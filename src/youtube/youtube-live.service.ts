@@ -60,6 +60,7 @@ export class YoutubeLiveService {
     }
     const isHoliday = !!this.hd.isHoliday(new Date());
     if (isHoliday) {
+      console.log(`[YouTube] hoy es feriado en Argentina`);
       const override = await this.configService.getBoolean(`youtube.fetch_override_holiday.${slug}`);
       if (!override) {
         console.log(`[YouTube] hoy es feriado en AR, skipping ${slug}`);
