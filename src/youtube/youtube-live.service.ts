@@ -41,55 +41,56 @@ export class YoutubeLiveService {
   }
 
   /**
-   * Devuelve:
-   * - videoId si hay que usarlo
-   * - null si no se encontró
-   * - '__SKIPPED__' si la llamada fue deshabilitada por flag/feriado
+   * Comprueba si el canal puede hacer fetch hoy (flags + feriado)
+   */
+  async canFetchLive(handle: string): Promise<boolean> {
+    const enabled = await this.configService.isYoutubeFetchEnabledFor(handle);
+    if (!enabled) return false;
+
+    const isHoliday = !!this.hd.isHoliday(new Date());
+    if (isHoliday) {
+      return this.configService.getBoolean(`youtube.fetch_override_holiday.${handle}`);
+    }
+
+    return true;
+  }
+
+  /**
+   * Devuelve videoId | null | '__SKIPPED__' según estado de flags, cache y fetch
    */
   async getLiveVideoId(
     channelId: string,
-    slug: string,
+    handle: string,
     blockTTL: number,
     context: 'cron' | 'onDemand',
   ): Promise<string | null | '__SKIPPED__'> {
-    // 0) gating: feature-flag por canal y feriado
-    const enabled = await this.configService.isYoutubeFetchEnabledFor(slug);
-    if (!enabled) {
-      console.log(`[YouTube] fetch disabled by config for ${slug}`);
+    // gating centralizado
+    if (!(await this.canFetchLive(handle))) {
+      console.log(`[YouTube] fetch skipped for ${handle}`);
       return '__SKIPPED__';
-    }
-    const isHoliday = !!this.hd.isHoliday(new Date());
-    if (isHoliday) {
-      console.log(`[YouTube] hoy es feriado en Argentina`);
-      const override = await this.configService.getBoolean(`youtube.fetch_override_holiday.${slug}`);
-      if (!override) {
-        console.log(`[YouTube] hoy es feriado en AR, skipping ${slug}`);
-        return '__SKIPPED__';
-      }
     }
 
     const liveKey = `liveVideoIdByChannel:${channelId}`;
     const notFoundKey = `videoIdNotFound:${channelId}`;
 
-    // 1) si marcamos no-found, skip rápido
+    // skip rápido si ya está marcado como no-found
     if (await this.redisService.get<string>(notFoundKey)) {
-      console.log(`🚫 Skipping ${slug}, marked as not-found`);
+      console.log(`🚫 Skipping ${handle}, marked as not-found`);
       return '__SKIPPED__';
     }
 
-    // 2) cache-hit: reuse si sigue vivo
+    // cache-hit: reuse si sigue vivo
     const cachedId = await this.redisService.get<string>(liveKey);
+    if (cachedId && (await this.isVideoLive(cachedId))) {
+      console.log(`🔁 Reusing cached videoId for ${handle}`);
+      return cachedId;
+    }
     if (cachedId) {
-      const stillLive = await this.isVideoLive(cachedId);
-      if (stillLive) {
-        console.log(`🔁 Reusing cached videoId for ${slug}`);
-        return cachedId;
-      }
       await this.redisService.del(liveKey);
-      console.log(`🗑️ Deleted cached videoId for ${slug} (no longer live)`);
+      console.log(`🗑️ Deleted cached videoId for ${handle} (no longer live)`);
     }
 
-    // 3) fetch a YouTube
+    // fetch a YouTube
     try {
       const { data } = await axios.get(`${this.apiUrl}/search`, {
         params: {
@@ -100,21 +101,21 @@ export class YoutubeLiveService {
           key: this.apiKey,
         },
       });
-      const videoId = data.items?.[0]?.id?.videoId || null;
+      const videoId = data.items?.[0]?.id?.videoId ?? null;
 
       if (!videoId) {
-        console.log(`🚫 No live video for ${slug} (${context})`);
+        console.log(`🚫 No live video for ${handle} (${context})`);
         await this.redisService.set(notFoundKey, '1', 900);
         return null;
       }
 
       await this.redisService.set(liveKey, videoId, blockTTL);
-      console.log(`📌 Cached ${slug} → ${videoId} (TTL ${blockTTL}s)`);
+      console.log(`📌 Cached ${handle} → ${videoId} (TTL ${blockTTL}s)`);
 
       await this.incrementCounter(channelId, context);
       return videoId;
     } catch (err) {
-      console.error(`❌ Error fetching live video for ${slug}:`, err.message || err);
+      console.error(`❌ Error fetching live video for ${handle}:`, err.message || err);
       return null;
     }
   }
@@ -130,28 +131,32 @@ export class YoutubeLiveService {
     }
   }
 
-  /** Solo agrupa canales y delega a getLiveVideoId */
+  /**
+   * Itera canales con programación hoy y llama a getLiveVideoId
+   */
   async fetchLiveVideoIds() {
-    const today = dayjs().tz('America/Argentina/Buenos_Aires').format('dddd').toLowerCase();
+    const today = dayjs()
+      .tz('America/Argentina/Buenos_Aires')
+      .format('dddd')
+      .toLowerCase();
     const schedules = await this.schedulesService.findByDay(today);
-    if (!schedules.length) {
+    if (schedules.length === 0) {
       console.warn('⚠️ No schedules for today');
       return;
     }
 
-    // map<channelId,slug>
-    const map = new Map<string,string>();
+    const map = new Map<string, string>();
     for (const s of schedules) {
       const ch = s.program.channel;
-      if (ch?.youtube_channel_id && ch.slug) {
-        map.set(ch.youtube_channel_id, ch.slug);
+      if (ch?.youtube_channel_id && ch.handle) {
+        map.set(ch.youtube_channel_id, ch.handle);
       }
     }
 
     console.log(`🎯 Channels to refresh: ${map.size}`);
-    for (const [cid, slug] of map.entries()) {
+    for (const [cid, handle] of map.entries()) {
       const ttl = await getCurrentBlockTTL(cid, schedules);
-      await this.getLiveVideoId(cid, slug, ttl, 'cron');
+      await this.getLiveVideoId(cid, handle, ttl, 'cron');
     }
   }
 }
