@@ -4,18 +4,20 @@ import * as cron from 'node-cron';
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
-import Holidays from 'date-holidays';
+import * as DateHolidays from 'date-holidays';
 
 import { SchedulesService } from '../schedules/schedules.service';
 import { RedisService } from '../redis/redis.service';
 import { ConfigService } from '../config/config.service';
 import { getCurrentBlockTTL } from '@/utils/getBlockTTL.util';
 
+const HolidaysClass = (DateHolidays as any).default ?? DateHolidays;
+
 @Injectable()
 export class YoutubeLiveService {
   private readonly apiKey = process.env.YOUTUBE_API_KEY;
   private readonly apiUrl = 'https://www.googleapis.com/youtube/v3';
-  private readonly hd = new Holidays('AR');
+  private readonly hd = new HolidaysClass('AR');
 
   constructor(
     private readonly configService: ConfigService,
