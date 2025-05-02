@@ -17,7 +17,7 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
-## [0.2.14] - 2025-04-02
+## [0.2.15] - 2025-04-02
 
 ### Added
 - Added several tests for new services
