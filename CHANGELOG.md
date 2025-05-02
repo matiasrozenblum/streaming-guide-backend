@@ -17,12 +17,17 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
-## [0.2.14] - 2025-04-28
+## [0.2.15] - 2025-04-02
+
+### Added
+- Added several tests for new services
+
+## [0.2.14] - 2025-04-01
 
 ### Changed
 - Now is_live depends on youtube_fetch feature flags as well
 
-## [0.2.13] - 2025-04-28
+## [0.2.13] - 2025-04-01
 
 ### Added
 - Added feature flags for turning youtube fech on and off
