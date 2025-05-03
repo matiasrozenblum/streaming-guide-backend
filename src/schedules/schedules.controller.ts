@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, NotFoundException, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Put, NotFoundException, Query, UseGuards, UseInterceptors } from '@nestjs/common';
+import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import { SchedulesService } from './schedules.service';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
@@ -8,12 +9,14 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('schedules')  // Etiqueta para los horarios
 @Controller('schedules')
+@UseInterceptors(CacheInterceptor)
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class SchedulesController {
   constructor(private readonly schedulesService: SchedulesService) {}
 
   @Get()
+  @CacheTTL(60)
   @ApiOperation({ summary: 'Obtener todos los horarios o filtrar por día' })
   @ApiQuery({ name: 'day', required: false, description: 'Día de la semana para filtrar (ej: monday, tuesday, etc.)' })
   @ApiResponse({ status: 200, description: 'Lista de horarios', type: [Schedule] })

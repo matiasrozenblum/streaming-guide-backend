@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { CacheModule } from '@nestjs/cache-manager';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Channel } from './channels/channels.entity';
@@ -20,9 +21,15 @@ import { AppService } from './app.service';
 import { YoutubeDiscoveryService } from './youtube/youtube-discovery.service';
 import { RedisService } from './redis/redis.service'; // 🔥 Agregado
 import { ScheduleModule } from '@nestjs/schedule';
+import * as redisStore from 'cache-manager-redis-store';
 
 @Module({
   imports: [
+    CacheModule.register({
+      store: redisStore,
+      url: process.env.REDIS_URL,
+      ttl: 60,            // default 60 s
+    }),
     ScheduleModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,

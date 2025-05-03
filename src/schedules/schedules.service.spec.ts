@@ -15,6 +15,7 @@ dayjs.extend(timezone);
 
 let currentTime = '15:00';
 let currentDay = 'monday';
+let qbChain: any;
 
 jest.mock('dayjs', () => {
   const actualDayjs = jest.requireActual('dayjs');
@@ -95,6 +96,15 @@ describe('SchedulesService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
 
+    qbChain = {
+      leftJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SchedulesService,
@@ -105,6 +115,7 @@ describe('SchedulesService', () => {
             findOne: jest.fn(),
             save: jest.fn(),
             delete: jest.fn(),
+            createQueryBuilder: jest.fn(() => qbChain),
           },
         },
         {
@@ -151,7 +162,26 @@ describe('SchedulesService', () => {
       } as unknown as Schedule;
 
       jest.spyOn(redisService, 'get').mockResolvedValueOnce(null).mockResolvedValueOnce('live-video-id');
-      jest.spyOn(schedulesRepo, 'find').mockResolvedValue([testSchedule]);
+      qbChain.getRawMany.mockResolvedValueOnce([
+        {
+          s_id: 1,
+          s_day_of_week: 'monday',
+          s_start_time: '10:00',
+          s_end_time: '12:00',
+          p_id: 1,
+          p_name: 'Test Program',
+          p_logoUrl: 'test-logo.png',
+          p_description: 'Test Description',
+          p_youtubeUrl: 'https://youtube.com/test',
+          c_id: 1,
+          c_name: 'Test Channel',
+          c_logoUrl: 'test-logo.png',
+          c_youtubeChannelId: 'test-channel-id',
+          c_handle: 'test',
+          pl_id: null,
+          pl_name: null,
+        },
+      ]);
 
       currentTime = '11:00';
       currentDay = 'monday';
@@ -176,7 +206,26 @@ describe('SchedulesService', () => {
       } as unknown as Schedule;
 
       jest.spyOn(redisService, 'get').mockResolvedValueOnce(null);
-      jest.spyOn(schedulesRepo, 'find').mockResolvedValue([testSchedule]);
+      qbChain.getRawMany.mockResolvedValueOnce([
+        {
+          s_id: 1,
+          s_day_of_week: 'monday',
+          s_start_time: '08:00',
+          s_end_time: '10:00',
+          p_id: 1,
+          p_name: 'Test Program',
+          p_logoUrl: 'test-logo.png',
+          p_description: 'Test Description',
+          p_youtubeUrl: 'https://youtube.com/test',
+          c_id: 1,
+          c_name: 'Test Channel',
+          c_logoUrl: 'test-logo.png',
+          c_youtubeChannelId: 'test-channel-id',
+          c_handle: 'test',
+          pl_id: null,
+          pl_name: null,
+        },
+      ]);
 
       currentTime = '15:00'; // fuera de rango
       currentDay = 'monday';

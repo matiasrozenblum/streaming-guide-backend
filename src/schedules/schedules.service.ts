@@ -40,41 +40,84 @@ export class SchedulesService {
 
   async findAll(options: FindAllOptions = {}): Promise<any[]> {
     const startTime = Date.now();
-    const { dayOfWeek, relations = ['program', 'program.channel', 'program.panelists'], select, skipCache = false } = options;
-
+    const { dayOfWeek, skipCache = false } = options;
     const cacheKey = `schedules:all:${dayOfWeek || 'all'}`;
-    let schedules: Schedule[] | null = null;
-    if (!skipCache) {
-      schedules = await this.redisService.get<Schedule[]>(cacheKey);
-    }
-
-    if (!schedules) {
+  
+    // 1) Intentamos cache
+    let raw: any[] | null = skipCache ? null : await this.redisService.get(cacheKey);
+    if (!raw) {
       console.log(`Cache MISS for ${cacheKey}`);
-
-      const where: FindOptionsWhere<Schedule> = {};
-      if (dayOfWeek) where.day_of_week = dayOfWeek;
-
-      const findOptions: FindManyOptions<Schedule> = { where, relations, order: { start_time: 'ASC' } };
-      if (select) {
-        findOptions.select = select.reduce((acc, field) => {
-          acc[field] = true;
-          return acc;
-        }, {} as any);
+  
+      // 2) Un único JOIN con selects finos
+      const qb = this.schedulesRepository
+        .createQueryBuilder('s')
+        .leftJoin('s.program', 'p')
+        .leftJoin('p.channel', 'c')
+        .leftJoin('p.panelists', 'pl')
+        .select([
+          'c.id', 'c.name', 'c.logoUrl', 'c.youtubeChannelId', 'c.handle',
+          'p.id', 'p.name', 'p.logoUrl', 'p.description', 'p.youtubeUrl',
+          's.id', 's.day_of_week', 's.start_time', 's.end_time',
+          'pl.id', 'pl.name',
+        ])
+        .orderBy('c.order', 'ASC')
+        .addOrderBy('s.start_time', 'ASC');
+  
+      if (dayOfWeek) {
+        qb.andWhere('s.day_of_week = :day', { day: dayOfWeek });
       }
-
-      schedules = await this.schedulesRepository.find(findOptions);
-      schedules.sort((a, b) => {
-        const aOrder = a.program?.channel?.order ?? 999;
-        const bOrder = b.program?.channel?.order ?? 999;
-        if (aOrder !== bOrder) return aOrder - bOrder;
-        return a.start_time.localeCompare(b.start_time);
-      });
-
-      await this.redisService.set(cacheKey, schedules, 1800);
-      console.log(`Database query and cache SET. Total time: ${Date.now() - startTime}ms`);
+  
+      raw = await qb.getRawMany();
+  
+      // 3) Guarda en cache 30 min
+      await this.redisService.set(cacheKey, raw, 1800);
+      console.log(`DB JOIN + cache SET: ${Date.now() - startTime}ms`);
     }
+  
+    // 4) Enriquecemos con lógica de live / YouTube
+    return this.enrichSchedules(this.mapRawToEntities(raw));
+  }
 
-    return this.enrichSchedules(schedules!);
+  private mapRawToEntities(raw: any[]): Schedule[] {
+    const map = new Map<number, any>();
+  
+    for (const row of raw) {
+      const schedId: number = row.s_id;
+      let sched = map.get(schedId);
+      if (!sched) {
+        sched = {
+          id: schedId,
+          day_of_week: row.s_day_of_week,
+          start_time: row.s_start_time,
+          end_time: row.s_end_time,
+          program: {
+            id: row.p_id,
+            name: row.p_name,
+            logo_url: row.p_logoUrl,
+            description: row.p_description,
+            youtube_url: row.p_youtubeUrl,
+            channel: {
+              id: row.c_id,
+              name: row.c_name,
+              logo_url: row.c_logoUrl,
+              youtube_channel_id: row.c_youtubeChannelId,
+              handle: row.c_handle,
+            },
+            panelists: [] as { id: number; name: string }[],
+          },
+        };
+        map.set(schedId, sched);
+      }
+      // Agrega panelistas si existen
+      if (row.pl_id) {
+        sched.program.panelists.push({
+          id: row.pl_id,
+          name: row.pl_name,
+        });
+      }
+    }
+  
+    return Array.from(map.values());
   }
 
   async enrichSchedules(schedules: Schedule[]): Promise<any[]> {
