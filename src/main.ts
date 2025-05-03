@@ -8,6 +8,11 @@ import * as compression from 'compression';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.use(compression());
+  app.enableCors({
+    origin: process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com',
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: true,
+  });
   const configService = app.get(ConfigService);
 
   const config = new DocumentBuilder()
