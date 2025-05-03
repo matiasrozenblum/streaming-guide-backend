@@ -28,7 +28,8 @@ import * as redisStore from 'cache-manager-redis-store';
     CacheModule.register({
       store: redisStore,
       url: process.env.REDIS_URL,
-      ttl: 60,            // default 60 s
+      ttl: 60,
+      isGlobal: true,
     }),
     ScheduleModule.forRoot(),
     ConfigModule.forRoot({
