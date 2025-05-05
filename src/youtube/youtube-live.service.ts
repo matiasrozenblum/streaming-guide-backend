@@ -135,27 +135,29 @@ export class YoutubeLiveService {
    * Itera canales con programación hoy y llama a getLiveVideoId
    */
   async fetchLiveVideoIds() {
-    const today = dayjs()
-      .tz('America/Argentina/Buenos_Aires')
-      .format('dddd')
-      .toLowerCase();
-    const schedules = await this.schedulesService.findByDay(today);
-    if (schedules.length === 0) {
-      console.warn('⚠️ No schedules for today');
-      return;
-    }
-
-    const map = new Map<string, string>();
-    for (const s of schedules) {
+    const today = dayjs().tz('America/Argentina/Buenos_Aires')
+                        .format('dddd')
+                        .toLowerCase();
+  
+    // 1) Primero traés y enriquecés los schedules
+    const rawSchedules = await this.schedulesService.findByDay(today);
+    const schedules    = await this.schedulesService.enrichSchedules(rawSchedules);
+  
+    // 2) Filtrás sólo los “on-air” right now
+    const liveNow = schedules.filter(s => s.program.is_live);
+  
+    // 3) Deduplicás canales de esos schedules
+    const map = new Map<string,string>();
+    for (const s of liveNow) {
       const ch = s.program.channel;
       if (ch?.youtube_channel_id && ch.handle) {
         map.set(ch.youtube_channel_id, ch.handle);
       }
     }
-
+  
     console.log(`🎯 Channels to refresh: ${map.size}`);
     for (const [cid, handle] of map.entries()) {
-      const ttl = await getCurrentBlockTTL(cid, schedules);
+      const ttl = await getCurrentBlockTTL(cid, rawSchedules);
       await this.getLiveVideoId(cid, handle, ttl, 'cron');
     }
   }
