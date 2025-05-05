@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.2.16] - 2025-04-02
+
+### Fixed
+- Fixed cron not filtering for is_live before fetching youtube
+
 ## [0.2.15] - 2025-04-02
 
 ### Added
