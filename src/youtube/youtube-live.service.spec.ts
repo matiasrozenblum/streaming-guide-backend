@@ -18,6 +18,7 @@ describe('YoutubeLiveService', () => {
     } as any;
     schedulesService = {
       findByDay: jest.fn(),
+      enrichSchedules: jest.fn((schedules) => Promise.resolve(schedules)),
     } as any;
     redisService = {
       get: jest.fn(),
@@ -124,8 +125,8 @@ describe('YoutubeLiveService', () => {
 
     it('calls getLiveVideoId for each channel with schedule', async () => {
       const schedules = [
-        { program: { channel: { youtube_channel_id: 'cid1', handle: 'h1' } } },
-        { program: { channel: { youtube_channel_id: 'cid2', handle: 'h2' } } },
+        { program: { channel: { youtube_channel_id: 'cid1', handle: 'h1' }, is_live: true } },
+        { program: { channel: { youtube_channel_id: 'cid2', handle: 'h2' }, is_live: true } },
       ];
       schedulesService.findByDay.mockResolvedValue(schedules as any);
       jest.spyOn(service, 'getLiveVideoId').mockResolvedValue('vid');
