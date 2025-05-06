@@ -10,6 +10,7 @@ import { YoutubeLiveService } from './youtube/youtube-live.service';
 import { RedisService } from './redis/redis.service'; // 🔥
 import { AuthGuard } from '@nestjs/passport';
 import * as DateHolidays from 'date-holidays';
+import webpush from 'web-push';
 
 const HolidaysClass = (DateHolidays as any).default ?? DateHolidays;
 
@@ -113,5 +114,12 @@ export class AppController {
   isHoliday() {
     const today = new Date();
     return { holiday: !!this.hd.isHoliday(today) };
+  }
+
+  @Get('push-test')
+  async pushTest() {
+    const keys = webpush.generateVAPIDKeys();
+    console.log(keys);
+    return { keys };
   }
 }
