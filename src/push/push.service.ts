@@ -29,6 +29,7 @@ export class PushService {
   }
 
   async sendNotification(entity: PushSubscriptionEntity, payload: any) {
+    console.log('🔥 Sending push notification to', entity.deviceId);
     const pushSub = {
       endpoint: entity.endpoint,
       keys: { p256dh: entity.p256dh, auth: entity.auth },
@@ -37,6 +38,7 @@ export class PushService {
   }
 
   async scheduleForProgram(programId: string, title: string, inMinutes: number) {
+    console.log('🔥 Scheduling push notification for', title);
     // Ejemplo simple con setTimeout, pero en prod usarías un job/cron
     const target = Date.now() + inMinutes * 60_000;
     const subs = await this.repo.find();
