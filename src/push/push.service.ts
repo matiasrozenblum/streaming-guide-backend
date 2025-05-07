@@ -16,6 +16,7 @@ export class PushService {
       process.env.VAPID_PUBLIC_KEY || '',
       process.env.VAPID_PRIVATE_KEY || '',
     );
+    console.log('🔥 VAPID_PUBLIC_KEY', process.env.VAPID_PUBLIC_KEY);
   }
 
   async create(dto: CreatePushSubscriptionDto) {
