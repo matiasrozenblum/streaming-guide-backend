@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import webpush from 'web-push';
+import * as webPush from 'web-push';
 import { PushSubscriptionEntity } from './push-subscription.entity';
 import { CreatePushSubscriptionDto } from './dto/create-push-subscription.dto';
 
@@ -11,7 +11,7 @@ export class PushService {
     @InjectRepository(PushSubscriptionEntity)
     private repo: Repository<PushSubscriptionEntity>,
   ) {
-    webpush.setVapidDetails(
+    webPush.setVapidDetails(
       'mailto:tu@correo.com',
       process.env.VAPID_PUBLIC_KEY || '',
       process.env.VAPID_PRIVATE_KEY || '',
@@ -33,7 +33,7 @@ export class PushService {
       endpoint: entity.endpoint,
       keys: { p256dh: entity.p256dh, auth: entity.auth },
     };
-    return webpush.sendNotification(pushSub, JSON.stringify(payload));
+    return webPush.sendNotification(pushSub, JSON.stringify(payload));
   }
 
   async scheduleForProgram(programId: string, title: string, inMinutes: number) {
