@@ -2,9 +2,9 @@ import { Injectable, Logger }       from '@nestjs/common';
 import { Cron, CronExpression }     from '@nestjs/schedule';
 import { InjectRepository }         from '@nestjs/typeorm';
 import { Repository }               from 'typeorm';
-import dayjs                        from 'dayjs';
-import utc                          from 'dayjs/plugin/utc';
-import timezone                     from 'dayjs/plugin/timezone';
+import * as dayjs                   from 'dayjs';
+import * as utc                     from 'dayjs/plugin/utc';
+import * as timezone                from 'dayjs/plugin/timezone';
 
 import { Schedule }                      from '../schedules/schedules.entity';
 import { NotificationPreferenceEntity }  from '../notifications/notification-preference.entity';
