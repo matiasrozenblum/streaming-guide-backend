@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Param, Query } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 
 @Controller('preferences')
@@ -7,7 +7,7 @@ export class NotificationsController {
 
   // GET /preferences
   @Get()
-  list(@Body('deviceId') deviceId: string) {
+  list(@Query('deviceId') deviceId: string) {
     return this.svc.list(deviceId);
   }
 
