@@ -14,7 +14,7 @@ export class NotificationsController {
   // POST /preferences/:programId
   @Post(':programId')
   subscribe(
-    @Param('programId') programId: string,
+    @Param('programId') programId: number,
     @Body('deviceId') deviceId: string,
   ) {
     return this.svc.subscribe(deviceId, programId);
@@ -23,7 +23,7 @@ export class NotificationsController {
   // DELETE /preferences/:programId
   @Delete(':programId')
   unsubscribe(
-    @Param('programId') programId: string,
+    @Param('programId') programId: number,
     @Body('deviceId') deviceId: string,
   ) {
     return this.svc.unsubscribe(deviceId, programId);

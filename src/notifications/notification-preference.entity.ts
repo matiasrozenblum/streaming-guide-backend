@@ -16,7 +16,7 @@ import {
         deviceId: string;
     
         @Column()
-        programId: string;
+        programId: number;
     
         @CreateDateColumn()
         createdAt: Date;

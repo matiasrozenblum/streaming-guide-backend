@@ -14,7 +14,7 @@ export class NotificationsService {
     return this.repo.find({ where: { deviceId } });
   }
 
-  async subscribe(deviceId: string, programId: string) {
+  async subscribe(deviceId: string, programId: number) {
     const exists = await this.repo.findOne({ where: { deviceId, programId } });
     if (!exists) {
       return this.repo.save(this.repo.create({ deviceId, programId }));
@@ -22,7 +22,7 @@ export class NotificationsService {
     return exists;
   }
 
-  async unsubscribe(deviceId: string, programId: string) {
+  async unsubscribe(deviceId: string, programId: number) {
     await this.repo.delete({ deviceId, programId });
   }
 }

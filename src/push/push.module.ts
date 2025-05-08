@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { PushSubscriptionEntity } from './push-subscription.entity';
 import { PushService } from './push.service';
 import { PushController } from './push.controller';
+import { PushScheduler }     from './push.scheduler';
 import { NotificationsModule } from '@/notifications/notifications.module';
 
 @Module({
@@ -11,7 +12,7 @@ import { NotificationsModule } from '@/notifications/notifications.module';
         NotificationsModule,
       ],
   controllers: [PushController],
-  providers: [PushService],
+  providers: [PushService, PushScheduler],
   exports: [PushService],
 })
 export class PushModule {}
