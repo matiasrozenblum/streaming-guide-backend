@@ -4,15 +4,17 @@ import { Repository } from 'typeorm';
 import * as webPush from 'web-push';
 import { PushSubscriptionEntity } from './push-subscription.entity';
 import { CreatePushSubscriptionDto } from './dto/create-push-subscription.dto';
+import { NotificationPreferenceEntity } from '../notifications/notification-preference.entity';
 
 @Injectable()
 export class PushService {
   constructor(
     @InjectRepository(PushSubscriptionEntity)
     private repo: Repository<PushSubscriptionEntity>,
+    private notificationsRepo: Repository<NotificationPreferenceEntity>,
   ) {
     webPush.setVapidDetails(
-      'mailto:tu@correo.com',
+      'mailto:laguiadelstreaming@gmail.com',
       process.env.VAPID_PUBLIC_KEY || '',
       process.env.VAPID_PRIVATE_KEY || '',
     );
@@ -39,17 +41,21 @@ export class PushService {
   }
 
   async scheduleForProgram(programId: string, title: string, inMinutes: number) {
-    console.log('🔥 Scheduling push notification for', title);
-    // Ejemplo simple con setTimeout, pero en prod usarías un job/cron
-    const target = Date.now() + inMinutes * 60_000;
-    const subs = await this.repo.find();
-    setTimeout(() => {
-      subs.forEach((s) =>
+    console.log('🔥 Scheduling push for', title, `in ${inMinutes}m`);
+    const delay = inMinutes * 60_000;
+    setTimeout(async () => {
+      // 1) Recuperar sólo las subscripciones de quienes quieren notificar ese programa
+      const prefs = await this.notificationsRepo.find({ where: { programId } });
+      const subs = await this.repo.find({
+        where: prefs.map(p => ({ deviceId: p.deviceId })),
+      });
+  
+      subs.forEach(s =>
         this.sendNotification(s, {
           title,
-          options: { body: `En 10 minutos comienza ${title}` },
+          options: { body: `En ${inMinutes} minutos comienza ${title}` },
         }),
       );
-    }, target - Date.now());
+    }, delay);
   }
 }

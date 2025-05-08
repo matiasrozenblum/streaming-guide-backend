@@ -21,7 +21,7 @@ import { YoutubeDiscoveryService } from './youtube/youtube-discovery.service';
 import { RedisService } from './redis/redis.service';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PushModule } from './push/push.module';
-
+import { NotificationsModule } from './notifications/notifications.module';
 @Module({
   imports: [
     ScheduleModule.forRoot(),
@@ -67,6 +67,7 @@ import { PushModule } from './push/push.module';
     ProposedChangesModule,
     EmailModule,
     PushModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [
