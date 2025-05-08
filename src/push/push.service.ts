@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import * as webPush from 'web-push';
 import { PushSubscriptionEntity } from './push-subscription.entity';
 import { CreatePushSubscriptionDto } from './dto/create-push-subscription.dto';
-import { NotificationPreferenceEntity } from '../notifications/notification-preference.entity';
+import { NotificationsService } from '@/notifications/notifications.service';
 
 @Injectable()
 export class PushService {
@@ -12,8 +12,7 @@ export class PushService {
     @InjectRepository(PushSubscriptionEntity)
     private repo: Repository<PushSubscriptionEntity>,
 
-    @InjectRepository(NotificationPreferenceEntity)
-    private notificationsRepo: Repository<NotificationPreferenceEntity>,
+    private notificationsService: NotificationsService,
   ) {
     webPush.setVapidDetails(
       'mailto:laguiadelstreaming@gmail.com',
@@ -47,7 +46,7 @@ export class PushService {
     const delay = inMinutes * 60_000;
     setTimeout(async () => {
       // 1) Recuperar sólo las subscripciones de quienes quieren notificar ese programa
-      const prefs = await this.notificationsRepo.find({ where: { programId } });
+      const prefs = await this.notificationsService.list(programId);
       const subs = await this.repo.find({
         where: prefs.map(p => ({ deviceId: p.deviceId })),
       });
