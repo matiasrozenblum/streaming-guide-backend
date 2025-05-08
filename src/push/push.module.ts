@@ -6,13 +6,14 @@ import { PushService } from './push.service';
 import { NotificationPreferenceEntity } from '@/notifications/notification-preference.entity';
 import { PushController } from './push.controller';
 import { PushScheduler }     from './push.scheduler';
+import { NotificationsModule } from '@/notifications/notifications.module';
 import { Schedule } from '@/schedules/schedules.entity';
 
 @Module({
     imports: [
       // Necesitas el módulo de scheduling de Nest para que @Cron funcione
       NestScheduleModule,
-  
+      NotificationsModule,
       // Registramos los tres repositories que usamos en PushService y PushScheduler
       TypeOrmModule.forFeature([
         PushSubscriptionEntity,
@@ -23,7 +24,7 @@ import { Schedule } from '@/schedules/schedules.entity';
     controllers: [PushController],
     providers: [
       PushService,
-      PushScheduler,
+      PushScheduler,  // ← aquí
     ],
     exports: [PushService],
   })
