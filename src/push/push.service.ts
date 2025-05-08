@@ -11,6 +11,8 @@ export class PushService {
   constructor(
     @InjectRepository(PushSubscriptionEntity)
     private repo: Repository<PushSubscriptionEntity>,
+
+    @InjectRepository(NotificationPreferenceEntity)
     private notificationsRepo: Repository<NotificationPreferenceEntity>,
   ) {
     webPush.setVapidDetails(
