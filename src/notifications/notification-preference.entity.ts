@@ -12,12 +12,12 @@ import {
         @PrimaryGeneratedColumn('uuid')
         id: string;
     
-        @Column()
+        @Column({ name: 'device_id' })
         deviceId: string;
     
-        @Column()
+        @Column({ name: 'program_id', type: 'int' })
         programId: number;
     
-        @CreateDateColumn()
+        @CreateDateColumn({ name: 'created_at' })
         createdAt: Date;
 }

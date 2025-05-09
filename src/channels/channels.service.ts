@@ -171,7 +171,7 @@ export class ChannelsService {
         day_of_week: schedule.day_of_week,
         start_time: schedule.start_time,
         end_time: schedule.end_time,
-        subscribed: prefSet.has(schedule.program.id.toString()),
+        subscribed: prefSet.has(schedule.program.id),
         program: {
           id: schedule.program.id,
           name: schedule.program.name,
