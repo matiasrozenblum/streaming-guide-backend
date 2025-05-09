@@ -11,12 +11,14 @@ import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
 import { getCurrentBlockTTL } from '@/utils/getBlockTTL.util';
+import { NotificationsService } from '../notifications/notifications.service';
 
 interface FindAllOptions {
   dayOfWeek?: string;
   relations?: string[];
   select?: string[];
   skipCache?: boolean;
+  deviceId?: string;
 }
 
 @Injectable()
@@ -32,6 +34,7 @@ export class SchedulesService {
 
     private readonly redisService: RedisService,
     private readonly youtubeLiveService: YoutubeLiveService,
+    private readonly notificationsService: NotificationsService,
   ) {
     this.dayjs = dayjs;
     this.dayjs.extend(utc);
@@ -40,7 +43,7 @@ export class SchedulesService {
 
   async findAll(options: FindAllOptions = {}): Promise<any[]> {
     const startTime = Date.now();
-    const { dayOfWeek, relations = ['program', 'program.channel', 'program.panelists'], select, skipCache = false } = options;
+    const { dayOfWeek, relations = ['program', 'program.channel', 'program.panelists'], select, skipCache = false, deviceId } = options;
 
     const cacheKey = `schedules:all:${dayOfWeek || 'all'}`;
     let schedules: Schedule[] | null = null;
@@ -74,7 +77,19 @@ export class SchedulesService {
       console.log(`Database query and cache SET. Total time: ${Date.now() - startTime}ms`);
     }
 
-    return this.enrichSchedules(schedules!);
+    const enriched = await this.enrichSchedules(schedules!);
+
+    if (!deviceId) {
+      return enriched;
+    }
+
+    const prefs = await this.notificationsService.list(deviceId);
+    const subscribedSet = new Set(prefs.map((p) => p.programId));
+
+    return enriched.map((block) => ({
+      ...block,
+      subscribed: subscribedSet.has(Number(block.program.id)),
+    }));
   }
 
   async enrichSchedules(schedules: Schedule[]): Promise<any[]> {

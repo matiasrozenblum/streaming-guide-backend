@@ -9,6 +9,7 @@ import { Schedule } from '@/schedules/schedules.entity';
 import { SchedulesService } from '@/schedules/schedules.service';
 import { RedisService } from '@/redis/redis.service';
 import { YoutubeDiscoveryService } from '@/youtube/youtube-discovery.service';
+import { NotificationPreferenceEntity } from '@/notifications/notification-preference.entity';
 
 type ChannelWithSchedules = {
   channel: {
@@ -21,6 +22,7 @@ type ChannelWithSchedules = {
     day_of_week: string;
     start_time: string;
     end_time: string;
+    subscribed: boolean;
     program: {
       id: number;
       name: string;
@@ -42,6 +44,8 @@ export class ChannelsService {
     private readonly programsRepository: Repository<Program>,
     @InjectRepository(Schedule)
     private readonly scheduleRepo: Repository<Schedule>,
+    @InjectRepository(NotificationPreferenceEntity)
+    private readonly notificationPreferenceRepo: Repository<NotificationPreferenceEntity>,
     private readonly dataSource: DataSource,
     private readonly schedulesService: SchedulesService,
     private readonly redisService: RedisService,
@@ -132,7 +136,7 @@ export class ChannelsService {
     });
   }
 
-  async getChannelsWithSchedules(day?: string): Promise<ChannelWithSchedules[]> {
+  async getChannelsWithSchedules(day?: string, deviceId?: string): Promise<ChannelWithSchedules[]> {
     const channels = await this.channelsRepository.find({
       order: {
         order: 'ASC',
@@ -142,6 +146,11 @@ export class ChannelsService {
     const schedules = await this.schedulesService.findAll({
       dayOfWeek: day ? day.toLowerCase() : undefined,
     });
+
+    const prefIds = deviceId
+      ? (await this.notificationPreferenceRepo.find({ where: { deviceId } })).map((p) => p.programId)
+      : [];
+    const prefSet = new Set(prefIds);
 
     const schedulesGroupedByChannelId = schedules.reduce((acc, schedule) => {
       const channelId = schedule.program?.channel?.id;
@@ -162,6 +171,7 @@ export class ChannelsService {
         day_of_week: schedule.day_of_week,
         start_time: schedule.start_time,
         end_time: schedule.end_time,
+        subscribed: prefSet.has(schedule.program.id.toString()),
         program: {
           id: schedule.program.id,
           name: schedule.program.name,
