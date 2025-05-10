@@ -10,22 +10,22 @@ import { NotificationsModule } from '@/notifications/notifications.module';
 import { Schedule } from '@/schedules/schedules.entity';
 
 @Module({
-    imports: [
-      // Necesitas el módulo de scheduling de Nest para que @Cron funcione
-      NestScheduleModule,
-      NotificationsModule,
-      // Registramos los tres repositories que usamos en PushService y PushScheduler
-      TypeOrmModule.forFeature([
-        PushSubscriptionEntity,
-        NotificationPreferenceEntity,
-        Schedule,
-      ]),
-    ],
-    controllers: [PushController],
-    providers: [
-      PushService,
-      PushScheduler,  // ← aquí
-    ],
-    exports: [PushService],
-  })
-  export class PushModule {}
+  imports: [
+    // Necesitas el módulo de scheduling de Nest para que @Cron funcione
+    NestScheduleModule,
+    NotificationsModule,
+    // Registramos los repositorios que usamos
+    TypeOrmModule.forFeature([
+      PushSubscriptionEntity,
+      NotificationPreferenceEntity,
+      Schedule,
+    ]),
+  ],
+  controllers: [PushController],
+  providers: [
+    PushService,
+    PushScheduler,
+  ],
+  exports: [PushService],
+})
+export class PushModule {}

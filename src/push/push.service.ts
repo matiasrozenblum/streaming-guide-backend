@@ -23,11 +23,21 @@ export class PushService {
   }
 
   async create(dto: CreatePushSubscriptionDto) {
+    const { deviceId, subscription } = dto;
+    const endpoint = subscription.endpoint;
+
+    // 1) Si ya existe la misma subscripción, devolvemos la existente
+    const existing = await this.repo.findOne({ where: { deviceId, endpoint } });
+    if (existing) {
+      return existing;
+    }
+
+    // 2) Si no existe, creamos y guardamos
     const sub = this.repo.create({
-      deviceId: dto.deviceId,
-      endpoint: dto.subscription.endpoint,
-      p256dh: dto.subscription.keys.p256dh,
-      auth: dto.subscription.keys.auth,
+      deviceId,
+      endpoint,
+      p256dh: subscription.keys.p256dh,
+      auth: subscription.keys.auth,
     });
     return this.repo.save(sub);
   }

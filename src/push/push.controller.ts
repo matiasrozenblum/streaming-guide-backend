@@ -2,6 +2,7 @@ import { Controller, Post, Body, Get } from '@nestjs/common';
 import { PushService } from './push.service';
 import { CreatePushSubscriptionDto } from './dto/create-push-subscription.dto';
 import { ScheduleNotificationDto } from './dto/schedule-notification.dto';
+
 @Controller('push')
 export class PushController {
   constructor(private svc: PushService) {}
