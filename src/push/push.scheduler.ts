@@ -35,9 +35,8 @@ export class PushScheduler {
     // 1) Target = ahora + 10 minutos, sin segundos ni ms
     const now = dayjs().tz('America/Argentina/Buenos_Aires');
     const target = now.add(10, 'minute').second(0).millisecond(0);
-    const dayOfWeek = target.format('dddd').toLowerCase();
+    const dayOfWeek = target.isBefore(now) ? target.add(1, 'day').format('dddd').toLowerCase() : target.format('dddd').toLowerCase();
     const timeString = target.format('HH:mm:ss');
-
     this.logger.log(`Buscando schedules para ${dayOfWeek} a las ${timeString}`);
 
     // 2) Obtener schedules que empiezan en 10 min
@@ -49,6 +48,15 @@ export class PushScheduler {
       this.logger.debug('Ningún programa coincide.');
       return;
     }
+    this.logger.log(`Encontrados ${dueSchedules.length} programas que coinciden.`);
+    this.logger.log(dueSchedules.map(s => {
+      return {
+        id: s.id,
+        program: s.program.name,
+        start_time: s.start_time,
+        end_time: s.end_time,
+      };
+    }));
 
     // 3) IDs únicos de programas
     const programIds = Array.from(new Set(dueSchedules.map(s => s.program.id)));
