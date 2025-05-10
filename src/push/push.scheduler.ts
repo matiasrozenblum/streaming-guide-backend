@@ -52,7 +52,8 @@ export class PushScheduler {
     this.logger.log(dueSchedules.map(s => {
       return {
         id: s.id,
-        program: s.program.name,
+        programId: s.program.id,
+        programName: s.program.name,
         start_time: s.start_time,
         end_time: s.end_time,
       };

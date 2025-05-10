@@ -41,22 +41,16 @@ export class PushService {
     return webPush.sendNotification(pushSub, JSON.stringify(payload));
   }
 
-  async scheduleForProgram(programId: string, title: string, inMinutes: number) {
-    console.log('🔥 Scheduling push for', title, `in ${inMinutes}m`);
-    const delay = inMinutes * 60_000;
-    setTimeout(async () => {
-      // 1) Recuperar sólo las subscripciones de quienes quieren notificar ese programa
-      const prefs = await this.notificationsService.list(programId);
-      const subs = await this.repo.find({
-        where: prefs.map(p => ({ deviceId: p.deviceId })),
-      });
-  
-      subs.forEach(s =>
-        this.sendNotification(s, {
-          title,
-          options: { body: `En ${inMinutes} minutos comienza ${title}` },
-        }),
-      );
-    }, delay);
+  async scheduleForProgram(
+    programId: string,
+    title: string,
+    inMinutes: number
+  ): Promise<void> {
+    // opcional: dejar un log para saber que el cliente pidió agendar
+    console.log(
+      `🔔 Cliente pidió scheduleForProgram(${programId}, "${title}", ${inMinutes}m) — ` +
+      `las notificaciones se enviarán vía cron 10′ antes`
+    );
+    return;
   }
 }
