@@ -3,16 +3,25 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { UnauthorizedException } from '@nestjs/common';
 
 describe('AuthController', () => {
   let controller: AuthController;
   let authService: AuthService;
 
+  const mockAuthService = {
+    loginLegacy: jest.fn(),
+    loginUser: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
       providers: [
-        AuthService,
+        {
+          provide: AuthService,
+          useValue: mockAuthService,
+        },
         {
           provide: ConfigService,
           useValue: {
@@ -45,20 +54,46 @@ describe('AuthController', () => {
     expect(controller).toBeDefined();
   });
 
-  describe('login', () => {
-    it('should return a JWT token for correct password', async () => {
-      const mockToken = { access_token: 'mock-token' };
-      jest.spyOn(authService, 'login').mockResolvedValue(mockToken);
+  describe('loginLegacy', () => {
+    it('should return JWT token for valid credentials', async () => {
+      const mockToken = { access_token: 'test-token' };
+      mockAuthService.loginLegacy.mockResolvedValue(mockToken);
 
-      const result = await controller.login({ password: 'admin123' });
+      const result = await controller.loginLegacy({ password: 'admin123', isBackoffice: true });
+
       expect(result).toEqual(mockToken);
-      expect(authService.login).toHaveBeenCalledWith('admin123', false);
+      expect(authService.loginLegacy).toHaveBeenCalledWith('admin123', true);
     });
 
-    it('should throw HttpException for incorrect password', async () => {
-      jest.spyOn(authService, 'login').mockRejectedValue(new Error('Authentication failed'));
+    it('should throw UnauthorizedException for invalid credentials', async () => {
+      mockAuthService.loginLegacy.mockRejectedValue(new UnauthorizedException('Invalid legacy password'));
 
-      await expect(controller.login({ password: 'wrong-password' })).rejects.toThrow('Authentication failed');
+      await expect(controller.loginLegacy({ password: 'wrong-password', isBackoffice: true }))
+        .rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('loginUser', () => {
+    it('should return JWT token for valid credentials', async () => {
+      const mockToken = { access_token: 'test-token' };
+      mockAuthService.loginUser.mockResolvedValue(mockToken);
+
+      const result = await controller.loginUser({
+        email: 'test@example.com',
+        password: 'password123',
+      });
+
+      expect(result).toEqual(mockToken);
+      expect(authService.loginUser).toHaveBeenCalledWith('test@example.com', 'password123');
+    });
+
+    it('should throw UnauthorizedException for invalid credentials', async () => {
+      mockAuthService.loginUser.mockRejectedValue(new UnauthorizedException('Invalid credentials'));
+
+      await expect(controller.loginUser({
+        email: 'test@example.com',
+        password: 'wrong-password',
+      })).rejects.toThrow(UnauthorizedException);
     });
   });
 }); 
