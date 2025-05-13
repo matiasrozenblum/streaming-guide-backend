@@ -10,6 +10,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { RedisService } from '../redis/redis.service';
 import { UsersService } from '../users/users.service';
 import { User } from '../users/users.entity';
+import { EmailService } from '../email/email.service';
 
 @Module({
   imports: [
@@ -26,7 +27,7 @@ import { User } from '../users/users.entity';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, OtpService, JwtStrategy, RedisService, UsersService],
+  providers: [AuthService, OtpService, JwtStrategy, RedisService, UsersService, EmailService],
   exports: [AuthService],
 })
 export class AuthModule {}
