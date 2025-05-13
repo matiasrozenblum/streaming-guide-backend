@@ -1,6 +1,16 @@
+import { IsString, MinLength } from 'class-validator';
+
 export class RegisterDto {
-    registration_token: string;
-    firstName: string;
-    lastName: string;
-    password: string;
-  }
+  @IsString()
+  registration_token: string;
+
+  @IsString()
+  firstName: string;
+
+  @IsString()
+  lastName: string;
+
+  @IsString()
+  @MinLength(6)
+  password: string;
+}
