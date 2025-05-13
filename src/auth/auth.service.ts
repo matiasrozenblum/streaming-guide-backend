@@ -15,43 +15,42 @@ export class AuthService {
     private usersService: UsersService,
   ) {}
 
-  /**
-   * Legacy login for Friends & Family and Backoffice
-   */
-  async loginLegacy(password: string, isBackoffice: boolean = false) {
-    const correctPassword = isBackoffice
+  async loginLegacy(
+    password: string,
+    isBackoffice: boolean = false,
+  ): Promise<{ access_token: string }> {
+    const correct = isBackoffice
       ? this.configService.get<string>('BACKOFFICE_PASSWORD')
       : this.configService.get<string>('PUBLIC_PASSWORD');
-
-    if (password !== correctPassword) {
+    if (password !== correct) {
       throw new UnauthorizedException('Invalid legacy password');
     }
-
-    const payload = {
-      sub: isBackoffice ? 'backoffice' : 'public',
-      type: isBackoffice ? 'backoffice' : 'public',
-    };
-
-    return {
-      access_token: this.jwtService.sign(payload),
-    };
+    const payload = { sub: isBackoffice ? 'backoffice' : 'public', type: isBackoffice ? 'backoffice' : 'public' };
+    return { access_token: this.jwtService.sign(payload) };
   }
 
-  /**
-   * Conventional login: validate user entity and issue JWT
-   */
-  async loginUser(email: string, password: string) {
+  async loginUser(
+    email: string,
+    password: string,
+  ): Promise<{ access_token: string }> {
     const user = await this.usersService.findByEmail(email);
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
-    const isMatching = await bcrypt.compare(password, user.password);
-    if (!isMatching) {
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) {
       throw new UnauthorizedException('Invalid credentials');
     }
     const payload = { sub: user.id, role: user.role };
-    return {
-      access_token: this.jwtService.sign(payload),
-    };
+    return { access_token: this.jwtService.sign(payload) };
+  }
+
+  async signJwtForIdentifier(identifier: string): Promise<string> {
+    const user = await this.usersService.findByEmail(identifier);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    const payload = { sub: user.id, role: user.role };
+    return this.jwtService.sign(payload);
   }
 }
