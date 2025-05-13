@@ -9,8 +9,10 @@ import {
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { OtpService } from './otp.service';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { UsersService } from '../users/users.service';
+import { RegisterDto } from './dto/register.dto';
+import { JwtService } from '@nestjs/jwt';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -18,6 +20,8 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly otpService: OtpService,
+    private readonly usersService: UsersService,
+    private readonly jwtService: JwtService,
   ) {}
 
   @Post('login/legacy')
@@ -55,15 +59,35 @@ export class AuthController {
   }
 
   @Post('verify-code')
-  @ApiOperation({ summary: 'Verifica OTP y retorna JWT' })
-  @ApiResponse({ status: 200, description: 'Access token' })
-  async verifyCode(@Body() body: { identifier: string; code: string }) {
-    const { identifier, code } = body;
-    if (!identifier || !code) {
-      throw new BadRequestException('Falta identificador o código');
-    }
+  @ApiOperation({ summary: 'Verifica OTP y retorna JWT o registration_token' })
+  async verifyCode(@Body() { identifier, code }: { identifier: string; code: string }) {
+    if (!identifier || !code) throw new BadRequestException('Falta identificador o código');
     await this.otpService.verifyCode(identifier, code);
-    const token = await this.authService.signJwtForIdentifier(identifier);
-    return { access_token: token };
+
+    // Si existe el usuario, lo logueamos
+    const user = await this.usersService.findByEmail(identifier);
+    if (user) {
+      const access_token = await this.authService.signJwtForIdentifier(identifier);
+      return { access_token, isNew: false };
+    }
+
+    // Si no existe, devolvemos un token de registro
+    const registration_token = this.authService.signRegistrationToken(identifier);
+    return { registration_token, isNew: true };
+  }
+
+  @Post('register')
+  @ApiOperation({ summary: 'Completa el registro y retorna JWT de sesión' })
+  async register(@Body() dto: RegisterDto) {
+    const { registration_token, firstName, lastName, password } = dto;
+    // 1) Validamos el token y extraemos el email
+    const { email } = this.authService.verifyRegistrationToken(registration_token);
+
+    // 2) Creamos el usuario (hasheo de password incluido en UsersService)
+    const user = await this.usersService.create({ email, firstName, lastName, phone: '', password });
+
+    // 3) Generamos el JWT definitivo
+    const access_token = this.jwtService.sign({ sub: user.id, role: user.role });
+    return { access_token };
   }
 }

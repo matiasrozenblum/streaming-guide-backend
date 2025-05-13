@@ -47,10 +47,28 @@ export class AuthService {
 
   async signJwtForIdentifier(identifier: string): Promise<string> {
     const user = await this.usersService.findByEmail(identifier);
-    if (!user) {
-      throw new UnauthorizedException('User not found');
-    }
+    if (!user) throw new UnauthorizedException('User not found');
     const payload = { sub: user.id, role: user.role };
     return this.jwtService.sign(payload);
+  }
+
+  signRegistrationToken(identifier: string): string {
+    // firmamos un token que contiene solo el email y un flag
+    return this.jwtService.sign(
+      { email: identifier, type: 'registration' },
+      { expiresIn: '1h' } // caduca en 1h
+    );
+  }
+
+  verifyRegistrationToken(token: string): { email: string } {
+    try {
+      const payload: any = this.jwtService.verify(token);
+      if (payload.type !== 'registration' || !payload.email) {
+        throw new Error();
+      }
+      return { email: payload.email };
+    } catch {
+      throw new UnauthorizedException('Invalid registration token');
+    }
   }
 }
