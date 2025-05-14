@@ -73,7 +73,6 @@ import {
     /**
      * Obtener usuario por ID (admin o dueño)
      */
-    @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
     @Get(':id')
     @ApiOperation({ summary: 'Obtener usuario por ID' })
@@ -89,7 +88,6 @@ import {
     /**
      * Buscar usuario por email (solo admin)
      */
-    @UseGuards(JwtAuthGuard, RolesGuard)
     @ApiBearerAuth()
     @Get('email/:email')
     @ApiOperation({ summary: 'Buscar usuario por email' })
