@@ -1,4 +1,4 @@
-import { IsString, IsEmail, MinLength } from 'class-validator';
+import { IsString, IsEmail, MinLength, Matches, IsOptional } from 'class-validator';
 
 export class CreateUserDto {
   @IsString()
@@ -10,8 +10,10 @@ export class CreateUserDto {
   @IsEmail()
   email: string;
 
+  @IsOptional()
   @IsString()
-  phone: string;
+  @Matches(/^\+\d+$/, { message: 'Phone must be in international format, e.g. +54911…' })
+  phone?: string;
 
   @IsString()
   @MinLength(6)
