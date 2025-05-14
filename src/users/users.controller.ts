@@ -10,6 +10,7 @@ import {
     Req,
     ForbiddenException,
     UnauthorizedException,
+    NotFoundException,
   } from '@nestjs/common';
   import {
     ApiTags,
@@ -84,6 +85,21 @@ import {
         throw new ForbiddenException('No autorizado');
       }
       return this.usersService.findOne(userId);
+    }
+    /**
+     * Buscar usuario por email (solo admin)
+     */
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @ApiBearerAuth()
+    @Get('email/:email')
+    @ApiOperation({ summary: 'Buscar usuario por email' })
+    @ApiResponse({ status: 200, type: User })
+    async findByEmail(@Param('email') email: string) {
+      const user = await this.usersService.findByEmail(email);
+      if (!user) {
+        throw new NotFoundException(`Usuario con email ${email} no encontrado`);
+      }
+      return user;
     }
   
     /**
