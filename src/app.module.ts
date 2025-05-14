@@ -20,6 +20,7 @@ import { AppService } from './app.service';
 import { YoutubeDiscoveryService } from './youtube/youtube-discovery.service';
 import { RedisService } from './redis/redis.service'; // 🔥 Agregado
 import { ScheduleModule } from '@nestjs/schedule';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -65,6 +66,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     YoutubeLiveModule,
     ProposedChangesModule,
     EmailModule,
+    UsersModule,
   ],
   controllers: [AppController],
   providers: [
