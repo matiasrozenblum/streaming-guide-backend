@@ -84,7 +84,7 @@ export class AuthController {
     const { email } = this.authService.verifyRegistrationToken(registration_token);
 
     // 2) Creamos el usuario (hasheo de password incluido en UsersService)
-    const user = await this.usersService.create({ email, firstName, lastName, phone: '', password });
+    const user = await this.usersService.create({ email, firstName, lastName, password });
 
     // 3) Generamos el JWT definitivo
     const access_token = this.jwtService.sign({ sub: user.id, type: 'public', role: user.role });
