@@ -48,7 +48,7 @@ export class AuthService {
   async signJwtForIdentifier(identifier: string): Promise<string> {
     const user = await this.usersService.findByEmail(identifier);
     if (!user) throw new UnauthorizedException('User not found');
-    const payload = { sub: user.id, role: user.role };
+    const payload = { sub: user.id, type: 'public', role: user.role };
     return this.jwtService.sign(payload);
   }
 
