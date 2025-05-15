@@ -64,6 +64,8 @@ import {
     @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
     @Get('me')
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles('user','admin')
     @ApiOperation({ summary: 'Perfil de usuario autenticado' })
     @ApiResponse({ status: 200, type: User })
     getProfile(@Req() req) {
