@@ -1,43 +1,74 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { UsersService } from '../users/users.service';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class AuthService {
   constructor(
     private jwtService: JwtService,
     private configService: ConfigService,
+    private usersService: UsersService,
   ) {}
 
-  async login(password: string, isBackoffice: boolean = false) {
-    const correctPassword = isBackoffice
+  async loginLegacy(
+    password: string,
+    isBackoffice: boolean = false,
+  ): Promise<{ access_token: string }> {
+    const correct = isBackoffice
       ? this.configService.get<string>('BACKOFFICE_PASSWORD')
       : this.configService.get<string>('PUBLIC_PASSWORD');
-
-    console.log('Login attempt:', {
-      isBackoffice,
-      providedPassword: password,
-      correctPassword,
-      env: {
-        BACKOFFICE_PASSWORD: this.configService.get<string>('BACKOFFICE_PASSWORD'),
-        PUBLIC_PASSWORD: this.configService.get<string>('PUBLIC_PASSWORD'),
-      }
-    });
-
-    if (password !== correctPassword) {
-      throw new UnauthorizedException('Invalid password');
+    if (password !== correct) {
+      throw new UnauthorizedException('Invalid legacy password');
     }
-
-    const payload = { 
-      sub: isBackoffice ? 'backoffice' : 'public',
-      type: isBackoffice ? 'backoffice' : 'public',
-    };
-
-    return {
-      access_token: this.jwtService.sign(payload, {
-        secret: this.configService.get<string>('JWT_SECRET') || 'default_secret_key_for_development',
-        expiresIn: '7d', // o el tiempo que quieras
-      }),
-    };
+    const payload = { sub: isBackoffice ? 'backoffice' : 'public', type: isBackoffice ? 'backoffice' : 'public', role: 'friends&family' };
+    return { access_token: this.jwtService.sign(payload) };
   }
-} 
+
+  async loginUser(
+    email: string,
+    password: string,
+  ): Promise<{ access_token: string }> {
+    const user = await this.usersService.findByEmail(email);
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+    const payload = { sub: user.id, type: 'public', role: user.role };
+    return { access_token: this.jwtService.sign(payload) };
+  }
+
+  async signJwtForIdentifier(identifier: string): Promise<string> {
+    const user = await this.usersService.findByEmail(identifier);
+    if (!user) throw new UnauthorizedException('User not found');
+    const payload = { sub: user.id, type: 'public', role: user.role };
+    return this.jwtService.sign(payload);
+  }
+
+  signRegistrationToken(identifier: string): string {
+    // firmamos un token que contiene solo el email y un flag
+    return this.jwtService.sign(
+      { email: identifier, type: 'registration' },
+      { expiresIn: '1h' } // caduca en 1h
+    );
+  }
+
+  verifyRegistrationToken(token: string): { email: string } {
+    try {
+      const payload: any = this.jwtService.verify(token);
+      if (payload.type !== 'registration' || !payload.email) {
+        throw new Error();
+      }
+      return { email: payload.email };
+    } catch {
+      throw new UnauthorizedException('Invalid registration token');
+    }
+  }
+}
