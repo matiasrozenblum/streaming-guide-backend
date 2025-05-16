@@ -90,7 +90,6 @@ import {
     /**
      * Buscar usuario por email (solo admin)
      */
-    @ApiBearerAuth()
     @Get('email/:email')
     @ApiOperation({ summary: 'Buscar usuario por email' })
     @ApiResponse({ status: 200, type: User })
