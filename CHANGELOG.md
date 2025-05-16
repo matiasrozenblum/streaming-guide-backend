@@ -17,6 +17,14 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.3.0] - 2025-04-16
+
+### Added
+- Added users CRUD
+
+### Changed
+- Now F&F login endpoint is /auth/login/legacy and /auth/login is the regular users's login
+
 ## [0.2.16] - 2025-04-02
 
 ### Fixed
