@@ -1,16 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
 import { JwtService } from '@nestjs/jwt';
-import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { UsersService } from '../users/users.service';
-import { UnauthorizedException } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { UnauthorizedException } from '@nestjs/common';
 
 describe('AuthService', () => {
   let service: AuthService;
-  let jwtService: JwtService;
   let jwtService: JwtService;
   let configService: ConfigService;
   let usersService: UsersService;
@@ -35,17 +31,12 @@ describe('AuthService', () => {
         { provide: JwtService, useValue: mockJwtService },
         { provide: ConfigService, useValue: mockConfigService },
         { provide: UsersService, useValue: mockUsersService },
-        { provide: JwtService, useValue: mockJwtService },
-        { provide: ConfigService, useValue: mockConfigService },
-        { provide: UsersService, useValue: mockUsersService },
       ],
     }).compile();
 
     service = module.get<AuthService>(AuthService);
     jwtService = module.get<JwtService>(JwtService);
-    jwtService = module.get<JwtService>(JwtService);
     configService = module.get<ConfigService>(ConfigService);
-    usersService = module.get<UsersService>(UsersService);
     usersService = module.get<UsersService>(UsersService);
   });
 
@@ -62,7 +53,7 @@ describe('AuthService', () => {
       expect(mockJwtService.sign).toHaveBeenCalledWith({
         sub: 'backoffice',
         type: 'backoffice',
-        role: 'friends&family'
+        role: 'admin'
       });
     });
 
