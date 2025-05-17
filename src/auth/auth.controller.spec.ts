@@ -34,17 +34,6 @@ describe('AuthController', () => {
     sign: jest.fn(),
   };
 
-  const mockAuthService = {
-    loginLegacy: jest.fn(),
-    loginUser: jest.fn(),
-    signJwtForIdentifier: jest.fn(),
-  };
-
-  const mockOtpService = {
-    sendCode: jest.fn(),
-    verifyCode: jest.fn(),
-  };
-
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
