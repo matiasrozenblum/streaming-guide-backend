@@ -17,7 +17,7 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
-## [0.3.1] - 2025-04-17
+## [0.3.2] - 2025-04-17
 
 ### Fixed
 - Fixed jwt strategy
