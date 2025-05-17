@@ -53,7 +53,7 @@ describe('AuthService', () => {
       expect(mockJwtService.sign).toHaveBeenCalledWith({
         sub: 'backoffice',
         type: 'backoffice',
-        role: 'friends&family'
+        role: 'admin'
       });
     });
 

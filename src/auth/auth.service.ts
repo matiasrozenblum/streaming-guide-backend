@@ -25,7 +25,7 @@ export class AuthService {
     if (password !== correct) {
       throw new UnauthorizedException('Invalid legacy password');
     }
-    const payload = { sub: isBackoffice ? 'backoffice' : 'public', type: isBackoffice ? 'backoffice' : 'public', role: 'friends&family' };
+    const payload = { sub: isBackoffice ? 'backoffice' : 'public', type: isBackoffice ? 'backoffice' : 'public', role: isBackoffice ? 'admin' : 'friends&family' };
     return { access_token: this.jwtService.sign(payload) };
   }
 
