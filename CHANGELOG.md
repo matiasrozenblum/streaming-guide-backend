@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.3.3] - 2025-04-17
+
+### Fixed
+- Fixed get user by id endpoint throwing 500 lacking jwt guard
+
 ## [0.3.2] - 2025-04-17
 
 ### Fixed
