@@ -66,11 +66,14 @@ export class UsersService {
     newPassword: string,
   ): Promise<void> {
     const user = await this.findOne(userId);
-    const isMatching = await bcrypt.compare(currentPassword, user.password);
-    if (!isMatching) {
+    const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    
+    if (!isPasswordValid) {
       throw new UnauthorizedException('Current password is incorrect');
     }
-    // Reuse UsersService update, which hashes the password
-    await this.update(user.id, { password: newPassword });
+
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedNewPassword;
+    await this.usersRepository.save(user);
   }
 }
