@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.3.4] - 2025-04-18
+
+### Added
+- Added reset password feature in the login flow
+
 ## [0.3.3] - 2025-04-18
 
 ### Fixed
