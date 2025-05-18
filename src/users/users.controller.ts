@@ -103,6 +103,10 @@ export class UsersController {
     @Body() updateUserDto: UpdateUserDto,
     @Req() req,
   ) {
+    // Remove empty string fields before validation
+    Object.keys(updateUserDto).forEach(
+      (key) => (updateUserDto[key] === '' ? delete updateUserDto[key] : undefined)
+    );
     const userId = Number(id);
     const requester = req.user;
     if (requester.role !== 'admin' && requester.id !== userId) {
