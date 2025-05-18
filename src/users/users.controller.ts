@@ -78,11 +78,10 @@ export class UsersController {
     return this.usersService.findOne(userId);
   }
 
-  /** Buscar por email (solo admin) */
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @ApiBearerAuth()
+  /**
+     * Buscar usuario por email
+     */
   @Get('email/:email')
-  @Roles('admin')
   @ApiOperation({ summary: 'Buscar usuario por email' })
   @ApiResponse({ status: 200, type: User })
   async findByEmail(@Param('email') email: string) {
