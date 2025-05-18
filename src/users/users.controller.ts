@@ -22,6 +22,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { UsersService } from './users.service';
+import { OtpService } from '../auth/otp.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { User } from './users.entity';
@@ -29,7 +30,7 @@ import { User } from './users.entity';
 @ApiTags('users')
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService, private readonly otpService: OtpService) {}
 
   /** Registro público */
   @Post()
@@ -126,21 +127,20 @@ export class UsersController {
     return this.usersService.remove(userId);
   }
 
-  /** Cambiar contraseña */
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @Post('change-password')
-  @ApiOperation({ summary: 'Cambiar contraseña de usuario' })
-  @ApiResponse({ status: 200, description: 'Contraseña actualizada' })
-  async changePassword(@Req() req, @Body() body: { currentPassword: string; newPassword: string }) {
-    try {
-      await this.usersService.changePassword(req.user.sub, body.currentPassword, body.newPassword);
-      return { message: 'Password updated successfully' };
-    } catch (error) {
-      if (error instanceof UnauthorizedException) {
-        throw error;
-      }
-      throw new UnauthorizedException('Invalid credentials');
+  /** Resetear contraseña (olvidada) */
+  @Post('reset-password')
+  @ApiOperation({ summary: 'Resetear contraseña de usuario (olvidada)' })
+  @ApiResponse({ status: 200, description: 'Contraseña reseteada' })
+  async resetPassword(@Body() body: { email: string; password: string; code: string }) {
+    const { email, password, code } = body;
+    // 1. Verificar el código
+    await this.otpService.verifyCode(email, code); // Throws if invalid
+    // 2. Buscar usuario y actualizar contraseña
+    const user = await this.usersService.findByEmail(email);
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado');
     }
+    await this.usersService.update(user.id, { password });
+    return { message: 'Password reset successfully' };
   }
 }
