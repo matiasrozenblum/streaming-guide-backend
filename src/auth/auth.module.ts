@@ -28,6 +28,6 @@ import { EmailService } from '../email/email.service';
   ],
   controllers: [AuthController],
   providers: [AuthService, OtpService, JwtStrategy, RedisService, UsersService, EmailService],
-  exports: [AuthService],
+  exports: [AuthService, OtpService],
 })
 export class AuthModule {}
