@@ -51,11 +51,9 @@ export class UsersController {
   }
 
   /** Perfil propio */
-  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Get('me')
-  @Roles('user', 'admin')
-  @UseGuards(RolesGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Perfil de usuario autenticado' })
   @ApiResponse({ status: 200, type: User })
   getProfile(@Req() req) {
