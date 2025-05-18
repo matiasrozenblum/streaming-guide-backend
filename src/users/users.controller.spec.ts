@@ -6,6 +6,7 @@ import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import { OtpService } from '../auth/otp.service';
 
 const mockUser = {
   id: 1,
@@ -31,9 +32,14 @@ const mockUsersService = {
   update: jest.fn(),
   remove: jest.fn(),
   changePassword: jest.fn(),
+  findByEmail: jest.fn(),
 };
 
 const mockAuthService = {};
+
+const mockOtpService = {
+  verifyCode: jest.fn(),
+};
 
 const mockRequest = (user) => ({ user });
 
@@ -47,6 +53,7 @@ describe('UsersController', () => {
       providers: [
         { provide: UsersService, useValue: mockUsersService },
         { provide: AuthService, useValue: mockAuthService },
+        { provide: OtpService, useValue: mockOtpService },
       ],
     })
       .overrideGuard(JwtAuthGuard)
@@ -168,26 +175,36 @@ describe('UsersController', () => {
     });
   });
 
-  describe('changePassword', () => {
-    it('should change password for authenticated user', async () => {
-      usersService.changePassword.mockResolvedValue(undefined);
-      const req = mockRequest({ sub: mockUser.id });
-      const body = { currentPassword: 'old', newPassword: 'new' };
-      const result = await controller.changePassword(req, body);
-      expect(usersService.changePassword).toHaveBeenCalledWith(mockUser.id, 'old', 'new');
-      expect(result).toEqual({ message: 'Password updated successfully' });
+  describe('resetPassword', () => {
+    let otpService;
+    beforeEach(() => {
+      otpService = { verifyCode: jest.fn() };
+      controller.otpService = otpService;
     });
-    it('should throw UnauthorizedException if service throws UnauthorizedException', async () => {
-      usersService.changePassword.mockRejectedValue(new UnauthorizedException('bad'));
-      const req = mockRequest({ sub: mockUser.id });
-      const body = { currentPassword: 'old', newPassword: 'new' };
-      await expect(controller.changePassword(req, body)).rejects.toThrow(UnauthorizedException);
+
+    it('should reset password if code is valid and user exists', async () => {
+      otpService.verifyCode.mockResolvedValue(undefined);
+      usersService.findByEmail.mockResolvedValue(mockUser);
+      usersService.update.mockResolvedValue({ ...mockUser, password: 'new' });
+      const body = { email: mockUser.email, password: 'new', code: '123456' };
+      const result = await controller.resetPassword(body);
+      expect(otpService.verifyCode).toHaveBeenCalledWith(mockUser.email, '123456');
+      expect(usersService.findByEmail).toHaveBeenCalledWith(mockUser.email);
+      expect(usersService.update).toHaveBeenCalledWith(mockUser.id, { password: 'new' });
+      expect(result).toEqual({ message: 'Password reset successfully' });
     });
-    it('should wrap other errors as UnauthorizedException', async () => {
-      usersService.changePassword.mockRejectedValue(new Error('other'));
-      const req = mockRequest({ sub: mockUser.id });
-      const body = { currentPassword: 'old', newPassword: 'new' };
-      await expect(controller.changePassword(req, body)).rejects.toThrow(UnauthorizedException);
+
+    it('should throw UnauthorizedException if code is invalid', async () => {
+      otpService.verifyCode.mockRejectedValue(new UnauthorizedException('bad code'));
+      const body = { email: mockUser.email, password: 'new', code: 'bad' };
+      await expect(controller.resetPassword(body)).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw NotFoundException if user not found', async () => {
+      otpService.verifyCode.mockResolvedValue(undefined);
+      usersService.findByEmail.mockResolvedValue(null);
+      const body = { email: 'notfound@example.com', password: 'new', code: '123456' };
+      await expect(controller.resetPassword(body)).rejects.toThrow('Usuario no encontrado');
     });
   });
 }); 

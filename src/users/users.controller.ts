@@ -30,7 +30,7 @@ import { User } from './users.entity';
 @ApiTags('users')
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService, private readonly otpService: OtpService) {}
+  constructor(private readonly usersService: UsersService, public otpService: OtpService) {}
 
   /** Registro público */
   @Post()
