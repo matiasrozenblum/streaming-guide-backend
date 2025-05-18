@@ -35,10 +35,21 @@ export class UsersService {
 
   async update(id: number, updateUserDto: UpdateUserDto): Promise<User> {
     const user = await this.findOne(id);
+    
+    // Only update password if it's provided
     if (updateUserDto.password) {
       updateUserDto.password = await bcrypt.hash(updateUserDto.password, 10);
     }
-    Object.assign(user, updateUserDto);
+
+    // Create an object with only the fields that are present in the DTO
+    const updateData = Object.entries(updateUserDto).reduce((acc, [key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        acc[key] = value;
+      }
+      return acc;
+    }, {} as Partial<User>);
+
+    Object.assign(user, updateData);
     return this.usersRepository.save(user);
   }
 

@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.3.5] - 2025-04-18
+
+### Fixed
+- Fixed patch users validations for empty strings
+
 ## [0.3.4] - 2025-04-18
 
 ### Added
