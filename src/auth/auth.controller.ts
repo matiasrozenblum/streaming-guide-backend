@@ -4,8 +4,6 @@ import {
   Body,
   BadRequestException,
   UnauthorizedException,
-  UseGuards,
-  Req,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { OtpService } from './otp.service';
