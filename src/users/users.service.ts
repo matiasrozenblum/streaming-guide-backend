@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -35,11 +35,29 @@ export class UsersService {
 
   async update(id: number, updateUserDto: UpdateUserDto): Promise<User> {
     const user = await this.findOne(id);
+  
     if (updateUserDto.password) {
       updateUserDto.password = await bcrypt.hash(updateUserDto.password, 10);
     }
-    Object.assign(user, updateUserDto);
-    return this.usersRepository.save(user);
+  
+    const updateData = Object.entries(updateUserDto).reduce((acc, [key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        acc[key] = value;
+      }
+      return acc;
+    }, {} as Partial<User>);
+  
+    Object.assign(user, updateData);
+  
+    try {
+      return await this.usersRepository.save(user);
+    } catch (error) {
+      if (error.code === '23505') {
+        // Unique violation
+        throw new ConflictException('El email ya está en uso por otro usuario');
+      }
+      throw error;
+    }
   }
 
   async remove(id: number): Promise<void> {
