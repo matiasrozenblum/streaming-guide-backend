@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.3.6] - 2025-04-19
+
+### Removed
+- Removed youtube fetch counters from cache
+
 ## [0.3.5] - 2025-04-18
 
 ### Fixed
