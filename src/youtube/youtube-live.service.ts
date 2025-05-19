@@ -34,12 +34,6 @@ export class YoutubeLiveService {
     });
   }
 
-  private async incrementCounter(channelId: string, type: 'cron' | 'onDemand') {
-    const date = dayjs().format('YYYY-MM-DD');
-    await this.redisService.incr(`${type}:count:${date}`);
-    await this.redisService.incr(`${type}:${channelId}:count:${date}`);
-  }
-
   /**
    * Comprueba si el canal puede hacer fetch hoy (flags + feriado)
    */
@@ -112,7 +106,6 @@ export class YoutubeLiveService {
       await this.redisService.set(liveKey, videoId, blockTTL);
       console.log(`📌 Cached ${handle} → ${videoId} (TTL ${blockTTL}s)`);
 
-      await this.incrementCounter(channelId, context);
       return videoId;
     } catch (err) {
       console.error(`❌ Error fetching live video for ${handle}:`, err.message || err);
