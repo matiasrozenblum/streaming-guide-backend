@@ -81,6 +81,22 @@ export class AppController {
     return { key, cachedValue };
   }
 
+  @Get('cache-test-del')
+  async cacheTestDel() {
+    const patterns = [
+      'cron:count:*',
+      'onDemand:count:*',
+      'cron:*:count:*',
+      'onDemand:*:count:*',
+    ];
+
+    for (const pattern of patterns) {
+      await this.redisService.delByPattern(pattern);
+    }
+
+    return { message: 'All counter entries deleted.' };
+  }
+
   @UseGuards(AuthGuard('jwt'))
   @Get('stats')
   async getStats(): Promise<{
