@@ -68,19 +68,29 @@ export class AuthController {
     @Request() req: any,
     @Body() { identifier, code, deviceId }: { identifier: string; code: string; deviceId?: string },
   ) {
+    console.log('🔍 [AuthController] verify-code called with:', {
+      identifier,
+      deviceId,
+      userAgent: req.headers['user-agent'],
+      timestamp: new Date().toISOString()
+    });
+
     if (!identifier || !code) throw new BadRequestException('Falta identificador o código');
     await this.otpService.verifyCode(identifier, code);
 
     // Si existe el usuario, lo logueamos
     const user = await this.usersService.findByEmail(identifier);
     if (user) {
+      console.log('✅ [AuthController] User found, creating device for user:', user.id);
       const userAgent = req.headers['user-agent'] || 'Unknown';
       // For OTP login, we don't verify password, so we generate token and device directly
       const access_token = await this.authService.signJwtForIdentifier(identifier);
       const finalDeviceId = await this.usersService.ensureUserDevice(user, userAgent, deviceId);
+      console.log('✅ [AuthController] Device created/updated:', finalDeviceId);
       return { access_token, deviceId: finalDeviceId, isNew: false };
     }
 
+    console.log('🆕 [AuthController] New user, returning registration token');
     // Si no existe, devolvemos un token de registro
     const registration_token = this.authService.signRegistrationToken(identifier);
     return { registration_token, isNew: true };
@@ -92,16 +102,25 @@ export class AuthController {
     @Request() req: any,
     @Body() dto: RegisterDto & { deviceId?: string },
   ) {
+    console.log('🔍 [AuthController] register called with:', {
+      email: dto.registration_token ? 'hidden' : 'none',
+      deviceId: dto.deviceId,
+      userAgent: req.headers['user-agent'],
+      timestamp: new Date().toISOString()
+    });
+
     const { registration_token, firstName, lastName, password, deviceId } = dto;
     // 1) Validamos el token y extraemos el email
     const { email } = this.authService.verifyRegistrationToken(registration_token);
 
     // 2) Creamos el usuario (hasheo de password incluido en UsersService)
     const user = await this.usersService.create({ email, firstName, lastName, password });
+    console.log('✅ [AuthController] User created:', user.id);
 
     // 3) Crear device para el nuevo usuario
     const userAgent = req.headers['user-agent'] || 'Unknown';
     const finalDeviceId = await this.usersService.ensureUserDevice(user, userAgent, deviceId);
+    console.log('✅ [AuthController] Device created for new user:', finalDeviceId);
 
     // 4) Generamos el JWT definitivo
     const access_token = this.jwtService.sign({ sub: user.id, type: 'public', role: user.role });

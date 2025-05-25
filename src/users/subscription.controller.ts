@@ -182,8 +182,18 @@ export class SubscriptionController {
   ) {
     const userFromToken = req.user;
     
+    console.log('🔍 [SubscriptionController] device registration called with:', {
+      userId: userFromToken.id,
+      userType: userFromToken.type,
+      userRole: userFromToken.role,
+      deviceId: body.deviceId,
+      userAgent: req.headers['user-agent'],
+      timestamp: new Date().toISOString()
+    });
+    
     // Check if this is a legacy authentication token
     if (userFromToken.type === 'public' && (typeof userFromToken.id === 'string' || userFromToken.id === 'public')) {
+      console.log('⏭️ [SubscriptionController] Skipping device registration for legacy user');
       return {
         error: 'Device registration not available for legacy authentication',
         message: 'Please register with a user account to use device features',
@@ -193,12 +203,14 @@ export class SubscriptionController {
     // For real users, fetch the actual User entity from database
     const user = await this.usersService.findOne(userFromToken.id);
     if (!user) {
+      console.log('❌ [SubscriptionController] User not found:', userFromToken.id);
       return {
         error: 'User not found',
         message: 'Unable to register device for this user',
       };
     }
     
+    console.log('✅ [SubscriptionController] User found, proceeding with device registration');
     const userAgent = req.headers['user-agent'] || 'Unknown';
     
     const device = await this.deviceService.findOrCreateDevice(
@@ -206,6 +218,8 @@ export class SubscriptionController {
       userAgent,
       body.deviceId,
     );
+    
+    console.log('✅ [SubscriptionController] Device registration completed:', device.deviceId);
     
     return {
       deviceId: device.deviceId,
