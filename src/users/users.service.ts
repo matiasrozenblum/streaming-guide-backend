@@ -108,7 +108,22 @@ export class UsersService {
    * This is called when a user logs in to automatically create a device if needed
    */
   async ensureUserDevice(user: User, userAgent: string, deviceId?: string): Promise<string> {
+    console.log('🔍 [UsersService] ensureUserDevice called with:', {
+      userId: user.id,
+      userEmail: user.email,
+      userAgent,
+      deviceId,
+      timestamp: new Date().toISOString(),
+      stack: new Error().stack?.split('\n').slice(1, 4).join('\n') // Show call stack
+    });
+    
     const device = await this.deviceService.findOrCreateDevice(user, userAgent, deviceId);
+    
+    console.log('✅ [UsersService] ensureUserDevice completed:', {
+      deviceId: device.deviceId,
+      deviceName: device.deviceName
+    });
+    
     return device.deviceId;
   }
 }

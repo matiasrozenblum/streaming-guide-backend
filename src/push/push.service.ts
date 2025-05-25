@@ -18,12 +18,25 @@ export class PushService {
 
     private notificationsService: NotificationsService,
   ) {
-    webPush.setVapidDetails(
-      'mailto:laguiadelstreaming@gmail.com',
-      process.env.VAPID_PUBLIC_KEY || '',
-      process.env.VAPID_PRIVATE_KEY || '',
-    );
-    console.log('🔥 VAPID_PUBLIC_KEY', process.env.VAPID_PUBLIC_KEY);
+    // Temporarily disable VAPID initialization to prevent startup errors
+    // TODO: Set proper VAPID environment variables
+    const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
+    const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
+    
+    if (vapidPublicKey && vapidPrivateKey && vapidPublicKey.length > 0 && vapidPrivateKey.length > 0) {
+      try {
+        webPush.setVapidDetails(
+          'mailto:laguiadelstreaming@gmail.com',
+          vapidPublicKey,
+          vapidPrivateKey,
+        );
+        console.log('✅ VAPID keys initialized successfully');
+      } catch (error) {
+        console.warn('⚠️ Failed to initialize VAPID keys:', error.message);
+      }
+    } else {
+      console.warn('⚠️ VAPID keys not configured - push notifications will not work');
+    }
   }
 
   async create(dto: CreatePushSubscriptionDto) {
