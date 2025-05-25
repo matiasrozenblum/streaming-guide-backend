@@ -6,6 +6,8 @@ import { Program } from './programs/programs.entity';
 import { Schedule } from './schedules/schedules.entity';
 import { Panelist } from './panelists/panelists.entity';
 import { Config } from './config/config.entity';
+import { Device } from './users/device.entity';
+import { UserSubscription } from './users/user-subscription.entity';
 import { ChannelsModule } from './channels/channels.module';
 import { ProgramsModule } from './programs/programs.module';
 import { SchedulesModule } from './schedules/schedules.module';
@@ -18,8 +20,10 @@ import { EmailModule } from './email/email.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { YoutubeDiscoveryService } from './youtube/youtube-discovery.service';
-import { RedisService } from './redis/redis.service'; // 🔥 Agregado
+import { RedisService } from './redis/redis.service';
 import { ScheduleModule } from '@nestjs/schedule';
+import { PushModule } from './push/push.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
@@ -55,7 +59,7 @@ import { UsersModule } from './users/users.module';
         };
       },
     }),
-    TypeOrmModule.forFeature([Channel, Program, Schedule, Panelist, Config]),
+    TypeOrmModule.forFeature([Channel, Program, Schedule, Panelist, Config, Device, UserSubscription]),
     ChannelsModule,
     ProgramsModule,
     SchedulesModule,
@@ -66,6 +70,8 @@ import { UsersModule } from './users/users.module';
     YoutubeLiveModule,
     ProposedChangesModule,
     EmailModule,
+    PushModule,
+    NotificationsModule,
     UsersModule,
   ],
   controllers: [AppController],

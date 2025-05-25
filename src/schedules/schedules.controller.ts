@@ -16,6 +16,12 @@ export class SchedulesController {
   @Get()
   @ApiOperation({ summary: 'Obtener todos los horarios o filtrar por día' })
   @ApiQuery({ name: 'day', required: false, description: 'Día de la semana para filtrar (ej: monday, tuesday, etc.)' })
+  @ApiQuery({
+    name: 'deviceId',
+    required: false,
+    description:
+      'ID de dispositivo para incluir flag `subscribed` en cada bloque',
+  })
   @ApiResponse({ status: 200, description: 'Lista de horarios', type: [Schedule] })
   async findAll(@Query('day') day?: string, @Query('live_status') liveStatus?: string,): Promise<Schedule[]> {
     const skipCache = liveStatus === 'true';

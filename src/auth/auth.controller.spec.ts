@@ -91,19 +91,27 @@ describe('AuthController', () => {
       const mockToken = { access_token: 'test-token' };
       mockAuthService.loginUser.mockResolvedValue(mockToken);
 
-      const result = await controller.loginUser({
+      const mockRequest = {
+        headers: { 'user-agent': 'Mozilla/5.0 Chrome/91.0' }
+      };
+
+      const result = await controller.loginUser(mockRequest, {
         email: 'test@example.com',
         password: 'password123',
       });
 
       expect(result).toEqual(mockToken);
-      expect(authService.loginUser).toHaveBeenCalledWith('test@example.com', 'password123');
+      expect(authService.loginUser).toHaveBeenCalledWith('test@example.com', 'password123', 'Mozilla/5.0 Chrome/91.0', undefined);
     });
 
     it('should throw UnauthorizedException for invalid credentials', async () => {
       mockAuthService.loginUser.mockRejectedValue(new UnauthorizedException('Invalid credentials'));
 
-      await expect(controller.loginUser({
+      const mockRequest = {
+        headers: { 'user-agent': 'Mozilla/5.0 Chrome/91.0' }
+      };
+
+      await expect(controller.loginUser(mockRequest, {
         email: 'test@example.com',
         password: 'wrong-password',
       })).rejects.toThrow(UnauthorizedException);
@@ -138,7 +146,11 @@ describe('AuthController', () => {
       mockUsersService.findByEmail.mockResolvedValue(mockUser);
       mockAuthService.signJwtForIdentifier.mockResolvedValue(mockToken);
 
-      const result = await controller.verifyCode({ identifier, code });
+      const mockRequest = {
+        headers: { 'user-agent': 'Mozilla/5.0 Chrome/91.0' }
+      };
+
+      const result = await controller.verifyCode(mockRequest, { identifier, code });
 
       expect(result).toEqual({ access_token: mockToken, isNew: false });
       expect(mockOtpService.verifyCode).toHaveBeenCalledWith(identifier, code);
@@ -155,7 +167,11 @@ describe('AuthController', () => {
       mockUsersService.findByEmail.mockResolvedValue(null);
       mockAuthService.signRegistrationToken.mockReturnValue(mockRegToken);
 
-      const result = await controller.verifyCode({ identifier, code });
+      const mockRequest = {
+        headers: { 'user-agent': 'Mozilla/5.0 Chrome/91.0' }
+      };
+
+      const result = await controller.verifyCode(mockRequest, { identifier, code });
 
       expect(result).toEqual({ registration_token: mockRegToken, isNew: true });
       expect(mockOtpService.verifyCode).toHaveBeenCalledWith(identifier, code);
@@ -164,7 +180,11 @@ describe('AuthController', () => {
     });
 
     it('should throw BadRequestException when identifier or code is missing', async () => {
-      await expect(controller.verifyCode({ identifier: '', code: '' }))
+      const mockRequest = {
+        headers: { 'user-agent': 'Mozilla/5.0 Chrome/91.0' }
+      };
+
+      await expect(controller.verifyCode(mockRequest, { identifier: '', code: '' }))
         .rejects.toThrow(BadRequestException);
     });
   });
@@ -184,7 +204,11 @@ describe('AuthController', () => {
       mockUsersService.create.mockResolvedValue(mockUser);
       mockJwtService.sign.mockReturnValue(mockToken);
 
-      const result = await controller.register(dto);
+      const mockRequest = {
+        headers: { 'user-agent': 'Mozilla/5.0 Chrome/91.0' }
+      };
+
+      const result = await controller.register(mockRequest, dto);
 
       expect(result).toEqual({ access_token: mockToken });
       expect(mockAuthService.verifyRegistrationToken).toHaveBeenCalledWith(dto.registration_token);
@@ -213,7 +237,11 @@ describe('AuthController', () => {
         throw new UnauthorizedException('Invalid registration token');
       });
 
-      await expect(controller.register(dto))
+      const mockRequest = {
+        headers: { 'user-agent': 'Mozilla/5.0 Chrome/91.0' }
+      };
+
+      await expect(controller.register(mockRequest, dto))
         .rejects.toThrow(UnauthorizedException);
     });
   });

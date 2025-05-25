@@ -9,10 +9,12 @@ import { YoutubeLiveModule } from '../youtube/youtube-live.module';
 import { SchedulesModule } from '../schedules/schedules.module';
 import { RedisModule } from '../redis/redis.module';
 import { YoutubeDiscoveryModule } from '../youtube/youtube-discovery.module';
+import { UserSubscription } from '../users/user-subscription.entity';
+import { Device } from '../users/device.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Channel, Program, Schedule]),
+    TypeOrmModule.forFeature([Channel, Program, Schedule, UserSubscription, Device]),
     forwardRef(() => YoutubeLiveModule),
     forwardRef(() => SchedulesModule),
     RedisModule,

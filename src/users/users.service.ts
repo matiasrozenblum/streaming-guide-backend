@@ -5,12 +5,14 @@ import * as bcrypt from 'bcrypt';
 import { User } from './users.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { DeviceService } from './device.service';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
+    private deviceService: DeviceService,
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
@@ -28,7 +30,10 @@ export class UsersService {
   }
 
   async findOne(id: number): Promise<User> {
-    const user = await this.usersRepository.findOne({ where: { id } });
+    const user = await this.usersRepository.findOne({ 
+      where: { id },
+      relations: ['devices', 'subscriptions'],
+    });
     if (!user) throw new NotFoundException(`User with ID ${id} not found`);
     return user;
   }
@@ -68,7 +73,10 @@ export class UsersService {
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    return this.usersRepository.findOne({ where: { email } });
+    return this.usersRepository.findOne({ 
+      where: { email },
+      relations: ['devices', 'subscriptions'],
+    });
   }
 
   async findByPhone(phone: string): Promise<User | null> {
@@ -93,5 +101,29 @@ export class UsersService {
     const hashedNewPassword = await bcrypt.hash(newPassword, 10);
     user.password = hashedNewPassword;
     await this.usersRepository.save(user);
+  }
+
+  /**
+   * Ensure user has a device for the current session
+   * This is called when a user logs in to automatically create a device if needed
+   */
+  async ensureUserDevice(user: User, userAgent: string, deviceId?: string): Promise<string> {
+    console.log('🔍 [UsersService] ensureUserDevice called with:', {
+      userId: user.id,
+      userEmail: user.email,
+      userAgent,
+      deviceId,
+      timestamp: new Date().toISOString(),
+      stack: new Error().stack?.split('\n').slice(1, 4).join('\n') // Show call stack
+    });
+    
+    const device = await this.deviceService.findOrCreateDevice(user, userAgent, deviceId);
+    
+    console.log('✅ [UsersService] ensureUserDevice completed:', {
+      deviceId: device.deviceId,
+      deviceName: device.deviceName
+    });
+    
+    return device.deviceId;
   }
 }

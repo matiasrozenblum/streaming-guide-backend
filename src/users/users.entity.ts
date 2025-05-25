@@ -1,5 +1,8 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, OneToMany } from "typeorm";
 import { Exclude } from "class-transformer";
+import { Device } from "./device.entity";
+import { UserSubscription } from "./user-subscription.entity";
+
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn()
@@ -26,4 +29,10 @@ export class User {
 
   @Column({ type: 'enum', enum: ['user','admin'], default: 'user' })
   role: 'user' | 'admin';
+
+  @OneToMany(() => Device, (device) => device.user, { cascade: true })
+  devices: Device[];
+
+  @OneToMany(() => UserSubscription, (subscription) => subscription.user, { cascade: true })
+  subscriptions: UserSubscription[];
 }

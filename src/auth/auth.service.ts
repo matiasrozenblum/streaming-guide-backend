@@ -32,6 +32,8 @@ export class AuthService {
   async loginUser(
     email: string,
     password: string,
+    userAgent?: string,
+    deviceId?: string,
   ): Promise<{ access_token: string }> {
     const user = await this.usersService.findByEmail(email);
     if (!user) {
@@ -41,8 +43,12 @@ export class AuthService {
     if (!match) {
       throw new UnauthorizedException('Invalid credentials');
     }
+
+    // Device creation will be handled by frontend useDeviceId hook with correct user-agent
     const payload = { sub: user.id, type: 'public', role: user.role };
-    return { access_token: this.jwtService.sign(payload) };
+    return { 
+      access_token: this.jwtService.sign(payload),
+    };
   }
 
   async signJwtForIdentifier(identifier: string): Promise<string> {

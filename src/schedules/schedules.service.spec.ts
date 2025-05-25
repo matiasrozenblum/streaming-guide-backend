@@ -6,6 +6,7 @@ import { Schedule } from './schedules.entity';
 import { Program } from '../programs/programs.entity';
 import { RedisService } from '../redis/redis.service';
 import { YoutubeLiveService } from '../youtube/youtube-live.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
@@ -125,6 +126,12 @@ describe('SchedulesService', () => {
           provide: YoutubeLiveService,
           useValue: {
             getLiveVideoId: jest.fn(),
+          },
+        },
+        {
+          provide: NotificationsService,
+          useValue: {
+            list: jest.fn().mockResolvedValue([]),
           },
         },
       ],

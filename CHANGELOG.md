@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.4.0] - 2025-04-25
+
+### Added
+- Added program subscriptions for users with favorites section and email & push notifications
+
 ## [0.3.7] - 2025-04-25
 
 ### Changed
