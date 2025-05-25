@@ -8,7 +8,7 @@ import { AuthService } from './auth.service';
 import { OtpService } from './otp.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { RedisService } from '../redis/redis.service';
-import { UsersService } from '../users/users.service';
+import { UsersModule } from '../users/users.module';
 import { User } from '../users/users.entity';
 import { EmailService } from '../email/email.service';
 
@@ -17,6 +17,7 @@ import { EmailService } from '../email/email.service';
     ConfigModule,
     PassportModule,
     TypeOrmModule.forFeature([User]),
+    UsersModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (cs: ConfigService) => ({
@@ -27,7 +28,7 @@ import { EmailService } from '../email/email.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, OtpService, JwtStrategy, RedisService, UsersService, EmailService],
+  providers: [AuthService, OtpService, JwtStrategy, RedisService, EmailService],
   exports: [AuthService, OtpService],
 })
 export class AuthModule {}
