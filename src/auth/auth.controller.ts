@@ -75,8 +75,7 @@ export class AuthController {
     const user = await this.usersService.findByEmail(identifier);
     if (user) {
       const userAgent = req.headers['user-agent'] || 'Unknown';
-      const result = await this.authService.loginUser(identifier, '', userAgent, deviceId);
-      // For OTP login, we don't verify password, so we need to generate token directly
+      // For OTP login, we don't verify password, so we generate token and device directly
       const access_token = await this.authService.signJwtForIdentifier(identifier);
       const finalDeviceId = await this.usersService.ensureUserDevice(user, userAgent, deviceId);
       return { access_token, deviceId: finalDeviceId, isNew: false };
