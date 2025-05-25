@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -8,15 +8,17 @@ import { AuthService } from './auth.service';
 import { OtpService } from './otp.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { RedisService } from '../redis/redis.service';
-import { UsersService } from '../users/users.service';
+import { UsersModule } from '../users/users.module';
 import { User } from '../users/users.entity';
-import { EmailService } from '../email/email.service';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
     ConfigModule,
     PassportModule,
     TypeOrmModule.forFeature([User]),
+    forwardRef(() => UsersModule),
+    EmailModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (cs: ConfigService) => ({
@@ -27,7 +29,7 @@ import { EmailService } from '../email/email.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, OtpService, JwtStrategy, RedisService, UsersService, EmailService],
+  providers: [AuthService, OtpService, JwtStrategy, RedisService],
   exports: [AuthService, OtpService],
 })
 export class AuthModule {}

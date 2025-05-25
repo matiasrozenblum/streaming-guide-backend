@@ -9,6 +9,8 @@ import { UpdateChannelDto } from './dto/update-channel.dto';
 import { DataSource } from 'typeorm';
 import { Program } from '../programs/programs.entity';
 import { Schedule } from '../schedules/schedules.entity';
+import { UserSubscription } from '../users/user-subscription.entity';
+import { Device } from '../users/device.entity';
 import { SchedulesService } from '../schedules/schedules.service';
 import { RedisService } from '../redis/redis.service';
 import { YoutubeDiscoveryService } from '../youtube/youtube-discovery.service';
@@ -53,6 +55,20 @@ describe('ChannelsService', () => {
     create: jest.fn(),
   };
 
+  const mockUserSubscriptionRepository = {
+    find: jest.fn(),
+    findOne: jest.fn(),
+    save: jest.fn(),
+    create: jest.fn(),
+  };
+
+  const mockDeviceRepository = {
+    find: jest.fn(),
+    findOne: jest.fn(),
+    save: jest.fn(),
+    create: jest.fn(),
+  };
+
   const mockDataSource = {
     createQueryRunner: jest.fn().mockReturnValue({
       connect: jest.fn(),
@@ -65,10 +81,23 @@ describe('ChannelsService', () => {
         findOne: jest.fn(),
       },
     }),
+    transaction: jest.fn().mockImplementation(async (callback) => {
+      const manager = {
+        update: jest.fn(),
+      };
+      return callback(manager);
+    }),
   };
 
   const mockSchedulesService = {
-    someMethod: jest.fn(), // Add methods as needed
+    findAll: jest.fn(),
+  };
+
+  const mockRedisService = {
+    get: jest.fn(),
+    set: jest.fn(),
+    del: jest.fn(),
+    delByPattern: jest.fn(),
   };
 
   const mockYoutubeDiscoveryService = {
@@ -92,6 +121,14 @@ describe('ChannelsService', () => {
           useValue: mockScheduleRepository,
         },
         {
+          provide: getRepositoryToken(UserSubscription),
+          useValue: mockUserSubscriptionRepository,
+        },
+        {
+          provide: getRepositoryToken(Device),
+          useValue: mockDeviceRepository,
+        },
+        {
           provide: DataSource,
           useValue: mockDataSource,
         },
@@ -100,17 +137,12 @@ describe('ChannelsService', () => {
           useValue: mockSchedulesService,
         },
         {
-          provide: YoutubeDiscoveryService,
-          useValue: mockYoutubeDiscoveryService,
+          provide: RedisService,
+          useValue: mockRedisService,
         },
         {
-          provide: RedisService,
-          useValue: {
-            get: jest.fn(),
-            set: jest.fn(),
-            del: jest.fn(),
-            delByPattern: jest.fn(),
-          },
+          provide: YoutubeDiscoveryService,
+          useValue: mockYoutubeDiscoveryService,
         },
       ],
     }).compile();
@@ -134,7 +166,6 @@ describe('ChannelsService', () => {
     expect(result).toEqual(mockChannels[0]);
     expect(repo.findOne).toHaveBeenCalledWith({
       where: { id: 1 },
-      relations: ['programs'],
     });
   });
 

@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ProgramsController } from './programs.controller';
 import { ProgramsService } from './programs.service';
+import { SubscriptionService } from '../users/subscription.service';
 import { CreateProgramDto } from './dto/create-program.dto';
 import { Program } from './programs.entity';
 
@@ -19,6 +20,15 @@ describe('ProgramsController', () => {
             findOne: jest.fn().mockResolvedValue({ name: 'Programa 1', description: 'Descripción del programa' }),
             create: jest.fn().mockResolvedValue({ name: 'Programa 1', description: 'Descripción del programa' }),
             remove: jest.fn().mockResolvedValue(null),
+          },
+        },
+        {
+          provide: SubscriptionService,
+          useValue: {
+            isUserSubscribedToProgram: jest.fn(),
+            createSubscription: jest.fn(),
+            removeSubscription: jest.fn(),
+            getUserSubscriptions: jest.fn(),
           },
         },
       ],

@@ -22,8 +22,8 @@ export class ChannelsController {
 
 
   @Get('with-schedules')
-  async getChannelsWithSchedules(@Query('day') day?: string) {
-    return this.channelsService.getChannelsWithSchedules(day);
+  async getChannelsWithSchedules(@Query('day') day?: string, @Query('deviceId') deviceId?: string) {
+    return this.channelsService.getChannelsWithSchedules(day, deviceId);
   }
 
   @Get(':id')
@@ -56,7 +56,7 @@ export class ChannelsController {
 
   @Post('reorder')
   async reorder(@Body() body: { ids: number[] }) {
-    await this.channelsService.reorderChannels(body.ids);
+    await this.channelsService.reorder(body.ids);
     return { message: 'Channels reordered successfully' };
   }
 }
