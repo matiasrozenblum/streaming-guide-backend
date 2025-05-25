@@ -32,7 +32,9 @@ export class AuthService {
   async loginUser(
     email: string,
     password: string,
-  ): Promise<{ access_token: string }> {
+    userAgent?: string,
+    deviceId?: string,
+  ): Promise<{ access_token: string; deviceId: string }> {
     const user = await this.usersService.findByEmail(email);
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
@@ -41,8 +43,19 @@ export class AuthService {
     if (!match) {
       throw new UnauthorizedException('Invalid credentials');
     }
+
+    // Ensure user has a device for this session
+    const finalDeviceId = await this.usersService.ensureUserDevice(
+      user,
+      userAgent || 'Unknown',
+      deviceId,
+    );
+
     const payload = { sub: user.id, type: 'public', role: user.role };
-    return { access_token: this.jwtService.sign(payload) };
+    return { 
+      access_token: this.jwtService.sign(payload),
+      deviceId: finalDeviceId,
+    };
   }
 
   async signJwtForIdentifier(identifier: string): Promise<string> {

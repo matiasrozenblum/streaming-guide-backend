@@ -4,17 +4,21 @@ import {
     PrimaryGeneratedColumn,
     CreateDateColumn,
     Unique,
+    ManyToOne,
+    JoinColumn,
   } from 'typeorm';
+import { Device } from '../users/device.entity';
   
   @Entity('push_subscriptions')
-  @Unique(['deviceId', 'endpoint'])
+  @Unique(['device', 'endpoint'])
   export class PushSubscriptionEntity {
     @PrimaryGeneratedColumn('uuid')
     id: string;
   
-    @Column({ name: 'device_id' })
-    deviceId: string;
-  
+    @ManyToOne(() => Device, (device) => device.pushSubscriptions, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'device_id' })
+    device: Device;
+
     @Column('text')
     endpoint: string;
   

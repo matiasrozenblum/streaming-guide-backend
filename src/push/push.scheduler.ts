@@ -7,7 +7,7 @@ import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
 
 import { Schedule } from '../schedules/schedules.entity';
-import { NotificationPreferenceEntity } from '../notifications/notification-preference.entity';
+import { UserSubscription, NotificationMethod } from '../users/user-subscription.entity';
 import { PushSubscriptionEntity } from './push-subscription.entity';
 import { PushService } from './push.service';
 
@@ -22,8 +22,8 @@ export class PushScheduler {
     private readonly pushService: PushService,
     @InjectRepository(Schedule)
     private readonly scheduleRepo: Repository<Schedule>,
-    @InjectRepository(NotificationPreferenceEntity)
-    private readonly prefsRepo: Repository<NotificationPreferenceEntity>,
+    @InjectRepository(UserSubscription)
+    private readonly userSubscriptionRepo: Repository<UserSubscription>,
     @InjectRepository(PushSubscriptionEntity)
     private readonly subsRepo: Repository<PushSubscriptionEntity>,
   ) {}
@@ -62,40 +62,47 @@ export class PushScheduler {
     // 3) IDs únicos de programas
     const programIds = Array.from(new Set(dueSchedules.map(s => s.program.id)));
 
-    // 4) Traer preferencias sólo para esos programas
-    const prefs = await this.prefsRepo.find({ where: { programId: In(programIds) } });
-    if (prefs.length === 0) {
-      this.logger.debug('No hay preferencias para estos programas.');
+    // 4) Traer subscripciones de usuarios para esos programas (que incluyan push notifications)
+    const userSubscriptions = await this.userSubscriptionRepo.find({
+      where: { 
+        program: { id: In(programIds) },
+        isActive: true,
+        notificationMethod: In([NotificationMethod.PUSH, NotificationMethod.BOTH])
+      },
+      relations: ['user', 'user.devices', 'user.devices.pushSubscriptions', 'program'],
+    });
+
+    if (userSubscriptions.length === 0) {
+      this.logger.debug('No hay subscripciones activas para estos programas.');
       return;
     }
 
-    // 5) Traer todas las subscripciones de los deviceId implicados
-    const deviceIds = Array.from(new Set(prefs.map(p => p.deviceId)));
-    const allSubs = await this.subsRepo.find({ where: { deviceId: In(deviceIds) } });
-    if (allSubs.length === 0) {
-      this.logger.debug('No hay subscripciones de push para esos dispositivos.');
-      return;
-    }
-
-    // 6) Enviar notificaciones por programa + dispositivo
+    // 5) Enviar notificaciones por programa + usuario
     for (const schedule of dueSchedules) {
       const title = schedule.program.name;
-      // dispositivos que pidieron este programa
-      const programPrefs = prefs.filter(p => p.programId === schedule.program.id);
-      for (const { deviceId } of programPrefs) {
-        const subs = allSubs.filter(s => s.deviceId === deviceId);
-        for (const sub of subs) {
-          try {
-            await this.pushService.sendNotification(sub, {
-              title,
-              options: {
-                body: `¡En 10 minutos comienza ${title}!`, 
-                icon: '/img/logo-192x192.png',
-              },
-            });
-            this.logger.log(`✅ Notificación enviada a ${deviceId} para "${title}"`);
-          } catch (err) {
-            this.logger.error(`❌ Falló notificar a ${deviceId}`, err as any);
+      // subscripciones para este programa específico
+      const programSubscriptions = userSubscriptions.filter(sub => sub.program.id === schedule.program.id);
+      
+      for (const subscription of programSubscriptions) {
+        const user = subscription.user;
+        if (user.devices && user.devices.length > 0) {
+          for (const device of user.devices) {
+            if (device.pushSubscriptions && device.pushSubscriptions.length > 0) {
+              for (const pushSub of device.pushSubscriptions) {
+                try {
+                  await this.pushService.sendNotification(pushSub, {
+                    title,
+                    options: {
+                      body: `¡En 10 minutos comienza ${title}!`, 
+                      icon: '/img/logo-192x192.png',
+                    },
+                  });
+                  this.logger.log(`✅ Notificación enviada a usuario ${user.email} (device: ${device.deviceId}) para "${title}"`);
+                } catch (err) {
+                  this.logger.error(`❌ Falló notificar a usuario ${user.email} (device: ${device.deviceId})`, err as any);
+                }
+              }
+            }
           }
         }
       }

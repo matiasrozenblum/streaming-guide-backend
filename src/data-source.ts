@@ -7,6 +7,9 @@ import { Schedule } from './schedules/schedules.entity';
 import { Panelist } from './panelists/panelists.entity';
 import { Config as AppConfig } from './config/config.entity';
 import { User } from './users/users.entity';
+import { Device } from './users/device.entity';
+import { UserSubscription } from './users/user-subscription.entity';
+import { PushSubscriptionEntity } from './push/push-subscription.entity';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -21,6 +24,9 @@ export const AppDataSource = new DataSource({
     Panelist,
     AppConfig,
     User,
+    Device,
+    UserSubscription,
+    PushSubscriptionEntity,
   ],
   migrations: ['src/migrations/*.ts'],
   synchronize: false,

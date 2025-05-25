@@ -9,7 +9,9 @@ import { Schedule } from '@/schedules/schedules.entity';
 import { SchedulesService } from '@/schedules/schedules.service';
 import { RedisService } from '@/redis/redis.service';
 import { YoutubeDiscoveryService } from '@/youtube/youtube-discovery.service';
-import { NotificationPreferenceEntity } from '@/notifications/notification-preference.entity';
+import { UserSubscription } from '@/users/user-subscription.entity';
+import { Device } from '@/users/device.entity';
+import { User } from '@/users/users.entity';
 
 type ChannelWithSchedules = {
   channel: {
@@ -44,8 +46,10 @@ export class ChannelsService {
     private readonly programsRepository: Repository<Program>,
     @InjectRepository(Schedule)
     private readonly scheduleRepo: Repository<Schedule>,
-    @InjectRepository(NotificationPreferenceEntity)
-    private readonly notificationPreferenceRepo: Repository<NotificationPreferenceEntity>,
+    @InjectRepository(UserSubscription)
+    private readonly userSubscriptionRepo: Repository<UserSubscription>,
+    @InjectRepository(Device)
+    private readonly deviceRepo: Repository<Device>,
     private readonly dataSource: DataSource,
     private readonly schedulesService: SchedulesService,
     private readonly redisService: RedisService,
@@ -54,15 +58,14 @@ export class ChannelsService {
 
   async findAll(): Promise<Channel[]> {
     return this.channelsRepository.find({
-      order: { order: 'ASC' },
+      order: {
+        order: 'ASC',
+      },
     });
   }
 
   async findOne(id: number): Promise<Channel> {
-    const channel = await this.channelsRepository.findOne({
-      where: { id: id },
-      relations: ['programs'],
-    });
+    const channel = await this.channelsRepository.findOne({ where: { id } });
     if (!channel) {
       throw new NotFoundException(`Channel with ID ${id} not found`);
     }
@@ -116,24 +119,13 @@ export class ChannelsService {
     await this.redisService.delByPattern('schedules:all:*');
   }
 
-  async reorderChannels(newOrderIds: number[]): Promise<void> {
-    if (!newOrderIds.length) {
-      throw new Error('No channel IDs provided for reordering.');
-    }
-
+  async reorder(channelIds: number[]): Promise<void> {
     await this.dataSource.transaction(async (manager) => {
-      for (let i = 0; i < newOrderIds.length; i++) {
-        const id = newOrderIds[i];
-        const channel = await manager.findOne(Channel, { where: { id } });
-
-        if (!channel) {
-          throw new NotFoundException(`Channel with ID ${id} not found`);
-        }
-
-        channel.order = i + 1;
-        await manager.save(channel);
+      for (let i = 0; i < channelIds.length; i++) {
+        await manager.update(Channel, channelIds[i], { order: i + 1 });
       }
     });
+    await this.redisService.delByPattern('schedules:all:*');
   }
 
   async getChannelsWithSchedules(day?: string, deviceId?: string): Promise<ChannelWithSchedules[]> {
@@ -147,10 +139,24 @@ export class ChannelsService {
       dayOfWeek: day ? day.toLowerCase() : undefined,
     });
 
-    const prefIds = deviceId
-      ? (await this.notificationPreferenceRepo.find({ where: { deviceId } })).map((p) => p.programId)
-      : [];
-    const prefSet = new Set(prefIds);
+    // Get user subscriptions based on deviceId
+    let subscribedProgramIds: Set<number> = new Set();
+    if (deviceId) {
+      // Find the device and get the user
+      const device = await this.deviceRepo.findOne({
+        where: { deviceId },
+        relations: ['user'],
+      });
+
+      if (device?.user) {
+        // Get user's active subscriptions
+        const subscriptions = await this.userSubscriptionRepo.find({
+          where: { user: { id: device.user.id }, isActive: true },
+          relations: ['program'],
+        });
+        subscribedProgramIds = new Set(subscriptions.map(sub => sub.program.id));
+      }
+    }
 
     const schedulesGroupedByChannelId = schedules.reduce((acc, schedule) => {
       const channelId = schedule.program?.channel?.id;
@@ -171,7 +177,7 @@ export class ChannelsService {
         day_of_week: schedule.day_of_week,
         start_time: schedule.start_time,
         end_time: schedule.end_time,
-        subscribed: prefSet.has(schedule.program.id),
+        subscribed: subscribedProgramIds.has(schedule.program.id),
         program: {
           id: schedule.program.id,
           name: schedule.program.name,

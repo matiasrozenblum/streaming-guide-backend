@@ -1,31 +1,30 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ScheduleModule as NestScheduleModule } from '@nestjs/schedule';
-import { PushSubscriptionEntity } from './push-subscription.entity';
 import { PushService } from './push.service';
-import { NotificationPreferenceEntity } from '@/notifications/notification-preference.entity';
 import { PushController } from './push.controller';
-import { PushScheduler }     from './push.scheduler';
-import { NotificationsModule } from '@/notifications/notifications.module';
-import { Schedule } from '@/schedules/schedules.entity';
+import { PushScheduler } from './push.scheduler';
+import { PushSubscriptionEntity } from './push-subscription.entity';
+import { Device } from '../users/device.entity';
+import { UserSubscription } from '../users/user-subscription.entity';
+import { NotificationsModule } from '../notifications/notifications.module';
+import { Schedule } from '../schedules/schedules.entity';
+import { Program } from '../programs/programs.entity';
+import { Channel } from '../channels/channels.entity';
 
 @Module({
   imports: [
-    // Necesitas el módulo de scheduling de Nest para que @Cron funcione
-    NestScheduleModule,
-    NotificationsModule,
-    // Registramos los repositorios que usamos
     TypeOrmModule.forFeature([
       PushSubscriptionEntity,
-      NotificationPreferenceEntity,
+      Device,
+      UserSubscription,
       Schedule,
+      Program,
+      Channel,
     ]),
+    NotificationsModule,
   ],
+  providers: [PushService, PushScheduler],
   controllers: [PushController],
-  providers: [
-    PushService,
-    PushScheduler,
-  ],
   exports: [PushService],
 })
 export class PushModule {}

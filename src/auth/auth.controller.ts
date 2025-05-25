@@ -4,6 +4,7 @@ import {
   Body,
   BadRequestException,
   UnauthorizedException,
+  Request,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { OtpService } from './otp.service';
@@ -34,11 +35,16 @@ export class AuthController {
 
   @Post('login')
   @ApiOperation({ summary: 'Login with email & password' })
-  @ApiResponse({ status: 201, description: 'Access token' })
-  async loginUser(@Body() body: { email: string; password: string }) {
-    const { email, password } = body;
+  @ApiResponse({ status: 201, description: 'Access token and device ID' })
+  async loginUser(
+    @Request() req: any,
+    @Body() body: { email: string; password: string; deviceId?: string },
+  ) {
+    const { email, password, deviceId } = body;
+    const userAgent = req.headers['user-agent'] || 'Unknown';
+    
     try {
-      return await this.authService.loginUser(email, password);
+      return await this.authService.loginUser(email, password, userAgent, deviceId);
     } catch (err) {
       throw new UnauthorizedException(err.message);
     }
@@ -58,15 +64,22 @@ export class AuthController {
 
   @Post('verify-code')
   @ApiOperation({ summary: 'Verifica OTP y retorna JWT o registration_token' })
-  async verifyCode(@Body() { identifier, code }: { identifier: string; code: string }) {
+  async verifyCode(
+    @Request() req: any,
+    @Body() { identifier, code, deviceId }: { identifier: string; code: string; deviceId?: string },
+  ) {
     if (!identifier || !code) throw new BadRequestException('Falta identificador o código');
     await this.otpService.verifyCode(identifier, code);
 
     // Si existe el usuario, lo logueamos
     const user = await this.usersService.findByEmail(identifier);
     if (user) {
+      const userAgent = req.headers['user-agent'] || 'Unknown';
+      const result = await this.authService.loginUser(identifier, '', userAgent, deviceId);
+      // For OTP login, we don't verify password, so we need to generate token directly
       const access_token = await this.authService.signJwtForIdentifier(identifier);
-      return { access_token, isNew: false };
+      const finalDeviceId = await this.usersService.ensureUserDevice(user, userAgent, deviceId);
+      return { access_token, deviceId: finalDeviceId, isNew: false };
     }
 
     // Si no existe, devolvemos un token de registro
@@ -76,16 +89,23 @@ export class AuthController {
 
   @Post('register')
   @ApiOperation({ summary: 'Completa el registro y retorna JWT de sesión' })
-  async register(@Body() dto: RegisterDto) {
-    const { registration_token, firstName, lastName, password } = dto;
+  async register(
+    @Request() req: any,
+    @Body() dto: RegisterDto & { deviceId?: string },
+  ) {
+    const { registration_token, firstName, lastName, password, deviceId } = dto;
     // 1) Validamos el token y extraemos el email
     const { email } = this.authService.verifyRegistrationToken(registration_token);
 
     // 2) Creamos el usuario (hasheo de password incluido en UsersService)
     const user = await this.usersService.create({ email, firstName, lastName, password });
 
-    // 3) Generamos el JWT definitivo
+    // 3) Crear device para el nuevo usuario
+    const userAgent = req.headers['user-agent'] || 'Unknown';
+    const finalDeviceId = await this.usersService.ensureUserDevice(user, userAgent, deviceId);
+
+    // 4) Generamos el JWT definitivo
     const access_token = this.jwtService.sign({ sub: user.id, type: 'public', role: user.role });
-    return { access_token };
+    return { access_token, deviceId: finalDeviceId };
   }
 }
