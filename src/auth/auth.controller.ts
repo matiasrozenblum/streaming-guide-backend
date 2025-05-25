@@ -81,13 +81,12 @@ export class AuthController {
     // Si existe el usuario, lo logueamos
     const user = await this.usersService.findByEmail(identifier);
     if (user) {
-      console.log('✅ [AuthController] User found, creating device for user:', user.id);
-      const userAgent = req.headers['user-agent'] || 'Unknown';
-      // For OTP login, we don't verify password, so we generate token and device directly
+      console.log('✅ [AuthController] User found, generating token for user:', user.id);
+      // For OTP login, we don't verify password, so we generate token directly
+      // Device creation will be handled by frontend useDeviceId hook with correct user-agent
       const access_token = await this.authService.signJwtForIdentifier(identifier);
-      const finalDeviceId = await this.usersService.ensureUserDevice(user, userAgent, deviceId);
-      console.log('✅ [AuthController] Device created/updated:', finalDeviceId);
-      return { access_token, deviceId: finalDeviceId, isNew: false };
+      console.log('✅ [AuthController] Token generated, device creation delegated to frontend');
+      return { access_token, isNew: false };
     }
 
     console.log('🆕 [AuthController] New user, returning registration token');
@@ -117,13 +116,11 @@ export class AuthController {
     const user = await this.usersService.create({ email, firstName, lastName, password });
     console.log('✅ [AuthController] User created:', user.id);
 
-    // 3) Crear device para el nuevo usuario
-    const userAgent = req.headers['user-agent'] || 'Unknown';
-    const finalDeviceId = await this.usersService.ensureUserDevice(user, userAgent, deviceId);
-    console.log('✅ [AuthController] Device created for new user:', finalDeviceId);
+    // 3) Device creation will be handled by frontend useDeviceId hook with correct user-agent
+    console.log('✅ [AuthController] User registration complete, device creation delegated to frontend');
 
     // 4) Generamos el JWT definitivo
     const access_token = this.jwtService.sign({ sub: user.id, type: 'public', role: user.role });
-    return { access_token, deviceId: finalDeviceId };
+    return { access_token };
   }
 }

@@ -34,7 +34,7 @@ export class AuthService {
     password: string,
     userAgent?: string,
     deviceId?: string,
-  ): Promise<{ access_token: string; deviceId: string }> {
+  ): Promise<{ access_token: string }> {
     const user = await this.usersService.findByEmail(email);
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
@@ -44,17 +44,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Ensure user has a device for this session
-    const finalDeviceId = await this.usersService.ensureUserDevice(
-      user,
-      userAgent || 'Unknown',
-      deviceId,
-    );
-
+    // Device creation will be handled by frontend useDeviceId hook with correct user-agent
     const payload = { sub: user.id, type: 'public', role: user.role };
     return { 
       access_token: this.jwtService.sign(payload),
-      deviceId: finalDeviceId,
     };
   }
 
