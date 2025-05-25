@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.3.7] - 2025-04-25
+
+### Changed
+- Updated update-user.dto.ts to be able to update a user's role
+
 ## [0.3.6] - 2025-04-19
 
 ### Removed
