@@ -56,7 +56,7 @@ export class ChannelsController {
 
   @Post('reorder')
   async reorder(@Body() body: { ids: number[] }) {
-    await this.channelsService.reorderChannels(body.ids);
+    await this.channelsService.reorder(body.ids);
     return { message: 'Channels reordered successfully' };
   }
 }
