@@ -12,6 +12,7 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SubscriptionService, CreateSubscriptionDto, UpdateSubscriptionDto } from './subscription.service';
 import { DeviceService } from './device.service';
+import { UsersService } from './users.service';
 
 @Controller('subscriptions')
 @UseGuards(JwtAuthGuard)
@@ -19,6 +20,7 @@ export class SubscriptionController {
   constructor(
     private subscriptionService: SubscriptionService,
     private deviceService: DeviceService,
+    private usersService: UsersService,
   ) {}
 
   @Post()
@@ -26,7 +28,25 @@ export class SubscriptionController {
     @Request() req: any,
     @Body() dto: CreateSubscriptionDto,
   ) {
-    const user = req.user;
+    const userFromToken = req.user;
+    
+    // Check if this is a legacy authentication token
+    if (userFromToken.type === 'public' && (typeof userFromToken.id === 'string' || userFromToken.id === 'public')) {
+      return {
+        error: 'Subscriptions not available for legacy authentication',
+        message: 'Please register with a user account to use subscription features',
+      };
+    }
+    
+    // For real users, fetch the actual User entity from database
+    const user = await this.usersService.findOne(userFromToken.id);
+    if (!user) {
+      return {
+        error: 'User not found',
+        message: 'Unable to create subscription for this user',
+      };
+    }
+    
     const subscription = await this.subscriptionService.createSubscription(user, dto);
     
     return {
@@ -42,8 +62,17 @@ export class SubscriptionController {
 
   @Get()
   async getUserSubscriptions(@Request() req: any) {
-    const user = req.user;
-    const subscriptions = await this.subscriptionService.getUserSubscriptions(user.id);
+    const userFromToken = req.user;
+    
+    // Check if this is a legacy authentication token
+    if (userFromToken.type === 'public' && (typeof userFromToken.id === 'string' || userFromToken.id === 'public')) {
+      return {
+        subscriptions: [],
+        message: 'Subscriptions not available for legacy authentication',
+      };
+    }
+    
+    const subscriptions = await this.subscriptionService.getUserSubscriptions(userFromToken.id);
     
     return {
       subscriptions: subscriptions.map(sub => ({
@@ -71,9 +100,18 @@ export class SubscriptionController {
     @Param('id') subscriptionId: string,
     @Body() dto: UpdateSubscriptionDto,
   ) {
-    const user = req.user;
+    const userFromToken = req.user;
+    
+    // Check if this is a legacy authentication token
+    if (userFromToken.type === 'public' && (typeof userFromToken.id === 'string' || userFromToken.id === 'public')) {
+      return {
+        error: 'Subscriptions not available for legacy authentication',
+        message: 'Please register with a user account to use subscription features',
+      };
+    }
+    
     const subscription = await this.subscriptionService.updateSubscription(
-      user.id,
+      userFromToken.id,
       subscriptionId,
       dto,
     );
@@ -93,8 +131,17 @@ export class SubscriptionController {
     @Request() req: any,
     @Param('id') subscriptionId: string,
   ) {
-    const user = req.user;
-    await this.subscriptionService.removeSubscription(user.id, subscriptionId);
+    const userFromToken = req.user;
+    
+    // Check if this is a legacy authentication token
+    if (userFromToken.type === 'public' && (typeof userFromToken.id === 'string' || userFromToken.id === 'public')) {
+      return {
+        error: 'Subscriptions not available for legacy authentication',
+        message: 'Please register with a user account to use subscription features',
+      };
+    }
+    
+    await this.subscriptionService.removeSubscription(userFromToken.id, subscriptionId);
     
     return {
       message: 'Successfully unsubscribed from program',
@@ -106,9 +153,19 @@ export class SubscriptionController {
     @Request() req: any,
     @Param('programId') programId: number,
   ) {
-    const user = req.user;
+    const userFromToken = req.user;
+    
+    // Check if this is a legacy authentication token
+    if (userFromToken.type === 'public' && (typeof userFromToken.id === 'string' || userFromToken.id === 'public')) {
+      return {
+        isSubscribed: false,
+        programId,
+        message: 'Subscriptions not available for legacy authentication',
+      };
+    }
+    
     const isSubscribed = await this.subscriptionService.isUserSubscribedToProgram(
-      user.id,
+      userFromToken.id,
       programId,
     );
     
@@ -123,7 +180,25 @@ export class SubscriptionController {
     @Request() req: any,
     @Body() body: { deviceId?: string },
   ) {
-    const user = req.user;
+    const userFromToken = req.user;
+    
+    // Check if this is a legacy authentication token
+    if (userFromToken.type === 'public' && (typeof userFromToken.id === 'string' || userFromToken.id === 'public')) {
+      return {
+        error: 'Device registration not available for legacy authentication',
+        message: 'Please register with a user account to use device features',
+      };
+    }
+    
+    // For real users, fetch the actual User entity from database
+    const user = await this.usersService.findOne(userFromToken.id);
+    if (!user) {
+      return {
+        error: 'User not found',
+        message: 'Unable to register device for this user',
+      };
+    }
+    
     const userAgent = req.headers['user-agent'] || 'Unknown';
     
     const device = await this.deviceService.findOrCreateDevice(
