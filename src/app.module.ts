@@ -22,6 +22,8 @@ import { RedisService } from './redis/redis.service';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PushModule } from './push/push.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { UsersModule } from './users/users.module';
+
 @Module({
   imports: [
     ScheduleModule.forRoot(),
@@ -68,6 +70,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     EmailModule,
     PushModule,
     NotificationsModule,
+    UsersModule,
   ],
   controllers: [AppController],
   providers: [

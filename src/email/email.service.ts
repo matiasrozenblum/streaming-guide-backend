@@ -23,4 +23,29 @@ export class EmailService {
 
     console.log('📬 Email de cambios enviado.');
   }
+
+  async sendOtpCode(to: string, code: string, ttlMinutes: number) {
+    const html = this.buildOtpHtml(code, ttlMinutes);
+    await this.mailerService.sendMail({
+      to,
+      subject: 'Tu código de acceso • La Guía del Streaming',
+      html,
+    });
+    console.log(`OTP enviado a ${to}: ${code}`);
+  }
+
+  private buildOtpHtml(code: string, ttl: number) {
+    return `
+      <div style="font-family: sans-serif; line-height:1.4;">
+        <h2>Tu código de acceso</h2>
+        <p>Usa este código para acceder a <strong>La Guía del Streaming</strong>:</p>
+        <p style="font-size: 2rem; margin: .5em 0;"><strong>${code}</strong></p>
+        <p>Va a expirar en ${ttl} minutos.</p>
+        <hr/>
+        <p style="font-size:.8em; color: #666;">
+          Si no solicitaste este código, puedes ignorar este mensaje.
+        </p>
+      </div>
+    `;
+  }
 }

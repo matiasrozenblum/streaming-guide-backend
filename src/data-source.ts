@@ -1,0 +1,28 @@
+import 'dotenv/config';
+import { DataSource } from 'typeorm';
+
+import { Channel } from './channels/channels.entity';
+import { Program } from './programs/programs.entity';
+import { Schedule } from './schedules/schedules.entity';
+import { Panelist } from './panelists/panelists.entity';
+import { Config as AppConfig } from './config/config.entity';
+import { User } from './users/users.entity';
+
+const isProduction = process.env.NODE_ENV === 'production';
+
+export const AppDataSource = new DataSource({
+  type: 'postgres',
+  url: process.env.DATABASE_URL,
+  ssl: isProduction ? { rejectUnauthorized: false } : false,
+  entities: [
+    Channel,
+    Program,
+    Schedule,
+    Panelist,
+    AppConfig,
+    User,
+  ],
+  migrations: ['src/migrations/*.ts'],
+  synchronize: false,
+  logging: !isProduction,
+});

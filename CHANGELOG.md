@@ -17,6 +17,52 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.3.7] - 2025-04-25
+
+### Changed
+- Updated update-user.dto.ts to be able to update a user's role
+
+## [0.3.6] - 2025-04-19
+
+### Removed
+- Removed youtube fetch counters from cache
+
+## [0.3.5] - 2025-04-18
+
+### Fixed
+- Fixed patch users validations for empty strings
+
+## [0.3.4] - 2025-04-18
+
+### Added
+- Added reset password feature in the login flow
+
+## [0.3.3] - 2025-04-18
+
+### Fixed
+- Fixed user endpoints jwt guards and roles
+
+## [0.3.2] - 2025-04-17
+
+### Fixed
+- Fixed jwt strategy
+
+## [0.3.1] - 2025-04-16
+
+### Added
+- Added uses table DB migration
+
+### Fixed
+- Fixed backoffice login token role
+
+## [0.3.0] - 2025-04-16
+
+### Added
+- Added users CRUD
+
+### Changed
+- Now F&F login endpoint is /auth/login/legacy and /auth/login is the regular users's login
+
 ## [0.2.16] - 2025-04-02
 
 ### Fixed
