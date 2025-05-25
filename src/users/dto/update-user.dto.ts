@@ -1,4 +1,4 @@
-import { IsString, IsEmail, MinLength, Matches, IsOptional } from 'class-validator';
+import { IsString, IsEmail, MinLength, Matches, IsOptional, IsEnum } from 'class-validator';
 
 export class UpdateUserDto {
   @IsOptional()
@@ -22,4 +22,8 @@ export class UpdateUserDto {
   @IsString()
   @MinLength(6)
   password?: string;
+
+  @IsOptional()
+  @IsEnum(['user', 'admin'], { message: 'Role must be either user or admin' })
+  role?: 'user' | 'admin';
 }
