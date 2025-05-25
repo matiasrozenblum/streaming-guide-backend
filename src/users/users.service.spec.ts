@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UsersService } from './users.service';
 import { User } from './users.entity';
+import { DeviceService } from './device.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { NotFoundException, UnauthorizedException } from '@nestjs/common';
@@ -11,6 +12,7 @@ import * as bcrypt from 'bcrypt';
 describe('UsersService', () => {
   let service: UsersService;
   let repository: Repository<User>;
+  let deviceService: DeviceService;
 
   const mockUser = {
     id: 1,
@@ -29,6 +31,10 @@ describe('UsersService', () => {
     delete: jest.fn(),
   };
 
+  const mockDeviceService = {
+    findOrCreateDevice: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -37,11 +43,16 @@ describe('UsersService', () => {
           provide: getRepositoryToken(User),
           useValue: mockRepository,
         },
+        {
+          provide: DeviceService,
+          useValue: mockDeviceService,
+        },
       ],
     }).compile();
 
     service = module.get<UsersService>(UsersService);
     repository = module.get<Repository<User>>(getRepositoryToken(User));
+    deviceService = module.get<DeviceService>(DeviceService);
   });
 
   afterEach(() => {
@@ -92,7 +103,10 @@ describe('UsersService', () => {
 
       const result = await service.findOne(1);
 
-      expect(mockRepository.findOne).toHaveBeenCalledWith({ where: { id: 1 } });
+      expect(mockRepository.findOne).toHaveBeenCalledWith({ 
+        where: { id: 1 },
+        relations: ['devices', 'subscriptions'],
+      });
       expect(result).toEqual(mockUser);
     });
 
@@ -145,7 +159,10 @@ describe('UsersService', () => {
 
       const result = await service.findByEmail('test@example.com');
 
-      expect(mockRepository.findOne).toHaveBeenCalledWith({ where: { email: 'test@example.com' } });
+      expect(mockRepository.findOne).toHaveBeenCalledWith({ 
+        where: { email: 'test@example.com' },
+        relations: ['devices', 'subscriptions'],
+      });
       expect(result).toEqual(mockUser);
     });
   });
@@ -190,6 +207,33 @@ describe('UsersService', () => {
 
       await expect(service.changePassword(1, currentPassword, newPassword))
         .rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('ensureUserDevice', () => {
+    it('should create device for user', async () => {
+      const userAgent = 'Mozilla/5.0 Chrome/91.0';
+      const deviceId = 'test-device-id';
+      const mockDevice = { deviceId: 'created-device-id' };
+
+      mockDeviceService.findOrCreateDevice.mockResolvedValue(mockDevice);
+
+      const result = await service.ensureUserDevice(mockUser as User, userAgent, deviceId);
+
+      expect(mockDeviceService.findOrCreateDevice).toHaveBeenCalledWith(mockUser, userAgent, deviceId);
+      expect(result).toBe('created-device-id');
+    });
+
+    it('should create device without deviceId', async () => {
+      const userAgent = 'Mozilla/5.0 Chrome/91.0';
+      const mockDevice = { deviceId: 'auto-generated-device-id' };
+
+      mockDeviceService.findOrCreateDevice.mockResolvedValue(mockDevice);
+
+      const result = await service.ensureUserDevice(mockUser as User, userAgent);
+
+      expect(mockDeviceService.findOrCreateDevice).toHaveBeenCalledWith(mockUser, userAgent, undefined);
+      expect(result).toBe('auto-generated-device-id');
     });
   });
 }); 

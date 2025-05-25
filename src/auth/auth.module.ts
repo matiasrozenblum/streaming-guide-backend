@@ -10,7 +10,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { RedisService } from '../redis/redis.service';
 import { UsersModule } from '../users/users.module';
 import { User } from '../users/users.entity';
-import { EmailService } from '../email/email.service';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
@@ -18,6 +18,7 @@ import { EmailService } from '../email/email.service';
     PassportModule,
     TypeOrmModule.forFeature([User]),
     forwardRef(() => UsersModule),
+    EmailModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (cs: ConfigService) => ({
@@ -28,7 +29,7 @@ import { EmailService } from '../email/email.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, OtpService, JwtStrategy, RedisService, EmailService],
+  providers: [AuthService, OtpService, JwtStrategy, RedisService],
   exports: [AuthService, OtpService],
 })
 export class AuthModule {}
