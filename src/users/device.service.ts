@@ -17,38 +17,60 @@ export class DeviceService {
     userAgent: string,
     deviceId?: string,
   ): Promise<Device> {
-    // If deviceId is provided, try to find existing device
-    if (deviceId) {
-      let device = await this.deviceRepository.findOne({
-        where: { deviceId },
-        relations: ['user'],
-      });
-      
-      if (device) {
-        // Update last seen and associate with user if not already associated
-        if (!device.user || device.user.id !== user.id) {
-          device.user = user;
-        }
-        device.lastSeen = new Date();
-        device.userAgent = userAgent;
-        return await this.deviceRepository.save(device);
+    // Generate device ID if not provided
+    const finalDeviceId = deviceId || uuidv4();
+    
+    // Try to find existing device first
+    let device = await this.deviceRepository.findOne({
+      where: { deviceId: finalDeviceId },
+      relations: ['user'],
+    });
+    
+    if (device) {
+      // Update last seen and associate with user if not already associated
+      if (!device.user || device.user.id !== user.id) {
+        device.user = user;
       }
+      device.lastSeen = new Date();
+      device.userAgent = userAgent;
+      return await this.deviceRepository.save(device);
     }
 
-    // Generate new device ID if not provided or device not found
-    const newDeviceId = deviceId || uuidv4();
-    
-    // Create new device
-    const device = this.deviceRepository.create({
-      deviceId: newDeviceId,
-      user,
-      userAgent,
-      deviceType: this.detectDeviceType(userAgent),
-      deviceName: this.generateDeviceName(userAgent),
-      lastSeen: new Date(),
-    });
+    // Try to create new device
+    try {
+      const newDevice = this.deviceRepository.create({
+        deviceId: finalDeviceId,
+        user,
+        userAgent,
+        deviceType: this.detectDeviceType(userAgent),
+        deviceName: this.generateDeviceName(userAgent),
+        lastSeen: new Date(),
+      });
 
-    return await this.deviceRepository.save(device);
+      return await this.deviceRepository.save(newDevice);
+    } catch (error) {
+      // If unique constraint violation, try to find the device again
+      // This handles race conditions where another request created the device
+      if (error.code === '23505') { // PostgreSQL unique violation
+        device = await this.deviceRepository.findOne({
+          where: { deviceId: finalDeviceId },
+          relations: ['user'],
+        });
+        
+        if (device) {
+          // Update the existing device
+          if (!device.user || device.user.id !== user.id) {
+            device.user = user;
+          }
+          device.lastSeen = new Date();
+          device.userAgent = userAgent;
+          return await this.deviceRepository.save(device);
+        }
+      }
+      
+      // Re-throw if it's not a unique constraint violation or device still not found
+      throw error;
+    }
   }
 
   async getUserDevices(userId: number): Promise<Device[]> {
