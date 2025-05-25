@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
@@ -9,9 +9,13 @@ import { Program } from '../programs/programs.entity';
 import { DeviceService } from './device.service';
 import { SubscriptionService } from './subscription.service';
 import { SubscriptionController } from './subscription.controller';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, Device, UserSubscription, Program])],
+  imports: [
+    TypeOrmModule.forFeature([User, Device, UserSubscription, Program]),
+    forwardRef(() => AuthModule),
+  ],
   controllers: [UsersController, SubscriptionController],
   providers: [UsersService, DeviceService, SubscriptionService],
   exports: [UsersService, DeviceService, SubscriptionService],
