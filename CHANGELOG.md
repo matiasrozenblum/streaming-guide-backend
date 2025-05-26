@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.4.1] - 2025-04-25
+
+### Fixed
+- Fixed scrapers and email template time formatting
+
 ## [0.4.0] - 2025-04-25
 
 ### Added

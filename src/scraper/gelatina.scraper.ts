@@ -25,8 +25,27 @@ export async function scrapeGelatinaSchedule(): Promise<GelatinaProgram[]> {
     const programRows = document.querySelectorAll('.et_pb_row');
 
     const formatTime = (input: string) => {
-      const clean = input.replace(/[^\d:]/g, '');
-      return clean.includes(':') ? clean : `${clean}:00`;
+      if (!input) return '';
+      
+      // Remove any extra whitespace and non-digit/colon characters
+      const clean = input.replace(/[^\d:]/g, '').trim();
+      
+      // Handle different time formats
+      if (clean.includes(':')) {
+        const parts = clean.split(':');
+        if (parts.length >= 2) {
+          const hours = parts[0].padStart(2, '0');
+          const minutes = parts[1].padStart(2, '0');
+          return `${hours}:${minutes}`;
+        }
+      }
+      
+      // If it's just a number, convert to "HH:00"
+      if (/^\d+$/.test(clean)) {
+        return `${clean.padStart(2, '0')}:00`;
+      }
+      
+      return clean;
     };
 
     programRows.forEach((row, index) => {
