@@ -291,7 +291,34 @@ function formatScheduleData(data: any, type: 'before' | 'after') {
 // Normaliza horas tipo "10" a "10:00" si falta el minuto
 function normalizeTime(time?: string) {
   if (!time) return '-';
-  return time.includes(':') ? time : `${time}:00`;
+  
+  // Remove any extra whitespace
+  time = time.trim();
+  
+  // Handle different time formats
+  // If it's already in HH:MM:SS format, convert to HH:MM
+  if (time.includes(':')) {
+    const parts = time.split(':');
+    if (parts.length >= 2) {
+      const hours = parts[0].padStart(2, '0');
+      const minutes = parts[1].padStart(2, '0');
+      return `${hours}:${minutes}`;
+    }
+  }
+  
+  // If it's just a number (like "16"), convert to "16:00"
+  if (/^\d+$/.test(time)) {
+    return `${time.padStart(2, '0')}:00`;
+  }
+  
+  // If it's in format like "16h" or "16 h", extract the number
+  const hourMatch = time.match(/^(\d+)h?$/i);
+  if (hourMatch) {
+    return `${hourMatch[1].padStart(2, '0')}:00`;
+  }
+  
+  // Return as-is if we can't parse it
+  return time;
 }
 
 // Opcional: pone un emoji lindo en el tipo de acción
