@@ -62,14 +62,14 @@ export class ProgramsController {
     @Body() body: { notificationMethod?: NotificationMethod, endpoint?: string, p256dh?: string, auth?: string },
   ) {
     const user = req.user;
-    const { notificationMethod = NotificationMethod.BOTH, endpoint = 'test-endpoint', p256dh = 'test-p256dh', auth = 'test-auth' } = body;
+    const { notificationMethod = NotificationMethod.BOTH, endpoint, p256dh, auth } = body;
     
     const subscription = await this.subscriptionService.createSubscription(user, {
       programId: Number(id),
       notificationMethod,
-      endpoint,
-      p256dh,
-      auth,
+      endpoint: endpoint || '',
+      p256dh: p256dh || '',
+      auth: auth || '',
     });
     
     return {
