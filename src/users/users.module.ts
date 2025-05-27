@@ -10,11 +10,13 @@ import { DeviceService } from './device.service';
 import { SubscriptionService } from './subscription.service';
 import { SubscriptionController } from './subscription.controller';
 import { AuthModule } from '../auth/auth.module';
+import { PushModule } from '../push/push.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User, Device, UserSubscription, Program]),
     forwardRef(() => AuthModule),
+    PushModule,
   ],
   controllers: [UsersController, SubscriptionController],
   providers: [UsersService, DeviceService, SubscriptionService],

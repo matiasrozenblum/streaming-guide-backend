@@ -27,6 +27,6 @@ import { Channel } from '../channels/channels.entity';
   ],
   providers: [PushService, PushScheduler],
   controllers: [PushController],
-  exports: [PushService],
+  exports: [PushService, TypeOrmModule],
 })
 export class PushModule {}
