@@ -103,17 +103,18 @@ describe('SubscriptionController', () => {
       const createDto = {
         programId: 1,
         notificationMethod: NotificationMethod.PUSH,
+        endpoint: 'test-endpoint',
+        p256dh: 'test-p256dh',
+        auth: 'test-auth',
       };
-
+      const mockRequest = { user: mockUser };
       mockUsersService.findOne.mockResolvedValue(mockUser);
       mockSubscriptionService.createSubscription.mockResolvedValue(mockSubscription);
-
-      const mockRequest = { user: mockUser };
       const result = await controller.createSubscription(mockRequest, createDto);
-
       expect(mockUsersService.findOne).toHaveBeenCalledWith(mockUser.id);
       expect(mockSubscriptionService.createSubscription).toHaveBeenCalledWith(mockUser, createDto);
       expect(result.message).toBe('Successfully subscribed to program');
+      expect(result.subscription?.notificationMethod).toBe(NotificationMethod.PUSH);
     });
 
     it('should return error for legacy users', async () => {
@@ -121,12 +122,54 @@ describe('SubscriptionController', () => {
       const createDto = {
         programId: 1,
         notificationMethod: NotificationMethod.PUSH,
+        endpoint: 'test-endpoint',
+        p256dh: 'test-p256dh',
+        auth: 'test-auth',
       };
-
       const mockRequest = { user: legacyUser };
       const result = await controller.createSubscription(mockRequest, createDto);
-
       expect(result.error).toBe('Subscriptions not available for legacy authentication');
+    });
+
+    it('should create a new subscription', async () => {
+      const createDto = {
+        programId: 1,
+        notificationMethod: NotificationMethod.EMAIL,
+        endpoint: 'test-endpoint',
+        p256dh: 'test-p256dh',
+        auth: 'test-auth',
+      };
+      const mockRequest = { user: mockUser };
+      mockUsersService.findOne.mockResolvedValue(mockUser);
+      mockSubscriptionService.createSubscription.mockResolvedValue({
+        ...mockSubscription,
+        notificationMethod: NotificationMethod.EMAIL,
+      });
+      const result = await controller.createSubscription(mockRequest, createDto);
+      expect(result).toBeDefined();
+      expect(result.subscription).toBeDefined();
+      if (result.subscription) {
+        expect(result.subscription.notificationMethod).toBe(NotificationMethod.EMAIL);
+      }
+    });
+
+    it('should update an existing subscription', async () => {
+      const createDto = {
+        programId: 1,
+        notificationMethod: NotificationMethod.PUSH,
+        endpoint: 'test-endpoint',
+        p256dh: 'test-p256dh',
+        auth: 'test-auth',
+      };
+      const mockRequest = { user: mockUser };
+      mockUsersService.findOne.mockResolvedValue(mockUser);
+      mockSubscriptionService.createSubscription.mockResolvedValue(mockSubscription);
+      const result = await controller.createSubscription(mockRequest, createDto);
+      expect(result).toBeDefined();
+      expect(result.subscription).toBeDefined();
+      if (result.subscription) {
+        expect(result.subscription.notificationMethod).toBe(NotificationMethod.PUSH);
+      }
     });
   });
 
