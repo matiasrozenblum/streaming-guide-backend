@@ -1,13 +1,18 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserSubscription, NotificationMethod } from './user-subscription.entity';
 import { User } from './users.entity';
 import { Program } from '../programs/programs.entity';
+import { Device } from '../users/device.entity';
+import { PushSubscriptionEntity } from '../push/push-subscription.entity';
 
 export interface CreateSubscriptionDto {
   programId: number;
   notificationMethod: NotificationMethod;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
 }
 
 export interface UpdateSubscriptionDto {
@@ -22,39 +27,80 @@ export class SubscriptionService {
     private subscriptionRepository: Repository<UserSubscription>,
     @InjectRepository(Program)
     private programRepository: Repository<Program>,
+    @InjectRepository(Device)
+    private deviceRepository: Repository<Device>,
+    @InjectRepository(PushSubscriptionEntity)
+    private pushSubscriptionRepository: Repository<PushSubscriptionEntity>,
   ) {}
 
-  async createSubscription(
-    user: User,
-    dto: CreateSubscriptionDto,
-  ): Promise<UserSubscription> {
-    // Check if program exists
-    const program = await this.programRepository.findOne({
-      where: { id: dto.programId },
-    });
-    
+  async createSubscription(user: User, dto: CreateSubscriptionDto): Promise<UserSubscription> {
+    const { programId, notificationMethod, endpoint, p256dh, auth } = dto;
+    const program = await this.programRepository.findOne({ where: { id: programId } });
     if (!program) {
-      throw new NotFoundException('Program not found');
+      throw new NotFoundException(`Program with ID ${programId} not found`);
     }
 
     // Check if subscription already exists
     const existingSubscription = await this.subscriptionRepository.findOne({
-      where: { user: { id: user.id }, program: { id: dto.programId } },
+      where: { user: { id: user.id }, program: { id: programId } },
     });
 
     if (existingSubscription) {
-      throw new ConflictException('User is already subscribed to this program');
+      existingSubscription.notificationMethod = notificationMethod;
+      existingSubscription.isActive = true;
+      return await this.subscriptionRepository.save(existingSubscription);
     }
 
-    // Create new subscription
     const subscription = this.subscriptionRepository.create({
       user,
       program,
-      notificationMethod: dto.notificationMethod,
+      notificationMethod,
       isActive: true,
     });
 
-    return await this.subscriptionRepository.save(subscription);
+    const savedSubscription = await this.subscriptionRepository.save(subscription);
+
+    // If notification method is PUSH or BOTH, create a push subscription entry
+    if (notificationMethod === NotificationMethod.PUSH || notificationMethod === NotificationMethod.BOTH) {
+      await this.createPushSubscription(user, savedSubscription, endpoint, p256dh, auth);
+    }
+
+    return savedSubscription;
+  }
+
+  // Updated method to create a push subscription entry with actual values
+  private async createPushSubscription(
+    user: User,
+    subscription: UserSubscription,
+    endpoint: string,
+    p256dh: string,
+    auth: string
+  ): Promise<void> {
+    const device = await this.deviceRepository.findOne({
+      where: { user: { id: user.id } },
+      relations: ['pushSubscriptions'],
+    });
+
+    if (!device) {
+      console.warn(`No device found for user ${user.id} to create push subscription`);
+      return;
+    }
+
+    // Check if a push subscription already exists for this device
+    const existingPushSubscription = await this.pushSubscriptionRepository.findOne({
+      where: { device: { id: device.id } },
+    });
+
+    if (!existingPushSubscription) {
+      // Create a new push subscription entry with actual values
+      const pushSubscription = this.pushSubscriptionRepository.create({
+        device,
+        endpoint,
+        p256dh,
+        auth,
+      });
+      await this.pushSubscriptionRepository.save(pushSubscription);
+    }
   }
 
   async getUserSubscriptions(userId: number): Promise<UserSubscription[]> {
