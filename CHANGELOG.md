@@ -17,7 +17,7 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
-## [0.4.2] - 2025-04-25
+## [0.4.2] - 2025-04-26
 
 ### Fixed
 - Fixed push subscriptions generation
