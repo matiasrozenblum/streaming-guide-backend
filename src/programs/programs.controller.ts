@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete, Patch, UseGuards, NotFoundException, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Patch, UseGuards, NotFoundException, Request, UnauthorizedException } from '@nestjs/common';
 import { ProgramsService } from './programs.service';
 import { CreateProgramDto } from './dto/create-program.dto';
 import { Program } from './programs.entity';
@@ -91,17 +91,23 @@ export class ProgramsController {
     @Param('id') id: string,
   ) {
     const user = req.user;
-    
+
+    // Validate user.id
+    if (!user || !user.id || isNaN(Number(user.id))) {
+      throw new UnauthorizedException('Invalid or missing user ID');
+    }
+    const userId = Number(user.id);
+
     // Find the subscription first
-    const subscriptions = await this.subscriptionService.getUserSubscriptions(user.id);
+    const subscriptions = await this.subscriptionService.getUserSubscriptions(userId);
     const subscription = subscriptions.find(sub => sub.program.id === Number(id));
-    
+
     if (!subscription) {
       throw new NotFoundException('Subscription not found');
     }
-    
-    await this.subscriptionService.removeSubscription(user.id, subscription.id);
-    
+
+    await this.subscriptionService.removeSubscription(userId, subscription.id);
+
     return {
       message: 'Successfully unsubscribed from program',
     };
