@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.4.4] - 2025-04-27
+
+### Fixed
+- Fixed push unsubscriptions
+
 ## [0.4.3] - 2025-04-27
 
 ### Fixed
