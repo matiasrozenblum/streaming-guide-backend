@@ -166,13 +166,27 @@ export class ChannelsService {
       return acc;
     }, {} as Record<number, any[]>);
 
-    const result: ChannelWithSchedules[] = channels.map((channel) => ({
+    // Helper to fetch panelists in join order for a given programId
+    const getOrderedPanelists = async (programId: number) => {
+      // The join table is named by TypeORM as "program_panelists_panelist"
+      // with columns: programId, panelistId
+      const panelists = await this.programsRepository.manager.query(
+        `SELECT p.id, p.name FROM panelist p
+         INNER JOIN program_panelists_panelist j ON j."panelistId" = p.id
+         WHERE j."programId" = $1
+         ORDER BY j.id ASC`,
+        [programId]
+      );
+      return panelists.map((p: any) => ({ id: p.id.toString(), name: p.name }));
+    };
+
+    const result: ChannelWithSchedules[] = await Promise.all(channels.map(async (channel) => ({
       channel: {
         id: channel.id,
         name: channel.name,
         logo_url: channel.logo_url,
       },
-      schedules: (schedulesGroupedByChannelId[channel.id] || []).map((schedule) => ({
+      schedules: await Promise.all((schedulesGroupedByChannelId[channel.id] || []).map(async (schedule) => ({
         id: schedule.id,
         day_of_week: schedule.day_of_week,
         start_time: schedule.start_time,
@@ -185,13 +199,10 @@ export class ChannelsService {
           description: schedule.program.description,
           stream_url: schedule.program.stream_url,
           is_live: schedule.program.is_live,
-          panelists: schedule.program.panelists?.map((p) => ({
-            id: p.id.toString(),
-            name: p.name,
-          })) || [],
+          panelists: await getOrderedPanelists(schedule.program.id),
         },
-      })),
-    }));
+      }))),
+    })));
 
     return result;
   }
