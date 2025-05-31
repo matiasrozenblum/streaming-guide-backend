@@ -18,12 +18,14 @@ export class UsersService {
   async create(createUserDto: CreateUserDto): Promise<User> {
     const { password, birthDate, gender, ...rest } = createUserDto;
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user = this.usersRepository.create({
+    const userData = {
       ...rest,
       password: hashedPassword,
       gender,
       birthDate: birthDate ? new Date(birthDate) : undefined,
-    } as User);
+    };
+    console.log('[UsersService] Creating user with:', userData);
+    const user = this.usersRepository.create(userData as User);
     return this.usersRepository.save(user);
   }
 
