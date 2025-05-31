@@ -26,4 +26,12 @@ export class UpdateUserDto {
   @IsOptional()
   @IsEnum(['user', 'admin'], { message: 'Role must be either user or admin' })
   role?: 'user' | 'admin';
+
+  @IsOptional()
+  @IsEnum(['male', 'female', 'non_binary', 'rather_not_say'])
+  gender?: 'male' | 'female' | 'non_binary' | 'rather_not_say';
+
+  @IsOptional()
+  @IsString()
+  birthDate?: string;
 }
