@@ -174,7 +174,7 @@ export class ChannelsService {
         `SELECT p.id, p.name FROM panelist p
          INNER JOIN program_panelists_panelist j ON j."panelistId" = p.id
          WHERE j."programId" = $1
-         ORDER BY j.id ASC`,
+         ORDER BY j."panelistId" ASC`,
         [programId]
       );
       return panelists.map((p: any) => ({ id: p.id.toString(), name: p.name }));
