@@ -21,6 +21,9 @@ describe('UsersService', () => {
     phone: '1234567890',
     firstName: 'John',
     lastName: 'Doe',
+    gender: 'male' as const,
+    birthDate: new Date('1990-01-01'),
+    role: 'user' as const,
   };
 
   const mockRepository = {
@@ -67,12 +70,23 @@ describe('UsersService', () => {
         phone: '1234567890',
         firstName: 'John',
         lastName: 'Doe',
+        gender: 'male',
+        birthDate: '1990-01-01'
       };
 
       const hashedPassword = 'hashedPassword123';
       jest.spyOn(bcrypt, 'hash').mockResolvedValue(hashedPassword as never);
-      mockRepository.create.mockReturnValue({ ...createUserDto, password: hashedPassword });
-      mockRepository.save.mockResolvedValue({ ...mockUser, password: hashedPassword });
+      mockRepository.create.mockReturnValue({ 
+        ...createUserDto, 
+        password: hashedPassword,
+        birthDate: new Date(createUserDto.birthDate!)
+      });
+      mockRepository.save.mockResolvedValue({ 
+        ...mockUser, 
+        password: hashedPassword,
+        gender: createUserDto.gender,
+        birthDate: new Date(createUserDto.birthDate!)
+      });
 
       const result = await service.create(createUserDto);
 
@@ -80,9 +94,55 @@ describe('UsersService', () => {
       expect(mockRepository.create).toHaveBeenCalledWith({
         ...createUserDto,
         password: hashedPassword,
+        birthDate: new Date(createUserDto.birthDate!)
       });
       expect(mockRepository.save).toHaveBeenCalled();
-      expect(result).toEqual({ ...mockUser, password: hashedPassword });
+      expect(result).toEqual({ 
+        ...mockUser, 
+        password: hashedPassword,
+        gender: createUserDto.gender,
+        birthDate: new Date(createUserDto.birthDate!)
+      });
+    });
+
+    it('should create a user without optional fields', async () => {
+      const createUserDto: CreateUserDto = {
+        email: 'test@example.com',
+        password: 'password123',
+        firstName: 'John',
+        lastName: 'Doe',
+        gender: 'rather_not_say'
+      };
+
+      const hashedPassword = 'hashedPassword123';
+      jest.spyOn(bcrypt, 'hash').mockResolvedValue(hashedPassword as never);
+      mockRepository.create.mockReturnValue({ 
+        ...createUserDto, 
+        password: hashedPassword,
+        birthDate: undefined
+      });
+      mockRepository.save.mockResolvedValue({ 
+        ...mockUser, 
+        password: hashedPassword,
+        gender: createUserDto.gender,
+        birthDate: undefined
+      });
+
+      const result = await service.create(createUserDto);
+
+      expect(bcrypt.hash).toHaveBeenCalledWith(createUserDto.password, 10);
+      expect(mockRepository.create).toHaveBeenCalledWith({
+        ...createUserDto,
+        password: hashedPassword,
+        birthDate: undefined
+      });
+      expect(mockRepository.save).toHaveBeenCalled();
+      expect(result).toEqual({ 
+        ...mockUser, 
+        password: hashedPassword,
+        gender: createUserDto.gender,
+        birthDate: undefined
+      });
     });
   });
 

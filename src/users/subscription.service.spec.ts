@@ -23,6 +23,8 @@ describe('SubscriptionService', () => {
     firstName: 'John',
     lastName: 'Doe',
     role: 'user',
+    gender: 'male' as const,
+    birthDate: new Date('1990-01-01'),
     createdAt: new Date(),
     devices: [],
     subscriptions: [],

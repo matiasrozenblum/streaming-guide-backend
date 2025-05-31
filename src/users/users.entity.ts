@@ -30,6 +30,17 @@ export class User {
   @Column({ type: 'enum', enum: ['user','admin'], default: 'user' })
   role: 'user' | 'admin';
 
+  @Column({ 
+    type: 'enum', 
+    enum: ['male', 'female', 'non_binary', 'rather_not_say'],
+    nullable: true,
+    name: 'gender'
+  })
+  gender: 'male' | 'female' | 'non_binary' | 'rather_not_say';
+
+  @Column({ type: 'date', nullable: true, name: 'birth_date' })
+  birthDate: Date;
+
   @OneToMany(() => Device, (device) => device.user, { cascade: true })
   devices: Device[];
 
