@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -17,6 +17,20 @@ export class UsersService {
 
   async create(createUserDto: CreateUserDto): Promise<User> {
     const { password, birthDate, gender, ...rest } = createUserDto;
+    // Validate age
+    if (!birthDate) {
+      throw new BadRequestException('La fecha de nacimiento es obligatoria');
+    }
+    const birth = new Date(birthDate);
+    const now = new Date();
+    let age = now.getFullYear() - birth.getFullYear();
+    const m = now.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) {
+      age--;
+    }
+    if (age < 18) {
+      throw new BadRequestException('Debes ser mayor de 18 años para registrarte');
+    }
     const hashedPassword = await bcrypt.hash(password, 10);
     const userData = {
       ...rest,
@@ -24,7 +38,6 @@ export class UsersService {
       gender,
       birthDate: birthDate ? new Date(birthDate) : undefined,
     };
-    console.log('[UsersService] Creating user with:', userData);
     const user = this.usersRepository.create(userData as User);
     return this.usersRepository.save(user);
   }

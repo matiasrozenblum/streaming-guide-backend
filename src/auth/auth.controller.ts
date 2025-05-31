@@ -101,7 +101,6 @@ export class AuthController {
     @Request() req: any,
     @Body() dto: RegisterDto & { deviceId?: string },
   ) {
-    console.log('[AuthController] Received DTO:', dto);
     if (!dto.gender || !dto.birthDate) {
       throw new BadRequestException('Género y fecha de nacimiento son obligatorios');
     }
