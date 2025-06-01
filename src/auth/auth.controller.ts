@@ -23,16 +23,6 @@ export class AuthController {
     private readonly jwtService: JwtService,
   ) {}
 
-  @Post('login/legacy')
-  @ApiOperation({ summary: 'Legacy F&F / Backoffice login' })
-  @ApiResponse({ status: 201, description: 'Access token' })
-  async loginLegacy(
-    @Body() body: { password: string; isBackoffice?: boolean },
-  ) {
-    const { password, isBackoffice = false } = body;
-    return this.authService.loginLegacy(password, isBackoffice);
-  }
-
   @Post('login')
   @ApiOperation({ summary: 'Login with email & password' })
   @ApiResponse({ status: 201, description: 'Access token and device ID' })

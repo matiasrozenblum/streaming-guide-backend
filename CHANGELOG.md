@@ -17,72 +17,77 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
-## [0.4.6] - 2025-04-31
+## [0.4.7] - 2025-06-01
+
+### Added
+- Added gender and birth date to jwt signing
+
+## [0.4.6] - 2025-05-31
 
 ### Added
 - Added gender and birth date fields to users table and sign up process
 
-## [0.4.5] - 2025-04-31
+## [0.4.5] - 2025-05-31
 
 ### Added
 - Added new gender and birthdate fields for users and signup process
 
-## [0.4.4] - 2025-04-27
+## [0.4.4] - 2025-05-27
 
 ### Fixed
 - Fixed push unsubscriptions
 
-## [0.4.3] - 2025-04-27
+## [0.4.3] - 2025-05-27
 
 ### Fixed
 - Fixed push subscriptions generation again
 
-## [0.4.2] - 2025-04-26
+## [0.4.2] - 2025-05-26
 
 ### Fixed
 - Fixed push subscriptions generation
 
-## [0.4.1] - 2025-04-25
+## [0.4.1] - 2025-05-25
 
 ### Fixed
 - Fixed scrapers and email template time formatting
 
-## [0.4.0] - 2025-04-25
+## [0.4.0] - 2025-05-25
 
 ### Added
 - Added program subscriptions for users with favorites section and email & push notifications
 
-## [0.3.7] - 2025-04-25
+## [0.3.7] - 2025-05-25
 
 ### Changed
 - Updated update-user.dto.ts to be able to update a user's role
 
-## [0.3.6] - 2025-04-19
+## [0.3.6] - 2025-05-19
 
 ### Removed
 - Removed youtube fetch counters from cache
 
-## [0.3.5] - 2025-04-18
+## [0.3.5] - 2025-05-18
 
 ### Fixed
 - Fixed patch users validations for empty strings
 
-## [0.3.4] - 2025-04-18
+## [0.3.4] - 2025-05-18
 
 ### Added
 - Added reset password feature in the login flow
 
-## [0.3.3] - 2025-04-18
+## [0.3.3] - 2025-05-18
 
 ### Fixed
 - Fixed user endpoints jwt guards and roles
 
-## [0.3.2] - 2025-04-17
+## [0.3.2] - 2025-05-17
 
 ### Fixed
 - Fixed jwt strategy
 
-## [0.3.1] - 2025-04-16
+## [0.3.1] - 2025-05-16
 
 ### Added
 - Added uses table DB migration
@@ -90,7 +95,7 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ### Fixed
 - Fixed backoffice login token role
 
-## [0.3.0] - 2025-04-16
+## [0.3.0] - 2025-05-16
 
 ### Added
 - Added users CRUD
@@ -98,22 +103,22 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ### Changed
 - Now F&F login endpoint is /auth/login/legacy and /auth/login is the regular users's login
 
-## [0.2.16] - 2025-04-02
+## [0.2.16] - 2025-05-02
 
 ### Fixed
 - Fixed cron not filtering for is_live before fetching youtube
 
-## [0.2.15] - 2025-04-02
+## [0.2.15] - 2025-05-02
 
 ### Added
 - Added several tests for new services
 
-## [0.2.14] - 2025-04-01
+## [0.2.14] - 2025-05-01
 
 ### Changed
 - Now is_live depends on youtube_fetch feature flags as well
 
-## [0.2.13] - 2025-04-01
+## [0.2.13] - 2025-05-01
 
 ### Added
 - Added feature flags for turning youtube fech on and off

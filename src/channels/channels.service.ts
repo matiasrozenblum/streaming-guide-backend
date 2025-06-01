@@ -128,7 +128,7 @@ export class ChannelsService {
     await this.redisService.delByPattern('schedules:all:*');
   }
 
-  async getChannelsWithSchedules(day?: string, deviceId?: string): Promise<ChannelWithSchedules[]> {
+  async getChannelsWithSchedules(day?: string, deviceId?: string, liveStatus?: boolean): Promise<ChannelWithSchedules[]> {
     const channels = await this.channelsRepository.find({
       order: {
         order: 'ASC',
@@ -137,6 +137,7 @@ export class ChannelsService {
 
     const schedules = await this.schedulesService.findAll({
       dayOfWeek: day ? day.toLowerCase() : undefined,
+      skipCache: liveStatus === true,
     });
 
     // Get user subscriptions based on deviceId
