@@ -45,8 +45,20 @@ export class AuthService {
     }
 
     // Device creation will be handled by frontend useDeviceId hook with correct user-agent
-    const payload = { sub: user.id, type: 'public', role: user.role };
-    return { 
+    const birthDate =
+      user.birthDate instanceof Date
+        ? user.birthDate.toISOString().split('T')[0]
+        : typeof user.birthDate === 'string'
+          ? user.birthDate
+          : undefined;
+    const payload = {
+      sub: user.id,
+      type: 'public',
+      role: user.role,
+      gender: user.gender,
+      birthDate,
+    };
+    return {
       access_token: this.jwtService.sign(payload),
     };
   }
@@ -54,7 +66,19 @@ export class AuthService {
   async signJwtForIdentifier(identifier: string): Promise<string> {
     const user = await this.usersService.findByEmail(identifier);
     if (!user) throw new UnauthorizedException('User not found');
-    const payload = { sub: user.id, type: 'public', role: user.role };
+    const birthDate =
+      user.birthDate instanceof Date
+        ? user.birthDate.toISOString().split('T')[0]
+        : typeof user.birthDate === 'string'
+          ? user.birthDate
+          : undefined;
+    const payload = {
+      sub: user.id,
+      type: 'public',
+      role: user.role,
+      gender: user.gender,
+      birthDate,
+    };
     return this.jwtService.sign(payload);
   }
 
