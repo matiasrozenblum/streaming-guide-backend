@@ -16,6 +16,8 @@ const mockUser = {
   firstName: 'John',
   lastName: 'Doe',
   role: 'user',
+  gender: 'male' as const,
+  birthDate: new Date('1990-01-01'),
 };
 
 const mockAdmin = {
@@ -69,7 +71,14 @@ describe('UsersController', () => {
 
   describe('create', () => {
     it('should call usersService.create with dto', async () => {
-      const dto = { email: 'a', password: 'b', phone: 'c', firstName: 'd', lastName: 'e' };
+      const dto = { 
+        email: 'a', 
+        password: 'b', 
+        phone: 'c', 
+        firstName: 'd', 
+        lastName: 'e',
+        gender: 'male' as const
+      };
       usersService.create.mockResolvedValue({ ...mockUser, ...dto });
       const result = await controller.create(dto);
       expect(usersService.create).toHaveBeenCalledWith(dto);
