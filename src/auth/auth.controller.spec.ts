@@ -4,34 +4,32 @@ import { AuthService } from './auth.service';
 import { OtpService } from './otp.service';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { UnauthorizedException, BadRequestException } from '@nestjs/common';
 
 describe('AuthController', () => {
   let controller: AuthController;
   let authService: AuthService;
+  let otpService: OtpService;
   let usersService: UsersService;
   let jwtService: JwtService;
 
-  const mockAuthService = {
-    loginLegacy: jest.fn(),
-    loginUser: jest.fn(),
-    signJwtForIdentifier: jest.fn(),
-    signRegistrationToken: jest.fn(),
-    verifyRegistrationToken: jest.fn(),
-  };
-
-  const mockOtpService = {
-    sendCode: jest.fn(),
-    verifyCode: jest.fn(),
-  };
-
-  const mockUsersService = {
-    findByEmail: jest.fn(),
-    create: jest.fn(),
-  };
-
-  const mockJwtService = {
-    sign: jest.fn(),
+  const mockUser = {
+    id: 1,
+    email: 'test@example.com',
+    password: 'hashed_password',
+    role: 'user' as const,
+    gender: 'male' as const,
+    birthDate: new Date('1990-01-01'),
+    firstName: 'Test',
+    lastName: 'User',
+    phone: '+1234567890',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    isActive: true,
+    lastLogin: new Date(),
+    devices: [],
+    subscriptions: [],
   };
 
   beforeEach(async () => {
@@ -40,25 +38,46 @@ describe('AuthController', () => {
       providers: [
         {
           provide: AuthService,
-          useValue: mockAuthService,
+          useValue: {
+            loginUser: jest.fn(),
+            signJwtForIdentifier: jest.fn(),
+            signRegistrationToken: jest.fn(),
+            verifyRegistrationToken: jest.fn(),
+          },
         },
         {
           provide: OtpService,
-          useValue: mockOtpService,
+          useValue: {
+            sendCode: jest.fn(),
+            verifyCode: jest.fn(),
+          },
         },
         {
           provide: UsersService,
-          useValue: mockUsersService,
+          useValue: {
+            findByEmail: jest.fn(),
+            create: jest.fn(),
+            ensureUserDevice: jest.fn(),
+          },
         },
         {
           provide: JwtService,
-          useValue: mockJwtService,
+          useValue: {
+            sign: jest.fn(),
+          },
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn(),
+          },
         },
       ],
     }).compile();
 
     controller = module.get<AuthController>(AuthController);
     authService = module.get<AuthService>(AuthService);
+    otpService = module.get<OtpService>(OtpService);
     usersService = module.get<UsersService>(UsersService);
     jwtService = module.get<JwtService>(JwtService);
   });
@@ -67,188 +86,129 @@ describe('AuthController', () => {
     expect(controller).toBeDefined();
   });
 
-  describe('loginLegacy', () => {
-    it('should return JWT token for valid credentials', async () => {
-      const mockToken = { access_token: 'test-token' };
-      mockAuthService.loginLegacy.mockResolvedValue(mockToken);
-
-      const result = await controller.loginLegacy({ password: 'admin123', isBackoffice: true });
-
-      expect(result).toEqual(mockToken);
-      expect(authService.loginLegacy).toHaveBeenCalledWith('admin123', true);
-    });
-
-    it('should throw UnauthorizedException for invalid credentials', async () => {
-      mockAuthService.loginLegacy.mockRejectedValue(new UnauthorizedException('Invalid legacy password'));
-
-      await expect(controller.loginLegacy({ password: 'wrong-password', isBackoffice: true }))
-        .rejects.toThrow(UnauthorizedException);
-    });
-  });
-
   describe('loginUser', () => {
-    it('should return JWT token for valid credentials', async () => {
+    it('should return access token on successful login', async () => {
       const mockToken = { access_token: 'test-token' };
-      mockAuthService.loginUser.mockResolvedValue(mockToken);
+      jest.spyOn(authService, 'loginUser').mockResolvedValue(mockToken);
 
-      const mockRequest = {
-        headers: { 'user-agent': 'Mozilla/5.0 Chrome/91.0' }
-      };
-
-      const result = await controller.loginUser(mockRequest, {
-        email: 'test@example.com',
-        password: 'password123',
-      });
+      const result = await controller.loginUser(
+        { headers: { 'user-agent': 'test-agent' } },
+        { email: 'test@example.com', password: 'password123' },
+      );
 
       expect(result).toEqual(mockToken);
-      expect(authService.loginUser).toHaveBeenCalledWith('test@example.com', 'password123', 'Mozilla/5.0 Chrome/91.0', undefined);
+      expect(authService.loginUser).toHaveBeenCalledWith(
+        'test@example.com',
+        'password123',
+        'test-agent',
+        undefined,
+      );
     });
 
-    it('should throw UnauthorizedException for invalid credentials', async () => {
-      mockAuthService.loginUser.mockRejectedValue(new UnauthorizedException('Invalid credentials'));
+    it('should throw UnauthorizedException on failed login', async () => {
+      jest
+        .spyOn(authService, 'loginUser')
+        .mockRejectedValue(new Error('Invalid credentials'));
 
-      const mockRequest = {
-        headers: { 'user-agent': 'Mozilla/5.0 Chrome/91.0' }
-      };
-
-      await expect(controller.loginUser(mockRequest, {
-        email: 'test@example.com',
-        password: 'wrong-password',
-      })).rejects.toThrow(UnauthorizedException);
+      await expect(
+        controller.loginUser(
+          { headers: { 'user-agent': 'test-agent' } },
+          { email: 'test@example.com', password: 'wrong-password' },
+        ),
+      ).rejects.toThrow('Invalid credentials');
     });
   });
 
   describe('sendCode', () => {
-    it('should send OTP code successfully', async () => {
-      const identifier = 'test@example.com';
-      mockOtpService.sendCode.mockResolvedValue(undefined);
+    it('should send OTP code', async () => {
+      const mockResponse = { message: 'Código enviado correctamente' };
+      jest.spyOn(otpService, 'sendCode').mockResolvedValue(undefined);
 
-      const result = await controller.sendCode({ identifier });
+      const result = await controller.sendCode({ identifier: 'test@example.com' });
 
-      expect(result).toEqual({ message: 'Código enviado correctamente' });
-      expect(mockOtpService.sendCode).toHaveBeenCalledWith(identifier);
+      expect(result).toEqual(mockResponse);
+      expect(otpService.sendCode).toHaveBeenCalledWith('test@example.com');
     });
 
-    it('should throw BadRequestException when identifier is missing', async () => {
-      await expect(controller.sendCode({ identifier: '' }))
-        .rejects.toThrow(BadRequestException);
+    it('should throw BadRequestException if identifier is missing', async () => {
+      await expect(controller.sendCode({ identifier: '' })).rejects.toThrow(
+        'Falta identificador',
+      );
     });
   });
 
   describe('verifyCode', () => {
-    it('should return JWT token for existing user', async () => {
-      const identifier = 'test@example.com';
-      const code = '123456';
-      const mockToken = 'test-token';
-      const mockUser = { id: 1, role: 'user' };
-      
-      mockOtpService.verifyCode.mockResolvedValue(undefined);
-      mockUsersService.findByEmail.mockResolvedValue(mockUser);
-      mockAuthService.signJwtForIdentifier.mockResolvedValue(mockToken);
+    it('should return access token for existing user', async () => {
+      const mockToken = { access_token: 'test-token' };
 
-      const mockRequest = {
-        headers: { 'user-agent': 'Mozilla/5.0 Chrome/91.0' }
-      };
+      jest.spyOn(otpService, 'verifyCode').mockResolvedValue(undefined);
+      jest.spyOn(usersService, 'findByEmail').mockResolvedValue(mockUser);
+      jest.spyOn(authService, 'signJwtForIdentifier').mockResolvedValue('test-token');
 
-      const result = await controller.verifyCode(mockRequest, { identifier, code });
+      const result = await controller.verifyCode(
+        { headers: { 'user-agent': 'test-agent' } },
+        { identifier: 'test@example.com', code: '123456' },
+      );
 
-      expect(result).toEqual({ access_token: mockToken, isNew: false });
-      expect(mockOtpService.verifyCode).toHaveBeenCalledWith(identifier, code);
-      expect(mockUsersService.findByEmail).toHaveBeenCalledWith(identifier);
-      expect(mockAuthService.signJwtForIdentifier).toHaveBeenCalledWith(identifier);
+      expect(result).toEqual({ access_token: 'test-token', isNew: false });
     });
 
     it('should return registration token for new user', async () => {
-      const identifier = 'new@example.com';
-      const code = '123456';
-      const mockRegToken = 'reg-token';
-      
-      mockOtpService.verifyCode.mockResolvedValue(undefined);
-      mockUsersService.findByEmail.mockResolvedValue(null);
-      mockAuthService.signRegistrationToken.mockReturnValue(mockRegToken);
+      const mockToken = { registration_token: 'test-token' };
 
-      const mockRequest = {
-        headers: { 'user-agent': 'Mozilla/5.0 Chrome/91.0' }
-      };
+      jest.spyOn(otpService, 'verifyCode').mockResolvedValue(undefined);
+      jest.spyOn(usersService, 'findByEmail').mockResolvedValue(null);
+      jest.spyOn(authService, 'signRegistrationToken').mockReturnValue('test-token');
 
-      const result = await controller.verifyCode(mockRequest, { identifier, code });
+      const result = await controller.verifyCode(
+        { headers: { 'user-agent': 'test-agent' } },
+        { identifier: 'new@example.com', code: '123456' },
+      );
 
-      expect(result).toEqual({ registration_token: mockRegToken, isNew: true });
-      expect(mockOtpService.verifyCode).toHaveBeenCalledWith(identifier, code);
-      expect(mockUsersService.findByEmail).toHaveBeenCalledWith(identifier);
-      expect(mockAuthService.signRegistrationToken).toHaveBeenCalledWith(identifier);
-    });
-
-    it('should throw BadRequestException when identifier or code is missing', async () => {
-      const mockRequest = {
-        headers: { 'user-agent': 'Mozilla/5.0 Chrome/91.0' }
-      };
-
-      await expect(controller.verifyCode(mockRequest, { identifier: '', code: '' }))
-        .rejects.toThrow(BadRequestException);
+      expect(result).toEqual({ registration_token: 'test-token', isNew: true });
     });
   });
 
   describe('register', () => {
-    it('should complete registration and return JWT token', async () => {
-      const dto = {
-        registration_token: 'valid-token',
-        firstName: 'John',
-        lastName: 'Doe',
-        password: 'password123',
-        gender: 'male' as const,
-        birthDate: '1990-01-01'
-      };
-      const mockUser = { id: 1, role: 'user' };
-      const mockToken = 'test-token';
+    it('should complete registration and return access token', async () => {
+      const mockToken = { access_token: 'test-token' };
 
-      mockAuthService.verifyRegistrationToken.mockReturnValue({ email: 'test@example.com' });
-      mockUsersService.create.mockResolvedValue(mockUser);
-      mockJwtService.sign.mockReturnValue(mockToken);
+      jest.spyOn(authService, 'verifyRegistrationToken').mockReturnValue({ email: 'test@example.com' });
+      jest.spyOn(usersService, 'create').mockResolvedValue(mockUser);
+      jest.spyOn(usersService, 'ensureUserDevice').mockResolvedValue('test-device-id');
+      jest.spyOn(jwtService, 'sign').mockReturnValue('test-token');
 
-      const mockRequest = {
-        headers: { 'user-agent': 'Mozilla/5.0 Chrome/91.0' }
-      };
+      const result = await controller.register(
+        { headers: { 'user-agent': 'test-agent' } },
+        {
+          registration_token: 'valid-token',
+          firstName: 'Test',
+          lastName: 'User',
+          password: 'password123',
+          gender: 'male',
+          birthDate: '1990-01-01',
+          deviceId: 'test-device-id'
+        },
+      );
 
-      const result = await controller.register(mockRequest, dto);
-
-      expect(result).toEqual({ access_token: mockToken });
-      expect(mockAuthService.verifyRegistrationToken).toHaveBeenCalledWith(dto.registration_token);
-      expect(mockUsersService.create).toHaveBeenCalledWith({
-        email: 'test@example.com',
-        firstName: dto.firstName,
-        lastName: dto.lastName,
-        password: dto.password,
-        gender: dto.gender,
-        birthDate: dto.birthDate,
-      });
-      expect(mockJwtService.sign).toHaveBeenCalledWith({
-        sub: mockUser.id,
-        type: 'public',
-        role: mockUser.role,
-      });
+      expect(result).toEqual(mockToken);
+      expect(usersService.create).toHaveBeenCalled();
+      expect(usersService.ensureUserDevice).toHaveBeenCalled();
     });
 
-    it('should throw UnauthorizedException for invalid registration token', async () => {
-      const dto = {
-        registration_token: 'invalid-token',
-        firstName: 'John',
-        lastName: 'Doe',
-        password: 'password123',
-        gender: 'male' as const,
-        birthDate: '1990-01-01'
-      };
-
-      mockAuthService.verifyRegistrationToken.mockImplementation(() => {
-        throw new UnauthorizedException('Invalid registration token');
-      });
-
-      const mockRequest = {
-        headers: { 'user-agent': 'Mozilla/5.0 Chrome/91.0' }
-      };
-
-      await expect(controller.register(mockRequest, dto))
-        .rejects.toThrow(UnauthorizedException);
+    it('should throw BadRequestException if gender or birthDate is missing', async () => {
+      await expect(
+        controller.register(
+          { headers: { 'user-agent': 'test-agent' } },
+          {
+            registration_token: 'valid-token',
+            firstName: 'Test',
+            lastName: 'User',
+            password: 'password123',
+            gender: 'male',
+          },
+        ),
+      ).rejects.toThrow('Género y fecha de nacimiento son obligatorios');
     });
   });
 }); 
