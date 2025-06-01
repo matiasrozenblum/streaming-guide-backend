@@ -17,6 +17,16 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [0.4.6] - 2025-04-31
+
+### Added
+- Added gender and birth date fields to users table and sign up process
+
+## [0.4.5] - 2025-04-31
+
+### Added
+- Added new gender and birthdate fields for users and signup process
+
 ## [0.4.4] - 2025-04-27
 
 ### Fixed

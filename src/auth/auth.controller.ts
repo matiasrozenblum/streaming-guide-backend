@@ -101,6 +101,9 @@ export class AuthController {
     @Request() req: any,
     @Body() dto: RegisterDto & { deviceId?: string },
   ) {
+    if (!dto.gender || !dto.birthDate) {
+      throw new BadRequestException('Género y fecha de nacimiento son obligatorios');
+    }
     console.log('🔍 [AuthController] register called with:', {
       email: dto.registration_token ? 'hidden' : 'none',
       deviceId: dto.deviceId,
@@ -108,16 +111,27 @@ export class AuthController {
       timestamp: new Date().toISOString()
     });
 
-    const { registration_token, firstName, lastName, password, deviceId } = dto;
+    const { registration_token, firstName, lastName, password, deviceId, gender, birthDate } = dto;
     // 1) Validamos el token y extraemos el email
     const { email } = this.authService.verifyRegistrationToken(registration_token);
 
     // 2) Creamos el usuario (hasheo de password incluido en UsersService)
-    const user = await this.usersService.create({ email, firstName, lastName, password });
+    const user = await this.usersService.create({ 
+      email, 
+      firstName, 
+      lastName, 
+      password,
+      gender,
+      birthDate
+    });
     console.log('✅ [AuthController] User created:', user.id);
 
-    // 3) Device creation will be handled by frontend useDeviceId hook with correct user-agent
-    console.log('✅ [AuthController] User registration complete, device creation delegated to frontend');
+    // 3) If deviceId is provided, ensure the device is created
+    if (deviceId) {
+      const userAgent = req.headers['user-agent'] || 'Unknown';
+      await this.usersService.ensureUserDevice(user, userAgent, deviceId);
+      console.log('✅ [AuthController] Device created/updated for user:', user.id);
+    }
 
     // 4) Generamos el JWT definitivo
     const access_token = this.jwtService.sign({ sub: user.id, type: 'public', role: user.role });
