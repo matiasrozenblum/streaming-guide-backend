@@ -196,7 +196,8 @@ describe('AuthController', () => {
         firstName: 'John',
         lastName: 'Doe',
         password: 'password123',
-        gender: 'male' as const
+        gender: 'male' as const,
+        birthDate: '1990-01-01'
       };
       const mockUser = { id: 1, role: 'user' };
       const mockToken = 'test-token';
@@ -219,6 +220,7 @@ describe('AuthController', () => {
         lastName: dto.lastName,
         password: dto.password,
         gender: dto.gender,
+        birthDate: dto.birthDate,
       });
       expect(mockJwtService.sign).toHaveBeenCalledWith({
         sub: mockUser.id,
@@ -233,7 +235,8 @@ describe('AuthController', () => {
         firstName: 'John',
         lastName: 'Doe',
         password: 'password123',
-        gender: 'male' as const
+        gender: 'male' as const,
+        birthDate: '1990-01-01'
       };
 
       mockAuthService.verifyRegistrationToken.mockImplementation(() => {
