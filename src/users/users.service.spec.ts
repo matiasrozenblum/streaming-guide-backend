@@ -6,7 +6,7 @@ import { User } from './users.entity';
 import { DeviceService } from './device.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { NotFoundException, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 
 describe('UsersService', () => {
@@ -70,7 +70,7 @@ describe('UsersService', () => {
         phone: '1234567890',
         firstName: 'John',
         lastName: 'Doe',
-        gender: 'male',
+        gender: 'male' as const,
         birthDate: '1990-01-01'
       };
 
@@ -106,12 +106,13 @@ describe('UsersService', () => {
     });
 
     it('should create a user without optional fields', async () => {
-      const createUserDto: CreateUserDto = {
-        email: 'test@example.com',
+      const createUserDto = {
+        email: 'test2@example.com',
         password: 'password123',
-        firstName: 'John',
-        lastName: 'Doe',
-        gender: 'rather_not_say'
+        firstName: 'Test2',
+        lastName: 'User2',
+        gender: 'male' as const,
+        birthDate: '1990-01-01',
       };
 
       const hashedPassword = 'hashedPassword123';
@@ -119,13 +120,13 @@ describe('UsersService', () => {
       mockRepository.create.mockReturnValue({ 
         ...createUserDto, 
         password: hashedPassword,
-        birthDate: undefined
+        birthDate: new Date(createUserDto.birthDate!)
       });
       mockRepository.save.mockResolvedValue({ 
         ...mockUser, 
         password: hashedPassword,
         gender: createUserDto.gender,
-        birthDate: undefined
+        birthDate: new Date(createUserDto.birthDate!)
       });
 
       const result = await service.create(createUserDto);
@@ -134,15 +135,27 @@ describe('UsersService', () => {
       expect(mockRepository.create).toHaveBeenCalledWith({
         ...createUserDto,
         password: hashedPassword,
-        birthDate: undefined
+        birthDate: new Date(createUserDto.birthDate!)
       });
       expect(mockRepository.save).toHaveBeenCalled();
       expect(result).toEqual({ 
         ...mockUser, 
         password: hashedPassword,
         gender: createUserDto.gender,
-        birthDate: undefined
+        birthDate: new Date(createUserDto.birthDate!)
       });
+    });
+
+    it('should throw BadRequestException if birthDate is missing', async () => {
+      const createUserDto = {
+        email: 'test3@example.com',
+        password: 'password123',
+        firstName: 'Test3',
+        lastName: 'User3',
+        gender: 'male' as const,
+        // birthDate missing
+      };
+      await expect(service.create(createUserDto as any)).rejects.toThrow('La fecha de nacimiento es obligatoria');
     });
   });
 
