@@ -85,6 +85,8 @@ describe('AuthService', () => {
         role: mockUser.role,
         gender: mockUser.gender,
         birthDate: mockUser.birthDate.toISOString().split('T')[0],
+        name: mockUser.firstName + ' ' + mockUser.lastName,
+        email: mockUser.email,
       });
     });
 
@@ -123,6 +125,8 @@ describe('AuthService', () => {
         role: mockUser.role,
         gender: mockUser.gender,
         birthDate: mockUser.birthDate.toISOString().split('T')[0],
+        name: mockUser.firstName + ' ' + mockUser.lastName,
+        email: mockUser.email,
       });
     });
 
