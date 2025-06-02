@@ -15,20 +15,6 @@ export class AuthService {
     private usersService: UsersService,
   ) {}
 
-  async loginLegacy(
-    password: string,
-    isBackoffice: boolean = false,
-  ): Promise<{ access_token: string }> {
-    const correct = isBackoffice
-      ? this.configService.get<string>('BACKOFFICE_PASSWORD')
-      : this.configService.get<string>('PUBLIC_PASSWORD');
-    if (password !== correct) {
-      throw new UnauthorizedException('Invalid legacy password');
-    }
-    const payload = { sub: isBackoffice ? 'backoffice' : 'public', type: isBackoffice ? 'backoffice' : 'public', role: isBackoffice ? 'admin' : 'friends&family' };
-    return { access_token: this.jwtService.sign(payload) };
-  }
-
   async loginUser(
     email: string,
     password: string,
@@ -57,6 +43,8 @@ export class AuthService {
       role: user.role,
       gender: user.gender,
       birthDate,
+      name: user.firstName + ' ' + user.lastName,
+      email: user.email,
     };
     return {
       access_token: this.jwtService.sign(payload),
@@ -78,6 +66,8 @@ export class AuthService {
       role: user.role,
       gender: user.gender,
       birthDate,
+      name: user.firstName + ' ' + user.lastName,
+      email: user.email,
     };
     return this.jwtService.sign(payload);
   }

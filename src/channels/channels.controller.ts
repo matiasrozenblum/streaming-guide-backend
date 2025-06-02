@@ -8,25 +8,30 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('channels')  // Etiqueta para los canales
 @Controller('channels')
-@UseGuards(JwtAuthGuard)
-@ApiBearerAuth()
 export class ChannelsController {
   constructor(private readonly channelsService: ChannelsService) {}
 
   @Get()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Obtener todos los canales' })  // Descripción de la operación
   @ApiResponse({ status: 200, description: 'Lista de canales', type: [Channel] })  // Respuesta esperada
   findAll(): Promise<Channel[]> {
     return this.channelsService.findAll();
   }
 
-
   @Get('with-schedules')
-  async getChannelsWithSchedules(@Query('day') day?: string, @Query('deviceId') deviceId?: string) {
+  async getChannelsWithSchedules(
+    @Query('day') day?: string,
+    @Query('deviceId') deviceId?: string,
+    @Query('live_status') liveStatus?: boolean
+  ) {
     return this.channelsService.getChannelsWithSchedules(day, deviceId);
   }
 
   @Get(':id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Obtener un canal por ID' })
   @ApiResponse({ status: 200, description: 'Canal encontrado', type: Channel })
   findOne(@Param('id') id: number): Promise<Channel> {
@@ -34,6 +39,8 @@ export class ChannelsController {
   }
 
   @Post()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Crear un nuevo canal' })
   @ApiResponse({ status: 201, description: 'Canal creado', type: Channel })
   create(@Body() createChannelDto: CreateChannelDto): Promise<Channel> {
@@ -41,6 +48,8 @@ export class ChannelsController {
   }
 
   @Patch(':id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Actualizar un canal' })
   @ApiResponse({ status: 200, description: 'Canal actualizado', type: Channel })
   update(@Param('id') id: number, @Body() updateChannelDto: UpdateChannelDto): Promise<Channel> {
@@ -48,6 +57,8 @@ export class ChannelsController {
   }
 
   @Delete(':id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Eliminar un canal por ID' })
   @ApiResponse({ status: 204, description: 'Canal eliminado' })
   remove(@Param('id') id: number): Promise<void> {
@@ -55,6 +66,8 @@ export class ChannelsController {
   }
 
   @Post('reorder')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   async reorder(@Body() body: { ids: number[] }) {
     await this.channelsService.reorder(body.ids);
     return { message: 'Channels reordered successfully' };

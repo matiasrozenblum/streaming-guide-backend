@@ -23,16 +23,6 @@ export class AuthController {
     private readonly jwtService: JwtService,
   ) {}
 
-  @Post('login/legacy')
-  @ApiOperation({ summary: 'Legacy F&F / Backoffice login' })
-  @ApiResponse({ status: 201, description: 'Access token' })
-  async loginLegacy(
-    @Body() body: { password: string; isBackoffice?: boolean },
-  ) {
-    const { password, isBackoffice = false } = body;
-    return this.authService.loginLegacy(password, isBackoffice);
-  }
-
   @Post('login')
   @ApiOperation({ summary: 'Login with email & password' })
   @ApiResponse({ status: 201, description: 'Access token and device ID' })
@@ -134,7 +124,16 @@ export class AuthController {
     }
 
     // 4) Generamos el JWT definitivo
-    const access_token = this.jwtService.sign({ sub: user.id, type: 'public', role: user.role });
+    const payload = {
+      sub: user.id,
+      type: 'public',
+      role: user.role,
+      gender: user.gender,
+      birthDate: user.birthDate,
+      name: user.firstName + ' ' + user.lastName,
+      email: user.email,
+    };
+    const access_token = this.jwtService.sign(payload);
     return { access_token };
   }
 }
