@@ -124,7 +124,16 @@ export class AuthController {
     }
 
     // 4) Generamos el JWT definitivo
-    const access_token = this.jwtService.sign({ sub: user.id, type: 'public', role: user.role });
+    const payload = {
+      sub: user.id,
+      type: 'public',
+      role: user.role,
+      gender: user.gender,
+      birthDate: user.birthDate,
+      name: user.firstName + ' ' + user.lastName,
+      email: user.email,
+    };
+    const access_token = this.jwtService.sign(payload);
     return { access_token };
   }
 }
