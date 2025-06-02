@@ -17,6 +17,15 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.0.0] - 2025-06-01
+
+### Changed
+- Now signing user name and email to JWT
+
+### Removed
+- Removed token requirement for GET /channels/with-schedules since it is now public.
+- Removed all logic related to legacy login and friends and family stage for the official launch
+
 ## [0.4.7] - 2025-06-01
 
 ### Added
