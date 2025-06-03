@@ -157,7 +157,7 @@ export class AuthController {
       const payload = await this.authService.verifyRefreshToken(refreshToken);
       // Remove iat, exp from payload
       const { iat, exp, ...rest } = payload;
-      const access_token = await this.authService.jwtService.signAccessToken(rest);
+      const access_token = await this.authService.signAccessToken(rest);
       return { access_token };
     } catch (err) {
       throw new UnauthorizedException('Invalid refresh token');

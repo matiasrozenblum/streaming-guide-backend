@@ -11,6 +11,7 @@ import { RedisService } from '../redis/redis.service';
 import { UsersModule } from '../users/users.module';
 import { User } from '../users/users.entity';
 import { EmailModule } from '../email/email.module';
+import { JwtService } from './jwt.service';
 
 @Module({
   imports: [
@@ -29,7 +30,16 @@ import { EmailModule } from '../email/email.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, OtpService, JwtStrategy, RedisService],
+  providers: [
+    AuthService,
+    OtpService,
+    JwtStrategy,
+    RedisService,
+    {
+      provide: JwtService,
+      useClass: JwtService,
+    },
+  ],
   exports: [AuthService, OtpService],
 })
 export class AuthModule {}

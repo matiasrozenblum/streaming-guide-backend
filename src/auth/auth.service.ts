@@ -10,9 +10,9 @@ import * as bcrypt from 'bcrypt';
 @Injectable()
 export class AuthService {
   constructor(
-    public jwtService: JwtService,
-    private configService: ConfigService,
-    private usersService: UsersService,
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+    private readonly usersService: UsersService,
   ) {}
 
   async loginUser(
@@ -102,5 +102,9 @@ export class AuthService {
 
   async verifyRefreshToken(token: string) {
     return await this.jwtService.verifyRefreshToken(token);
+  }
+
+  async signAccessToken(payload: Record<string, any>): Promise<string> {
+    return this.jwtService.signAccessToken(payload);
   }
 }
