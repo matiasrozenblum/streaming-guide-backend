@@ -43,7 +43,8 @@ export class AuthController {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
-        path: '/'
+        path: '/',
+        maxAge: 14 * 24 * 60 * 60 * 1000, // 14 days in ms
       });
       return { access_token };
     } catch (err) {
