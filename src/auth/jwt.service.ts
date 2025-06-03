@@ -3,7 +3,7 @@ import { JwtService as NestJwtService } from '@nestjs/jwt';
 
 @Injectable()
 export class JwtService {
-  constructor(private jwtService: NestJwtService) {}
+  constructor(private readonly jwtService: NestJwtService) {}
 
   async sign(payload: Record<string, any>, options?: { expiresIn?: string }) {
     return this.jwtService.sign(payload, {
