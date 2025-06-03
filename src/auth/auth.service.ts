@@ -2,7 +2,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import { JwtService } from './jwt.service';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
 import * as bcrypt from 'bcrypt';
@@ -10,7 +10,7 @@ import * as bcrypt from 'bcrypt';
 @Injectable()
 export class AuthService {
   constructor(
-    private jwtService: JwtService,
+    public jwtService: JwtService,
     private configService: ConfigService,
     private usersService: UsersService,
   ) {}
@@ -20,7 +20,7 @@ export class AuthService {
     password: string,
     userAgent?: string,
     deviceId?: string,
-  ): Promise<{ access_token: string }> {
+  ): Promise<{ access_token: string; refresh_token: string }> {
     const user = await this.usersService.findByEmail(email);
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
@@ -37,7 +37,21 @@ export class AuthService {
         : typeof user.birthDate === 'string'
           ? user.birthDate
           : undefined;
-    const payload = {
+    const payload = this.buildPayload(user);
+    return {
+      access_token: await this.jwtService.signAccessToken(payload),
+      refresh_token: await this.jwtService.signRefreshToken(payload),
+    };
+  }
+
+  buildPayload(user: any) {
+    const birthDate =
+      user.birthDate instanceof Date
+        ? user.birthDate.toISOString().split('T')[0]
+        : typeof user.birthDate === 'string'
+          ? user.birthDate
+          : undefined;
+    return {
       sub: user.id,
       type: 'public',
       role: user.role,
@@ -45,9 +59,6 @@ export class AuthService {
       birthDate,
       name: user.firstName + ' ' + user.lastName,
       email: user.email,
-    };
-    return {
-      access_token: this.jwtService.sign(payload),
     };
   }
 
@@ -69,20 +80,17 @@ export class AuthService {
       name: user.firstName + ' ' + user.lastName,
       email: user.email,
     };
-    return this.jwtService.sign(payload);
+    return await this.jwtService.sign(payload);
   }
 
-  signRegistrationToken(identifier: string): string {
+  async signRegistrationToken(identifier: string): Promise<string> {
     // firmamos un token que contiene solo el email y un flag
-    return this.jwtService.sign(
-      { email: identifier, type: 'registration' },
-      { expiresIn: '1h' } // caduca en 1h
-    );
+    return await this.jwtService.sign({ email: identifier, type: 'registration' }, { expiresIn: '1h' });
   }
 
-  verifyRegistrationToken(token: string): { email: string } {
+  async verifyRegistrationToken(token: string): Promise<{ email: string }> {
     try {
-      const payload: any = this.jwtService.verify(token);
+      const payload: any = await this.jwtService.verify(token);
       if (payload.type !== 'registration' || !payload.email) {
         throw new Error();
       }
@@ -90,5 +98,9 @@ export class AuthService {
     } catch {
       throw new UnauthorizedException('Invalid registration token');
     }
+  }
+
+  async verifyRefreshToken(token: string) {
+    return await this.jwtService.verifyRefreshToken(token);
   }
 }
