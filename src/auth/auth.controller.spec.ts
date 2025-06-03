@@ -88,15 +88,19 @@ describe('AuthController', () => {
 
   describe('loginUser', () => {
     it('should return access token on successful login', async () => {
-      const mockToken = { access_token: 'test-token' };
+      const mockToken = { 
+        access_token: 'test-token',
+        refresh_token: 'refresh-token'
+      };
       jest.spyOn(authService, 'loginUser').mockResolvedValue(mockToken);
 
       const result = await controller.loginUser(
         { headers: { 'user-agent': 'test-agent' } },
         { email: 'test@example.com', password: 'password123' },
+        { cookie: jest.fn() } as any
       );
 
-      expect(result).toEqual(mockToken);
+      expect(result).toEqual({ access_token: 'test-token' });
       expect(authService.loginUser).toHaveBeenCalledWith(
         'test@example.com',
         'password123',
@@ -114,6 +118,7 @@ describe('AuthController', () => {
         controller.loginUser(
           { headers: { 'user-agent': 'test-agent' } },
           { email: 'test@example.com', password: 'wrong-password' },
+          { cookie: jest.fn() } as any
         ),
       ).rejects.toThrow('Invalid credentials');
     });
@@ -139,7 +144,10 @@ describe('AuthController', () => {
 
   describe('verifyCode', () => {
     it('should return access token for existing user', async () => {
-      const mockToken = { access_token: 'test-token' };
+      const mockToken = { 
+        access_token: 'test-token',
+        refresh_token: 'refresh-token'
+      };
 
       jest.spyOn(otpService, 'verifyCode').mockResolvedValue(undefined);
       jest.spyOn(usersService, 'findByEmail').mockResolvedValue(mockUser);
@@ -154,26 +162,28 @@ describe('AuthController', () => {
     });
 
     it('should return registration token for new user', async () => {
-      const mockToken = { registration_token: 'test-token' };
-
       jest.spyOn(otpService, 'verifyCode').mockResolvedValue(undefined);
       jest.spyOn(usersService, 'findByEmail').mockResolvedValue(null);
-      jest.spyOn(authService, 'signRegistrationToken').mockReturnValue('test-token');
+      jest.spyOn(authService, 'signRegistrationToken').mockImplementation(async () => Promise.resolve('test-token'));
 
       const result = await controller.verifyCode(
         { headers: { 'user-agent': 'test-agent' } },
         { identifier: 'new@example.com', code: '123456' },
       );
 
-      expect(result).toEqual({ registration_token: 'test-token', isNew: true });
+      const registration_token = await result.registration_token;
+      expect({ ...result, registration_token }).toEqual({ registration_token: 'test-token', isNew: true });
     });
   });
 
   describe('register', () => {
     it('should complete registration and return access token', async () => {
-      const mockToken = { access_token: 'test-token' };
+      const mockToken = { 
+        access_token: 'test-token',
+        refresh_token: 'refresh-token'
+      };
 
-      jest.spyOn(authService, 'verifyRegistrationToken').mockReturnValue({ email: 'test@example.com' });
+      jest.spyOn(authService, 'verifyRegistrationToken').mockResolvedValue({ email: 'test@example.com' });
       jest.spyOn(usersService, 'create').mockResolvedValue(mockUser);
       jest.spyOn(usersService, 'ensureUserDevice').mockResolvedValue('test-device-id');
       jest.spyOn(jwtService, 'sign').mockReturnValue('test-token');
@@ -191,7 +201,7 @@ describe('AuthController', () => {
         },
       );
 
-      expect(result).toEqual(mockToken);
+      expect(result).toEqual({ access_token: 'test-token' });
       expect(usersService.create).toHaveBeenCalled();
       expect(usersService.ensureUserDevice).toHaveBeenCalled();
     });
