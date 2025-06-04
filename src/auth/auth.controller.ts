@@ -84,7 +84,7 @@ export class AuthController {
 
     console.log('🆕 [AuthController] New user, returning registration token');
     // Si no existe, devolvemos un token de registro
-    const registration_token = this.authService.signRegistrationToken(identifier);
+    const registration_token = await this.authService.signRegistrationToken(identifier);
     return { registration_token, isNew: true };
   }
 
