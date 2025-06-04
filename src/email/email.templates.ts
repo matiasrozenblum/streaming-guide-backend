@@ -48,7 +48,6 @@ export function buildProgramNotificationHtml(
   startTime: string,
   endTime: string,
   description?: string,
-  logoUrl?: string
 ): string {
   const currentTime = new Date().toLocaleString('es-ES', {
     timeZone: 'America/Argentina/Buenos_Aires',
@@ -78,7 +77,7 @@ export function buildProgramNotificationHtml(
           background-color: #f8fafc;
         }
         .container {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
           border-radius: 16px;
           overflow: hidden;
           box-shadow: 0 10px 25px rgba(0,0,0,0.1);
@@ -90,16 +89,10 @@ export function buildProgramNotificationHtml(
           color: white;
         }
         .logo {
-          width: 60px;
+          width: 40px;
           height: 60px;
-          border-radius: 50%;
           margin: 0 auto 15px;
-          background: rgba(255,255,255,0.2);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 24px;
-          font-weight: bold;
+          display: block;
         }
         .header h1 {
           margin: 0;
@@ -120,7 +113,7 @@ export function buildProgramNotificationHtml(
           border-radius: 12px;
           padding: 25px;
           margin: 20px 0;
-          border-left: 4px solid #667eea;
+          border-left: 4px solid #2563eb;
         }
         .program-header {
           display: flex;
@@ -130,15 +123,22 @@ export function buildProgramNotificationHtml(
         .program-logo {
           width: 50px;
           height: 50px;
-          border-radius: 8px;
+          border-radius: 50%;
           margin-right: 15px;
-          background: #667eea;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
+          background: #2563eb;
+          text-align: center;
+          vertical-align: middle;
+          line-height: 50px;
           font-weight: bold;
-          font-size: 18px;
+          font-size: 22px;
+          color: white;
+          display: inline-block;
+        }
+        .program-logo img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          border-radius: 50%;
         }
         .program-info h2 {
           margin: 0;
@@ -148,7 +148,7 @@ export function buildProgramNotificationHtml(
         }
         .channel-badge {
           display: inline-block;
-          background: #667eea;
+          background: #2563eb;
           color: white;
           padding: 4px 12px;
           border-radius: 20px;
@@ -157,7 +157,7 @@ export function buildProgramNotificationHtml(
           margin-top: 5px;
         }
         .time-info {
-          background: rgba(102, 126, 234, 0.1);
+          background: rgba(59, 130, 246, 0.08);
           border-radius: 8px;
           padding: 15px;
           margin: 15px 0;
@@ -170,7 +170,7 @@ export function buildProgramNotificationHtml(
         }
         .time-label {
           font-weight: 600;
-          color: #4c51bf;
+          color: #2563eb;
         }
         .time-value {
           font-size: 16px;
@@ -186,7 +186,7 @@ export function buildProgramNotificationHtml(
         }
         .cta-button {
           display: inline-block;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
           color: white;
           padding: 15px 30px;
           text-decoration: none;
@@ -203,7 +203,7 @@ export function buildProgramNotificationHtml(
           font-size: 14px;
         }
         .footer a {
-          color: #667eea;
+          color: #2563eb;
           text-decoration: none;
         }
         @media (max-width: 600px) {
@@ -217,8 +217,8 @@ export function buildProgramNotificationHtml(
     </head>
     <body>
       <div class="container">
-        <div class="header">
-          <div class="logo">📺</div>
+        <div class="header" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);">
+          <img src="https://laguiadelstreaming.com/img/logo.png" alt="La Guía del Streaming" class="logo" />
           <h1>¡Tu programa favorito comienza pronto!</h1>
           <p>No te pierdas ${programName}</p>
         </div>
@@ -227,7 +227,7 @@ export function buildProgramNotificationHtml(
           <div class="program-card">
             <div class="program-header">
               <div class="program-logo">
-                ${logoUrl ? `<img src="${logoUrl}" alt="${programName}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;">` : programName.charAt(0)}
+                ${programName.charAt(0)}
               </div>
               <div class="program-info">
                 <h2>${programName}</h2>

@@ -9,7 +9,7 @@ describe('Email Templates', () => {
       const startTime = '20:00';
       const endTime = '21:00';
       const description = 'Test program description';
-      const logoUrl = 'https://example.com/logo.png';
+
 
       const html = buildProgramNotificationHtml(
         programName,
@@ -17,7 +17,6 @@ describe('Email Templates', () => {
         startTime,
         endTime,
         description,
-        logoUrl
       );
 
       expect(html).toContain(programName);
@@ -25,7 +24,6 @@ describe('Email Templates', () => {
       expect(html).toContain(startTime);
       expect(html).toContain(endTime);
       expect(html).toContain(description);
-      expect(html).toContain(logoUrl);
       expect(html).toContain('¡Tu programa favorito comienza pronto!');
     });
 
@@ -47,28 +45,6 @@ describe('Email Templates', () => {
       expect(html).toContain(startTime);
       expect(html).toContain(endTime);
       expect(html).toContain('¡Tu programa favorito comienza pronto!');
-    });
-
-    it('should handle missing logo URL gracefully', () => {
-      const programName = 'Test Program';
-      const channelName = 'Test Channel';
-      const startTime = '20:00';
-      const endTime = '21:00';
-      const description = 'Test description';
-
-      const html = buildProgramNotificationHtml(
-        programName,
-        channelName,
-        startTime,
-        endTime,
-        description,
-        undefined
-      );
-
-      expect(html).toContain(programName);
-      expect(html).toContain(channelName);
-      expect(html).toContain(description);
-      expect(html).not.toContain('undefined');
     });
   });
 

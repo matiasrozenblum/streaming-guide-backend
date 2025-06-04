@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
-import { JwtService } from '@nestjs/jwt';
+import { JwtService } from './jwt.service';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
 import { UnauthorizedException } from '@nestjs/common';
@@ -37,20 +37,33 @@ describe('AuthService', () => {
         {
           provide: JwtService,
           useValue: {
-            sign: jest.fn(),
-            verify: jest.fn(),
+            sign: jest.fn().mockResolvedValue('test-token'),
+            verify: jest.fn().mockResolvedValue({ email: 'test@example.com', type: 'registration' }),
+            signAccessToken: jest.fn().mockResolvedValue('test-token'),
+            signRefreshToken: jest.fn().mockResolvedValue('test-token'),
           },
         },
         {
           provide: ConfigService,
           useValue: {
-            get: jest.fn(),
+            get: jest.fn().mockImplementation((key: string) => {
+              switch (key) {
+                case 'JWT_SECRET':
+                  return 'test-secret';
+                case 'JWT_EXPIRATION':
+                  return '1d';
+                default:
+                  return undefined;
+              }
+            }),
           },
         },
         {
           provide: UsersService,
           useValue: {
             findByEmail: jest.fn(),
+            create: jest.fn(),
+            ensureUserDevice: jest.fn(),
           },
         },
       ],
@@ -72,14 +85,13 @@ describe('AuthService', () => {
 
       jest.spyOn(usersService, 'findByEmail').mockResolvedValue(mockUser);
       jest.spyOn(bcrypt, 'compare').mockResolvedValue(true);
-      jest.spyOn(jwtService, 'sign').mockReturnValue(mockToken);
+      jest.spyOn(jwtService, 'sign').mockResolvedValue(mockToken);
 
       const result = await service.loginUser('test@example.com', 'password123');
-
-      expect(result).toEqual({ access_token: mockToken });
+      expect(result).toEqual({ access_token: mockToken, refresh_token: mockToken });
       expect(usersService.findByEmail).toHaveBeenCalledWith('test@example.com');
       expect(bcrypt.compare).toHaveBeenCalledWith('password123', 'hashed_password');
-      expect(jwtService.sign).toHaveBeenCalledWith({
+      const expectedPayload = {
         sub: mockUser.id,
         type: 'public',
         role: mockUser.role,
@@ -87,7 +99,9 @@ describe('AuthService', () => {
         birthDate: mockUser.birthDate.toISOString().split('T')[0],
         name: mockUser.firstName + ' ' + mockUser.lastName,
         email: mockUser.email,
-      });
+      };
+      expect(jwtService.signAccessToken).toHaveBeenCalledWith(expectedPayload);
+      expect(jwtService.signRefreshToken).toHaveBeenCalledWith(expectedPayload);
     });
 
     it('should throw UnauthorizedException for invalid credentials', async () => {
@@ -113,7 +127,7 @@ describe('AuthService', () => {
       const mockToken = 'test-token';
 
       jest.spyOn(usersService, 'findByEmail').mockResolvedValue(mockUser);
-      jest.spyOn(jwtService, 'sign').mockReturnValue(mockToken);
+      jest.spyOn(jwtService, 'sign').mockResolvedValue(mockToken);
 
       const result = await service.signJwtForIdentifier('test@example.com');
 
@@ -140,46 +154,44 @@ describe('AuthService', () => {
   });
 
   describe('signRegistrationToken', () => {
-    it('should return registration token', () => {
+    it('should return registration token', async () => {
       const mockToken = 'test-token';
-      jest.spyOn(jwtService, 'sign').mockReturnValue(mockToken);
+      jest.spyOn(jwtService, 'sign').mockResolvedValue(mockToken);
 
-      const result = service.signRegistrationToken('test@example.com');
+      const result = await service.signRegistrationToken('test@example.com');
 
       expect(result).toBe(mockToken);
-      expect(jwtService.sign).toHaveBeenCalledWith(
-        { email: 'test@example.com', type: 'registration' },
-        { expiresIn: '1h' },
-      );
+      const calls = (jwtService.sign as jest.Mock).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      expect(calls[0][0]).toEqual({ email: 'test@example.com', type: 'registration' });
+      expect(calls[0][1]).toEqual(expect.objectContaining({ expiresIn: '1h' }));
     });
   });
 
   describe('verifyRegistrationToken', () => {
-    it('should return email for valid token', () => {
+    it('should return email for valid token', async () => {
       const mockPayload = { email: 'test@example.com', type: 'registration' };
-      jest.spyOn(jwtService, 'verify').mockReturnValue(mockPayload);
+      jest.spyOn(jwtService, 'verify').mockResolvedValue(mockPayload);
 
-      const result = service.verifyRegistrationToken('valid-token');
+      const result = await service.verifyRegistrationToken('valid-token');
 
       expect(result).toEqual({ email: 'test@example.com' });
       expect(jwtService.verify).toHaveBeenCalledWith('valid-token');
     });
 
-    it('should throw UnauthorizedException for invalid token', () => {
-      jest.spyOn(jwtService, 'verify').mockImplementation(() => {
-        throw new Error();
-      });
+    it('should throw UnauthorizedException for invalid token', async () => {
+      jest.spyOn(jwtService, 'verify').mockRejectedValue(new Error());
 
-      expect(() => service.verifyRegistrationToken('invalid-token')).toThrow(
+      await expect(service.verifyRegistrationToken('invalid-token')).rejects.toThrow(
         UnauthorizedException,
       );
     });
 
-    it('should throw UnauthorizedException for token with wrong type', () => {
+    it('should throw UnauthorizedException for token with wrong type', async () => {
       const mockPayload = { email: 'test@example.com', type: 'wrong-type' };
-      jest.spyOn(jwtService, 'verify').mockReturnValue(mockPayload);
+      jest.spyOn(jwtService, 'verify').mockResolvedValue(mockPayload);
 
-      expect(() => service.verifyRegistrationToken('wrong-type-token')).toThrow(
+      await expect(service.verifyRegistrationToken('wrong-type-token')).rejects.toThrow(
         UnauthorizedException,
       );
     });
