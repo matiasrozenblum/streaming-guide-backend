@@ -107,4 +107,8 @@ export class AuthService {
   async signAccessToken(payload: Record<string, any>): Promise<string> {
     return this.jwtService.signAccessToken(payload);
   }
+
+  async signRefreshToken(payload: Record<string, any>): Promise<string> {
+    return this.jwtService.signRefreshToken(payload);
+  }
 }
