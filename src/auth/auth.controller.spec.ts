@@ -43,6 +43,10 @@ describe('AuthController', () => {
             signJwtForIdentifier: jest.fn(),
             signRegistrationToken: jest.fn(),
             verifyRegistrationToken: jest.fn(),
+            buildPayload: jest.fn(),
+            signAccessToken: jest.fn(),
+            signRefreshToken: jest.fn(),
+            verifyRefreshToken: jest.fn(),
           },
         },
         {
@@ -87,20 +91,19 @@ describe('AuthController', () => {
   });
 
   describe('loginUser', () => {
-    it('should return access token on successful login', async () => {
-      const mockToken = { 
+    it('should return access and refresh tokens on successful login', async () => {
+      const mockTokens = { 
         access_token: 'test-token',
         refresh_token: 'refresh-token'
       };
-      jest.spyOn(authService, 'loginUser').mockResolvedValue(mockToken);
+      jest.spyOn(authService, 'loginUser').mockResolvedValue(mockTokens);
 
       const result = await controller.loginUser(
         { headers: { 'user-agent': 'test-agent' } },
-        { email: 'test@example.com', password: 'password123' },
-        { cookie: jest.fn() } as any
+        { email: 'test@example.com', password: 'password123' }
       );
 
-      expect(result).toEqual({ access_token: 'test-token' });
+      expect(result).toEqual(mockTokens);
       expect(authService.loginUser).toHaveBeenCalledWith(
         'test@example.com',
         'password123',
@@ -117,8 +120,7 @@ describe('AuthController', () => {
       await expect(
         controller.loginUser(
           { headers: { 'user-agent': 'test-agent' } },
-          { email: 'test@example.com', password: 'wrong-password' },
-          { cookie: jest.fn() } as any
+          { email: 'test@example.com', password: 'wrong-password' }
         ),
       ).rejects.toThrow('Invalid credentials');
     });
@@ -143,42 +145,55 @@ describe('AuthController', () => {
   });
 
   describe('verifyCode', () => {
-    it('should return access token for existing user', async () => {
-      const mockToken = { 
+    it('should return access and refresh tokens for existing user', async () => {
+      const mockTokens = { 
         access_token: 'test-token',
         refresh_token: 'refresh-token'
       };
 
       jest.spyOn(otpService, 'verifyCode').mockResolvedValue(undefined);
       jest.spyOn(usersService, 'findByEmail').mockResolvedValue(mockUser);
-      jest.spyOn(authService, 'signJwtForIdentifier').mockResolvedValue('test-token');
+      jest.spyOn(authService, 'buildPayload').mockReturnValue({
+        sub: 1,
+        type: 'public',
+        role: 'user',
+        gender: 'male',
+        birthDate: '1990-01-01',
+        name: 'Test User',
+        email: 'test@example.com'
+      });
+      jest.spyOn(authService, 'signAccessToken').mockResolvedValue('test-token');
+      jest.spyOn(authService, 'signRefreshToken').mockResolvedValue('refresh-token');
 
       const result = await controller.verifyCode(
         { headers: { 'user-agent': 'test-agent' } },
         { identifier: 'test@example.com', code: '123456' },
       );
 
-      expect(result).toEqual({ access_token: 'test-token', isNew: false });
+      expect(result).toEqual({ 
+        access_token: 'test-token', 
+        refresh_token: 'refresh-token',
+        isNew: false 
+      });
     });
 
     it('should return registration token for new user', async () => {
       jest.spyOn(otpService, 'verifyCode').mockResolvedValue(undefined);
       jest.spyOn(usersService, 'findByEmail').mockResolvedValue(null);
-      jest.spyOn(authService, 'signRegistrationToken').mockImplementation(async () => Promise.resolve('test-token'));
+      jest.spyOn(authService, 'signRegistrationToken').mockResolvedValue('test-token');
 
       const result = await controller.verifyCode(
         { headers: { 'user-agent': 'test-agent' } },
         { identifier: 'new@example.com', code: '123456' },
       );
 
-      const registration_token = await result.registration_token;
-      expect({ ...result, registration_token }).toEqual({ registration_token: 'test-token', isNew: true });
+      expect(result).toEqual({ registration_token: 'test-token', isNew: true });
     });
   });
 
   describe('register', () => {
-    it('should complete registration and return access token', async () => {
-      const mockToken = { 
+    it('should complete registration and return access and refresh tokens', async () => {
+      const mockTokens = { 
         access_token: 'test-token',
         refresh_token: 'refresh-token'
       };
@@ -186,7 +201,17 @@ describe('AuthController', () => {
       jest.spyOn(authService, 'verifyRegistrationToken').mockResolvedValue({ email: 'test@example.com' });
       jest.spyOn(usersService, 'create').mockResolvedValue(mockUser);
       jest.spyOn(usersService, 'ensureUserDevice').mockResolvedValue('test-device-id');
-      jest.spyOn(jwtService, 'sign').mockReturnValue('test-token');
+      jest.spyOn(authService, 'buildPayload').mockReturnValue({
+        sub: 1,
+        type: 'public',
+        role: 'user',
+        gender: 'male',
+        birthDate: '1990-01-01',
+        name: 'Test User',
+        email: 'test@example.com'
+      });
+      jest.spyOn(authService, 'signAccessToken').mockResolvedValue('test-token');
+      jest.spyOn(authService, 'signRefreshToken').mockResolvedValue('refresh-token');
 
       const result = await controller.register(
         { headers: { 'user-agent': 'test-agent' } },
@@ -201,7 +226,7 @@ describe('AuthController', () => {
         },
       );
 
-      expect(result).toEqual({ access_token: 'test-token' });
+      expect(result).toEqual(mockTokens);
       expect(usersService.create).toHaveBeenCalled();
       expect(usersService.ensureUserDevice).toHaveBeenCalled();
     });
@@ -219,6 +244,51 @@ describe('AuthController', () => {
           },
         ),
       ).rejects.toThrow('Género y fecha de nacimiento son obligatorios');
+    });
+  });
+
+  describe('refreshToken', () => {
+    it('should return new access and refresh tokens', async () => {
+      const mockTokens = {
+        access_token: 'new-access-token',
+        refresh_token: 'new-refresh-token'
+      };
+
+      jest.spyOn(authService, 'verifyRefreshToken').mockResolvedValue({
+        sub: 1,
+        type: 'public',
+        role: 'user',
+        gender: 'male',
+        birthDate: '1990-01-01',
+        name: 'Test User',
+        email: 'test@example.com'
+      });
+      jest.spyOn(authService, 'signAccessToken').mockResolvedValue('new-access-token');
+      jest.spyOn(authService, 'signRefreshToken').mockResolvedValue('new-refresh-token');
+
+      const result = await controller.refreshToken({
+        headers: { authorization: 'Bearer valid-refresh-token' }
+      });
+
+      expect(result).toEqual(mockTokens);
+    });
+
+    it('should throw UnauthorizedException if no refresh token provided', async () => {
+      await expect(
+        controller.refreshToken({
+          headers: {}
+        })
+      ).rejects.toThrow('No refresh token provided');
+    });
+
+    it('should throw UnauthorizedException if refresh token is invalid', async () => {
+      jest.spyOn(authService, 'verifyRefreshToken').mockRejectedValue(new Error('Invalid token'));
+
+      await expect(
+        controller.refreshToken({
+          headers: { authorization: 'Bearer invalid-token' }
+        })
+      ).rejects.toThrow('Invalid refresh token');
     });
   });
 }); 

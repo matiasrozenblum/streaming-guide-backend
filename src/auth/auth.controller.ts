@@ -5,7 +5,6 @@ import {
   BadRequestException,
   UnauthorizedException,
   Request,
-  Res,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { OtpService } from './otp.service';
@@ -13,7 +12,6 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { JwtService } from '@nestjs/jwt';
-import { Response } from 'express';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -27,26 +25,17 @@ export class AuthController {
 
   @Post('login')
   @ApiOperation({ summary: 'Login with email & password' })
-  @ApiResponse({ status: 201, description: 'Access token and device ID' })
+  @ApiResponse({ status: 201, description: 'Access token and refresh token' })
   async loginUser(
     @Request() req: any,
     @Body() body: { email: string; password: string; deviceId?: string },
-    @Res({ passthrough: true }) res: Response,
   ) {
     const { email, password, deviceId } = body;
     const userAgent = req.headers['user-agent'] || 'Unknown';
     
     try {
       const { access_token, refresh_token } = await this.authService.loginUser(email, password, userAgent, deviceId);
-      // Set refresh token as HTTP-only cookie
-      res.cookie('refresh_token', refresh_token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        path: '/',
-        maxAge: 14 * 24 * 60 * 60 * 1000, // 14 days in ms
-      });
-      return { access_token };
+      return { access_token, refresh_token };
     } catch (err) {
       throw new UnauthorizedException(err.message);
     }
@@ -86,9 +75,11 @@ export class AuthController {
       console.log('✅ [AuthController] User found, generating token for user:', user.id);
       // For OTP login, we don't verify password, so we generate token directly
       // Device creation will be handled by frontend useDeviceId hook with correct user-agent
-      const access_token = await this.authService.signJwtForIdentifier(identifier);
+      const payload = this.authService.buildPayload(user);
+      const access_token = await this.authService.signAccessToken(payload);
+      const refresh_token = await this.authService.signRefreshToken(payload);
       console.log('✅ [AuthController] Token generated, device creation delegated to frontend');
-      return { access_token, isNew: false };
+      return { access_token, refresh_token, isNew: false };
     }
 
     console.log('🆕 [AuthController] New user, returning registration token');
@@ -136,30 +127,28 @@ export class AuthController {
     }
 
     // 4) Generamos el JWT definitivo
-    const payload = {
-      sub: user.id,
-      type: 'public',
-      role: user.role,
-      gender: user.gender,
-      birthDate: user.birthDate,
-      name: user.firstName + ' ' + user.lastName,
-      email: user.email,
-    };
-    const access_token = this.jwtService.sign(payload);
-    return { access_token };
+    const payload = this.authService.buildPayload(user);
+    const access_token = await this.authService.signAccessToken(payload);
+    const refresh_token = await this.authService.signRefreshToken(payload);
+    return { access_token, refresh_token };
   }
 
   @Post('refresh')
-  @ApiOperation({ summary: 'Refresh access token using refresh token cookie' })
-  async refreshToken(@Request() req: any, @Res({ passthrough: true }) res: Response) {
-    const refreshToken = req.cookies?.refresh_token;
-    if (!refreshToken) throw new UnauthorizedException('No refresh token');
+  @ApiOperation({ summary: 'Refresh access token using refresh token' })
+  async refreshToken(@Request() req: any) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+      throw new UnauthorizedException('No refresh token provided');
+    }
+    const refreshToken = authHeader.split(' ')[1];
+    
     try {
       const payload = await this.authService.verifyRefreshToken(refreshToken);
       // Remove iat, exp from payload
       const { iat, exp, ...rest } = payload;
       const access_token = await this.authService.signAccessToken(rest);
-      return { access_token };
+      const refresh_token = await this.authService.signRefreshToken(rest); // Generate new refresh token
+      return { access_token, refresh_token };
     } catch (err) {
       throw new UnauthorizedException('Invalid refresh token');
     }
