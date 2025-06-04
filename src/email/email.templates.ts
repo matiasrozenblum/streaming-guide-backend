@@ -127,12 +127,13 @@ export function buildProgramNotificationHtml(
           border-radius: 50%;
           margin-right: 15px;
           background: #2563eb;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
+          text-align: center;
+          vertical-align: middle;
+          line-height: 50px;
           font-weight: bold;
           font-size: 22px;
+          color: white;
+          display: inline-block;
         }
         .program-logo img {
           width: 100%;
@@ -227,7 +228,7 @@ export function buildProgramNotificationHtml(
           <div class="program-card">
             <div class="program-header">
               <div class="program-logo">
-                ${logoUrl ? `<img src="${logoUrl}" alt="${programName}" />` : programName.charAt(0)}
+                ${programName.charAt(0)}
               </div>
               <div class="program-info">
                 <h2>${programName}</h2>
