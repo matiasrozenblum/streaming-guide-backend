@@ -48,7 +48,6 @@ export function buildProgramNotificationHtml(
   startTime: string,
   endTime: string,
   description?: string,
-  logoUrl?: string
 ): string {
   const currentTime = new Date().toLocaleString('es-ES', {
     timeZone: 'America/Argentina/Buenos_Aires',

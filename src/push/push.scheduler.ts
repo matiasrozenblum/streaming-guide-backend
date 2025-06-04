@@ -126,7 +126,6 @@ export class PushScheduler {
               schedule.start_time,
               schedule.end_time,
               program.description,
-              program.logo_url || undefined
             );
             
             await this.emailService['mailerService'].sendMail({
