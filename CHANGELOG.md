@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.0.3] - 2025-06-05
+
+### Added
+- Now returning channel order in get user subscriptions endpoint
+
 ## [1.0.2] - 2025-06-04
 
 ### Fixed
