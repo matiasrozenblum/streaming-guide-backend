@@ -17,6 +17,17 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.0.3] - 2025-06-05
+
+### Added
+- Now returning channel order in get user subscriptions endpoint
+
+### Changed
+- Now get channel id endpoint is dynamic and reads from database
+
+### Fixed
+- Fixed back-to-back programs not updating cached video id
+
 ## [1.0.2] - 2025-06-04
 
 ### Fixed

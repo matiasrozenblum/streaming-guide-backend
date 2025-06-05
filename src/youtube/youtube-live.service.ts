@@ -29,7 +29,14 @@ export class YoutubeLiveService {
     dayjs.extend(timezone);
 
     console.log('🚀 YoutubeLiveService initialized');
-    cron.schedule('0 * * * *', () => this.fetchLiveVideoIds(), {
+    
+    // Main cron: runs every hour at :00
+    cron.schedule('0 * * * *', () => this.fetchLiveVideoIds('main'), {
+      timezone: 'America/Argentina/Buenos_Aires',
+    });
+    
+    // Back-to-back fix cron: runs 7 minutes after each hour to catch overlapping programs
+    cron.schedule('7 * * * *', () => this.fetchLiveVideoIds('back-to-back-fix'), {
       timezone: 'America/Argentina/Buenos_Aires',
     });
   }
@@ -127,7 +134,12 @@ export class YoutubeLiveService {
   /**
    * Itera canales con programación hoy y llama a getLiveVideoId
    */
-  async fetchLiveVideoIds() {
+  async fetchLiveVideoIds(cronType: 'main' | 'back-to-back-fix' = 'main') {
+    const cronLabel = cronType === 'main' ? '🕐 MAIN CRON' : '🔄 BACK-TO-BACK FIX CRON';
+    const currentTime = dayjs().tz('America/Argentina/Buenos_Aires').format('HH:mm:ss');
+    
+    console.log(`${cronLabel} started at ${currentTime}`);
+    
     const today = dayjs().tz('America/Argentina/Buenos_Aires')
                         .format('dddd')
                         .toLowerCase();
@@ -136,7 +148,7 @@ export class YoutubeLiveService {
     const rawSchedules = await this.schedulesService.findByDay(today);
     const schedules    = await this.schedulesService.enrichSchedules(rawSchedules);
   
-    // 2) Filtrás sólo los “on-air” right now
+    // 2) Filtrás sólo los "on-air" right now
     const liveNow = schedules.filter(s => s.program.is_live);
   
     // 3) Deduplicás canales de esos schedules
@@ -148,10 +160,29 @@ export class YoutubeLiveService {
       }
     }
   
-    console.log(`🎯 Channels to refresh: ${map.size}`);
+    console.log(`${cronLabel} - Channels to refresh: ${map.size}`);
+    
+    let updatedCount = 0;
     for (const [cid, handle] of map.entries()) {
+      const beforeCache = cronType === 'back-to-back-fix' ? await this.redisService.get<string>(`liveVideoIdByChannel:${cid}`) : null;
+      
       const ttl = await getCurrentBlockTTL(cid, rawSchedules);
-      await this.getLiveVideoId(cid, handle, ttl, 'cron');
+      const result = await this.getLiveVideoId(cid, handle, ttl, 'cron');
+      
+      // Track if the back-to-back fix cron actually updated a video ID
+      if (cronType === 'back-to-back-fix' && result && result !== '__SKIPPED__') {
+        const afterCache = await this.redisService.get<string>(`liveVideoIdByChannel:${cid}`);
+        if (beforeCache && afterCache && beforeCache !== afterCache) {
+          updatedCount++;
+          console.log(`🔧 ${cronLabel} - FIXED back-to-back issue for ${handle}: ${beforeCache} → ${afterCache}`);
+        }
+      }
+    }
+    
+    if (cronType === 'back-to-back-fix') {
+      console.log(`${cronLabel} completed - ${updatedCount} channels updated (back-to-back fixes detected)`);
+    } else {
+      console.log(`${cronLabel} completed`);
     }
   }
 }
