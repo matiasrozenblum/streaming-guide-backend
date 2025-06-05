@@ -126,7 +126,7 @@ export class ProgramsService {
       .leftJoinAndSelect('program.channel', 'channel')
       .leftJoinAndSelect('program.panelists', 'panelists')
       .where('program.id = :id', { id })
-      .orderBy('panelists.id', 'DESC')
+      .orderBy('panelists.id', 'ASC')
       .getOne();
     if (!program) {
       throw new NotFoundException(`Program with ID ${id} not found`);
