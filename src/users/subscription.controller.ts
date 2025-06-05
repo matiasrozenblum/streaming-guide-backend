@@ -85,6 +85,7 @@ export class SubscriptionController {
           channel: {
             id: sub.program.channel.id,
             name: sub.program.channel.name,
+            order: sub.program.channel.order,
           },
         },
         notificationMethod: sub.notificationMethod,

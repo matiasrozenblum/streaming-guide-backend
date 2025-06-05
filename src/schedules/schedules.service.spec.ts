@@ -96,6 +96,15 @@ describe('SchedulesService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
 
+    const mockQueryBuilder = {
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([mockSchedule]),
+      getOne: jest.fn().mockResolvedValue(mockSchedule),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SchedulesService,
@@ -106,6 +115,7 @@ describe('SchedulesService', () => {
             findOne: jest.fn(),
             save: jest.fn(),
             delete: jest.fn(),
+            createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
           },
         },
         {
@@ -147,18 +157,44 @@ describe('SchedulesService', () => {
   describe('findByDay', () => {
     it('should return schedules for a specific day with live status', async () => {
       const testSchedule = {
-        ...mockSchedule,
+        id: 1,
+        day_of_week: 'monday',
         start_time: '10:00',
         end_time: '12:00',
         program: {
-          ...mockProgram,
+          id: 1,
+          name: 'Test Program',
+          description: 'Test Description',
+          logo_url: 'test-logo.png',
+          youtube_url: 'https://youtube.com/test',
           is_live: false,
-          stream_url: 'https://youtube.com/test'
-        }
+          stream_url: '',
+          channel: {
+            id: 1,
+            name: 'Test Channel',
+            description: 'Test Description',
+            logo_url: 'test-logo.png',
+            handle: 'test',
+            youtube_channel_id: 'test-channel-id',
+            programs: [],
+          },
+          panelists: [],
+          schedules: [],
+        },
       } as unknown as Schedule;
 
+      // Mock the query builder to return our test schedule
+      const mockQueryBuilder = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([testSchedule]),
+        getOne: jest.fn().mockResolvedValue(testSchedule),
+      };
+      
+      jest.spyOn(schedulesRepo, 'createQueryBuilder').mockReturnValue(mockQueryBuilder as any);
       jest.spyOn(redisService, 'get').mockResolvedValueOnce(null).mockResolvedValueOnce('live-video-id');
-      jest.spyOn(schedulesRepo, 'find').mockResolvedValue([testSchedule]);
 
       currentTime = '11:00';
       currentDay = 'monday';
@@ -172,18 +208,44 @@ describe('SchedulesService', () => {
 
     it('should not mark program as live if outside time', async () => {
       const testSchedule = {
-        ...mockSchedule,
+        id: 1,
+        day_of_week: 'monday',
         start_time: '08:00',
         end_time: '10:00',
         program: {
-          ...mockProgram,
+          id: 1,
+          name: 'Test Program',
+          description: 'Test Description',
+          logo_url: 'test-logo.png',
+          youtube_url: 'https://youtube.com/test',
           is_live: false,
-          stream_url: 'https://youtube.com/test'
-        }
+          stream_url: '',
+          channel: {
+            id: 1,
+            name: 'Test Channel',
+            description: 'Test Description',
+            logo_url: 'test-logo.png',
+            handle: 'test',
+            youtube_channel_id: 'test-channel-id',
+            programs: [],
+          },
+          panelists: [],
+          schedules: [],
+        },
       } as unknown as Schedule;
 
+      // Mock the query builder to return our test schedule
+      const mockQueryBuilder = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([testSchedule]),
+        getOne: jest.fn().mockResolvedValue(testSchedule),
+      };
+      
+      jest.spyOn(schedulesRepo, 'createQueryBuilder').mockReturnValue(mockQueryBuilder as any);
       jest.spyOn(redisService, 'get').mockResolvedValueOnce(null);
-      jest.spyOn(schedulesRepo, 'find').mockResolvedValue([testSchedule]);
 
       currentTime = '15:00'; // fuera de rango
       currentDay = 'monday';

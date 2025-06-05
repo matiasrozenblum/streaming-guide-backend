@@ -71,6 +71,27 @@ describe('ProgramsService', () => {
   };
 
   beforeEach(async () => {
+    let queryId: number | null = null;
+
+    const mockQueryBuilder = {
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockImplementation((condition, params) => {
+        if (params?.id) {
+          queryId = params.id;
+        }
+        return mockQueryBuilder;
+      }),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([mockProgramWithChannel]),
+      getOne: jest.fn().mockImplementation(() => {
+        if (queryId === 999) {
+          return Promise.resolve(null);
+        }
+        return Promise.resolve(mockProgramWithChannel);
+      }),
+    };
+
     programRepository = {
       find: jest.fn().mockResolvedValue([mockProgramWithChannel]),
       findOne: jest.fn().mockImplementation(({ where: { id } }) => {
@@ -82,6 +103,7 @@ describe('ProgramsService', () => {
       create: jest.fn().mockReturnValue(mockProgramWithChannel),
       save: jest.fn().mockResolvedValue(mockProgramWithChannel),
       delete: jest.fn().mockResolvedValue({ affected: 1 }),
+      createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
     };
 
     panelistRepository = {
@@ -129,16 +151,13 @@ describe('ProgramsService', () => {
   it('should return an array of programs', async () => {
     const result = await service.findAll();
     expect(result).toEqual([mockProgramResponse]);
-    expect(programRepository.find).toHaveBeenCalled();
+    expect(programRepository.createQueryBuilder).toHaveBeenCalledWith('program');
   });
 
   it('should return a single program', async () => {
     const result = await service.findOne(1);
     expect(result).toEqual(mockProgramResponse);
-    expect(programRepository.findOne).toHaveBeenCalledWith({
-      where: { id: 1 },
-      relations: ['panelists', 'channel'],
-    });
+    expect(programRepository.createQueryBuilder).toHaveBeenCalledWith('program');
   });
 
   it('should throw NotFoundException for non-existent program', async () => {
