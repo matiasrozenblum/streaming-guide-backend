@@ -35,20 +35,25 @@ export class AppController {
 
   @Get('youtube/resolve-handles')
   async getChannelsFromHandles() {
-    return this.youtubeDiscoveryService.getChannelIdsFromLiveUrls([
-      'https://www.youtube.com/@luzutv/live',
-      'https://www.youtube.com/@VorterixOficial/live',
-      'https://www.youtube.com/@UrbanaPlayFM/live',
-      'https://www.youtube.com/@estoesblender/live',
-      'https://www.youtube.com/@somoslacasa/live',
-      'https://www.youtube.com/@Bondi_liveok/live',
-      'https://www.youtube.com/@olgaenvivo_/live',
-      'https://www.youtube.com/@SomosGelatina/live',
-      'https://www.youtube.com/@Updr/live',
-      'https://www.youtube.com/@CarajoStream/live',
-      'https://www.youtube.com/@republicaz/live',
-      'https://www.youtube.com/@futurock/live'
-    ]);
+    // Get all channels from the database
+    const channels = await this.channelsRepository.find({
+      select: ['handle']
+    });
+
+    // Filter out channels without handles and build YouTube URLs
+    const youtubeUrls = channels
+      .filter(channel => channel.handle && channel.handle.trim() !== '')
+      .map(channel => {
+        // Ensure handle starts with @ if it doesn't already
+        const handle = channel.handle.startsWith('@') ? channel.handle : `@${channel.handle}`;
+        return `https://www.youtube.com/${handle}/live`;
+      });
+
+    if (youtubeUrls.length === 0) {
+      return { message: 'No channels with valid handles found in the database' };
+    }
+
+    return this.youtubeDiscoveryService.getChannelIdsFromLiveUrls(youtubeUrls);
   }
 
   @Post('youtube/fetch-live-ids')
