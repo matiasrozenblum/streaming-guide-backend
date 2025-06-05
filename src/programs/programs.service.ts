@@ -51,7 +51,7 @@ export class ProgramsService {
       .createQueryBuilder('program')
       .leftJoinAndSelect('program.channel', 'channel')
       .leftJoinAndSelect('program.panelists', 'panelists')
-      .orderBy('panelists.id', 'DESC')
+      .orderBy('panelists.id', 'ASC')
       .getMany();
     return programs.map(program => ({
       id: program.id,
@@ -73,7 +73,7 @@ export class ProgramsService {
       .leftJoinAndSelect('program.channel', 'channel')
       .leftJoinAndSelect('program.panelists', 'panelists')
       .where('program.id = :id', { id })
-      .orderBy('panelists.id', 'DESC')
+      .orderBy('panelists.id', 'ASC')
       .getOne();
     if (!program) {
       throw new NotFoundException(`Program with ID ${id} not found`);

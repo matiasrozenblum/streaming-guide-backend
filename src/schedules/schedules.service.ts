@@ -60,7 +60,7 @@ export class SchedulesService {
         .leftJoinAndSelect('program.channel', 'channel')
         .leftJoinAndSelect('program.panelists', 'panelists')
         .orderBy('schedule.start_time', 'ASC')
-        .addOrderBy('panelists.id', 'DESC');
+        .addOrderBy('panelists.id', 'ASC');
 
       if (dayOfWeek) {
         queryBuilder.where('schedule.day_of_week = :dayOfWeek', { dayOfWeek });
