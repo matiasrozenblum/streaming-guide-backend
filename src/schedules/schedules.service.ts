@@ -198,7 +198,7 @@ export class SchedulesService {
       .where('program.id = :programId', { programId: Number(programId) })
       .orderBy('schedule.day_of_week', 'ASC')
       .addOrderBy('schedule.start_time', 'ASC')
-      .addOrderBy('panelists.id', 'DESC')
+      .addOrderBy('panelists.id', 'ASC')
       .getMany();
   }
 
