@@ -54,18 +54,19 @@ export class SchedulesService {
     if (!schedules) {
       console.log(`Cache MISS for ${cacheKey}`);
 
-      const where: FindOptionsWhere<Schedule> = {};
-      if (dayOfWeek) where.day_of_week = dayOfWeek;
+      const queryBuilder = this.schedulesRepository
+        .createQueryBuilder('schedule')
+        .leftJoinAndSelect('schedule.program', 'program')
+        .leftJoinAndSelect('program.channel', 'channel')
+        .leftJoinAndSelect('program.panelists', 'panelists')
+        .orderBy('schedule.start_time', 'ASC')
+        .addOrderBy('panelists.id', 'DESC');
 
-      const findOptions: FindManyOptions<Schedule> = { where, relations, order: { start_time: 'ASC' } };
-      if (select) {
-        findOptions.select = select.reduce((acc, field) => {
-          acc[field] = true;
-          return acc;
-        }, {} as any);
+      if (dayOfWeek) {
+        queryBuilder.where('schedule.day_of_week = :dayOfWeek', { dayOfWeek });
       }
 
-      schedules = await this.schedulesRepository.find(findOptions);
+      schedules = await queryBuilder.getMany();
       schedules.sort((a, b) => {
         const aOrder = a.program?.channel?.order ?? 999;
         const bOrder = b.program?.channel?.order ?? 999;
@@ -189,14 +190,16 @@ export class SchedulesService {
   }
 
   async findByProgram(programId: string): Promise<Schedule[]> {
-    return this.schedulesRepository.find({
-      where: { program: { id: Number(programId) } },
-      relations: ['program', 'program.channel', 'program.panelists'],
-      order: {
-        day_of_week: 'ASC',
-        start_time: 'ASC',
-      },
-    });
+    return this.schedulesRepository
+      .createQueryBuilder('schedule')
+      .leftJoinAndSelect('schedule.program', 'program')
+      .leftJoinAndSelect('program.channel', 'channel')
+      .leftJoinAndSelect('program.panelists', 'panelists')
+      .where('program.id = :programId', { programId: Number(programId) })
+      .orderBy('schedule.day_of_week', 'ASC')
+      .addOrderBy('schedule.start_time', 'ASC')
+      .addOrderBy('panelists.id', 'DESC')
+      .getMany();
   }
 
   async findByDay(dayOfWeek: string): Promise<any[]> {

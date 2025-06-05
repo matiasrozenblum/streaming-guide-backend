@@ -47,7 +47,12 @@ export class ProgramsService {
   }
 
   async findAll(): Promise<any[]> {
-    const programs = await this.programsRepository.find({ relations: ['panelists', 'channel'] });
+    const programs = await this.programsRepository
+      .createQueryBuilder('program')
+      .leftJoinAndSelect('program.channel', 'channel')
+      .leftJoinAndSelect('program.panelists', 'panelists')
+      .orderBy('panelists.id', 'DESC')
+      .getMany();
     return programs.map(program => ({
       id: program.id,
       name: program.name,
@@ -63,10 +68,13 @@ export class ProgramsService {
   }
 
   async findOne(id: number): Promise<any> {
-    const program = await this.programsRepository.findOne({
-      where: { id },
-      relations: ['panelists', 'channel'],
-    });
+    const program = await this.programsRepository
+      .createQueryBuilder('program')
+      .leftJoinAndSelect('program.channel', 'channel')
+      .leftJoinAndSelect('program.panelists', 'panelists')
+      .where('program.id = :id', { id })
+      .orderBy('panelists.id', 'DESC')
+      .getOne();
     if (!program) {
       throw new NotFoundException(`Program with ID ${id} not found`);
     }
@@ -85,10 +93,8 @@ export class ProgramsService {
   }
 
   async update(id: number, updateProgramDto: UpdateProgramDto): Promise<any> {
-    const program = await this.findOne(id);
-    if (!program) {
-      throw new NotFoundException(`Program with ID ${id} not found`);
-    }
+    const program = await this.findProgramEntity(id);
+    
     Object.assign(program, updateProgramDto);
     const updatedProgram = await this.programsRepository.save(program);
     await this.redisService.delByPattern('schedules:all:*');
@@ -102,6 +108,7 @@ export class ProgramsService {
       is_live: updatedProgram.is_live,
       stream_url: updatedProgram.stream_url,
       channel_id: updatedProgram.channel?.id,
+      channel_name: updatedProgram.channel?.name || null,
     };
   }
 
@@ -113,11 +120,22 @@ export class ProgramsService {
     await this.redisService.delByPattern('schedules:all:*');
   }
 
-  async addPanelist(programId: number, panelistId: number): Promise<void> {
-    const program = await this.findOne(programId);
+  private async findProgramEntity(id: number): Promise<Program> {
+    const program = await this.programsRepository
+      .createQueryBuilder('program')
+      .leftJoinAndSelect('program.channel', 'channel')
+      .leftJoinAndSelect('program.panelists', 'panelists')
+      .where('program.id = :id', { id })
+      .orderBy('panelists.id', 'DESC')
+      .getOne();
     if (!program) {
-      throw new NotFoundException(`Program with ID ${programId} not found`);
+      throw new NotFoundException(`Program with ID ${id} not found`);
     }
+    return program;
+  }
+
+  async addPanelist(programId: number, panelistId: number): Promise<void> {
+    const program = await this.findProgramEntity(programId);
 
     const panelist = await this.panelistsRepository.findOne({
       where: { id: panelistId },
@@ -138,10 +156,7 @@ export class ProgramsService {
   }
 
   async removePanelist(programId: number, panelistId: number): Promise<void> {
-    const program = await this.findOne(programId);
-    if (!program) {
-      throw new NotFoundException(`Program with ID ${programId} not found`);
-    }
+    const program = await this.findProgramEntity(programId);
 
     if (program.panelists) {
       program.panelists = program.panelists.filter(p => p.id !== panelistId);
