@@ -76,7 +76,7 @@ export class ProgramsController {
       message: 'Successfully subscribed to program',
       subscription: {
         id: subscription.id,
-        programId: subscription.program.id,
+        programId: Number(id),
         notificationMethod: subscription.notificationMethod,
         createdAt: subscription.createdAt,
       },
