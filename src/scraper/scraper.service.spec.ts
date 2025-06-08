@@ -21,6 +21,7 @@ describe('ScraperService', () => {
 
   const mockProgramRepo = {
     findOne: jest.fn(),
+    find: jest.fn(),
     create: jest.fn(),
     save: jest.fn(),
   };
@@ -84,6 +85,7 @@ describe('ScraperService', () => {
       mockChannelRepo.save.mockResolvedValue({ id: 1, name: 'Vorterix' });
     
       mockProgramRepo.findOne.mockResolvedValue(null);
+      mockProgramRepo.find.mockResolvedValue([]); // No existing programs found
       mockProgramRepo.create.mockReturnValue({ name: 'Demo Show' });
       mockProgramRepo.save.mockResolvedValue({ id: 1, name: 'Demo Show' });
     
@@ -148,6 +150,7 @@ describe('ScraperService', () => {
       mockChannelRepo.save.mockResolvedValue({ id: 2, name: 'Gelatina' });
 
       mockProgramRepo.findOne.mockResolvedValue(null);
+      mockProgramRepo.find.mockResolvedValue([]); // No existing programs found
       mockProgramRepo.create.mockReturnValue({ name: 'Gelatina Show' });
       mockProgramRepo.save.mockResolvedValue({ id: 2, name: 'Gelatina Show' });
 
@@ -176,6 +179,7 @@ describe('ScraperService', () => {
       mockChannelRepo.save.mockResolvedValue({ id: 3, name: 'Urbana Play' });
 
       mockProgramRepo.findOne.mockResolvedValue(null);
+      mockProgramRepo.find.mockResolvedValue([]); // No existing programs found
       mockProgramRepo.create.mockReturnValue({ name: 'Urbana Show' });
       mockProgramRepo.save.mockResolvedValue({ id: 3, name: 'Urbana Show' });
 
