@@ -5,6 +5,11 @@ import { ScraperService } from './scraper.service';
 export class ScraperController {
   constructor(private readonly scraperService: ScraperService) {}
 
+  @Post('all/update')
+  async handleWeeklyScrapersUpdate() {
+    return this.scraperService.handleWeeklyScrapersUpdate();
+  }
+
   @Post('vorterix/insert')
   async insertVorterixSchedule() {
     return this.scraperService.insertVorterixSchedule();
