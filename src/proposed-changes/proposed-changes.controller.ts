@@ -26,4 +26,9 @@ export class ProposedChangesController {
   async rejectChange(@Param('id', ParseIntPipe) id: number) {
     return this.proposedChangesService.rejectChange(id);
   }
+
+  @Post('reject-all')
+  async rejectAllPendingChanges() {
+    return this.proposedChangesService.rejectAllPendingChanges();
+  }
 }
