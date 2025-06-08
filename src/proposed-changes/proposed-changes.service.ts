@@ -141,4 +141,12 @@ export class ProposedChangesService {
   async clearPendingChangesForChannel(channelName: string) {
     await this.proposedChangeRepo.delete({ channelName, status: 'pending' });
   }
+
+  async rejectAllPendingChanges() {
+    await this.proposedChangeRepo.update(
+      { status: 'pending' },
+      { status: 'rejected' }
+    );
+    return { success: true, message: 'All pending changes have been rejected' };
+  }
 }

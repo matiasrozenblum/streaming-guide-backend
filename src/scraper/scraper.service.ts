@@ -225,6 +225,9 @@ export class ScraperService {
     // Remove any extra whitespace
     time = time.trim();
     
+    // Convert dots to colons (handle "HH.mm" format like "19.00" -> "19:00")
+    time = time.replace(/\./g, ':');
+    
     // Handle different time formats
     // If it's already in HH:MM:SS format, convert to HH:MM
     if (time.includes(':')) {
