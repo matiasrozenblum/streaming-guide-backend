@@ -17,6 +17,12 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.0.4] - 2025-06-08
+
+### Fixed
+- Fixed formatting differences between DB and scrapers
+- Unified scrapers proposed changes into only 1 email
+
 ## [1.0.3] - 2025-06-05
 
 ### Added

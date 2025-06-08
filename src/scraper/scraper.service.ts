@@ -24,28 +24,62 @@ export class ScraperService {
     private readonly emailService: EmailService,
   ) {}
 
+  // Single consolidated cron job that runs all scrapers and sends one email
   @Cron(CronExpression.EVERY_WEEK)
-  async handleWeeklyVorterixUpdate() {
-    console.log('⏰ Ejecutando actualización semanal de Vorterix...');
-    await this.insertVorterixSchedule();
-    console.log('✅ Actualización semanal de Vorterix completada');
+  async handleWeeklyScrapersUpdate() {
+    console.log('⏰ Ejecutando actualización semanal de todos los canales...');
+    
+    const results = await Promise.allSettled([
+      this.insertVorterixSchedule(false), // Don't send individual emails
+      this.insertGelatinaSchedule(false),
+      this.insertUrbanaSchedule(false),
+    ]);
+
+    // Log results for each scraper
+    results.forEach((result, index) => {
+      const channelName = ['Vorterix', 'Gelatina', 'Urbana Play'][index];
+      if (result.status === 'fulfilled') {
+        console.log(`✅ Actualización de ${channelName} completada`);
+      } else {
+        console.error(`❌ Error en actualización de ${channelName}:`, result.reason);
+      }
+    });
+
+    // Send consolidated email report
+    await this.sendConsolidatedReportEmail();
+    console.log('✅ Actualización semanal consolidada completada');
   }
 
-  @Cron(CronExpression.EVERY_WEEK)
-  async handleWeeklyGelatinaUpdate() {
-    console.log('⏰ Ejecutando actualización semanal de Gelatina...');
-    await this.insertGelatinaSchedule();
-    console.log('✅ Actualización semanal de Gelatina completada');
+  // Helper method to normalize program names for comparison (removes accents and normalizes case)
+  private normalizeStringForComparison(str: string): string {
+    return str
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remove accents
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .trim();
   }
 
-  @Cron(CronExpression.EVERY_WEEK)
-  async handleWeeklyUrbanaUpdate() {
-    console.log('⏰ Ejecutando actualización semanal de Urbana Play...');
-    await this.insertUrbanaSchedule();
-    console.log('✅ Actualización semanal de Urbana completada');
+  // Helper method to check if two times are equivalent (handles 23:59 vs 00:00 case)
+  private areTimesEquivalent(time1: string, time2: string): boolean {
+    const normalizedTime1 = this.normalizeTime(time1);
+    const normalizedTime2 = this.normalizeTime(time2);
+    
+    // Direct match
+    if (normalizedTime1 === normalizedTime2) {
+      return true;
+    }
+    
+    // Handle 23:59 vs 00:00 equivalence (for end times that cross midnight)
+    if ((normalizedTime1 === '23:59' && normalizedTime2 === '00:00') ||
+        (normalizedTime1 === '00:00' && normalizedTime2 === '23:59')) {
+      return true;
+    }
+    
+    return false;
   }
 
-  private async insertSchedule(scrapedData: any[], channelName: string) {
+  private async insertSchedule(scrapedData: any[], channelName: string, sendEmail: boolean = true) {
     const changes: Array<{
       entityType: 'program' | 'schedule';
       action: 'create' | 'update';
@@ -64,10 +98,16 @@ export class ScraperService {
     await this.proposedChangesService.clearPendingChangesForChannel(channel.name);
 
     for (const item of scrapedData) {
-      let program = await this.programRepo.findOne({
-        where: { name: item.name, channel: { id: channel.id } },
+      // Find program using normalized name comparison
+      const normalizedScrapedName = this.normalizeStringForComparison(item.name);
+      const existingPrograms = await this.programRepo.find({
+        where: { channel: { id: channel.id } },
         relations: ['channel'],
       });
+
+      let program = existingPrograms.find(p => 
+        this.normalizeStringForComparison(p.name) === normalizedScrapedName
+      );
 
       if (!program) {
         changes.push({
@@ -112,8 +152,8 @@ export class ScraperService {
           const dbStartTime = this.normalizeTime(existingSchedule.start_time);
           const dbEndTime = this.normalizeTime(existingSchedule.end_time);
 
-          const startMatches = dbStartTime === startTimeNormalized;
-          const endMatches = dbEndTime === endTimeNormalized;
+          const startMatches = this.areTimesEquivalent(dbStartTime, startTimeNormalized);
+          const endMatches = this.areTimesEquivalent(dbEndTime, endTimeNormalized);
 
           if (!startMatches || !endMatches) {
             changes.push({
@@ -141,23 +181,27 @@ export class ScraperService {
       await this.proposedChangesService.createProposedChange(changes);
     }
 
-    await this.sendReportEmail();
+    // Only send email if explicitly requested (for individual scraper runs)
+    if (sendEmail) {
+      await this.sendReportEmail();
+    }
+    
     return { success: true };
   }
 
-  async insertVorterixSchedule() {
+  async insertVorterixSchedule(sendEmail: boolean = true) {
     const data: VorterixProgram[] = await scrapeVorterixSchedule();
-    return this.insertSchedule(data, 'Vorterix');
+    return this.insertSchedule(data, 'Vorterix', sendEmail);
   }
 
-  async insertGelatinaSchedule() {
+  async insertGelatinaSchedule(sendEmail: boolean = true) {
     const data: GelatinaProgram[] = await scrapeGelatinaSchedule();
-    return this.insertSchedule(data, 'Gelatina');
+    return this.insertSchedule(data, 'Gelatina', sendEmail);
   }
 
-  async insertUrbanaSchedule() {
+  async insertUrbanaSchedule(sendEmail: boolean = true) {
     const data: UrbanaProgram[] = await scrapeUrbanaPlaySchedule();
-    return this.insertSchedule(data, 'Urbana Play');
+    return this.insertSchedule(data, 'Urbana Play', sendEmail);
   }
 
   private translateDay(day: string): string {
@@ -180,6 +224,9 @@ export class ScraperService {
     
     // Remove any extra whitespace
     time = time.trim();
+    
+    // Convert dots to colons (handle "HH.mm" format like "19.00" -> "19:00")
+    time = time.replace(/\./g, ':');
     
     // Handle different time formats
     // If it's already in HH:MM:SS format, convert to HH:MM
@@ -208,6 +255,13 @@ export class ScraperService {
   }
 
   private async sendReportEmail() {
+    const pendingChanges = await this.proposedChangesService.getPendingChanges();
+    if (pendingChanges.length) {
+      await this.emailService.sendProposedChangesReport(pendingChanges);
+    }
+  }
+
+  private async sendConsolidatedReportEmail() {
     const pendingChanges = await this.proposedChangesService.getPendingChanges();
     if (pendingChanges.length) {
       await this.emailService.sendProposedChangesReport(pendingChanges);
