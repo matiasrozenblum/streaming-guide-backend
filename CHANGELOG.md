@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.0.5] - 2025-06-09
+
+### Fixed
+- Fixed subscription logic
+
 ## [1.0.4] - 2025-06-08
 
 ### Fixed
