@@ -7,6 +7,7 @@ import { Program } from '../programs/programs.entity';
 import { RedisService } from '../redis/redis.service';
 import { YoutubeLiveService } from '../youtube/youtube-live.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { WeeklyOverridesService } from './weekly-overrides.service';
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
@@ -142,6 +143,13 @@ describe('SchedulesService', () => {
           provide: NotificationsService,
           useValue: {
             list: jest.fn().mockResolvedValue([]),
+          },
+        },
+        {
+          provide: WeeklyOverridesService,
+          useValue: {
+            getWeekStartDate: jest.fn().mockReturnValue('2024-01-01'),
+            applyWeeklyOverrides: jest.fn().mockImplementation((schedules) => Promise.resolve(schedules)),
           },
         },
       ],

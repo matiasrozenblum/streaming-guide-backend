@@ -7,6 +7,7 @@ import { CreateScheduleDto } from './dto/create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { YoutubeLiveService } from '../youtube/youtube-live.service';
 import { RedisService } from '../redis/redis.service';
+import { WeeklyOverridesService } from './weekly-overrides.service';
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
@@ -35,6 +36,7 @@ export class SchedulesService {
     private readonly redisService: RedisService,
     private readonly youtubeLiveService: YoutubeLiveService,
     private readonly notificationsService: NotificationsService,
+    private readonly weeklyOverridesService: WeeklyOverridesService,
   ) {
     this.dayjs = dayjs;
     this.dayjs.extend(utc);
@@ -46,6 +48,7 @@ export class SchedulesService {
     const { dayOfWeek, relations = ['program', 'program.channel', 'program.panelists'], select, skipCache = false, deviceId } = options;
 
     const cacheKey = `schedules:all:${dayOfWeek || 'all'}`;
+    
     let schedules: Schedule[] | null = null;
     if (!skipCache) {
       schedules = await this.redisService.get<Schedule[]>(cacheKey);
@@ -77,6 +80,10 @@ export class SchedulesService {
       await this.redisService.set(cacheKey, schedules, 1800);
       console.log(`Database query and cache SET. Total time: ${Date.now() - startTime}ms`);
     }
+
+    // Apply weekly overrides for current week
+    const currentWeekStart = this.weeklyOverridesService.getWeekStartDate('current');
+    schedules = await this.weeklyOverridesService.applyWeeklyOverrides(schedules!, currentWeekStart);
 
     const enriched = await this.enrichSchedules(schedules!);
 
