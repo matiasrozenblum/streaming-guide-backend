@@ -23,11 +23,16 @@ export class SchedulesController {
       'ID de dispositivo para incluir flag `subscribed` en cada bloque',
   })
   @ApiResponse({ status: 200, description: 'Lista de horarios', type: [Schedule] })
-  async findAll(@Query('day') day?: string, @Query('live_status') liveStatus?: string,): Promise<Schedule[]> {
+  async findAll(
+    @Query('day') day?: string, 
+    @Query('live_status') liveStatus?: string,
+    @Query('deviceId') deviceId?: string,
+  ): Promise<Schedule[]> {
     const skipCache = liveStatus === 'true';
     return this.schedulesService.findAll({
       dayOfWeek: day?.toLowerCase(),
       skipCache,
+      deviceId,
     });
   }
 
