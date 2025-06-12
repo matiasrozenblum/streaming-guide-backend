@@ -91,6 +91,7 @@ export class PanelistsService {
     await Promise.all([
       this.redisService.del('panelists:all'),
       this.redisService.del(`panelists:${id}`),
+      this.redisService.delByPattern('schedules:all:*'), // Clear schedule cache since panelist info appears in schedules
     ]);
     
     return updatedPanelist;
