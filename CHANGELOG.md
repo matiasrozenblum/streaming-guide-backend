@@ -17,6 +17,15 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.1.0] - 2025-06-12
+
+### Added
+- Added weekly changes functionality for one-time changes for current and next week.
+- Added clean cache endpoint for backoffice actions
+
+### Removed
+- Removed TypeORM logging in staging
+
 ## [1.0.5] - 2025-06-09
 
 ### Fixed
