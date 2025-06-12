@@ -38,8 +38,10 @@ import { UsersModule } from './users/users.module';
       inject: [ConfigService],
       useFactory: async (config: ConfigService) => {
         const dbUrl = config.get<string>('DATABASE_URL');
-        const isProduction = config.get<string>('NODE_ENV') === 'production';
+        const nodeEnv = config.get<string>('NODE_ENV');
+        const isProduction = nodeEnv === 'production';
         console.log('🌐 Connecting to DB:', dbUrl);
+        console.log('🔧 NODE_ENV:', nodeEnv, '| isProduction:', isProduction);
 
         return {
           type: 'postgres',
@@ -47,7 +49,7 @@ import { UsersModule } from './users/users.module';
           ssl: { rejectUnauthorized: false },
           autoLoadEntities: true,
           synchronize: !isProduction,
-          logging: !isProduction,
+          logging: false,
           extra: {
             max: 20,
             connectionTimeoutMillis: 2000,
