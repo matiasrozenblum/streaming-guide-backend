@@ -22,17 +22,25 @@ export class SchedulesController {
     description:
       'ID de dispositivo para incluir flag `subscribed` en cada bloque',
   })
+  @ApiQuery({
+    name: 'raw',
+    required: false,
+    description: 'Si es true, devuelve los horarios sin aplicar weekly overrides',
+  })
   @ApiResponse({ status: 200, description: 'Lista de horarios', type: [Schedule] })
   async findAll(
     @Query('day') day?: string, 
     @Query('live_status') liveStatus?: string,
     @Query('deviceId') deviceId?: string,
+    @Query('raw') raw?: string,
   ): Promise<Schedule[]> {
     const skipCache = liveStatus === 'true';
+    const applyOverrides = raw !== 'true';
     return this.schedulesService.findAll({
       dayOfWeek: day?.toLowerCase(),
       skipCache,
       deviceId,
+      applyOverrides,
     });
   }
 

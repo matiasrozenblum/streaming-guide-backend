@@ -20,7 +20,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
           },
         },
         defaults: {
-          from: `"Streaming Guide" <${configService.get('SMTP_USER')}>`,
+          from: `"La Guía del Streaming" <${configService.get('SMTP_USER')}>`,
         },
       }),
     }),
