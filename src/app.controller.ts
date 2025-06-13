@@ -10,6 +10,7 @@ import { YoutubeLiveService } from './youtube/youtube-live.service';
 import { RedisService } from './redis/redis.service'; // 🔥
 import { AuthGuard } from '@nestjs/passport';
 import * as DateHolidays from 'date-holidays';
+import { Roles } from './auth/roles.decorator';
 
 const HolidaysClass = (DateHolidays as any).default ?? DateHolidays;
 
@@ -56,10 +57,15 @@ export class AppController {
     return this.youtubeDiscoveryService.getChannelIdsFromLiveUrls(youtubeUrls);
   }
 
+  @UseGuards(AuthGuard('jwt'))
+  @Roles('admin')
   @Post('youtube/fetch-live-ids')
   async fetchYoutubeLiveIds() {
     await this.youtubeLiveService.fetchLiveVideoIds();
-    return { message: 'YouTube live video IDs fetched successfully.' };
+    return { 
+      success: true, 
+      message: 'YouTube live video IDs fetched successfully.' 
+    };
   }
 
   @Post('cache-test')
@@ -100,6 +106,17 @@ export class AppController {
     }
 
     return { message: 'All counter entries deleted.' };
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Roles('admin')
+  @Post('cache/clear-schedules')
+  async clearScheduleCache() {
+    await this.redisService.delByPattern('schedules:all:*');
+    return { 
+      success: true, 
+      message: 'Schedule cache cleared successfully' 
+    };
   }
 
   @UseGuards(AuthGuard('jwt'))

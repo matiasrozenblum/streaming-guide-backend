@@ -24,9 +24,10 @@ export class ChannelsController {
   async getChannelsWithSchedules(
     @Query('day') day?: string,
     @Query('deviceId') deviceId?: string,
-    @Query('live_status') liveStatus?: boolean
+    @Query('live_status') liveStatus?: boolean,
+    @Query('raw') raw?: string
   ) {
-    return this.channelsService.getChannelsWithSchedules(day, deviceId);
+    return this.channelsService.getChannelsWithSchedules(day, deviceId, liveStatus, raw);
   }
 
   @Get(':id')
