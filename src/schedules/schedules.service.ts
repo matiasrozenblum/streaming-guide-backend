@@ -20,6 +20,7 @@ interface FindAllOptions {
   select?: string[];
   skipCache?: boolean;
   deviceId?: string;
+  applyOverrides?: boolean;
 }
 
 @Injectable()
@@ -45,7 +46,7 @@ export class SchedulesService {
 
   async findAll(options: FindAllOptions = {}): Promise<any[]> {
     const startTime = Date.now();
-    const { dayOfWeek, relations = ['program', 'program.channel', 'program.panelists'], select, skipCache = false, deviceId } = options;
+    const { dayOfWeek, relations = ['program', 'program.channel', 'program.panelists'], select, skipCache = false, deviceId, applyOverrides = true } = options;
 
     const cacheKey = `schedules:all:${dayOfWeek || 'all'}`;
     
@@ -81,9 +82,11 @@ export class SchedulesService {
       console.log(`Database query and cache SET. Total time: ${Date.now() - startTime}ms`);
     }
 
-    // Apply weekly overrides for current week
-    const currentWeekStart = this.weeklyOverridesService.getWeekStartDate('current');
-    schedules = await this.weeklyOverridesService.applyWeeklyOverrides(schedules!, currentWeekStart);
+    // Apply weekly overrides for current week (unless raw=true)
+    if (applyOverrides) {
+      const currentWeekStart = this.weeklyOverridesService.getWeekStartDate('current');
+      schedules = await this.weeklyOverridesService.applyWeeklyOverrides(schedules!, currentWeekStart);
+    }
 
     const enriched = await this.enrichSchedules(schedules!);
 

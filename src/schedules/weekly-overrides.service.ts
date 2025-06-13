@@ -223,18 +223,20 @@ export class WeeklyOverridesService {
             ...schedule,
             start_time: override.newStartTime || schedule.start_time,
             end_time: override.newEndTime || schedule.end_time,
-          });
+            isWeeklyOverride: true,
+            overrideType: override.overrideType,
+          } as any);
           break;
 
         case 'reschedule':
-          // For reschedules, we need to check if it's moved to a different day
-          // This is simplified - in practice you'd need more complex logic
           modifiedSchedules.push({
             ...schedule,
             start_time: override.newStartTime || schedule.start_time,
             end_time: override.newEndTime || schedule.end_time,
             day_of_week: override.newDayOfWeek || schedule.day_of_week,
-          });
+            isWeeklyOverride: true,
+            overrideType: override.overrideType,
+          } as any);
           break;
 
         default:
