@@ -25,6 +25,8 @@ type ChannelWithSchedules = {
     start_time: string;
     end_time: string;
     subscribed: boolean;
+    isWeeklyOverride: boolean;
+    overrideType: string;
     program: {
       id: number;
       name: string;
@@ -128,7 +130,7 @@ export class ChannelsService {
     await this.redisService.delByPattern('schedules:all:*');
   }
 
-  async getChannelsWithSchedules(day?: string, deviceId?: string, liveStatus?: boolean): Promise<ChannelWithSchedules[]> {
+  async getChannelsWithSchedules(day?: string, deviceId?: string, liveStatus?: boolean, raw?: string): Promise<ChannelWithSchedules[]> {
     const channels = await this.channelsRepository.find({
       order: {
         order: 'ASC',
@@ -138,6 +140,7 @@ export class ChannelsService {
     const schedules = await this.schedulesService.findAll({
       dayOfWeek: day ? day.toLowerCase() : undefined,
       skipCache: liveStatus === true,
+      applyOverrides: raw !== 'true',
     });
 
     // Get user subscriptions based on deviceId
@@ -179,6 +182,8 @@ export class ChannelsService {
         start_time: schedule.start_time,
         end_time: schedule.end_time,
         subscribed: subscribedProgramIds.has(schedule.program.id),
+        isWeeklyOverride: schedule.isWeeklyOverride,
+        overrideType: schedule.overrideType,
         program: {
           id: schedule.program.id,
           name: schedule.program.name,
