@@ -60,6 +60,7 @@ describe('AuthController', () => {
           provide: UsersService,
           useValue: {
             findByEmail: jest.fn(),
+            findOne: jest.fn(),
             create: jest.fn(),
             ensureUserDevice: jest.fn(),
           },
@@ -263,6 +264,7 @@ describe('AuthController', () => {
         name: 'Test User',
         email: 'test@example.com'
       });
+      jest.spyOn(usersService, 'findOne').mockResolvedValue(mockUser);
       jest.spyOn(authService, 'signAccessToken').mockResolvedValue('new-access-token');
       jest.spyOn(authService, 'signRefreshToken').mockResolvedValue('new-refresh-token');
 
