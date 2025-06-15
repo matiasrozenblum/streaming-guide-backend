@@ -14,10 +14,10 @@ export class WeeklyScheduleManagerService {
   ) {}
 
   /**
-   * Runs every Sunday at 2 AM to clean up old overrides and reset caches
+   * Runs every Sunday at 11 PM to clean up old overrides and reset caches
    * This simulates the "Sunday reset" functionality
    */
-  @Cron('0 2 * * 0', {
+  @Cron('0 23 * * 0', {
     name: 'weekly-schedule-reset',
     timeZone: 'America/Argentina/Buenos_Aires',
   })
