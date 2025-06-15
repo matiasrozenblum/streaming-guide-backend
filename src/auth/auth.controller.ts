@@ -144,10 +144,12 @@ export class AuthController {
     
     try {
       const payload = await this.authService.verifyRefreshToken(refreshToken);
-      // Remove iat, exp from payload
-      const { iat, exp, ...rest } = payload;
-      const access_token = await this.authService.signAccessToken(rest);
-      const refresh_token = await this.authService.signRefreshToken(rest); // Generate new refresh token
+      const userId = payload.sub;
+      const user = await this.usersService.findOne(Number(userId));
+      if (!user) throw new UnauthorizedException('User not found');
+      const newPayload = this.authService.buildPayload(user);
+      const access_token = await this.authService.signAccessToken(newPayload);
+      const refresh_token = await this.authService.signRefreshToken(newPayload); // Generate new refresh token
       return { access_token, refresh_token };
     } catch (err) {
       throw new UnauthorizedException('Invalid refresh token');
