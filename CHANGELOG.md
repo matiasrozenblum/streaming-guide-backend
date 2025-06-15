@@ -17,7 +17,7 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
-## [1.1.0] - 2025-06-14
+## [1.1.1] - 2025-06-14
 
 ### Changed
 - Now updating user info on token refresh
