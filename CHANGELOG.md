@@ -17,7 +17,12 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
-## [1.1.0] - 2025-06-12
+## [1.1.0] - 2025-06-14
+
+### Changed
+- Now updating user info on token refresh
+
+## [1.1.0] - 2025-06-13
 
 ### Added
 - Added weekly changes functionality for one-time changes for current and next week.
