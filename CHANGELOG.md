@@ -17,7 +17,12 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
-## [1.1.0] - 2025-06-14
+## [1.1.2] - 2025-06-15
+
+### Changed
+- Changed weekly updates cron execution time from 2 am to 11 pm on sundays
+
+## [1.1.1] - 2025-06-14
 
 ### Changed
 - Now updating user info on token refresh
