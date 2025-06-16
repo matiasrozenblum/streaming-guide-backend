@@ -17,6 +17,12 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.1.3] - 2025-06-16
+
+### Changed
+- Refactored can fetch feature flag logic
+- Now not notifying for channels that fetch is disabled
+
 ## [1.1.2] - 2025-06-15
 
 ### Changed

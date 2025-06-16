@@ -12,6 +12,7 @@ import { PushSubscriptionEntity } from './push-subscription.entity';
 import { PushService } from './push.service';
 import { EmailService } from '../email/email.service';
 import { buildProgramNotificationHtml } from '../email/email.templates';
+import { ConfigService } from '../config/config.service';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -29,6 +30,7 @@ export class PushScheduler {
     private readonly userSubscriptionRepo: Repository<UserSubscription>,
     @InjectRepository(PushSubscriptionEntity)
     private readonly subsRepo: Repository<PushSubscriptionEntity>,
+    private readonly configService: ConfigService,
   ) {}
 
   @Cron(CronExpression.EVERY_MINUTE, {
@@ -85,6 +87,13 @@ export class PushScheduler {
       const program = schedule.program;
       const title = program.name;
       const channelName = program.channel?.name || 'Canal desconocido';
+      const channelHandle = program.channel?.handle;
+
+      // Gating: skip notifications if channel is not fetchable (holiday/flag)
+      if (channelHandle && !(await this.configService.canFetchLive(channelHandle))) {
+        this.logger.log(`⏸️ Notificaciones suspendidas para canal ${channelHandle} por holiday/flag`);
+        continue;
+      }
       
       // subscripciones para este programa específico
       const programSubscriptions = allUserSubscriptions.filter(sub => sub.program.id === program.id);
