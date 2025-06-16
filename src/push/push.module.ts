@@ -11,6 +11,7 @@ import { EmailModule } from '../email/email.module';
 import { Schedule } from '../schedules/schedules.entity';
 import { Program } from '../programs/programs.entity';
 import { Channel } from '../channels/channels.entity';
+import { ConfigModule } from '../config/config.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { Channel } from '../channels/channels.entity';
     ]),
     NotificationsModule,
     EmailModule,
+    ConfigModule,
   ],
   providers: [PushService, PushScheduler],
   controllers: [PushController],
