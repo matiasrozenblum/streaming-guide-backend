@@ -11,6 +11,7 @@ import { WeeklyOverridesService } from './weekly-overrides.service';
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
+import { ConfigService } from '../config/config.service';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -150,6 +151,12 @@ describe('SchedulesService', () => {
           useValue: {
             getWeekStartDate: jest.fn().mockReturnValue('2024-01-01'),
             applyWeeklyOverrides: jest.fn().mockImplementation((schedules) => Promise.resolve(schedules)),
+          },
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            canFetchLive: jest.fn().mockResolvedValue(true),
           },
         },
       ],

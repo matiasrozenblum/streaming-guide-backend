@@ -13,6 +13,7 @@ import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
 import { getCurrentBlockTTL } from '@/utils/getBlockTTL.util';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ConfigService } from '../config/config.service';
 
 interface FindAllOptions {
   dayOfWeek?: string;
@@ -38,6 +39,7 @@ export class SchedulesService {
     private readonly youtubeLiveService: YoutubeLiveService,
     private readonly notificationsService: NotificationsService,
     private readonly weeklyOverridesService: WeeklyOverridesService,
+    private readonly configService: ConfigService,
   ) {
     this.dayjs = dayjs;
     this.dayjs.extend(utc);
@@ -131,10 +133,7 @@ export class SchedulesService {
         channelId
       ) {
         // Validar feature-flag + feriado (fallback true si no existe)
-        const canFetch =
-          typeof this.youtubeLiveService.canFetchLive === 'function'
-            ? await this.youtubeLiveService.canFetchLive(handle)
-            : true;
+        const canFetch = await this.configService.canFetchLive(handle);
 
         if (canFetch) {
           isLive = true;

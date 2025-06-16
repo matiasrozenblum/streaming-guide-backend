@@ -15,6 +15,7 @@ describe('YoutubeLiveService', () => {
     configService = {
       isYoutubeFetchEnabledFor: jest.fn(),
       getBoolean: jest.fn(),
+      canFetchLive: jest.fn(),
     } as any;
     schedulesService = {
       findByDay: jest.fn(),
@@ -33,36 +34,13 @@ describe('YoutubeLiveService', () => {
     jest.clearAllMocks();
   });
 
-  describe('canFetchLive', () => {
-    it('returns false if fetch is not enabled', async () => {
-      configService.isYoutubeFetchEnabledFor.mockResolvedValue(false);
-      await expect(service.canFetchLive('handle')).resolves.toBe(false);
-    });
-
-    it('returns override value if today is a holiday', async () => {
-      configService.isYoutubeFetchEnabledFor.mockResolvedValue(true);
-      configService.getBoolean.mockResolvedValue(true);
-      // Force isHoliday to return true
-      service['hd'].isHoliday = jest.fn().mockReturnValue(true);
-      await expect(service.canFetchLive('handle')).resolves.toBe(true);
-      configService.getBoolean.mockResolvedValue(false);
-      await expect(service.canFetchLive('handle')).resolves.toBe(false);
-    });
-
-    it('returns true if not a holiday and enabled', async () => {
-      configService.isYoutubeFetchEnabledFor.mockResolvedValue(true);
-      service['hd'].isHoliday = jest.fn().mockReturnValue(false);
-      await expect(service.canFetchLive('handle')).resolves.toBe(true);
-    });
-  });
-
   describe('getLiveVideoId', () => {
     beforeEach(() => {
-      jest.spyOn(service as any, 'canFetchLive').mockResolvedValue(true);
+      configService.canFetchLive.mockResolvedValue(true);
     });
 
     it('returns __SKIPPED__ if canFetchLive is false', async () => {
-      (service as any).canFetchLive.mockResolvedValue(false);
+      configService.canFetchLive.mockResolvedValue(false);
       const result = await service.getLiveVideoId('cid', 'handle', 100, 'cron');
       expect(result).toBe('__SKIPPED__');
     });
