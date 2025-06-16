@@ -13,6 +13,7 @@ import { WeeklyScheduleManagerController } from './weekly-schedule-manager.contr
 import { YoutubeLiveModule } from '../youtube/youtube-live.module';
 import { RedisModule } from '../redis/redis.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { ConfigModule } from '../config/config.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     forwardRef(() => YoutubeLiveModule),
     RedisModule,
     NotificationsModule,
+    ConfigModule,
   ],
   controllers: [
     SchedulesController, 
