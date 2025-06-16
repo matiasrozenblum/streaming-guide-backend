@@ -2,11 +2,11 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Schedule } from './schedules.entity';
-import { Program } from '../programs/programs.entity';
 import { RedisService } from '../redis/redis.service';
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
+import * as updateLocale from 'dayjs/plugin/updateLocale';
 
 export interface WeeklyOverrideDto {
   scheduleId: number;
@@ -45,6 +45,11 @@ export class WeeklyOverridesService {
     this.dayjs = dayjs;
     this.dayjs.extend(utc);
     this.dayjs.extend(timezone);
+    this.dayjs.extend(updateLocale);
+    // Set Monday as the first day of the week
+    this.dayjs.updateLocale('en', {
+      weekStart: 1
+    });
   }
 
   /**
@@ -74,6 +79,7 @@ export class WeeklyOverridesService {
     }
 
     const weekStartDate = targetWeekStart.format('YYYY-MM-DD');
+    // Set expiration to next Monday at 00:00
     const expiresAt = targetWeekStart.add(1, 'week').format('YYYY-MM-DD');
 
     // Validate override type requirements
@@ -110,8 +116,9 @@ export class WeeklyOverridesService {
     };
 
     // Store in Redis with expiration
-    const daysUntilExpiry = this.dayjs(expiresAt).diff(now, 'days');
-    await this.redisService.set(`weekly_override:${overrideId}`, override, daysUntilExpiry * 24 * 60 * 60);
+    const expirationDate = this.dayjs(expiresAt).tz('America/Argentina/Buenos_Aires');
+    const secondsUntilExpiry = expirationDate.diff(now, 'seconds');
+    await this.redisService.set(`weekly_override:${overrideId}`, override, secondsUntilExpiry);
 
     // Clear schedule caches
     await this.redisService.delByPattern('schedules:all:*');

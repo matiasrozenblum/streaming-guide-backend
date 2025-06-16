@@ -17,7 +17,6 @@ const HolidaysClass = (DateHolidays as any).default ?? DateHolidays;
 export class YoutubeLiveService {
   private readonly apiKey = process.env.YOUTUBE_API_KEY;
   private readonly apiUrl = 'https://www.googleapis.com/youtube/v3';
-  private readonly hd = new HolidaysClass('AR');
 
   constructor(
     private readonly configService: ConfigService,
@@ -42,21 +41,6 @@ export class YoutubeLiveService {
   }
 
   /**
-   * Comprueba si el canal puede hacer fetch hoy (flags + feriado)
-   */
-  async canFetchLive(handle: string): Promise<boolean> {
-    const enabled = await this.configService.isYoutubeFetchEnabledFor(handle);
-    if (!enabled) return false;
-
-    const isHoliday = !!this.hd.isHoliday(new Date());
-    if (isHoliday) {
-      return this.configService.getBoolean(`youtube.fetch_override_holiday.${handle}`);
-    }
-
-    return true;
-  }
-
-  /**
    * Devuelve videoId | null | '__SKIPPED__' según estado de flags, cache y fetch
    */
   async getLiveVideoId(
@@ -66,7 +50,7 @@ export class YoutubeLiveService {
     context: 'cron' | 'onDemand',
   ): Promise<string | null | '__SKIPPED__'> {
     // gating centralizado
-    if (!(await this.canFetchLive(handle))) {
+    if (!(await this.configService.canFetchLive(handle))) {
       console.log(`[YouTube] fetch skipped for ${handle}`);
       return '__SKIPPED__';
     }

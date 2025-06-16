@@ -2,9 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Config } from './config.entity';
 import { Repository } from 'typeorm';
+import * as DateHolidays from 'date-holidays';
 
 @Injectable()
 export class ConfigService {
+  private readonly hd = new ((DateHolidays as any).default ?? DateHolidays)('AR');
   constructor(
     @InjectRepository(Config)
     private configRepository: Repository<Config>,
@@ -55,5 +57,16 @@ export class ConfigService {
     // fallback al global
     const global = await this.get('youtube.fetch_enabled');
     return global === 'true';
+  }
+
+  async canFetchLive(handle: string): Promise<boolean> {
+    const enabled = await this.isYoutubeFetchEnabledFor(handle);
+    if (!enabled) return false;
+
+    const isHoliday = !!this.hd.isHoliday(new Date());
+    if (isHoliday) {
+      return this.getBoolean(`youtube.fetch_override_holiday.${handle}`);
+    }
+    return true;
   }
 }
