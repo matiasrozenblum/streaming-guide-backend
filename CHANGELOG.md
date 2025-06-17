@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.1.4] - 2025-06-17
+
+### Added
+- Added new program weekly override type
+
 ## [1.1.3] - 2025-06-16
 
 ### Changed
