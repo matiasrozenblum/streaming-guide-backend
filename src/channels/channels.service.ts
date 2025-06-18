@@ -35,6 +35,7 @@ type ChannelWithSchedules = {
       stream_url: string | null;
       is_live: boolean;
       panelists: { id: string; name: string }[];
+      style_override: string | null;
     };
   }>;
 };
@@ -195,6 +196,7 @@ export class ChannelsService {
             id: p.id.toString(),
             name: p.name,
           })) || [],
+          style_override: schedule.program.style_override,
         },
       })),
     }));
