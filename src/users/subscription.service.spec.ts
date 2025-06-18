@@ -52,6 +52,7 @@ describe('SubscriptionService', () => {
     channel: mockChannel,
     panelists: [],
     schedules: [],
+    style_override: null,
   };
 
   const mockSubscription: UserSubscription = {

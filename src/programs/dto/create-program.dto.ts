@@ -23,4 +23,8 @@ export class CreateProgramDto {
   @ApiProperty({ description: 'ID del canal asociado al programa' })
   @IsNotEmpty()
   channel_id: number;
+
+  @IsOptional()
+  @IsString()
+  style_override?: string;
 }

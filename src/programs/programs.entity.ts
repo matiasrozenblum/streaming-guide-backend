@@ -36,4 +36,7 @@ export class Program {
 
   @Column({ type: 'text', nullable: true })
   stream_url: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  style_override: string | null;
 }
