@@ -43,6 +43,7 @@ export class ProgramsService {
       stream_url: savedProgram.stream_url,
       channel_id: savedProgram.channel?.id,
       channel_name: savedProgram.channel?.name || null,
+      style_override: savedProgram.style_override,
     };
   }
 
@@ -64,6 +65,7 @@ export class ProgramsService {
       stream_url: program.stream_url,
       channel_id: program.channel?.id,
       channel_name: program.channel?.name || null,
+      style_override: program.style_override,
     }));
   }
 
@@ -89,6 +91,7 @@ export class ProgramsService {
       stream_url: program.stream_url,
       channel_id: program.channel?.id,
       channel_name: program.channel?.name || null,
+      style_override: program.style_override,
     };
   }
 
@@ -109,6 +112,7 @@ export class ProgramsService {
       stream_url: updatedProgram.stream_url,
       channel_id: updatedProgram.channel?.id,
       channel_name: updatedProgram.channel?.name || null,
+      style_override: updatedProgram.style_override,
     };
   }
 
