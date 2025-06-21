@@ -4,12 +4,14 @@ import { Repository } from 'typeorm';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { WeeklyOverridesService, WeeklyOverrideDto } from './weekly-overrides.service';
 import { Schedule } from './schedules.entity';
+import { Panelist } from '../panelists/panelists.entity';
 import { RedisService } from '../redis/redis.service';
 import * as dayjs from 'dayjs';
 
 describe('WeeklyOverridesService', () => {
   let service: WeeklyOverridesService;
   let schedulesRepo: Repository<Schedule>;
+  let panelistsRepo: Repository<Panelist>;
   let redisService: RedisService;
 
   const mockSchedule = {
@@ -47,6 +49,12 @@ describe('WeeklyOverridesService', () => {
           },
         },
         {
+          provide: getRepositoryToken(Panelist),
+          useValue: {
+            find: jest.fn(),
+          },
+        },
+        {
           provide: RedisService,
           useValue: mockRedisService,
         },
@@ -55,6 +63,7 @@ describe('WeeklyOverridesService', () => {
 
     service = module.get<WeeklyOverridesService>(WeeklyOverridesService);
     schedulesRepo = module.get<Repository<Schedule>>(getRepositoryToken(Schedule));
+    panelistsRepo = module.get<Repository<Panelist>>(getRepositoryToken(Panelist));
     redisService = module.get<RedisService>(RedisService);
   });
 
@@ -194,6 +203,103 @@ describe('WeeklyOverridesService', () => {
       jest.spyOn(redisService, 'get').mockResolvedValue(null);
 
       await expect(service.createWeeklyOverride(dto)).rejects.toThrow(BadRequestException);
+    });
+
+    it('should create a program-level override successfully', async () => {
+      const dto: WeeklyOverrideDto = {
+        programId: 1,
+        targetWeek: 'current',
+        overrideType: 'cancel',
+        reason: 'Program cancelled for the week',
+      };
+
+      jest.spyOn(schedulesRepo, 'findOne').mockResolvedValue(mockSchedule as any);
+      jest.spyOn(redisService, 'get').mockResolvedValue(null);
+      jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
+      jest.spyOn(redisService, 'delByPattern').mockResolvedValue(undefined);
+
+      const result = await service.createWeeklyOverride(dto);
+
+      expect(result.programId).toBe(1);
+      expect(result.overrideType).toBe('cancel');
+      expect(result.id).toMatch(/^program_1_\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it('should throw BadRequestException when both scheduleId and programId are provided', async () => {
+      const dto: WeeklyOverrideDto = {
+        scheduleId: 1,
+        programId: 1,
+        targetWeek: 'current',
+        overrideType: 'cancel',
+      };
+
+      await expect(service.createWeeklyOverride(dto)).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException when neither scheduleId nor programId is provided for non-create overrides', async () => {
+      const dto: WeeklyOverrideDto = {
+        targetWeek: 'current',
+        overrideType: 'cancel',
+      };
+
+      await expect(service.createWeeklyOverride(dto)).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw NotFoundException when program does not exist', async () => {
+      const dto: WeeklyOverrideDto = {
+        programId: 999,
+        targetWeek: 'current',
+        overrideType: 'cancel',
+      };
+
+      jest.spyOn(schedulesRepo, 'findOne').mockResolvedValue(null);
+
+      await expect(service.createWeeklyOverride(dto)).rejects.toThrow(NotFoundException);
+    });
+
+    it('should create a weekly override with panelists successfully', async () => {
+      const dto: WeeklyOverrideDto = {
+        scheduleId: 1,
+        targetWeek: 'current',
+        overrideType: 'time_change',
+        newStartTime: '15:00',
+        newEndTime: '17:00',
+        panelistIds: [1, 2],
+      };
+
+      jest.spyOn(schedulesRepo, 'findOne').mockResolvedValue(mockSchedule as any);
+      jest.spyOn(panelistsRepo, 'find').mockResolvedValue([
+        { id: 1, name: 'Panelist 1' },
+        { id: 2, name: 'Panelist 2' },
+      ] as any);
+      jest.spyOn(redisService, 'get').mockResolvedValue(null);
+      jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
+      jest.spyOn(redisService, 'delByPattern').mockResolvedValue(undefined);
+
+      const result = await service.createWeeklyOverride(dto);
+
+      expect(result.panelistIds).toEqual([1, 2]);
+      expect(panelistsRepo.find).toHaveBeenCalledWith({
+        where: { id: expect.any(Object) },
+      });
+    });
+
+    it('should throw NotFoundException when panelist does not exist', async () => {
+      const dto: WeeklyOverrideDto = {
+        scheduleId: 1,
+        targetWeek: 'current',
+        overrideType: 'time_change',
+        newStartTime: '15:00',
+        newEndTime: '17:00',
+        panelistIds: [1, 999], // 999 doesn't exist
+      };
+
+      jest.spyOn(schedulesRepo, 'findOne').mockResolvedValue(mockSchedule as any);
+      jest.spyOn(panelistsRepo, 'find').mockResolvedValue([
+        { id: 1, name: 'Panelist 1' },
+      ] as any);
+
+      await expect(service.createWeeklyOverride(dto)).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -367,21 +473,23 @@ describe('WeeklyOverridesService', () => {
         newEndTime: '17:00',
       };
       const createOverride = {
-        id: 'special_test_2024-01-01',
+        id: 'special_un_dia_rosarino_2024-01-01',
         overrideType: 'create',
-        newStartTime: '18:00',
-        newEndTime: '20:00',
+        newStartTime: '14:00',
+        newEndTime: '16:00',
         newDayOfWeek: 'monday',
         specialProgram: {
-          name: 'Test Special',
+          name: 'Un día rosarino',
+          description: 'Special program for Flag Day',
           channelId: 1,
+          imageUrl: 'https://example.com/image.jpg',
         },
       };
 
       // Mock scanStream to return both override keys
       const mockStream = {
         [Symbol.asyncIterator]: async function* () {
-          yield ['weekly_override:1_2024-01-01', 'weekly_override:special_test_2024-01-01'];
+          yield ['weekly_override:1_2024-01-01', 'weekly_override:special_un_dia_rosarino_2024-01-01'];
         },
       };
       jest.spyOn(mockRedisService.client, 'scanStream').mockReturnValue(mockStream);
@@ -391,10 +499,114 @@ describe('WeeklyOverridesService', () => {
 
       const result = await service.applyWeeklyOverrides(schedules, weekStartDate);
 
-      expect(result).toHaveLength(2); // Modified original + virtual schedule
-      const virtualSchedule = result.find(s => String(s.id).startsWith('virtual_'));
-      expect(virtualSchedule).toBeDefined();
-      expect(virtualSchedule!.program.name).toBe('Test Special');
+      expect(result).toHaveLength(2);
+      expect(result[0].start_time).toBe('15:00');
+      expect(result[0].end_time).toBe('17:00');
+      expect(result[1].program.name).toBe('Un día rosarino');
+    });
+
+    it('should apply program-level cancel override', async () => {
+      const schedules = [
+        { ...mockSchedule, id: 1, program: { id: 1 } },
+        { ...mockSchedule, id: 2, program: { id: 1 } },
+        { ...mockSchedule, id: 3, program: { id: 2 } },
+      ] as any;
+      const weekStartDate = '2024-01-01';
+      const override = {
+        id: 'program_1_2024-01-01',
+        programId: 1,
+        overrideType: 'cancel',
+      };
+
+      // Mock scanStream to return the override key
+      const mockStream = {
+        [Symbol.asyncIterator]: async function* () {
+          yield ['weekly_override:program_1_2024-01-01'];
+        },
+      };
+      jest.spyOn(mockRedisService.client, 'scanStream').mockReturnValue(mockStream);
+      jest.spyOn(redisService, 'get').mockResolvedValue(override);
+
+      const result = await service.applyWeeklyOverrides(schedules, weekStartDate);
+
+      expect(result).toHaveLength(1); // Only program 2's schedule should remain
+      expect(result[0].program.id).toBe(2);
+    });
+
+    it('should apply program-level time_change override', async () => {
+      const schedules = [
+        { ...mockSchedule, id: 1, program: { id: 1 } },
+        { ...mockSchedule, id: 2, program: { id: 1 } },
+        { ...mockSchedule, id: 3, program: { id: 2 } },
+      ] as any;
+      const weekStartDate = '2024-01-01';
+      const override = {
+        id: 'program_1_2024-01-01',
+        programId: 1,
+        overrideType: 'time_change',
+        newStartTime: '15:00',
+        newEndTime: '17:00',
+      };
+
+      // Mock scanStream to return the override key
+      const mockStream = {
+        [Symbol.asyncIterator]: async function* () {
+          yield ['weekly_override:program_1_2024-01-01'];
+        },
+      };
+      jest.spyOn(mockRedisService.client, 'scanStream').mockReturnValue(mockStream);
+      jest.spyOn(redisService, 'get').mockResolvedValue(override);
+
+      const result = await service.applyWeeklyOverrides(schedules, weekStartDate);
+
+      expect(result).toHaveLength(3);
+      // Program 1's schedules should have new times
+      expect(result[0].start_time).toBe('15:00');
+      expect(result[0].end_time).toBe('17:00');
+      expect(result[1].start_time).toBe('15:00');
+      expect(result[1].end_time).toBe('17:00');
+      // Program 2's schedule should remain unchanged
+      expect(result[2].start_time).toBe('14:00');
+      expect(result[2].end_time).toBe('16:00');
+    });
+
+    it('should prioritize program-level overrides over schedule-level overrides', async () => {
+      const schedules = [
+        { ...mockSchedule, id: 1, program: { id: 1 } },
+      ] as any;
+      const weekStartDate = '2024-01-01';
+      const programOverride = {
+        id: 'program_1_2024-01-01',
+        programId: 1,
+        overrideType: 'time_change',
+        newStartTime: '15:00',
+        newEndTime: '17:00',
+      };
+      const scheduleOverride = {
+        id: '1_2024-01-01',
+        scheduleId: 1,
+        overrideType: 'time_change',
+        newStartTime: '16:00',
+        newEndTime: '18:00',
+      };
+
+      // Mock scanStream to return both override keys
+      const mockStream = {
+        [Symbol.asyncIterator]: async function* () {
+          yield ['weekly_override:program_1_2024-01-01', 'weekly_override:1_2024-01-01'];
+        },
+      };
+      jest.spyOn(mockRedisService.client, 'scanStream').mockReturnValue(mockStream);
+      jest.spyOn(redisService, 'get')
+        .mockResolvedValueOnce(programOverride)
+        .mockResolvedValueOnce(scheduleOverride);
+
+      const result = await service.applyWeeklyOverrides(schedules, weekStartDate);
+
+      expect(result).toHaveLength(1);
+      // Program-level override should take precedence
+      expect(result[0].start_time).toBe('15:00');
+      expect(result[0].end_time).toBe('17:00');
     });
   });
 
