@@ -17,6 +17,14 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.1.7] - 2025-06-21
+
+### Added
+- Added logic to bulk creat schedules
+- Added logic to weekly override whole programs
+- Added logic to add panelists to weekly overrides
+- added statistics endpoints for users and subscriptions
+
 ## [1.1.5] - 2025-06-18
 
 ### Added
