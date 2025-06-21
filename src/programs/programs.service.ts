@@ -7,6 +7,7 @@ import { UpdateProgramDto } from './dto/update-program.dto';
 import { Panelist } from '../panelists/panelists.entity';
 import { Channel } from '../channels/channels.entity';
 import { RedisService } from '../redis/redis.service';
+import { WeeklyOverridesService } from '../schedules/weekly-overrides.service';
 
 @Injectable()
 export class ProgramsService {
@@ -18,6 +19,7 @@ export class ProgramsService {
     @InjectRepository(Channel)
     private channelsRepository: Repository<Channel>,
     private redisService: RedisService,
+    private weeklyOverridesService: WeeklyOverridesService,
   ) {}
 
   async create(createProgramDto: CreateProgramDto): Promise<any> {
@@ -117,6 +119,15 @@ export class ProgramsService {
   }
 
   async remove(id: number): Promise<void> {
+    // Get all schedule IDs for this program before deleting
+    const program = await this.programsRepository.findOne({ where: { id }, relations: ['schedules'] });
+    if (!program) {
+      throw new NotFoundException(`Program with ID ${id} not found`);
+    }
+    const scheduleIds = (program.schedules || []).map(s => s.id);
+    // Delete all related weekly overrides
+    await this.weeklyOverridesService.deleteOverridesForProgram(id, scheduleIds);
+    // Delete the program (cascades schedules, panelists, etc.)
     const result = await this.programsRepository.delete(id);
     if (result.affected === 0) {
       throw new NotFoundException(`Program with ID ${id} not found`);

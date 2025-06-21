@@ -6,6 +6,7 @@ import { SchedulesController } from './schedules.controller';
 import { SchedulesService } from './schedules.service';
 import { Schedule } from './schedules.entity';
 import { Program } from '../programs/programs.entity';
+import { Panelist } from '../panelists/panelists.entity';
 import { WeeklyOverridesService } from './weekly-overrides.service';
 import { WeeklyOverridesController } from './weekly-overrides.controller';
 import { WeeklyScheduleManagerService } from './weekly-schedule-manager.service';
@@ -17,7 +18,7 @@ import { ConfigModule } from '../config/config.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Schedule, Program]),
+    TypeOrmModule.forFeature([Schedule, Program, Panelist]),
     ScheduleModule.forRoot(), // For cron jobs
     forwardRef(() => YoutubeLiveModule),
     RedisModule,

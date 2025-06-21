@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, FindOneOptions, FindManyOptions, FindOptionsWhere } from 'typeorm';
 import { Schedule } from './schedules.entity';
 import { Program } from '../programs/programs.entity';
-import { CreateScheduleDto } from './dto/create-schedule.dto';
+import { CreateScheduleDto, CreateBulkSchedulesDto } from './dto/create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { YoutubeLiveService } from '../youtube/youtube-live.service';
 import { RedisService } from '../redis/redis.service';
@@ -246,5 +246,23 @@ export class SchedulesService {
       return true;
     }
     return false;
+  }
+
+  async createBulk(dto: CreateBulkSchedulesDto): Promise<Schedule[]> {
+    const program = await this.programsRepository.findOne({ where: { id: +dto.programId } });
+    if (!program) {
+      throw new NotFoundException(`Program with ID ${dto.programId} not found`);
+    }
+
+    const schedules = dto.schedules.map(scheduleDto => this.schedulesRepository.create({
+      day_of_week: scheduleDto.dayOfWeek,
+      start_time: scheduleDto.startTime,
+      end_time: scheduleDto.endTime,
+      program,
+    }));
+
+    const savedSchedules = await this.schedulesRepository.save(schedules);
+    await this.redisService.delByPattern('schedules:all:*');
+    return savedSchedules;
   }
 }

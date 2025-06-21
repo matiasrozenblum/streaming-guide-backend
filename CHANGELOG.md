@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.1.5] - 2025-06-18
+
+### Added
+- Added new field style_override to program table in the database
+
 ## [1.1.4] - 2025-06-17
 
 ### Added

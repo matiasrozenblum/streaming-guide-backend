@@ -1,7 +1,8 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Schedule } from './schedules.entity';
+import { Panelist } from '../panelists/panelists.entity';
 import { RedisService } from '../redis/redis.service';
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
@@ -9,7 +10,8 @@ import * as timezone from 'dayjs/plugin/timezone';
 import * as updateLocale from 'dayjs/plugin/updateLocale';
 
 export interface WeeklyOverrideDto {
-  scheduleId?: number; // Optional for special programs
+  scheduleId?: number; // Optional for special programs or program-level overrides
+  programId?: number; // Optional for program-level overrides
   targetWeek: 'current' | 'next';
   overrideType: 'cancel' | 'time_change' | 'reschedule' | 'create';
   newStartTime?: string;
@@ -17,6 +19,7 @@ export interface WeeklyOverrideDto {
   newDayOfWeek?: string;
   reason?: string;
   createdBy?: string;
+  panelistIds?: number[]; // Array of panelist IDs to assign to this override
   // Fields for creating special programs
   specialProgram?: {
     name: string;
@@ -28,7 +31,8 @@ export interface WeeklyOverrideDto {
 
 export interface WeeklyOverride {
   id: string;
-  scheduleId?: number; // Optional for special programs
+  scheduleId?: number; // Optional for special programs or program-level overrides
+  programId?: number; // Optional for program-level overrides
   weekStartDate: string;
   overrideType: 'cancel' | 'time_change' | 'reschedule' | 'create';
   newStartTime?: string;
@@ -38,6 +42,7 @@ export interface WeeklyOverride {
   createdBy?: string;
   expiresAt: string;
   createdAt: Date;
+  panelistIds?: number[]; // Array of panelist IDs assigned to this override
   // Fields for special programs
   specialProgram?: {
     name: string;
@@ -54,6 +59,8 @@ export class WeeklyOverridesService {
   constructor(
     @InjectRepository(Schedule)
     private schedulesRepository: Repository<Schedule>,
+    @InjectRepository(Panelist)
+    private panelistsRepository: Repository<Panelist>,
     private readonly redisService: RedisService,
   ) {
     this.dayjs = dayjs;
@@ -70,7 +77,16 @@ export class WeeklyOverridesService {
    * Create a weekly override
    */
   async createWeeklyOverride(dto: WeeklyOverrideDto): Promise<WeeklyOverride> {
-    // Validate schedule exists (only for non-create overrides)
+    // Validate that either scheduleId or programId is provided (but not both)
+    if (dto.scheduleId && dto.programId) {
+      throw new BadRequestException('Cannot provide both scheduleId and programId. Use one or the other.');
+    }
+
+    if (!dto.scheduleId && !dto.programId && dto.overrideType !== 'create') {
+      throw new BadRequestException('Either scheduleId or programId is required for non-create overrides');
+    }
+
+    // Validate schedule exists (only for non-create overrides with scheduleId)
     if (dto.overrideType !== 'create' && dto.scheduleId) {
       const schedule = await this.schedulesRepository.findOne({
         where: { id: dto.scheduleId },
@@ -79,6 +95,18 @@ export class WeeklyOverridesService {
 
       if (!schedule) {
         throw new NotFoundException(`Schedule with ID ${dto.scheduleId} not found`);
+      }
+    }
+
+    // Validate program exists (only for program-level overrides)
+    if (dto.programId) {
+      const program = await this.schedulesRepository.findOne({
+        where: { program: { id: dto.programId } },
+        relations: ['program'],
+      });
+
+      if (!program) {
+        throw new NotFoundException(`Program with ID ${dto.programId} not found`);
       }
     }
 
@@ -121,20 +149,40 @@ export class WeeklyOverridesService {
       throw new BadRequestException('New day of week is required for reschedules');
     }
 
+    // Validate panelist IDs if provided
+    if (dto.panelistIds && dto.panelistIds.length > 0) {
+      const panelists = await this.panelistsRepository.find({
+        where: { id: In(dto.panelistIds) },
+      });
+      if (panelists.length !== dto.panelistIds.length) {
+        const foundIds = panelists.map(p => p.id);
+        const missingIds = dto.panelistIds.filter(id => !foundIds.includes(id));
+        throw new NotFoundException(`Panelists with IDs ${missingIds.join(', ')} not found`);
+      }
+    }
+
     // Create override ID
-    const overrideId = dto.overrideType === 'create' 
-      ? `special_${dto.specialProgram!.name.replace(/\s+/g, '_').toLowerCase()}_${weekStartDate}`
-      : `${dto.scheduleId}_${weekStartDate}`;
+    let overrideId: string;
+    if (dto.overrideType === 'create') {
+      overrideId = `special_${dto.specialProgram!.name.replace(/\s+/g, '_').toLowerCase()}_${weekStartDate}`;
+    } else if (dto.programId) {
+      overrideId = `program_${dto.programId}_${weekStartDate}`;
+    } else {
+      overrideId = `${dto.scheduleId}_${weekStartDate}`;
+    }
 
     // Check if override already exists
     const existing = await this.getWeeklyOverride(overrideId);
     if (existing) {
-      throw new BadRequestException(`An override already exists for ${dto.overrideType === 'create' ? 'this special program' : `schedule ${dto.scheduleId}`} on ${dto.targetWeek} week`);
+      const entityType = dto.overrideType === 'create' ? 'this special program' : 
+                        dto.programId ? `program ${dto.programId}` : `schedule ${dto.scheduleId}`;
+      throw new BadRequestException(`An override already exists for ${entityType} on ${dto.targetWeek} week`);
     }
 
     const override: WeeklyOverride = {
       id: overrideId,
       scheduleId: dto.scheduleId,
+      programId: dto.programId,
       weekStartDate,
       overrideType: dto.overrideType,
       newStartTime: dto.newStartTime,
@@ -145,6 +193,7 @@ export class WeeklyOverridesService {
       expiresAt,
       createdAt: new Date(),
       specialProgram: dto.specialProgram,
+      panelistIds: dto.panelistIds,
     };
 
     // Store in Redis with expiration
@@ -170,6 +219,7 @@ export class WeeklyOverridesService {
    */
   async getOverridesForWeek(weekStartDate: string): Promise<WeeklyOverride[]> {
     // Use a more specific Redis key pattern for the target week
+    // This pattern will match: schedule_123_2024-01-01, program_456_2024-01-01, special_program_name_2024-01-01
     const weekPattern = `weekly_override:*_${weekStartDate}`;
     const overrides: WeeklyOverride[] = [];
     
@@ -235,53 +285,157 @@ export class WeeklyOverridesService {
       return schedules;
     }
 
-    // Separate regular overrides from create overrides
-    const regularOverrides = overrides.filter(o => o.overrideType !== 'create' && o.scheduleId);
+    // Separate different types of overrides
+    const scheduleOverrides = overrides.filter(o => o.overrideType !== 'create' && o.scheduleId);
+    const programOverrides = overrides.filter(o => o.overrideType !== 'create' && o.programId);
     const createOverrides = overrides.filter(o => o.overrideType === 'create');
 
-    // Create override map for regular overrides
-    const overrideMap = new Map<number, WeeklyOverride>();
-    regularOverrides.forEach(override => {
+    // Create override maps
+    const scheduleOverrideMap = new Map<number, WeeklyOverride>();
+    scheduleOverrides.forEach(override => {
       if (override.scheduleId) {
-        overrideMap.set(override.scheduleId, override);
+        scheduleOverrideMap.set(override.scheduleId, override);
       }
     });
 
+    const programOverrideMap = new Map<number, WeeklyOverride>();
+    programOverrides.forEach(override => {
+      if (override.programId) {
+        programOverrideMap.set(override.programId, override);
+      }
+    });
+
+    // Get all panelist IDs from overrides to fetch them once
+    const allPanelistIds = new Set<number>();
+    overrides.forEach(override => {
+      if (override.panelistIds) {
+        override.panelistIds.forEach(id => allPanelistIds.add(id));
+      }
+    });
+
+    // Fetch all panelists at once
+    const panelistsMap = new Map<number, any>();
+    if (allPanelistIds.size > 0) {
+      const panelists = await this.panelistsRepository.find({
+        where: { id: In(Array.from(allPanelistIds)) },
+      });
+      panelists.forEach(panelist => {
+        panelistsMap.set(panelist.id, panelist);
+      });
+    }
+
     const modifiedSchedules: Schedule[] = [];
 
-    // Apply regular overrides
+    // Apply overrides to schedules
     for (const schedule of schedules) {
-      const override = overrideMap.get(schedule.id);
+      // Check if the schedule's program has a program-level override
+      const programOverride = schedule.program ? programOverrideMap.get(schedule.program.id) : null;
       
-      if (!override) {
+      if (programOverride) {
+        // Handle program-level override
+        switch (programOverride.overrideType) {
+          case 'cancel':
+            // Skip all schedules for this program
+            continue;
+          case 'time_change':
+            // Apply time change to all schedules of this program
+            const modifiedSchedule1 = {
+              ...schedule,
+              start_time: programOverride.newStartTime || schedule.start_time,
+              end_time: programOverride.newEndTime || schedule.end_time,
+              isWeeklyOverride: true,
+              overrideType: programOverride.overrideType,
+            } as any;
+            
+            // Add panelists if specified in the override
+            if (programOverride.panelistIds && programOverride.panelistIds.length > 0) {
+              modifiedSchedule1.program = {
+                ...modifiedSchedule1.program,
+                panelists: programOverride.panelistIds.map(id => panelistsMap.get(id)).filter(Boolean),
+              };
+            }
+            
+            modifiedSchedules.push(modifiedSchedule1);
+            break;
+          case 'reschedule':
+            // Apply reschedule to all schedules of this program
+            const modifiedSchedule2 = {
+              ...schedule,
+              start_time: programOverride.newStartTime || schedule.start_time,
+              end_time: programOverride.newEndTime || schedule.end_time,
+              day_of_week: programOverride.newDayOfWeek || schedule.day_of_week,
+              isWeeklyOverride: true,
+              overrideType: programOverride.overrideType,
+            } as any;
+            
+            // Add panelists if specified in the override
+            if (programOverride.panelistIds && programOverride.panelistIds.length > 0) {
+              modifiedSchedule2.program = {
+                ...modifiedSchedule2.program,
+                panelists: programOverride.panelistIds.map(id => panelistsMap.get(id)).filter(Boolean),
+              };
+            }
+            
+            modifiedSchedules.push(modifiedSchedule2);
+            break;
+          default:
+            modifiedSchedules.push(schedule);
+        }
+        continue;
+      }
+
+      // Check for schedule-specific override
+      const scheduleOverride = scheduleOverrideMap.get(schedule.id);
+      
+      if (!scheduleOverride) {
         modifiedSchedules.push(schedule);
         continue;
       }
 
-      switch (override.overrideType) {
+      switch (scheduleOverride.overrideType) {
         case 'cancel':
           // Skip cancelled programs
           continue;
 
         case 'time_change':
-          modifiedSchedules.push({
+          const modifiedSchedule3 = {
             ...schedule,
-            start_time: override.newStartTime || schedule.start_time,
-            end_time: override.newEndTime || schedule.end_time,
+            start_time: scheduleOverride.newStartTime || schedule.start_time,
+            end_time: scheduleOverride.newEndTime || schedule.end_time,
             isWeeklyOverride: true,
-            overrideType: override.overrideType,
-          } as any);
+            overrideType: scheduleOverride.overrideType,
+          } as any;
+          
+          // Add panelists if specified in the override
+          if (scheduleOverride.panelistIds && scheduleOverride.panelistIds.length > 0) {
+            modifiedSchedule3.program = {
+              ...modifiedSchedule3.program,
+              panelists: scheduleOverride.panelistIds.map(id => panelistsMap.get(id)).filter(Boolean),
+            };
+          }
+          
+          modifiedSchedules.push(modifiedSchedule3);
           break;
 
         case 'reschedule':
-          modifiedSchedules.push({
+          const modifiedSchedule4 = {
             ...schedule,
-            start_time: override.newStartTime || schedule.start_time,
-            end_time: override.newEndTime || schedule.end_time,
-            day_of_week: override.newDayOfWeek || schedule.day_of_week,
+            start_time: scheduleOverride.newStartTime || schedule.start_time,
+            end_time: scheduleOverride.newEndTime || schedule.end_time,
+            day_of_week: scheduleOverride.newDayOfWeek || schedule.day_of_week,
             isWeeklyOverride: true,
-            overrideType: override.overrideType,
-          } as any);
+            overrideType: scheduleOverride.overrideType,
+          } as any;
+          
+          // Add panelists if specified in the override
+          if (scheduleOverride.panelistIds && scheduleOverride.panelistIds.length > 0) {
+            modifiedSchedule4.program = {
+              ...modifiedSchedule4.program,
+              panelists: scheduleOverride.panelistIds.map(id => panelistsMap.get(id)).filter(Boolean),
+            };
+          }
+          
+          modifiedSchedules.push(modifiedSchedule4);
           break;
 
         default:
@@ -308,6 +462,8 @@ export class WeeklyOverridesService {
               id: override.specialProgram.channelId,
               name: 'Special Program', // This will be overridden by the actual channel data
             },
+            // Add panelists if specified in the override
+            panelists: override.panelistIds ? override.panelistIds.map(id => panelistsMap.get(id)).filter(Boolean) : [],
           },
         };
         modifiedSchedules.push(virtualSchedule);
@@ -362,5 +518,33 @@ export class WeeklyOverridesService {
     }
 
     return cleaned;
+  }
+
+  /**
+   * Delete all weekly overrides for a given program and its schedules
+   */
+  async deleteOverridesForProgram(programId: number, scheduleIds: number[]): Promise<number> {
+    const pattern = 'weekly_override:*';
+    const stream = (this.redisService as any).client.scanStream({ match: pattern });
+    const keys: string[] = [];
+    for await (const keyChunk of stream) {
+      keys.push(...keyChunk);
+    }
+    let deleted = 0;
+    for (const key of keys) {
+      const override = await this.redisService.get<WeeklyOverride>(key);
+      if (!override) continue;
+      if (
+        (override.programId && override.programId === programId) ||
+        (override.scheduleId && scheduleIds.includes(override.scheduleId))
+      ) {
+        await this.redisService.del(key);
+        deleted++;
+      }
+    }
+    if (deleted > 0) {
+      await this.redisService.delByPattern('schedules:all:*');
+    }
+    return deleted;
   }
 } 
