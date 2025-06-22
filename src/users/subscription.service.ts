@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserSubscription, NotificationMethod } from './user-subscription.entity';
@@ -31,6 +31,8 @@ export class SubscriptionService {
     private deviceRepository: Repository<Device>,
     @InjectRepository(PushSubscriptionEntity)
     private pushSubscriptionRepository: Repository<PushSubscriptionEntity>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
   ) {}
 
   async createSubscription(user: User, dto: CreateSubscriptionDto): Promise<UserSubscription> {
@@ -160,5 +162,68 @@ export class SubscriptionService {
       where: { user: { id: userId }, program: { id: programId }, isActive: true },
     });
     return !!subscription;
+  }
+
+  // Admin Methods
+
+  async adminCreateSubscription(userId: number, programId: number, notificationMethod: NotificationMethod): Promise<UserSubscription> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
+    const program = await this.programRepository.findOne({ where: { id: programId } });
+    if (!program) {
+      throw new NotFoundException(`Program with ID ${programId} not found`);
+    }
+
+    if (notificationMethod !== NotificationMethod.EMAIL) {
+        throw new BadRequestException('Admin can only create subscriptions with "email" notification method.');
+    }
+
+    let subscription = await this.subscriptionRepository.findOne({
+      where: { user: { id: user.id }, program: { id: programId } },
+    });
+
+    if (subscription) {
+      subscription.notificationMethod = notificationMethod;
+      subscription.isActive = true;
+    } else {
+      subscription = this.subscriptionRepository.create({
+        user,
+        program,
+        notificationMethod,
+        isActive: true,
+      });
+    }
+
+    return await this.subscriptionRepository.save(subscription);
+  }
+
+  async adminUpdateSubscription(subscriptionId: string, dto: UpdateSubscriptionDto): Promise<UserSubscription> {
+    const subscription = await this.subscriptionRepository.findOne({
+      where: { id: subscriptionId },
+    });
+
+    if (!subscription) {
+      throw new NotFoundException('Subscription not found');
+    }
+
+    if (dto.notificationMethod !== undefined) {
+      subscription.notificationMethod = dto.notificationMethod;
+    }
+    
+    if (dto.isActive !== undefined) {
+      subscription.isActive = dto.isActive;
+    }
+
+    return await this.subscriptionRepository.save(subscription);
+  }
+
+  async adminRemoveSubscription(subscriptionId: string): Promise<void> {
+    const result = await this.subscriptionRepository.delete(subscriptionId);
+    if (result.affected === 0) {
+      throw new NotFoundException(`Subscription with ID ${subscriptionId} not found`);
+    }
   }
 } 

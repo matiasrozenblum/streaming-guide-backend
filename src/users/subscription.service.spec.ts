@@ -72,9 +72,14 @@ describe('SubscriptionService', () => {
     save: jest.fn(),
     remove: jest.fn(),
     update: jest.fn(),
+    delete: jest.fn(),
   };
 
   const mockProgramRepository = {
+    findOne: jest.fn(),
+  };
+
+  const mockUserRepository = {
     findOne: jest.fn(),
   };
 
@@ -97,6 +102,10 @@ describe('SubscriptionService', () => {
         {
           provide: getRepositoryToken(PushSubscriptionEntity),
           useValue: {},
+        },
+        {
+          provide: getRepositoryToken(User),
+          useValue: mockUserRepository,
         },
       ],
     }).compile();
