@@ -165,12 +165,12 @@ export class StatisticsService {
       .limit(limit)
       .getRawMany();
 
-    return topPrograms.map(program => ({
-      programId: parseInt(program.programId),
-      programName: program.programName,
-      channelName: program.channelName,
-      subscriptionCount: parseInt(program.subscriptionCount),
-      percentageOfTotalUsers: totalUsers > 0 ? (parseInt(program.subscriptionCount) / totalUsers) * 100 : 0,
+    return topPrograms.map(p => ({
+      programId: parseInt(p.programid),
+      programName: p.programname,
+      channelName: p.channelname,
+      subscriptionCount: parseInt(p.subscriptioncount),
+      percentageOfTotalUsers: totalUsers > 0 ? (parseInt(p.subscriptioncount) / totalUsers) * 100 : 0,
     }));
   }
 
