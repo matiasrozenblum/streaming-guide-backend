@@ -11,6 +11,7 @@ import { SubscriptionService } from './subscription.service';
 import { SubscriptionController } from './subscription.controller';
 import { AuthModule } from '../auth/auth.module';
 import { PushModule } from '../push/push.module';
+import { DeviceController } from './device.controller';
 
 @Module({
   imports: [
@@ -18,7 +19,7 @@ import { PushModule } from '../push/push.module';
     forwardRef(() => AuthModule),
     PushModule,
   ],
-  controllers: [UsersController, SubscriptionController],
+  controllers: [UsersController, SubscriptionController, DeviceController],
   providers: [UsersService, DeviceService, SubscriptionService],
   exports: [UsersService, DeviceService, SubscriptionService],
 })
