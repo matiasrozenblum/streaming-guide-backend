@@ -8,12 +8,14 @@ import { NotFoundException } from '@nestjs/common';
 import { CreateProgramDto } from './dto/create-program.dto';
 import { Channel } from '../channels/channels.entity';
 import { RedisService } from '../redis/redis.service';
+import { WeeklyOverridesService } from '../schedules/weekly-overrides.service';
 
 describe('ProgramsService', () => {
   let service: ProgramsService;
   let programRepository: Partial<Repository<Program>>;
   let panelistRepository: Partial<Repository<Panelist>>;
   let channelRepository: Partial<Repository<Channel>>;
+  let weeklyOverridesService: { deleteOverridesForProgram: jest.Mock };
 
   const mockChannel = {
     id: 1,
@@ -114,6 +116,10 @@ describe('ProgramsService', () => {
       findOne: jest.fn().mockResolvedValue(mockChannel),
     };
 
+    weeklyOverridesService = {
+      deleteOverridesForProgram: jest.fn().mockResolvedValue(2),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ProgramsService,
@@ -137,6 +143,10 @@ describe('ProgramsService', () => {
             del: jest.fn(),
             delByPattern: jest.fn(),
           },
+        },
+        {
+          provide: WeeklyOverridesService,
+          useValue: weeklyOverridesService,
         },
       ],
     }).compile();
@@ -178,8 +188,18 @@ describe('ProgramsService', () => {
     expect(programRepository.save).toHaveBeenCalled();
   });
 
-  it('should remove a program', async () => {
+  it('should remove a program and delete its weekly overrides', async () => {
+    // Mock program with schedules
+    const programWithSchedules = {
+      ...mockProgramWithChannel,
+      schedules: [
+        { id: 10 },
+        { id: 11 },
+      ],
+    };
+    (programRepository.findOne as jest.Mock).mockResolvedValueOnce(programWithSchedules);
     await service.remove(1);
+    expect(weeklyOverridesService.deleteOverridesForProgram).toHaveBeenCalledWith(1, [10, 11]);
     expect(programRepository.delete).toHaveBeenCalledWith(1);
   });
 });

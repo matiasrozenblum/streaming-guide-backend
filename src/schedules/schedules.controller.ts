@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, Param, Delete, Put, NotFoundException, Query, UseGuards } from '@nestjs/common';
 import { SchedulesService } from './schedules.service';
-import { CreateScheduleDto } from './dto/create-schedule.dto';
+import { CreateScheduleDto, CreateBulkSchedulesDto } from './dto/create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { Schedule } from './schedules.entity';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
@@ -74,6 +74,13 @@ export class SchedulesController {
   @ApiResponse({ status: 201, description: 'Horario creado', type: Schedule })
   create(@Body() createScheduleDto: CreateScheduleDto): Promise<Schedule> {
     return this.schedulesService.create(createScheduleDto);
+  }
+
+  @Post('bulk')
+  @ApiOperation({ summary: 'Crear múltiples horarios para un programa' })
+  @ApiResponse({ status: 201, description: 'Horarios creados', type: [Schedule] })
+  createBulk(@Body() createBulkSchedulesDto: CreateBulkSchedulesDto): Promise<Schedule[]> {
+    return this.schedulesService.createBulk(createBulkSchedulesDto);
   }
 
   @Put(':id')
