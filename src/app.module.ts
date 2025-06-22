@@ -25,6 +25,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { PushModule } from './push/push.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { UsersModule } from './users/users.module';
+import { StatisticsModule } from './statistics/statistics.module';
 
 @Module({
   imports: [
@@ -75,6 +76,7 @@ import { UsersModule } from './users/users.module';
     PushModule,
     NotificationsModule,
     UsersModule,
+    StatisticsModule,
   ],
   controllers: [AppController],
   providers: [
