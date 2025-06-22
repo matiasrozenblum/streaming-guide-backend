@@ -20,6 +20,7 @@ export interface UserDemographics {
     age30to45: number;
     age45to60: number;
     over60: number;
+    unknown: number;
   };
   usersWithSubscriptions: number;
   usersWithoutSubscriptions: number;
@@ -42,6 +43,7 @@ export interface ProgramSubscriptionStats {
     age30to45: number;
     age45to60: number;
     over60: number;
+    unknown: number;
   };
 }
 
@@ -66,12 +68,20 @@ export class StatisticsService {
     private channelRepository: Repository<Channel>,
   ) {}
 
-  private calculateAgeGroup(birthDate: Date): string {
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
+  private calculateAgeGroup(birthDate: Date | string): string {
+    // Ensure birthDate is a Date object
+    const birth = birthDate instanceof Date ? birthDate : new Date(birthDate);
     
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    // Check if the date is valid
+    if (isNaN(birth.getTime())) {
+      return 'unknown';
+    }
+    
+    const today = new Date();
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+    
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
       age--;
     }
 
@@ -102,6 +112,7 @@ export class StatisticsService {
       age30to45: 0,
       age45to60: 0,
       over60: 0,
+      unknown: 0,
     };
 
     let usersWithSubscriptions = 0;
@@ -191,6 +202,7 @@ export class StatisticsService {
       age30to45: 0,
       age45to60: 0,
       over60: 0,
+      unknown: 0,
     };
 
     subscriptions.forEach(subscription => {
@@ -243,6 +255,7 @@ export class StatisticsService {
           age30to45: 0,
           age45to60: 0,
           over60: 0,
+          unknown: 0,
         };
 
         subscriptions.forEach(subscription => {
