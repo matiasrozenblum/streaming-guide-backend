@@ -45,17 +45,17 @@ export class StatisticsController {
     return this.statisticsService.getUserDemographics();
   }
 
-  @Get('top-programs')
-  @ApiOperation({ summary: 'Get top programs by subscription count' })
+  @Get('popular-programs')
+  @ApiOperation({ summary: 'Get popular programs by subscription count' })
   @ApiQuery({ 
     name: 'limit', 
     required: false, 
     type: Number, 
-    description: 'Number of top programs to return (default: 10)' 
+    description: 'Number of popular programs to return (default: 10)' 
   })
   @ApiResponse({ 
     status: 200, 
-    description: 'Top programs by subscription count',
+    description: 'Popular programs by subscription count',
     schema: {
       type: 'array',
       items: {
