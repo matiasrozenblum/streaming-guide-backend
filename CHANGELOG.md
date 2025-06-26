@@ -17,7 +17,13 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
-## [1.1.7] - 2025-06-21
+## [1.2.0] - 2025-06-22
+
+### Added
+- Added statistics backoffice logic
+- Added devices and subscriptions to users backoffice logic
+
+## [1.1.6] - 2025-06-21
 
 ### Added
 - Added logic to bulk creat schedules

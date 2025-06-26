@@ -156,4 +156,38 @@ export class StatisticsController {
   async getAllProgramsSubscriptionStats(): Promise<ProgramSubscriptionStats[]> {
     return this.statisticsService.getAllProgramsSubscriptionStats();
   }
+
+  @Get('reports/users')
+  @ApiOperation({ summary: 'Get paginated list of new users in a date range' })
+  @ApiQuery({ name: 'from', required: true, type: String, description: 'Start date (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'to', required: true, type: String, description: 'End date (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)' })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number, description: 'Page size (default: 20)' })
+  async getNewUsersReport(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('page') page: number = 1,
+    @Query('pageSize') pageSize: number = 20,
+  ) {
+    return this.statisticsService.getNewUsersReport(from, to, page, pageSize);
+  }
+
+  @Get('reports/subscriptions')
+  @ApiOperation({ summary: 'Get paginated list of new subscriptions in a date range, optionally filtered by channel or program' })
+  @ApiQuery({ name: 'from', required: true, type: String, description: 'Start date (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'to', required: true, type: String, description: 'End date (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)' })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number, description: 'Page size (default: 20)' })
+  @ApiQuery({ name: 'channelId', required: false, type: Number, description: 'Filter by channel ID' })
+  @ApiQuery({ name: 'programId', required: false, type: Number, description: 'Filter by program ID' })
+  async getNewSubscriptionsReport(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('page') page: number = 1,
+    @Query('pageSize') pageSize: number = 20,
+    @Query('channelId') channelId?: number,
+    @Query('programId') programId?: number,
+  ) {
+    return this.statisticsService.getNewSubscriptionsReport(from, to, page, pageSize, channelId, programId);
+  }
 } 
