@@ -284,4 +284,71 @@ export class StatisticsService {
 
     return stats.sort((a, b) => b.totalSubscriptions - a.totalSubscriptions);
   }
+
+  async getNewUsersReport(from: string, to: string, page: number = 1, pageSize: number = 20) {
+    const skip = (page - 1) * pageSize;
+    const qb = this.userRepository.createQueryBuilder('user')
+      .where('user.role = :role', { role: 'user' })
+      .andWhere('user.createdAt >= :from', { from })
+      .andWhere('user.createdAt <= :to', { to })
+      .orderBy('user.createdAt', 'DESC')
+      .skip(skip)
+      .take(pageSize)
+      .select([
+        'user.id',
+        'user.firstName',
+        'user.lastName',
+        'user.gender',
+        'user.birthDate',
+        'user.createdAt',
+      ]);
+    const [users, total] = await qb.getManyAndCount();
+    return {
+      total,
+      page,
+      pageSize,
+      users,
+    };
+  }
+
+  async getNewSubscriptionsReport(
+    from: string,
+    to: string,
+    page: number = 1,
+    pageSize: number = 20,
+    channelId?: number,
+    programId?: number,
+  ) {
+    const skip = (page - 1) * pageSize;
+    const qb = this.subscriptionRepository.createQueryBuilder('subscription')
+      .leftJoinAndSelect('subscription.user', 'user')
+      .leftJoinAndSelect('subscription.program', 'program')
+      .leftJoinAndSelect('program.channel', 'channel')
+      .where('subscription.createdAt >= :from', { from })
+      .andWhere('subscription.createdAt <= :to', { to });
+    if (programId) {
+      qb.andWhere('program.id = :programId', { programId });
+    }
+    if (channelId) {
+      qb.andWhere('channel.id = :channelId', { channelId });
+    }
+    qb.orderBy('subscription.createdAt', 'DESC')
+      .skip(skip)
+      .take(pageSize);
+    const [subscriptions, total] = await qb.getManyAndCount();
+    // Map to required fields
+    const result = subscriptions.map(sub => ({
+      id: sub.id,
+      createdAt: sub.createdAt,
+      user: sub.user ? { id: sub.user.id, firstName: sub.user.firstName, lastName: sub.user.lastName } : null,
+      program: sub.program ? { id: sub.program.id, name: sub.program.name } : null,
+      channel: sub.program && sub.program.channel ? { id: sub.program.channel.id, name: sub.program.channel.name } : null,
+    }));
+    return {
+      total,
+      page,
+      pageSize,
+      subscriptions: result,
+    };
+  }
 } 
