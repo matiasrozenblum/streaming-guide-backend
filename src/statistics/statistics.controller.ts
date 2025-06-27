@@ -1,7 +1,8 @@
-import { Controller, Get, Param, ParseIntPipe, Query } from '@nestjs/common';
+import { Controller, Get, Param, ParseIntPipe, Query, Res, Post } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { StatisticsService } from './statistics.service';
 import { UserDemographics, TopProgramsStats, ProgramSubscriptionStats } from './statistics.service';
+import { Response } from 'express';
 
 @ApiTags('statistics')
 @Controller('statistics')
@@ -189,5 +190,71 @@ export class StatisticsController {
     @Query('programId') programId?: number,
   ) {
     return this.statisticsService.getNewSubscriptionsReport(from, to, page, pageSize, channelId, programId);
+  }
+
+  @Get('reports/users/download')
+  @ApiOperation({ summary: 'Download users report as CSV or PDF' })
+  @ApiQuery({ name: 'from', required: true, type: String })
+  @ApiQuery({ name: 'to', required: true, type: String })
+  @ApiQuery({ name: 'format', required: true, type: String, enum: ['csv', 'pdf'] })
+  async downloadUsersReport(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('format') format: 'csv' | 'pdf',
+    @Res() res: Response,
+  ) {
+    return this.statisticsService.downloadUsersReport(from, to, format, res);
+  }
+
+  @Get('reports/subscriptions/download')
+  @ApiOperation({ summary: 'Download subscriptions report as CSV or PDF' })
+  @ApiQuery({ name: 'from', required: true, type: String })
+  @ApiQuery({ name: 'to', required: true, type: String })
+  @ApiQuery({ name: 'format', required: true, type: String, enum: ['csv', 'pdf'] })
+  @ApiQuery({ name: 'channelId', required: false, type: Number })
+  @ApiQuery({ name: 'programId', required: false, type: Number })
+  async downloadSubscriptionsReport(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('format') format: 'csv' | 'pdf',
+    @Query('channelId') channelId: number,
+    @Query('programId') programId: number,
+    @Res() res: Response,
+  ) {
+    return this.statisticsService.downloadSubscriptionsReport(from, to, format, channelId, programId, res);
+  }
+
+  @Post('reports/users/email')
+  @ApiOperation({ summary: 'Send users report by email' })
+  @ApiQuery({ name: 'from', required: true, type: String })
+  @ApiQuery({ name: 'to', required: true, type: String })
+  @ApiQuery({ name: 'format', required: true, type: String, enum: ['csv', 'pdf'] })
+  @ApiQuery({ name: 'toEmail', required: true, type: String, description: 'Destination email address' })
+  async emailUsersReport(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('format') format: 'csv' | 'pdf',
+    @Query('toEmail') toEmail: string,
+  ) {
+    return this.statisticsService.emailUsersReport(from, to, format, toEmail);
+  }
+
+  @Post('reports/subscriptions/email')
+  @ApiOperation({ summary: 'Send subscriptions report by email' })
+  @ApiQuery({ name: 'from', required: true, type: String })
+  @ApiQuery({ name: 'to', required: true, type: String })
+  @ApiQuery({ name: 'format', required: true, type: String, enum: ['csv', 'pdf'] })
+  @ApiQuery({ name: 'channelId', required: false, type: Number })
+  @ApiQuery({ name: 'programId', required: false, type: Number })
+  @ApiQuery({ name: 'toEmail', required: true, type: String, description: 'Destination email address' })
+  async emailSubscriptionsReport(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('format') format: 'csv' | 'pdf',
+    @Query('channelId') channelId: number,
+    @Query('programId') programId: number,
+    @Query('toEmail') toEmail: string,
+  ) {
+    return this.statisticsService.emailSubscriptionsReport(from, to, format, channelId, programId, toEmail);
   }
 } 
