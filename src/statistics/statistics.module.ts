@@ -2,21 +2,20 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { StatisticsController } from './statistics.controller';
 import { StatisticsService } from './statistics.service';
+import { WeeklyReportController } from './weekly-report.controller';
+import { ReportsProxyService } from './reports-proxy.service';
 import { User } from '../users/users.entity';
 import { UserSubscription } from '../users/user-subscription.entity';
 import { Program } from '../programs/programs.entity';
 import { Channel } from '../channels/channels.entity';
-import { EmailModule } from '../email/email.module';
-import { WeeklyReportService } from './weekly-report.service';
-import { WeeklyReportController } from './weekly-report.controller';
+import { EmailService } from '../email/email.service';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User, UserSubscription, Program, Channel]),
-    EmailModule,
   ],
   controllers: [StatisticsController, WeeklyReportController],
-  providers: [StatisticsService, WeeklyReportService],
+  providers: [StatisticsService, ReportsProxyService, EmailService],
   exports: [StatisticsService],
 })
 export class StatisticsModule {} 

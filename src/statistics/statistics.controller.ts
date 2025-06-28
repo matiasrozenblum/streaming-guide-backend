@@ -1,13 +1,17 @@
-import { Controller, Get, Param, ParseIntPipe, Query, Res, Post } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
+import { Controller, Get, Query, Res, Post } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { StatisticsService } from './statistics.service';
-import { UserDemographics, TopProgramsStats, ProgramSubscriptionStats } from './statistics.service';
+import { ReportsProxyService } from './reports-proxy.service';
+import { UserDemographics, TopProgramsStats } from './statistics.service';
 import { Response } from 'express';
 
 @ApiTags('statistics')
 @Controller('statistics')
 export class StatisticsController {
-  constructor(private readonly statisticsService: StatisticsService) {}
+  constructor(
+    private readonly statisticsService: StatisticsService,
+    private readonly reportsProxyService: ReportsProxyService,
+  ) {}
 
   @Get('demographics')
   @ApiOperation({ summary: 'Get user demographics statistics' })
@@ -75,89 +79,6 @@ export class StatisticsController {
     return this.statisticsService.getTopPrograms(limit);
   }
 
-  @Get('programs/:id')
-  @ApiOperation({ summary: 'Get subscription statistics for a specific program' })
-  @ApiParam({ name: 'id', description: 'Program ID' })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Program subscription statistics',
-    schema: {
-      type: 'object',
-      properties: {
-        programId: { type: 'number' },
-        programName: { type: 'string' },
-        channelName: { type: 'string' },
-        totalSubscriptions: { type: 'number' },
-        byGender: {
-          type: 'object',
-          properties: {
-            male: { type: 'number' },
-            female: { type: 'number' },
-            non_binary: { type: 'number' },
-            rather_not_say: { type: 'number' },
-          },
-        },
-        byAgeGroup: {
-          type: 'object',
-          properties: {
-            under18: { type: 'number' },
-            age18to30: { type: 'number' },
-            age30to45: { type: 'number' },
-            age45to60: { type: 'number' },
-            over60: { type: 'number' },
-          },
-        },
-      },
-    },
-  })
-  @ApiResponse({ status: 404, description: 'Program not found' })
-  async getProgramSubscriptionStats(
-    @Param('id', ParseIntPipe) programId: number,
-  ): Promise<ProgramSubscriptionStats | null> {
-    return this.statisticsService.getProgramSubscriptionStats(programId);
-  }
-
-  @Get('programs')
-  @ApiOperation({ summary: 'Get subscription statistics for all programs' })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'All programs subscription statistics',
-    schema: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          programId: { type: 'number' },
-          programName: { type: 'string' },
-          channelName: { type: 'string' },
-          totalSubscriptions: { type: 'number' },
-          byGender: {
-            type: 'object',
-            properties: {
-              male: { type: 'number' },
-              female: { type: 'number' },
-              non_binary: { type: 'number' },
-              rather_not_say: { type: 'number' },
-            },
-          },
-          byAgeGroup: {
-            type: 'object',
-            properties: {
-              under18: { type: 'number' },
-              age18to30: { type: 'number' },
-              age30to45: { type: 'number' },
-              age45to60: { type: 'number' },
-              over60: { type: 'number' },
-            },
-          },
-        },
-      },
-    },
-  })
-  async getAllProgramsSubscriptionStats(): Promise<ProgramSubscriptionStats[]> {
-    return this.statisticsService.getAllProgramsSubscriptionStats();
-  }
-
   @Get('reports/users')
   @ApiOperation({ summary: 'Get paginated list of new users in a date range' })
   @ApiQuery({ name: 'from', required: true, type: String, description: 'Start date (YYYY-MM-DD)' })
@@ -203,7 +124,16 @@ export class StatisticsController {
     @Query('format') format: 'csv' | 'pdf',
     @Res() res: Response,
   ) {
-    return this.statisticsService.downloadUsersReport(from, to, format, res);
+    const result = await this.reportsProxyService.generateReport({
+      type: 'users',
+      format,
+      from,
+      to,
+    });
+    
+    res.setHeader('Content-Type', format === 'csv' ? 'text/csv' : 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="users_report_${from}_to_${to}.${format}"`);
+    res.send(result);
   }
 
   @Get('reports/subscriptions/download')
@@ -217,19 +147,30 @@ export class StatisticsController {
     @Query('from') from: string,
     @Query('to') to: string,
     @Query('format') format: 'csv' | 'pdf',
-    @Query('channelId') channelId: number,
-    @Query('programId') programId: number,
+    @Query('channelId') channelId: number = 0,
+    @Query('programId') programId: number = 0,
     @Res() res: Response,
   ) {
-    return this.statisticsService.downloadSubscriptionsReport(from, to, format, channelId, programId, res);
+    const result = await this.reportsProxyService.generateReport({
+      type: 'subscriptions',
+      format,
+      from,
+      to,
+      channelId,
+      programId,
+    });
+    
+    res.setHeader('Content-Type', format === 'csv' ? 'text/csv' : 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="subscriptions_report_${from}_to_${to}.${format}"`);
+    res.send(result);
   }
 
   @Post('reports/users/email')
-  @ApiOperation({ summary: 'Send users report by email' })
+  @ApiOperation({ summary: 'Email users report as CSV or PDF' })
   @ApiQuery({ name: 'from', required: true, type: String })
   @ApiQuery({ name: 'to', required: true, type: String })
   @ApiQuery({ name: 'format', required: true, type: String, enum: ['csv', 'pdf'] })
-  @ApiQuery({ name: 'toEmail', required: true, type: String, description: 'Destination email address' })
+  @ApiQuery({ name: 'toEmail', required: true, type: String })
   async emailUsersReport(
     @Query('from') from: string,
     @Query('to') to: string,
@@ -240,19 +181,19 @@ export class StatisticsController {
   }
 
   @Post('reports/subscriptions/email')
-  @ApiOperation({ summary: 'Send subscriptions report by email' })
+  @ApiOperation({ summary: 'Email subscriptions report as CSV or PDF' })
   @ApiQuery({ name: 'from', required: true, type: String })
   @ApiQuery({ name: 'to', required: true, type: String })
   @ApiQuery({ name: 'format', required: true, type: String, enum: ['csv', 'pdf'] })
   @ApiQuery({ name: 'channelId', required: false, type: Number })
   @ApiQuery({ name: 'programId', required: false, type: Number })
-  @ApiQuery({ name: 'toEmail', required: true, type: String, description: 'Destination email address' })
+  @ApiQuery({ name: 'toEmail', required: true, type: String })
   async emailSubscriptionsReport(
     @Query('from') from: string,
     @Query('to') to: string,
     @Query('format') format: 'csv' | 'pdf',
-    @Query('channelId') channelId: number,
-    @Query('programId') programId: number,
+    @Query('channelId') channelId: number = 0,
+    @Query('programId') programId: number = 0,
     @Query('toEmail') toEmail: string,
   ) {
     return this.statisticsService.emailSubscriptionsReport(from, to, format, channelId, programId, toEmail);
