@@ -11,7 +11,18 @@ RUN apk add --no-cache \
     ttf-freefont \
     nodejs \
     yarn \
-    bash
+    bash \
+    python3 \
+    make \
+    g++ \
+    cairo-dev \
+    pango-dev \
+    jpeg-dev \
+    giflib-dev \
+    pixman-dev \
+    pangomm-dev \
+    libjpeg-turbo-dev \
+    pkgconfig
 
 WORKDIR /app
 
