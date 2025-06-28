@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between } from 'typeorm';
+import { Repository, Between, In } from 'typeorm';
 import { User } from '../users/users.entity';
 import { UserSubscription } from '../users/user-subscription.entity';
 import { Program } from '../programs/programs.entity';
@@ -47,9 +47,35 @@ export class WeeklyReportService {
 
   async getWeeklyReportData(from: string, to: string, channelId?: number): Promise<WeeklyReportData> {
     // 1. New users
-    const userWhere: any = { role: 'user', createdAt: Between(from, to) };
-    if (channelId) userWhere.channel = { id: channelId };
-    const newUsers = await this.userRepository.find({ where: userWhere });
+    let newUsers: User[];
+    if (channelId) {
+      // If filtering by channel, get users who have subscriptions to programs in that channel
+      const usersWithChannelSubs = await this.subscriptionRepository.find({
+        where: { 
+          createdAt: Between(new Date(from), new Date(to)),
+          program: { channel: { id: channelId } }
+        },
+        relations: ['user', 'program', 'program.channel'],
+      });
+      // Get unique users from these subscriptions
+      const userIds = [...new Set(usersWithChannelSubs.map(sub => sub.user.id))];
+      newUsers = await this.userRepository.find({ 
+        where: { 
+          id: In(userIds),
+          role: 'user',
+          createdAt: Between(new Date(from), new Date(to))
+        }
+      });
+    } else {
+      // No channel filter, get all new users
+      newUsers = await this.userRepository.find({ 
+        where: { 
+          role: 'user', 
+          createdAt: Between(new Date(from), new Date(to))
+        } 
+      });
+    }
+    
     const totalNewUsers = newUsers.length;
     const usersByGender: Record<string, number> = {};
     newUsers.forEach(u => {
@@ -57,8 +83,8 @@ export class WeeklyReportService {
     });
 
     // 2. New subscriptions
-    const subWhere: any = { createdAt: Between(from, to) };
-    if (channelId) subWhere.channel = { id: channelId };
+    const subWhere: any = { createdAt: Between(new Date(from), new Date(to)) };
+    if (channelId) subWhere.program = { channel: { id: channelId } };
     const newSubs = await this.subscriptionRepository.find({
       where: subWhere,
       relations: ['user', 'program', 'program.channel'],
