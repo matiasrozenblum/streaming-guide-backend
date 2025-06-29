@@ -1,9 +1,21 @@
-import { Controller, Get, Query, Res, Post } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import { Controller, Get, Query, Res, Post, Body } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBody } from '@nestjs/swagger';
 import { StatisticsService } from './statistics.service';
 import { ReportsProxyService } from './reports-proxy.service';
 import { UserDemographics, TopProgramsStats } from './statistics.service';
+import { EmailService } from '../email/email.service';
 import { Response } from 'express';
+
+export class UnifiedReportDto {
+  type: 'users' | 'subscriptions' | 'weekly-summary';
+  format: 'csv' | 'pdf';
+  from: string;
+  to: string;
+  channelId?: number;
+  programId?: number;
+  action: 'download' | 'email';
+  toEmail?: string;
+}
 
 @ApiTags('statistics')
 @Controller('statistics')
@@ -11,6 +23,7 @@ export class StatisticsController {
   constructor(
     private readonly statisticsService: StatisticsService,
     private readonly reportsProxyService: ReportsProxyService,
+    private readonly emailService: EmailService,
   ) {}
 
   @Get('demographics')
@@ -165,38 +178,34 @@ export class StatisticsController {
     res.send(result);
   }
 
-  @Post('reports/users/email')
-  @ApiOperation({ summary: 'Email users report as CSV or PDF' })
-  @ApiQuery({ name: 'from', required: true, type: String })
-  @ApiQuery({ name: 'to', required: true, type: String })
-  @ApiQuery({ name: 'format', required: true, type: String, enum: ['csv', 'pdf'] })
-  @ApiQuery({ name: 'toEmail', required: true, type: String })
-  async emailUsersReport(
-    @Query('from') from: string,
-    @Query('to') to: string,
-    @Query('format') format: 'csv' | 'pdf',
-    @Query('toEmail') toEmail: string,
-  ) {
-    return this.statisticsService.emailUsersReport(from, to, format, toEmail);
-  }
-
-  @Post('reports/subscriptions/email')
-  @ApiOperation({ summary: 'Email subscriptions report as CSV or PDF' })
-  @ApiQuery({ name: 'from', required: true, type: String })
-  @ApiQuery({ name: 'to', required: true, type: String })
-  @ApiQuery({ name: 'format', required: true, type: String, enum: ['csv', 'pdf'] })
-  @ApiQuery({ name: 'channelId', required: false, type: Number })
-  @ApiQuery({ name: 'programId', required: false, type: Number })
-  @ApiQuery({ name: 'toEmail', required: true, type: String })
-  async emailSubscriptionsReport(
-    @Query('from') from: string,
-    @Query('to') to: string,
-    @Query('format') format: 'csv' | 'pdf',
-    @Query('channelId') channelId: number = 0,
-    @Query('programId') programId: number = 0,
-    @Query('toEmail') toEmail: string,
-  ) {
-    return this.statisticsService.emailSubscriptionsReport(from, to, format, channelId, programId, toEmail);
+  @Post('reports')
+  @ApiOperation({ summary: 'Generate and download or email a report' })
+  @ApiBody({ type: UnifiedReportDto })
+  @ApiResponse({ status: 200, description: 'Report generated or emailed successfully' })
+  async unifiedReport(@Body() body: UnifiedReportDto, @Res() res: Response) {
+    const { action, toEmail, ...reportParams } = body;
+    let file = await this.reportsProxyService.generateReport(reportParams);
+    if (typeof file === 'string') {
+      file = Buffer.from(file);
+    }
+    const filename = `${body.type}_report_${body.from}_to_${body.to}.${body.format}`;
+    if (action === 'download') {
+      res.setHeader('Content-Type', body.format === 'csv' ? 'text/csv' : 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(file);
+    } else if (action === 'email') {
+      const recipient = toEmail || 'laguiadelstreaming@gmail.com';
+      await this.emailService.sendReportWithAttachment({
+        to: recipient,
+        subject: `Reporte solicitado: ${filename}`,
+        text: `Adjuntamos el reporte solicitado (${filename}).`,
+        html: `<p>Adjuntamos el reporte solicitado (<b>${filename}</b>).</p>`,
+        attachments: [{ filename, content: file, contentType: body.format === 'csv' ? 'text/csv' : 'application/pdf' }],
+      });
+      res.json({ success: true, message: `Reporte enviado a ${recipient}` });
+    } else {
+      res.status(400).json({ error: 'Invalid action' });
+    }
   }
 
   @Get('programs')
