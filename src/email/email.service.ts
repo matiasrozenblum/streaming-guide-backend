@@ -48,4 +48,14 @@ export class EmailService {
       </div>
     `;
   }
+
+  async sendReportWithAttachment({ to, subject, text, html, attachments }: { to: string, subject: string, text: string, html: string, attachments: { filename: string, content: Buffer, contentType: string }[] }) {
+    await this.mailerService.sendMail({
+      to,
+      subject,
+      text,
+      html,
+      attachments,
+    });
+  }
 }
