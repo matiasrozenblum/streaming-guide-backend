@@ -174,6 +174,21 @@ export class StatisticsController {
   @ApiResponse({ status: 200, description: 'Report generated or emailed successfully' })
   async unifiedReport(@Body() body: UnifiedReportDto, @Res() res: Response) {
     const { action, toEmail, ...reportParams } = body;
+    if (action === 'table') {
+      if (body.type === 'users') {
+        const result = await this.statisticsService.getNewUsersReport(
+          body.from, body.to, body.page ?? 1, body.pageSize ?? 20
+        );
+        return res.json(result);
+      } else if (body.type === 'subscriptions') {
+        const result = await this.statisticsService.getNewSubscriptionsReport(
+          body.from, body.to, body.page ?? 1, body.pageSize ?? 20, body.channelId, body.programId
+        );
+        return res.json(result);
+      } else {
+        return res.status(400).json({ error: 'Invalid type for table action' });
+      }
+    }
     let file = await this.reportsProxyService.generateReport(reportParams);
     if (typeof file === 'string') {
       file = Buffer.from(file);
