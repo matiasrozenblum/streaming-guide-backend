@@ -198,4 +198,46 @@ export class StatisticsController {
   ) {
     return this.statisticsService.emailSubscriptionsReport(from, to, format, channelId, programId, toEmail);
   }
+
+  @Get('programs')
+  @ApiOperation({ summary: 'Get all programs with subscription stats' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of all programs with subscription stats',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          programId: { type: 'number' },
+          programName: { type: 'string' },
+          channelName: { type: 'string' },
+          totalSubscriptions: { type: 'number' },
+          byGender: {
+            type: 'object',
+            properties: {
+              male: { type: 'number' },
+              female: { type: 'number' },
+              non_binary: { type: 'number' },
+              rather_not_say: { type: 'number' },
+            },
+          },
+          byAgeGroup: {
+            type: 'object',
+            properties: {
+              under18: { type: 'number' },
+              age18to30: { type: 'number' },
+              age30to45: { type: 'number' },
+              age45to60: { type: 'number' },
+              over60: { type: 'number' },
+              unknown: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+  })
+  async getAllProgramsStats() {
+    return this.statisticsService.getAllProgramsStats();
+  }
 } 

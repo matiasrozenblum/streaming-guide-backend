@@ -205,4 +205,33 @@ export class StatisticsService {
       toEmail,
     });
   }
+
+  async getAllProgramsStats() {
+    const programs = await this.programRepository.find({ relations: ['channel'] });
+    const stats: any[] = [];
+    for (const program of programs) {
+      // Get all active subscriptions for this program
+      const subscriptions = await this.subscriptionRepository.find({
+        where: { program: { id: program.id }, isActive: true },
+        relations: ['user'],
+      });
+      const totalSubscriptions = subscriptions.length;
+      const byGender = { male: 0, female: 0, non_binary: 0, rather_not_say: 0 };
+      const byAgeGroup = { under18: 0, age18to30: 0, age30to45: 0, age45to60: 0, over60: 0, unknown: 0 };
+      subscriptions.forEach(sub => {
+        if (sub.user && sub.user.gender) byGender[sub.user.gender]++;
+        if (sub.user && sub.user.birthDate) byAgeGroup[this.calculateAgeGroup(sub.user.birthDate)]++;
+        else byAgeGroup.unknown++;
+      });
+      stats.push({
+        programId: program.id,
+        programName: program.name,
+        channelName: program.channel ? program.channel.name : '',
+        totalSubscriptions,
+        byGender,
+        byAgeGroup,
+      });
+    }
+    return stats;
+  }
 } 
