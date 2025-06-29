@@ -1,44 +1,31 @@
 FROM node:22-alpine
 
-# Instalar Chromium + dependencias necesarias
+# Install basic dependencies
 RUN apk add --no-cache \
-    chromium \
-    nss \
-    freetype \
-    freetype-dev \
-    harfbuzz \
-    ca-certificates \
-    ttf-freefont \
     nodejs \
     yarn \
     bash
 
 WORKDIR /app
 
-# Copiar package.json y package-lock.json
+# Copy package files
 COPY package*.json ./
 
-# 👉🏻 Acá todavía NO seteamos NODE_ENV
-# Instalamos TODO (dependencias de producción + desarrollo)
+# Install dependencies
 RUN npm install
 
-# Copiar el resto del proyecto
+# Copy source code
 COPY . .
 
-# Build del proyecto Nest.js
+# Build the application
 RUN npm run build
 
-# 👉🏻 recién acá seteamos NODE_ENV=production
+# Set environment variables
 ENV NODE_ENV=production
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
-ENV PORT=8080
+ENV PORT=3000
 
-# Limpiamos devDependencies
-RUN npm prune --production
+# Expose port
+EXPOSE 3000
 
-# Exponer el puerto
-EXPOSE 8080
-
-# Comando de arranque
+# Start the application
 CMD ["node", "dist/main.js"]
