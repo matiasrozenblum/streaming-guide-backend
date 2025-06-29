@@ -19,7 +19,6 @@ export class ReportsProxyService {
     toEmail?: string;
   }): Promise<Buffer | string> {
     try {
-      console.log('url', `${this.reportsServiceUrl}/reports/generate`);
       const response = await axios.post(
         `${this.reportsServiceUrl}/reports/generate`,
         request,
