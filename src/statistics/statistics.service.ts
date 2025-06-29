@@ -207,31 +207,49 @@ export class StatisticsService {
   }
 
   async getAllProgramsStats() {
+    // 1. Fetch all programs with their channels
     const programs = await this.programRepository.find({ relations: ['channel'] });
-    const stats: any[] = [];
+
+    // 2. Fetch all active subscriptions with user, program, and channel in one query
+    const subscriptions = await this.subscriptionRepository
+      .createQueryBuilder('subscription')
+      .leftJoinAndSelect('subscription.user', 'user')
+      .leftJoinAndSelect('subscription.program', 'program')
+      .leftJoinAndSelect('program.channel', 'channel')
+      .where('subscription.isActive = :isActive', { isActive: true })
+      .getMany();
+
+    // 3. Aggregate stats in-memory
+    const statsMap = new Map<number, {
+      programId: number;
+      programName: string;
+      channelName: string;
+      totalSubscriptions: number;
+      byGender: { male: number; female: number; non_binary: number; rather_not_say: number; };
+      byAgeGroup: { under18: number; age18to30: number; age30to45: number; age45to60: number; over60: number; unknown: number; };
+    }>();
+
     for (const program of programs) {
-      // Get all active subscriptions for this program
-      const subscriptions = await this.subscriptionRepository.find({
-        where: { program: { id: program.id }, isActive: true },
-        relations: ['user'],
-      });
-      const totalSubscriptions = subscriptions.length;
-      const byGender = { male: 0, female: 0, non_binary: 0, rather_not_say: 0 };
-      const byAgeGroup = { under18: 0, age18to30: 0, age30to45: 0, age45to60: 0, over60: 0, unknown: 0 };
-      subscriptions.forEach(sub => {
-        if (sub.user && sub.user.gender) byGender[sub.user.gender]++;
-        if (sub.user && sub.user.birthDate) byAgeGroup[this.calculateAgeGroup(sub.user.birthDate)]++;
-        else byAgeGroup.unknown++;
-      });
-      stats.push({
+      statsMap.set(program.id, {
         programId: program.id,
         programName: program.name,
-        channelName: program.channel ? program.channel.name : '',
-        totalSubscriptions,
-        byGender,
-        byAgeGroup,
+        channelName: program.channel?.name || '',
+        totalSubscriptions: 0,
+        byGender: { male: 0, female: 0, non_binary: 0, rather_not_say: 0 },
+        byAgeGroup: { under18: 0, age18to30: 0, age30to45: 0, age45to60: 0, over60: 0, unknown: 0 },
       });
     }
-    return stats;
+
+    for (const sub of subscriptions) {
+      if (!sub.program) continue;
+      const stat = statsMap.get(sub.program.id);
+      if (!stat) continue;
+      stat.totalSubscriptions++;
+      if (sub.user && sub.user.gender) stat.byGender[sub.user.gender]++;
+      if (sub.user && sub.user.birthDate) stat.byAgeGroup[this.calculateAgeGroup(sub.user.birthDate)]++;
+      else stat.byAgeGroup.unknown++;
+    }
+
+    return Array.from(statsMap.values());
   }
 } 
