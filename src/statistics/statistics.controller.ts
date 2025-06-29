@@ -5,17 +5,7 @@ import { ReportsProxyService } from './reports-proxy.service';
 import { UserDemographics, TopProgramsStats } from './statistics.service';
 import { EmailService } from '../email/email.service';
 import { Response } from 'express';
-
-export class UnifiedReportDto {
-  type: 'users' | 'subscriptions' | 'weekly-summary';
-  format: 'csv' | 'pdf';
-  from: string;
-  to: string;
-  channelId?: number;
-  programId?: number;
-  action: 'download' | 'email';
-  toEmail?: string;
-}
+import { UnifiedReportDto } from './dto/unified-report.dto';
 
 @ApiTags('statistics')
 @Controller('statistics')
