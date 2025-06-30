@@ -17,6 +17,12 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.3.0] - 2025-06-29
+
+### Added
+- Added statistics logic
+- Added integration with reports microservice
+
 ## [1.2.0] - 2025-06-22
 
 ### Added

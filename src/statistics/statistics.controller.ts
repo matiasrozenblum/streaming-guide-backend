@@ -172,7 +172,28 @@ export class StatisticsController {
   @ApiOperation({ summary: 'Generate and download or email a report' })
   @ApiBody({ type: UnifiedReportDto })
   @ApiResponse({ status: 200, description: 'Report generated or emailed successfully' })
-  async unifiedReport(@Body() body: UnifiedReportDto, @Res() res: Response) {
+  async unifiedReport(@Body() body: any, @Res() res: Response) {
+    // Support multi-report email
+    if (Array.isArray(body.reports)) {
+      // Each item is a UnifiedReportDto
+      const attachments: any[] = [];
+      for (const report of body.reports) {
+        if (report.action === 'email') {
+          // Generate the report file (PDF or CSV)
+          let file = await this.reportsProxyService.generateReport(report);
+          if (typeof file === 'string') {
+            file = Buffer.from(file, 'utf-8');
+          }
+          attachments.push({
+            filename: this.getReportFilename(report),
+            content: file,
+          });
+        }
+      }
+      // Send all as attachments in a single email
+      await this.emailService.sendReportWithAttachments(body.reports[0].toEmail, attachments);
+      return res.json({ success: true });
+    }
     const { action, toEmail, ...reportParams } = body;
     if (action === 'table') {
       if (body.type === 'users') {
@@ -211,6 +232,13 @@ export class StatisticsController {
     } else {
       res.status(400).json({ error: 'Invalid action' });
     }
+  }
+
+  getReportFilename(report: any) {
+    if (report.format === 'pdf') return 'Reporte_Demografico_y_Actividad.pdf';
+    if (report.type === 'users') return 'Listado_Usuarios_Nuevos.csv';
+    if (report.type === 'subscriptions') return 'Listado_Suscripciones_Nuevas.csv';
+    return 'reporte.csv';
   }
 
   @Get('programs')
