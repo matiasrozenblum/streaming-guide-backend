@@ -12,6 +12,7 @@ import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
 import { ConfigService } from '../config/config.service';
+import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -63,6 +64,7 @@ describe('SchedulesService', () => {
   let programsRepo: Repository<Program>;
   let redisService: RedisService;
   let youtubeLiveService: YoutubeLiveService;
+  let notifyUtil: NotifyAndRevalidateUtil;
 
   const mockChannel = {
     id: 1,
@@ -117,6 +119,7 @@ describe('SchedulesService', () => {
             findOne: jest.fn(),
             save: jest.fn(),
             delete: jest.fn(),
+            create: jest.fn(),
             createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
           },
         },
@@ -132,6 +135,7 @@ describe('SchedulesService', () => {
             get: jest.fn(),
             set: jest.fn(),
             del: jest.fn(),
+            delByPattern: jest.fn(),
           },
         },
         {
@@ -167,6 +171,12 @@ describe('SchedulesService', () => {
     programsRepo = module.get<Repository<Program>>(getRepositoryToken(Program));
     redisService = module.get<RedisService>(RedisService);
     youtubeLiveService = module.get<YoutubeLiveService>(YoutubeLiveService);
+    notifyUtil = new NotifyAndRevalidateUtil(
+      redisService as any,
+      'https://frontend.test',
+      'testsecret'
+    );
+    service['notifyUtil'] = notifyUtil;
   });
 
   describe('findByDay', () => {
@@ -269,6 +279,30 @@ describe('SchedulesService', () => {
 
       expect(result[0].program.is_live).toBe(false);
       expect(result[0].program.stream_url).toBe('https://youtube.com/test');
+    });
+  });
+
+  describe('notifyAndRevalidate integration', () => {
+    it('calls notifyAndRevalidate on create', async () => {
+      const spy = jest.spyOn(notifyUtil, 'notifyAndRevalidate').mockResolvedValue(undefined as any);
+      jest.spyOn(programsRepo, 'findOne').mockResolvedValue({ id: 1 } as any);
+      jest.spyOn(schedulesRepo, 'create').mockReturnValue({ id: 1 } as any);
+      jest.spyOn(schedulesRepo, 'save').mockResolvedValue({ id: 1 } as any);
+      await service.create({ programId: '1', channelId: '1', dayOfWeek: 'monday', startTime: '10:00', endTime: '12:00' });
+      expect(spy).toHaveBeenCalled();
+    });
+    it('calls notifyAndRevalidate on update', async () => {
+      const spy = jest.spyOn(notifyUtil, 'notifyAndRevalidate').mockResolvedValue(undefined as any);
+      jest.spyOn(service, 'findOne').mockResolvedValue({ id: 1 } as any);
+      jest.spyOn(schedulesRepo, 'save').mockResolvedValue({ id: 1 } as any);
+      await service.update('1', { dayOfWeek: 'tuesday' });
+      expect(spy).toHaveBeenCalled();
+    });
+    it('calls notifyAndRevalidate on remove', async () => {
+      const spy = jest.spyOn(notifyUtil, 'notifyAndRevalidate').mockResolvedValue(undefined as any);
+      jest.spyOn(schedulesRepo, 'delete').mockResolvedValue({ affected: 1 } as any);
+      await service.remove('1');
+      expect(spy).toHaveBeenCalled();
     });
   });
 });

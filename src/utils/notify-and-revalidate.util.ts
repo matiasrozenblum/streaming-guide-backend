@@ -1,4 +1,3 @@
-import fetch from 'node-fetch';
 import { RedisService } from '../redis/redis.service';
 
 interface NotifyAndRevalidateOptions {
@@ -36,7 +35,7 @@ export class NotifyAndRevalidateUtil {
       for (const path of options.revalidatePaths) {
         try {
           console.log(`[NotifyAndRevalidate] Calling revalidate endpoint for path: ${path}`);
-          const response = await fetch(`${this.frontendUrl}/api/revalidate`, {
+          const response = await globalThis.fetch(`${this.frontendUrl}/api/revalidate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ path, secret: this.revalidateSecret }),
