@@ -9,6 +9,7 @@ import { CreateProgramDto } from './dto/create-program.dto';
 import { Channel } from '../channels/channels.entity';
 import { RedisService } from '../redis/redis.service';
 import { WeeklyOverridesService } from '../schedules/weekly-overrides.service';
+import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
 
 describe('ProgramsService', () => {
   let service: ProgramsService;
@@ -16,6 +17,7 @@ describe('ProgramsService', () => {
   let panelistRepository: Partial<Repository<Panelist>>;
   let channelRepository: Partial<Repository<Channel>>;
   let weeklyOverridesService: { deleteOverridesForProgram: jest.Mock };
+  let notifyUtil: NotifyAndRevalidateUtil;
 
   const mockChannel = {
     id: 1,
@@ -152,6 +154,12 @@ describe('ProgramsService', () => {
     }).compile();
 
     service = module.get<ProgramsService>(ProgramsService);
+    notifyUtil = new NotifyAndRevalidateUtil(
+      module.get<RedisService>(RedisService),
+      'https://frontend.test',
+      'testsecret'
+    );
+    service['notifyUtil'] = notifyUtil;
   });
 
   it('should be defined', () => {
@@ -182,10 +190,40 @@ describe('ProgramsService', () => {
       channel_id: 1,
     };
 
+    const spy = jest.spyOn(service['notifyUtil'], 'notifyAndRevalidate').mockResolvedValue(undefined as any);
     const result = await service.create(createDto);
     expect(result).toEqual(mockProgramResponse);
     expect(programRepository.create).toHaveBeenCalledWith(createDto);
     expect(programRepository.save).toHaveBeenCalled();
+    expect(spy).toHaveBeenCalled();
+  });
+
+  it('should update an existing program', async () => {
+    const updateDto: CreateProgramDto = {
+      name: 'Updated Program',
+      description: 'Updated Description',
+      youtube_url: 'https://youtube.com/updated',
+      channel_id: 1,
+    };
+
+    const spy = jest.spyOn(service['notifyUtil'], 'notifyAndRevalidate').mockResolvedValue(undefined as any);
+    const result = await service.update(1, updateDto);
+    expect(result).toEqual({
+      id: 1,
+      name: 'Updated Program',
+      description: 'Updated Description',
+      panelists: [],
+      logo_url: null,
+      youtube_url: 'https://youtube.com/updated',
+      is_live: false,
+      stream_url: null,
+      channel_id: 1,
+      channel_name: 'Luzu TV',
+      style_override: undefined,
+    });
+    expect(programRepository.createQueryBuilder).toHaveBeenCalledWith('program');
+    expect(programRepository.save).toHaveBeenCalledWith(expect.objectContaining({ id: 1, ...updateDto }));
+    expect(spy).toHaveBeenCalled();
   });
 
   it('should remove a program and delete its weekly overrides', async () => {
@@ -198,8 +236,10 @@ describe('ProgramsService', () => {
       ],
     };
     (programRepository.findOne as jest.Mock).mockResolvedValueOnce(programWithSchedules);
+    const spy = jest.spyOn(service['notifyUtil'], 'notifyAndRevalidate').mockResolvedValue(undefined as any);
     await service.remove(1);
     expect(weeklyOverridesService.deleteOverridesForProgram).toHaveBeenCalledWith(1, [10, 11]);
     expect(programRepository.delete).toHaveBeenCalledWith(1);
+    expect(spy).toHaveBeenCalled();
   });
 });

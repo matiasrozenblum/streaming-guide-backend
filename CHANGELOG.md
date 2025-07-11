@@ -17,6 +17,12 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.4.0] - 2025-07-11
+
+### Added
+- Added Server Side Events to update frontend's client side for any change in any entity
+- Added on-demand revalidation to update frontend's server side for any change in any entity
+
 ## [1.3.0] - 2025-06-29
 
 ### Added

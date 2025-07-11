@@ -41,6 +41,32 @@ export class YoutubeLiveService {
   }
 
   /**
+   * Notify connected clients about live status changes
+   */
+  private async notifyLiveStatusChange(channelId: string, videoId: string | null, channelName: string) {
+    try {
+      // Store the notification in Redis for SSE clients to pick up
+      const notification = {
+        type: 'live_status_change',
+        channelId,
+        videoId,
+        channelName,
+        timestamp: Date.now(),
+      };
+      
+      await this.redisService.set(
+        `live_notification:${channelId}:${Date.now()}`,
+        JSON.stringify(notification),
+        300 // 5 minutes TTL
+      );
+      
+      console.log(`📡 Notified clients about live status change for ${channelName}: ${videoId || 'no video'}`);
+    } catch (error) {
+      console.error('Failed to notify live status change:', error);
+    }
+  }
+
+  /**
    * Devuelve videoId | null | '__SKIPPED__' según estado de flags, cache y fetch
    */
   async getLiveVideoId(
@@ -96,6 +122,11 @@ export class YoutubeLiveService {
 
       await this.redisService.set(liveKey, videoId, blockTTL);
       console.log(`📌 Cached ${handle} → ${videoId} (TTL ${blockTTL}s)`);
+
+      // Notify clients about the new video ID
+      if (context === 'cron') {
+        await this.notifyLiveStatusChange(channelId, videoId, handle);
+      }
 
       return videoId;
     } catch (err) {
