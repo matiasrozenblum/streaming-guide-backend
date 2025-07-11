@@ -35,11 +35,14 @@ export class NotifyAndRevalidateUtil {
     if (options.revalidatePaths && options.revalidatePaths.length > 0) {
       for (const path of options.revalidatePaths) {
         try {
-          await fetch(`${this.frontendUrl}/api/revalidate`, {
+          console.log(`[NotifyAndRevalidate] Calling revalidate endpoint for path: ${path}`);
+          const response = await fetch(`${this.frontendUrl}/api/revalidate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ path, secret: this.revalidateSecret }),
           });
+          const responseBody = await response.text();
+          console.log(`[NotifyAndRevalidate] Revalidate response for path ${path}:`, response.status, responseBody);
         } catch (err) {
           console.error('Failed to revalidate path', path, err);
         }
