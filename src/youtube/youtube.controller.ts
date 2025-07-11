@@ -1,4 +1,4 @@
-import { Controller, Get, Res, Sse } from '@nestjs/common';
+import { Controller, Get, Res, Sse, Post, Body } from '@nestjs/common';
 import { Response } from 'express';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
@@ -52,5 +52,31 @@ export class YoutubeController {
         clearInterval(interval);
       };
     });
+  }
+
+  @Post('test-live-notification')
+  async testLiveNotification(@Body() body: { channelId: string; channelName: string; videoId?: string }) {
+    try {
+      // Manually trigger a live status notification for testing
+      const notification = {
+        type: 'live_status_change',
+        channelId: body.channelId,
+        videoId: body.videoId || 'test_video_id_123',
+        channelName: body.channelName,
+        timestamp: Date.now(),
+      };
+      
+      await this.redisService.set(
+        `live_notification:${body.channelId}:${Date.now()}`,
+        JSON.stringify(notification),
+        300 // 5 minutes TTL
+      );
+      
+      console.log(`🧪 Test notification sent for ${body.channelName}`);
+      return { success: true, message: 'Test notification sent' };
+    } catch (error) {
+      console.error('Failed to send test notification:', error);
+      return { success: false, error: error.message };
+    }
   }
 } 

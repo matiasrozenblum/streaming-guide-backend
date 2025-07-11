@@ -14,6 +14,10 @@ import * as timezone from 'dayjs/plugin/timezone';
 import { getCurrentBlockTTL } from '@/utils/getBlockTTL.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ConfigService } from '../config/config.service';
+import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
+
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
+const REVALIDATE_SECRET = process.env.REVALIDATE_SECRET || 'changeme';
 
 interface FindAllOptions {
   dayOfWeek?: string;
@@ -27,6 +31,7 @@ interface FindAllOptions {
 @Injectable()
 export class SchedulesService {
   private dayjs: typeof dayjs;
+  private notifyUtil: NotifyAndRevalidateUtil;
 
   constructor(
     @InjectRepository(Schedule)
@@ -44,6 +49,11 @@ export class SchedulesService {
     this.dayjs = dayjs;
     this.dayjs.extend(utc);
     this.dayjs.extend(timezone);
+    this.notifyUtil = new NotifyAndRevalidateUtil(
+      this.redisService,
+      FRONTEND_URL,
+      REVALIDATE_SECRET
+    );
   }
 
   async findAll(options: FindAllOptions = {}): Promise<any[]> {
@@ -226,6 +236,16 @@ export class SchedulesService {
     });
     const saved = await this.schedulesRepository.save(schedule);
     await this.redisService.delByPattern('schedules:all:*');
+
+    // Notify and revalidate
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: 'schedule_created',
+      entity: 'schedule',
+      entityId: saved.id,
+      payload: { schedule: saved },
+      revalidatePaths: ['/'],
+    });
+
     return saved;
   }
 
@@ -234,15 +254,33 @@ export class SchedulesService {
     if (dto.dayOfWeek) schedule.day_of_week = dto.dayOfWeek;
     if (dto.startTime) schedule.start_time = dto.startTime;
     if (dto.endTime) schedule.end_time = dto.endTime;
-    const saved = await this.schedulesRepository.save(schedule);
+    const updated = await this.schedulesRepository.save(schedule);
     await this.redisService.delByPattern('schedules:all:*');
-    return saved;
+
+    // Notify and revalidate
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: 'schedule_updated',
+      entity: 'schedule',
+      entityId: id,
+      payload: { schedule: updated },
+      revalidatePaths: ['/'],
+    });
+
+    return updated;
   }
 
   async remove(id: string): Promise<boolean> {
     const result = await this.schedulesRepository.delete(id);
-    if (result.affected && result.affected > 0) {
+    if ((result?.affected ?? 0) > 0) {
       await this.redisService.delByPattern('schedules:all:*');
+      // Notify and revalidate
+      await this.notifyUtil.notifyAndRevalidate({
+        eventType: 'schedule_deleted',
+        entity: 'schedule',
+        entityId: id,
+        payload: {},
+        revalidatePaths: ['/'],
+      });
       return true;
     }
     return false;
@@ -263,6 +301,16 @@ export class SchedulesService {
 
     const savedSchedules = await this.schedulesRepository.save(schedules);
     await this.redisService.delByPattern('schedules:all:*');
+
+    // Notify and revalidate
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: 'schedules_bulk_created',
+      entity: 'schedule',
+      entityId: 'bulk',
+      payload: { count: savedSchedules.length },
+      revalidatePaths: ['/'],
+    });
+
     return savedSchedules;
   }
 }
