@@ -6,18 +6,28 @@ import { CreatePanelistDto } from './dto/create-panelist.dto';
 import { UpdatePanelistDto } from './dto/update-panelist.dto';
 import { Program } from '../programs/programs.entity';
 import { RedisService } from '../redis/redis.service';
+import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
+
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
+const REVALIDATE_SECRET = process.env.REVALIDATE_SECRET || 'changeme';
 
 @Injectable()
 export class PanelistsService {
+  private notifyUtil: NotifyAndRevalidateUtil;
+
   constructor(
     @InjectRepository(Panelist)
     private panelistsRepository: Repository<Panelist>,
-
     @InjectRepository(Program)
     private programsRepository: Repository<Program>,
-
     private readonly redisService: RedisService,
-  ) {}
+  ) {
+    this.notifyUtil = new NotifyAndRevalidateUtil(
+      this.redisService,
+      FRONTEND_URL,
+      REVALIDATE_SECRET
+    );
+  }
 
   async findAll(): Promise<Panelist[]> {
     const startTime = Date.now();
@@ -80,6 +90,15 @@ export class PanelistsService {
     
     await this.redisService.del('panelists:all');
     
+    // Notify and revalidate
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: 'panelist_created',
+      entity: 'panelist',
+      entityId: savedPanelist.id,
+      payload: { panelist: savedPanelist },
+      revalidatePaths: ['/'],
+    });
+
     return savedPanelist;
   }
 
@@ -93,6 +112,15 @@ export class PanelistsService {
       this.redisService.del(`panelists:${id}`),
       this.redisService.delByPattern('schedules:all:*'), // Clear schedule cache since panelist info appears in schedules
     ]);
+
+    // Notify and revalidate
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: 'panelist_updated',
+      entity: 'panelist',
+      entityId: id,
+      payload: { panelist: updatedPanelist },
+      revalidatePaths: ['/'],
+    });
     
     return updatedPanelist;
   }
@@ -104,6 +132,14 @@ export class PanelistsService {
         this.redisService.del('panelists:all'),
         this.redisService.del(`panelists:${id}`),
       ]);
+      // Notify and revalidate
+      await this.notifyUtil.notifyAndRevalidate({
+        eventType: 'panelist_deleted',
+        entity: 'panelist',
+        entityId: id,
+        payload: {},
+        revalidatePaths: ['/'],
+      });
       return true;
     }
     return false;
@@ -129,6 +165,14 @@ export class PanelistsService {
       console.log(`[Cache] Invalidating cache for panelist ${panelistId} after adding to program ${programId}`);
       await this.redisService.del(`panelists:${panelistId}`);
       await this.redisService.delByPattern('schedules:all:*');
+      // Notify and revalidate
+      await this.notifyUtil.notifyAndRevalidate({
+        eventType: 'panelist_added_to_program',
+        entity: 'panelist',
+        entityId: panelistId,
+        payload: { programId },
+        revalidatePaths: ['/'],
+      });
     }
   }
 
@@ -141,6 +185,14 @@ export class PanelistsService {
       console.log(`[Cache] Invalidating cache for panelist ${panelistId} after removing from program ${programId}`);
       await this.redisService.del(`panelists:${panelistId}`);
       await this.redisService.delByPattern('schedules:all:*');
+      // Notify and revalidate
+      await this.notifyUtil.notifyAndRevalidate({
+        eventType: 'panelist_removed_from_program',
+        entity: 'panelist',
+        entityId: panelistId,
+        payload: { programId },
+        revalidatePaths: ['/'],
+      });
     }
   }
 

@@ -12,6 +12,10 @@ import { YoutubeDiscoveryService } from '@/youtube/youtube-discovery.service';
 import { UserSubscription } from '@/users/user-subscription.entity';
 import { Device } from '@/users/device.entity';
 import { User } from '@/users/users.entity';
+import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
+
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
+const REVALIDATE_SECRET = process.env.REVALIDATE_SECRET || 'changeme';
 
 type ChannelWithSchedules = {
   channel: {
@@ -42,6 +46,8 @@ type ChannelWithSchedules = {
 
 @Injectable()
 export class ChannelsService {
+  private notifyUtil: NotifyAndRevalidateUtil;
+
   constructor(
     @InjectRepository(Channel)
     private readonly channelsRepository: Repository<Channel>,
@@ -57,7 +63,13 @@ export class ChannelsService {
     private readonly schedulesService: SchedulesService,
     private readonly redisService: RedisService,
     private readonly youtubeDiscovery: YoutubeDiscoveryService,
-  ) {}
+  ) {
+    this.notifyUtil = new NotifyAndRevalidateUtil(
+      this.redisService,
+      FRONTEND_URL,
+      REVALIDATE_SECRET
+    );
+  }
 
   async findAll(): Promise<Channel[]> {
     return this.channelsRepository.find({
@@ -98,6 +110,15 @@ export class ChannelsService {
       await this.channelsRepository.save(saved);
     }
 
+    // Notify and revalidate
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: 'channel_created',
+      entity: 'channel',
+      entityId: saved.id,
+      payload: { channel: saved },
+      revalidatePaths: ['/'],
+    });
+
     return saved;
   }
 
@@ -111,7 +132,18 @@ export class ChannelsService {
     });
 
     await this.redisService.delByPattern('schedules:all:*');
-    return this.channelsRepository.save(channel);
+    const updated = await this.channelsRepository.save(channel);
+
+    // Notify and revalidate
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: 'channel_updated',
+      entity: 'channel',
+      entityId: updated.id,
+      payload: { channel: updated },
+      revalidatePaths: ['/'],
+    });
+
+    return updated;
   }
 
   async remove(id: number): Promise<void> {
@@ -120,6 +152,15 @@ export class ChannelsService {
       throw new NotFoundException(`Channel with ID ${id} not found`);
     }
     await this.redisService.delByPattern('schedules:all:*');
+
+    // Notify and revalidate
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: 'channel_deleted',
+      entity: 'channel',
+      entityId: id,
+      payload: {},
+      revalidatePaths: ['/'],
+    });
   }
 
   async reorder(channelIds: number[]): Promise<void> {
@@ -129,6 +170,15 @@ export class ChannelsService {
       }
     });
     await this.redisService.delByPattern('schedules:all:*');
+
+    // Notify and revalidate
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: 'channels_reordered',
+      entity: 'channel',
+      entityId: 'all',
+      payload: { channelIds },
+      revalidatePaths: ['/'],
+    });
   }
 
   async getChannelsWithSchedules(day?: string, deviceId?: string, liveStatus?: boolean, raw?: string): Promise<ChannelWithSchedules[]> {

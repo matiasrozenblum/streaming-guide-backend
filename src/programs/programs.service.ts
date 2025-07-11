@@ -8,9 +8,15 @@ import { Panelist } from '../panelists/panelists.entity';
 import { Channel } from '../channels/channels.entity';
 import { RedisService } from '../redis/redis.service';
 import { WeeklyOverridesService } from '../schedules/weekly-overrides.service';
+import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
+
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
+const REVALIDATE_SECRET = process.env.REVALIDATE_SECRET || 'changeme';
 
 @Injectable()
 export class ProgramsService {
+  private notifyUtil: NotifyAndRevalidateUtil;
+
   constructor(
     @InjectRepository(Program)
     private programsRepository: Repository<Program>,
@@ -20,7 +26,13 @@ export class ProgramsService {
     private channelsRepository: Repository<Channel>,
     private redisService: RedisService,
     private weeklyOverridesService: WeeklyOverridesService,
-  ) {}
+  ) {
+    this.notifyUtil = new NotifyAndRevalidateUtil(
+      this.redisService,
+      FRONTEND_URL,
+      REVALIDATE_SECRET
+    );
+  }
 
   async create(createProgramDto: CreateProgramDto): Promise<any> {
     const channelId = createProgramDto.channel_id;
@@ -34,6 +46,16 @@ export class ProgramsService {
     program.channel = channel;
     const savedProgram = await this.programsRepository.save(program);
     await this.redisService.delByPattern('schedules:all:*');
+
+    // Notify and revalidate
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: 'program_created',
+      entity: 'program',
+      entityId: savedProgram.id,
+      payload: { program: savedProgram },
+      revalidatePaths: ['/', `/programs/${savedProgram.id}`],
+    });
+
     return {
       id: savedProgram.id,
       name: savedProgram.name,
@@ -103,6 +125,16 @@ export class ProgramsService {
     Object.assign(program, updateProgramDto);
     const updatedProgram = await this.programsRepository.save(program);
     await this.redisService.delByPattern('schedules:all:*');
+
+    // Notify and revalidate
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: 'program_updated',
+      entity: 'program',
+      entityId: updatedProgram.id,
+      payload: { program: updatedProgram },
+      revalidatePaths: ['/', `/programs/${updatedProgram.id}`],
+    });
+
     return {
       id: updatedProgram.id,
       name: updatedProgram.name,
@@ -133,6 +165,15 @@ export class ProgramsService {
       throw new NotFoundException(`Program with ID ${id} not found`);
     }
     await this.redisService.delByPattern('schedules:all:*');
+
+    // Notify and revalidate
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: 'program_deleted',
+      entity: 'program',
+      entityId: id,
+      payload: {},
+      revalidatePaths: ['/'],
+    });
   }
 
   private async findProgramEntity(id: number): Promise<Program> {
@@ -168,6 +209,15 @@ export class ProgramsService {
       await this.programsRepository.save(program);
     }
     await this.redisService.delByPattern('schedules:all:*');
+
+    // Notify and revalidate
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: 'program_panelist_added',
+      entity: 'program',
+      entityId: programId,
+      payload: { panelistId },
+      revalidatePaths: ['/', `/programs/${programId}`],
+    });
   }
 
   async removePanelist(programId: number, panelistId: number): Promise<void> {
@@ -178,5 +228,14 @@ export class ProgramsService {
       await this.programsRepository.save(program);
     }
     await this.redisService.delByPattern('schedules:all:*');
+
+    // Notify and revalidate
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: 'program_panelist_removed',
+      entity: 'program',
+      entityId: programId,
+      payload: { panelistId },
+      revalidatePaths: ['/', `/programs/${programId}`],
+    });
   }
 }
