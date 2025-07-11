@@ -7,6 +7,8 @@ import { RedisService } from '../redis/redis.service';
 
 @Controller('youtube')
 export class YoutubeController {
+  private sentNotifications = new Set<string>(); // Track sent notifications
+
   constructor(
     private readonly youtubeLiveService: YoutubeLiveService,
     private readonly redisService: RedisService,
@@ -35,10 +37,26 @@ export class YoutubeController {
             if (timestamp > thirtySecondsAgo) {
               const notification = await this.redisService.get(key);
               if (notification) {
-                subscriber.next({
-                  data: JSON.stringify(notification),
-                  type: 'message',
-                } as MessageEvent);
+                // Create a unique identifier for this notification
+                const notificationId = `${notification.entity}:${notification.entityId}:${notification.timestamp}`;
+                
+                // Only send if we haven't sent this notification before
+                if (!this.sentNotifications.has(notificationId)) {
+                  this.sentNotifications.add(notificationId);
+                  
+                  subscriber.next({
+                    data: JSON.stringify(notification),
+                    type: 'message',
+                  } as MessageEvent);
+                  
+                  // Clean up the notification from Redis after sending
+                  await this.redisService.del(key);
+                  
+                  // Clean up the tracking set after 1 minute to prevent memory leaks
+                  setTimeout(() => {
+                    this.sentNotifications.delete(notificationId);
+                  }, 60000);
+                }
               }
             }
           }
