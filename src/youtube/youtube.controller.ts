@@ -5,6 +5,14 @@ import { map } from 'rxjs/operators';
 import { YoutubeLiveService } from './youtube-live.service';
 import { RedisService } from '../redis/redis.service';
 
+interface LiveNotification {
+  type: string;
+  channelId: string;
+  videoId?: string;
+  channelName: string;
+  timestamp: number;
+}
+
 @Controller('youtube')
 export class YoutubeController {
   private sentNotifications = new Set<string>(); // Track sent notifications
@@ -35,27 +43,33 @@ export class YoutubeController {
             const timestamp = parseInt(parts[parts.length - 1]);
             
             if (timestamp > thirtySecondsAgo) {
-              const notification = await this.redisService.get(key);
-              if (notification) {
-                // Create a unique identifier for this notification
-                const notificationId = `${notification.entity}:${notification.entityId}:${notification.timestamp}`;
-                
-                // Only send if we haven't sent this notification before
-                if (!this.sentNotifications.has(notificationId)) {
-                  this.sentNotifications.add(notificationId);
+              const notificationString = await this.redisService.get(key);
+              if (notificationString && typeof notificationString === 'string') {
+                try {
+                  const notification = JSON.parse(notificationString) as LiveNotification;
                   
-                  subscriber.next({
-                    data: JSON.stringify(notification),
-                    type: 'message',
-                  } as MessageEvent);
+                  // Create a unique identifier for this notification
+                  const notificationId = `${notification.type}:${notification.channelId}:${notification.timestamp}`;
                   
-                  // Clean up the notification from Redis after sending
-                  await this.redisService.del(key);
-                  
-                  // Clean up the tracking set after 1 minute to prevent memory leaks
-                  setTimeout(() => {
-                    this.sentNotifications.delete(notificationId);
-                  }, 60000);
+                  // Only send if we haven't sent this notification before
+                  if (!this.sentNotifications.has(notificationId)) {
+                    this.sentNotifications.add(notificationId);
+                    
+                    subscriber.next({
+                      data: JSON.stringify(notification),
+                      type: 'message',
+                    } as MessageEvent);
+                    
+                    // Clean up the notification from Redis after sending
+                    await this.redisService.del(key);
+                    
+                    // Clean up the tracking set after 1 minute to prevent memory leaks
+                    setTimeout(() => {
+                      this.sentNotifications.delete(notificationId);
+                    }, 60000);
+                  }
+                } catch (error) {
+                  console.error('Error parsing notification:', error);
                 }
               }
             }
