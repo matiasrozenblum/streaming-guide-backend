@@ -258,6 +258,7 @@ export class SchedulesService {
     await this.redisService.delByPattern('schedules:all:*');
 
     // Notify and revalidate
+    console.log('📅 Sending schedule update notification for schedule ID:', id);
     await this.notifyUtil.notifyAndRevalidate({
       eventType: 'schedule_updated',
       entity: 'schedule',
