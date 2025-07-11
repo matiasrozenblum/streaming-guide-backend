@@ -7,10 +7,13 @@ import { RedisService } from '../redis/redis.service';
 
 interface LiveNotification {
   type: string;
-  channelId: string;
+  channelId?: string;
   videoId?: string;
-  channelName: string;
+  channelName?: string;
   timestamp: number;
+  entity?: string;
+  entityId?: string | number;
+  payload?: any;
 }
 
 @Controller('youtube')
@@ -47,9 +50,12 @@ export class YoutubeController {
               if (notificationString && typeof notificationString === 'string') {
                 try {
                   const notification = JSON.parse(notificationString) as LiveNotification;
+                  console.log('🔔 Processing SSE notification:', notification.type, notification.entity || notification.channelId);
                   
                   // Create a unique identifier for this notification
-                  const notificationId = `${notification.type}:${notification.channelId}:${notification.timestamp}`;
+                  const notificationId = notification.channelId 
+                    ? `${notification.type}:${notification.channelId}:${notification.timestamp}`
+                    : `${notification.type}:${notification.entity}:${notification.entityId}:${notification.timestamp}`;
                   
                   // Only send if we haven't sent this notification before
                   if (!this.sentNotifications.has(notificationId)) {
