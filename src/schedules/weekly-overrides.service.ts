@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, DataSource } from 'typeorm';
 import { Schedule } from './schedules.entity';
 import { Panelist } from '../panelists/panelists.entity';
 import { RedisService } from '../redis/redis.service';
@@ -62,6 +62,7 @@ export class WeeklyOverridesService {
     @InjectRepository(Panelist)
     private panelistsRepository: Repository<Panelist>,
     private readonly redisService: RedisService,
+    private readonly dataSource: DataSource,
   ) {
     this.dayjs = dayjs;
     this.dayjs.extend(utc);
@@ -324,6 +325,27 @@ export class WeeklyOverridesService {
       });
     }
 
+    // Get all channel IDs from create overrides to fetch them once
+    const allChannelIds = new Set<number>();
+    createOverrides.forEach(override => {
+      if (override.specialProgram?.channelId) {
+        allChannelIds.add(override.specialProgram.channelId);
+      }
+    });
+
+    // Fetch all channels at once
+    const channelsMap = new Map<number, any>();
+    if (allChannelIds.size > 0) {
+      const channels = await this.dataSource.query(`
+        SELECT id, name, handle, youtube_channel_id, logo_url, description, "order"
+        FROM channel 
+        WHERE id IN (${Array.from(allChannelIds).join(',')})
+      `);
+      channels.forEach(channel => {
+        channelsMap.set(channel.id, channel);
+      });
+    }
+
     const modifiedSchedules: Schedule[] = [];
 
     // Apply overrides to schedules
@@ -446,6 +468,7 @@ export class WeeklyOverridesService {
     // Add virtual schedules for create overrides
     for (const override of createOverrides) {
       if (override.specialProgram && override.newStartTime && override.newEndTime && override.newDayOfWeek) {
+        const channel = channelsMap.get(override.specialProgram.channelId);
         const virtualSchedule: any = {
           id: `virtual_${override.id}`,
           day_of_week: override.newDayOfWeek,
@@ -458,9 +481,17 @@ export class WeeklyOverridesService {
             name: override.specialProgram.name,
             description: override.specialProgram.description || '',
             image_url: override.specialProgram.imageUrl || '',
-            channel: {
+            channel: channel ? {
+              id: channel.id,
+              name: channel.name,
+              handle: channel.handle,
+              youtube_channel_id: channel.youtube_channel_id,
+              logo_url: channel.logo_url,
+              description: channel.description,
+              order: channel.order,
+            } : {
               id: override.specialProgram.channelId,
-              name: 'Special Program', // This will be overridden by the actual channel data
+              name: 'Special Program', // Fallback if channel not found
             },
             // Add panelists if specified in the override
             panelists: override.panelistIds ? override.panelistIds.map(id => panelistsMap.get(id)).filter(Boolean) : [],

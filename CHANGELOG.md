@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.4.1] - 2025-07-11
+
+### Fixed
+- Fixed special programs live status not being calculated
+
 ## [1.4.0] - 2025-07-11
 
 ### Added
