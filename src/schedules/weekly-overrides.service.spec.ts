@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { WeeklyOverridesService, WeeklyOverrideDto } from './weekly-overrides.service';
 import { Schedule } from './schedules.entity';
@@ -13,6 +13,7 @@ describe('WeeklyOverridesService', () => {
   let schedulesRepo: Repository<Schedule>;
   let panelistsRepo: Repository<Panelist>;
   let redisService: RedisService;
+  let dataSource: DataSource;
 
   const mockSchedule = {
     id: 1,
@@ -58,6 +59,12 @@ describe('WeeklyOverridesService', () => {
           provide: RedisService,
           useValue: mockRedisService,
         },
+        {
+          provide: DataSource,
+          useValue: {
+            query: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -65,6 +72,7 @@ describe('WeeklyOverridesService', () => {
     schedulesRepo = module.get<Repository<Schedule>>(getRepositoryToken(Schedule));
     panelistsRepo = module.get<Repository<Panelist>>(getRepositoryToken(Panelist));
     redisService = module.get<RedisService>(RedisService);
+    dataSource = module.get<DataSource>(DataSource);
   });
 
   describe('createWeeklyOverride', () => {
@@ -448,6 +456,9 @@ describe('WeeklyOverridesService', () => {
       };
       jest.spyOn(mockRedisService.client, 'scanStream').mockReturnValue(mockStream);
       jest.spyOn(redisService, 'get').mockResolvedValue(override);
+      jest.spyOn(dataSource, 'query').mockResolvedValue([
+        { id: 1, name: 'Test Channel', handle: 'test', youtube_channel_id: 'test123', logo_url: null, description: null, order: 1 }
+      ]);
 
       const result = await service.applyWeeklyOverrides(schedules, weekStartDate);
 
@@ -496,6 +507,9 @@ describe('WeeklyOverridesService', () => {
       jest.spyOn(redisService, 'get')
         .mockResolvedValueOnce(regularOverride)
         .mockResolvedValueOnce(createOverride);
+      jest.spyOn(dataSource, 'query').mockResolvedValue([
+        { id: 1, name: 'Test Channel', handle: 'test', youtube_channel_id: 'test123', logo_url: null, description: null, order: 1 }
+      ]);
 
       const result = await service.applyWeeklyOverrides(schedules, weekStartDate);
 
