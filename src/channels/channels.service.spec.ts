@@ -14,10 +14,12 @@ import { Device } from '../users/device.entity';
 import { SchedulesService } from '../schedules/schedules.service';
 import { RedisService } from '../redis/redis.service';
 import { YoutubeDiscoveryService } from '../youtube/youtube-discovery.service';
+import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
 
 describe('ChannelsService', () => {
   let service: ChannelsService;
   let repo: Repository<Channel>;
+  let notifyUtil: NotifyAndRevalidateUtil;
 
   const mockChannels: Channel[] = [
     { id: 1, name: 'Luzu TV', logo_url: 'https://logo1.png', handle: 'stream1', programs: [], description: 'Luzu TV is a streaming channel.', youtube_channel_id: 'channel1', order: 1 },
@@ -149,6 +151,12 @@ describe('ChannelsService', () => {
 
     service = module.get<ChannelsService>(ChannelsService);
     repo = module.get<Repository<Channel>>(getRepositoryToken(Channel));
+    notifyUtil = new NotifyAndRevalidateUtil(
+      mockRedisService as any,
+      'https://frontend.test',
+      'testsecret'
+    );
+    service['notifyUtil'] = notifyUtil;
   });
 
   it('should be defined', () => {
@@ -230,6 +238,37 @@ describe('ChannelsService', () => {
     it('should throw NotFoundException when channel is not found', async () => {
       jest.spyOn(repo, 'findOne').mockResolvedValueOnce(null);
       await expect(service.update(1, { name: 'Updated Channel' })).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('notifyAndRevalidate integration', () => {
+    it('calls notifyAndRevalidate on create', async () => {
+      const spy = jest.spyOn(notifyUtil, 'notifyAndRevalidate').mockResolvedValue(undefined as any);
+      jest.spyOn(repo, 'create').mockReturnValue({ id: 1 } as any);
+      jest.spyOn(repo, 'save').mockResolvedValue({ id: 1 } as any);
+      jest.spyOn(mockYoutubeDiscoveryService, 'getChannelIdFromHandle').mockResolvedValue({ channelId: 'ytid' });
+      await service.create({ name: 'Test', handle: 'test' });
+      expect(spy).toHaveBeenCalled();
+    });
+    it('calls notifyAndRevalidate on update', async () => {
+      const spy = jest.spyOn(notifyUtil, 'notifyAndRevalidate').mockResolvedValue(undefined as any);
+      jest.spyOn(service, 'findOne').mockResolvedValue({ id: 1 } as any);
+      jest.spyOn(repo, 'save').mockResolvedValue({ id: 1 } as any);
+      await service.update(1, { name: 'Updated' });
+      expect(spy).toHaveBeenCalled();
+    });
+    it('calls notifyAndRevalidate on remove', async () => {
+      const spy = jest.spyOn(notifyUtil, 'notifyAndRevalidate').mockResolvedValue(undefined as any);
+      jest.spyOn(repo, 'delete').mockResolvedValue({ affected: 1 } as any);
+      await service.remove(1);
+      expect(spy).toHaveBeenCalled();
+    });
+    it('calls notifyAndRevalidate on reorder', async () => {
+      const spy = jest.spyOn(notifyUtil, 'notifyAndRevalidate').mockResolvedValue(undefined as any);
+      jest.spyOn(mockDataSource, 'transaction').mockImplementation(async (cb: any) => { await cb({ update: jest.fn() }); });
+      jest.spyOn(mockRedisService, 'delByPattern').mockResolvedValue(undefined as any);
+      await service.reorder([1, 2, 3]);
+      expect(spy).toHaveBeenCalled();
     });
   });
 });
