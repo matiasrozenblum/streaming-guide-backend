@@ -337,7 +337,7 @@ export class WeeklyOverridesService {
     const channelsMap = new Map<number, any>();
     if (allChannelIds.size > 0) {
       const channels = await this.dataSource.query(`
-        SELECT id, name, handle, youtube_channel_id, logo_url, description, \`order\`
+        SELECT id, name, handle, youtube_channel_id, logo_url, description, "order"
         FROM channel 
         WHERE id IN (${Array.from(allChannelIds).join(',')})
       `);
