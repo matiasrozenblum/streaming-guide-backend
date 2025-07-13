@@ -6,6 +6,7 @@ import { User } from './users.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { DeviceService } from './device.service';
+import { randomBytes } from 'crypto';
 
 @Injectable()
 export class UsersService {
@@ -38,8 +39,39 @@ export class UsersService {
       gender,
       birthDate: birthDate ? new Date(birthDate) : undefined,
     };
-    const user = this.usersRepository.create(userData as User);
-    return this.usersRepository.save(user);
+    const user = this.usersRepository.create(userData);
+    const saved = await this.usersRepository.save(user);
+    if (Array.isArray(saved)) {
+      throw new Error('Unexpected array returned from save when saving a single user');
+    }
+    return saved;
+  }
+
+  /** Create user for social login (no password required) */
+  async createSocialUser(body: { firstName: string; lastName: string; email: string; gender?: string; birthDate?: string }): Promise<User> {
+    // Generate a random password (not used for login)
+    const randomPassword = randomBytes(16).toString('hex'); // always a string
+    // Validate gender
+    const allowedGenders = ['male', 'female', 'non_binary', 'rather_not_say'];
+    let gender: 'male' | 'female' | 'non_binary' | 'rather_not_say' | undefined = undefined;
+    if (body.gender && allowedGenders.includes(body.gender)) {
+      gender = body.gender as 'male' | 'female' | 'non_binary' | 'rather_not_say';
+    }
+    const userData: any = {
+      firstName: body.firstName,
+      lastName: body.lastName,
+      email: body.email,
+      password: await bcrypt.hash(randomPassword, 10),
+      role: 'user',
+    };
+    if (gender) userData.gender = gender;
+    if (body.birthDate) userData.birthDate = new Date(body.birthDate);
+    const user = this.usersRepository.create(userData);
+    const saved = await this.usersRepository.save(user);
+    if (Array.isArray(saved)) {
+      throw new Error('Unexpected array returned from save when saving a single user');
+    }
+    return saved;
   }
 
   async findAll(): Promise<User[]> {
@@ -59,20 +91,25 @@ export class UsersService {
 
   async update(id: number, updateUserDto: UpdateUserDto): Promise<User> {
     const user = await this.findOne(id);
-  
     if (updateUserDto.password) {
       updateUserDto.password = await bcrypt.hash(updateUserDto.password, 10);
     }
-  
+    // Fix: ensure birthDate is a Date if present
+    if (updateUserDto.birthDate && typeof updateUserDto.birthDate === 'string') {
+      updateUserDto.birthDate = new Date(updateUserDto.birthDate) as any;
+    }
+    // Fix: ensure gender is correct enum
+    const allowedGenders = ['male', 'female', 'non_binary', 'rather_not_say'];
+    if (updateUserDto.gender && !allowedGenders.includes(updateUserDto.gender)) {
+      updateUserDto.gender = undefined;
+    }
     const updateData = Object.entries(updateUserDto).reduce((acc, [key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
         acc[key] = value;
       }
       return acc;
     }, {} as Partial<User>);
-  
     Object.assign(user, updateData);
-  
     try {
       return await this.usersRepository.save(user);
     } catch (error) {
