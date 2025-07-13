@@ -91,6 +91,33 @@ export class UsersController {
     return user;
   }
 
+  /** Upsert user for social login (no password required) */
+  @Post('social-upsert')
+  @ApiOperation({ summary: 'Upsert user for social login (no password required)' })
+  async socialUpsert(@Body() body: { firstName: string; lastName: string; email: string; gender?: string; birthDate?: string }) {
+    // Try to find user by email
+    let user = await this.usersService.findByEmail(body.email);
+    const allowedGenders = ['male', 'female', 'non_binary', 'rather_not_say'];
+    if (user) {
+      // Prepare update DTO
+      const updateDto: any = {
+        firstName: body.firstName || user.firstName,
+        lastName: body.lastName || user.lastName,
+      };
+      if (body.gender && allowedGenders.includes(body.gender)) {
+        updateDto.gender = body.gender;
+      }
+      if (body.birthDate) {
+        updateDto.birthDate = body.birthDate;
+      }
+      user = await this.usersService.update(user.id, updateDto);
+    } else {
+      // Create user without password
+      user = await this.usersService.createSocialUser(body);
+    }
+    return user;
+  }
+
   /** Actualizar (admin o dueño) */
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
