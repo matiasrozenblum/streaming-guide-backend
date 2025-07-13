@@ -182,29 +182,33 @@ export class ChannelsService {
   }
 
   async getChannelsWithSchedules(day?: string, deviceId?: string, liveStatus?: boolean, raw?: string): Promise<ChannelWithSchedules[]> {
+    const overallStart = Date.now();
+    console.log('[getChannelsWithSchedules] START');
+
+    const channelsStart = Date.now();
     const channels = await this.channelsRepository.find({
       order: {
         order: 'ASC',
       },
     });
+    console.log('[getChannelsWithSchedules] Channels fetched in', Date.now() - channelsStart, 'ms');
 
+    const schedulesStart = Date.now();
     const schedules = await this.schedulesService.findAll({
       dayOfWeek: day ? day.toLowerCase() : undefined,
       skipCache: liveStatus === true,
       applyOverrides: raw !== 'true',
     });
+    console.log('[getChannelsWithSchedules] Schedules fetched in', Date.now() - schedulesStart, 'ms');
 
     // Get user subscriptions based on deviceId
     let subscribedProgramIds: Set<number> = new Set();
     if (deviceId) {
-      // Find the device and get the user
       const device = await this.deviceRepo.findOne({
         where: { deviceId },
         relations: ['user'],
       });
-
       if (device?.user) {
-        // Get user's active subscriptions
         const subscriptions = await this.userSubscriptionRepo.find({
           where: { user: { id: device.user.id }, isActive: true },
           relations: ['program'],
@@ -213,6 +217,7 @@ export class ChannelsService {
       }
     }
 
+    const groupStart = Date.now();
     const schedulesGroupedByChannelId = schedules.reduce((acc, schedule) => {
       const channelId = schedule.program?.channel?.id;
       if (!channelId) return acc;
@@ -220,7 +225,9 @@ export class ChannelsService {
       acc[channelId].push(schedule);
       return acc;
     }, {} as Record<number, any[]>);
+    console.log('[getChannelsWithSchedules] Grouped schedules in', Date.now() - groupStart, 'ms');
 
+    const resultStart = Date.now();
     const result: ChannelWithSchedules[] = channels.map((channel) => ({
       channel: {
         id: channel.id,
@@ -250,7 +257,8 @@ export class ChannelsService {
         },
       })),
     }));
-
+    console.log('[getChannelsWithSchedules] Built result in', Date.now() - resultStart, 'ms');
+    console.log('[getChannelsWithSchedules] TOTAL time:', Date.now() - overallStart, 'ms');
     return result;
   }
 }
