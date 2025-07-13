@@ -33,6 +33,6 @@ export const AppDataSource = new DataSource({
   logging: false,
   extra: {
     max: 5, // Lower pool size to avoid saturating Supabase pooler
-    statement_timeout: 20000, // 10 seconds query timeout
+    statement_timeout: 20000, // 20 seconds query timeout
   },
 });
