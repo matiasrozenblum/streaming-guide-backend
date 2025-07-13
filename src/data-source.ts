@@ -31,4 +31,8 @@ export const AppDataSource = new DataSource({
   migrations: ['src/migrations/*.ts'],
   synchronize: false,
   logging: false,
+  extra: {
+    max: 5, // Lower pool size to avoid saturating Supabase pooler
+    statement_timeout: 20000, // 10 seconds query timeout
+  },
 });
