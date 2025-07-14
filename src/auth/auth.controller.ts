@@ -155,4 +155,38 @@ export class AuthController {
       throw new UnauthorizedException('Invalid refresh token');
     }
   }
+
+  @Post('social-login')
+  @ApiOperation({ summary: 'Social login: upsert user and return backend JWT/access token' })
+  async socialLogin(
+    @Body() body: { email: string; firstName?: string; lastName?: string; provider: string; gender?: string; birthDate?: string }
+  ) {
+    // Upsert user by email
+    let user = await this.usersService.findByEmail(body.email);
+    const firstName = body.firstName || '';
+    const lastName = body.lastName || '';
+    if (user) {
+      // Update user fields if provided
+      const updateDto: any = {
+        firstName: firstName || user.firstName,
+        lastName: lastName || user.lastName,
+      };
+      if (body.gender) updateDto.gender = body.gender;
+      if (body.birthDate) updateDto.birthDate = body.birthDate;
+      user = await this.usersService.update(user.id, updateDto);
+    } else {
+      user = await this.usersService.createSocialUser({
+        email: body.email,
+        firstName,
+        lastName,
+        gender: body.gender,
+        birthDate: body.birthDate,
+      });
+    }
+    // Issue backend JWT/access token
+    const payload = this.authService.buildPayload(user);
+    const access_token = await this.authService.signAccessToken(payload);
+    const refresh_token = await this.authService.signRefreshToken(payload);
+    return { access_token, refresh_token };
+  }
 }
