@@ -157,7 +157,7 @@ export class AuthController {
   }
 
   @Post('social-login')
-  @ApiOperation({ summary: 'Social login: upsert user and return backend JWT/access token' })
+  @ApiOperation({ summary: 'Social login: upsert user and return backend JWT/access token or registration token if incomplete' })
   async socialLogin(
     @Body() body: { email: string; firstName?: string; lastName?: string; provider: string; gender?: string; birthDate?: string }
   ) {
@@ -182,6 +182,61 @@ export class AuthController {
         gender: body.gender,
         birthDate: body.birthDate,
       });
+    }
+    // If user is missing gender, birthDate, or password, require profile completion
+    if (!user.gender || !user.birthDate) {
+      // Issue a registration token (like verify-code flow)
+      const registration_token = await this.authService.signRegistrationToken(user.email);
+      return {
+        profileIncomplete: true,
+        registration_token,
+        user: {
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+        }
+      };
+    }
+    // Issue backend JWT/access token
+    const payload = this.authService.buildPayload(user);
+    const access_token = await this.authService.signAccessToken(payload);
+    const refresh_token = await this.authService.signRefreshToken(payload);
+    return { access_token, refresh_token };
+  }
+
+  @Post('complete-profile')
+  @ApiOperation({ summary: 'Complete social signup profile and return backend JWT/access token' })
+  async completeProfile(
+    @Request() req: any,
+    @Body() dto: { registration_token: string; firstName?: string; lastName?: string; password: string; gender: string; birthDate: string; deviceId?: string }
+  ) {
+    if (!dto.gender || !dto.birthDate || !dto.password) {
+      throw new BadRequestException('Género, fecha de nacimiento y contraseña son obligatorios');
+    }
+    // Validate registration token and get email
+    const { email } = await this.authService.verifyRegistrationToken(dto.registration_token);
+    // Find the user by email
+    let user = await this.usersService.findByEmail(email);
+    if (!user) {
+      throw new BadRequestException('Usuario no encontrado para completar el perfil');
+    }
+    // Update user with missing fields
+    const allowedGenders = ['male', 'female', 'non_binary', 'rather_not_say'];
+    let gender: 'male' | 'female' | 'non_binary' | 'rather_not_say' | undefined = undefined;
+    if (dto.gender && allowedGenders.includes(dto.gender)) {
+      gender = dto.gender as 'male' | 'female' | 'non_binary' | 'rather_not_say';
+    }
+    user = await this.usersService.update(user.id, {
+      firstName: dto.firstName || user.firstName,
+      lastName: dto.lastName || user.lastName,
+      password: dto.password,
+      gender,
+      birthDate: dto.birthDate,
+    });
+    // Optionally register device
+    if (dto.deviceId) {
+      const userAgent = req.headers['user-agent'] || 'Unknown';
+      await this.usersService.ensureUserDevice(user, userAgent, dto.deviceId);
     }
     // Issue backend JWT/access token
     const payload = this.authService.buildPayload(user);
