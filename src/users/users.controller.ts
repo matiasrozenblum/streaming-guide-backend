@@ -26,11 +26,16 @@ import { OtpService } from '../auth/otp.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { User } from './users.entity';
+import { AuthService } from '../auth/auth.service';
 
 @ApiTags('users')
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService, public otpService: OtpService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    public otpService: OtpService,
+    private readonly authService: AuthService,
+  ) {}
 
   /** Registro público */
   @Post()
