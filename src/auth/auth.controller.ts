@@ -191,6 +191,7 @@ export class AuthController {
         profileIncomplete: true,
         registration_token,
         user: {
+          id: user.id,
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
