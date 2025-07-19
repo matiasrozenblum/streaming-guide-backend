@@ -269,4 +269,86 @@ export class AuthController {
       message: 'Contraseña establecida correctamente' 
     };
   }
+
+  @Post('complete-profile-all')
+  @ApiOperation({ summary: 'Complete social signup profile with all data including password and return backend JWT/access token' })
+  async completeProfileAll(
+    @Request() req: any,
+    @Body() dto: { 
+      registration_token: string; 
+      firstName: string; 
+      lastName: string; 
+      gender: string; 
+      birthDate: string; 
+      password: string;
+      deviceId?: string 
+    }
+  ) {
+    if (!dto.gender || !dto.birthDate || !dto.password) {
+      throw new BadRequestException('Género, fecha de nacimiento y contraseña son obligatorios');
+    }
+
+    // Validate age
+    const birth = new Date(dto.birthDate);
+    const now = new Date();
+    let age = now.getFullYear() - birth.getFullYear();
+    const m = now.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) {
+      age--;
+    }
+    if (age < 18) {
+      throw new BadRequestException('Debes ser mayor de 18 años para registrarte');
+    }
+
+    // Validate registration token and get email
+    const { email } = await this.authService.verifyRegistrationToken(dto.registration_token);
+    
+    // Find the user by email
+    let user = await this.usersService.findByEmail(email);
+    if (!user) {
+      throw new BadRequestException('Usuario no encontrado para completar el perfil');
+    }
+
+    // Validate gender
+    const allowedGenders = ['male', 'female', 'non_binary', 'rather_not_say'];
+    let gender: 'male' | 'female' | 'non_binary' | 'rather_not_say' | undefined = undefined;
+    if (dto.gender && allowedGenders.includes(dto.gender)) {
+      gender = dto.gender as 'male' | 'female' | 'non_binary' | 'rather_not_say';
+    } else {
+      throw new BadRequestException('Género no válido');
+    }
+
+    // Update user with all missing fields (personal data + password)
+    user = await this.usersService.update(user.id, {
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+      gender,
+      birthDate: dto.birthDate,
+      password: dto.password, // Password hashing is handled in UsersService
+    });
+
+    // Optionally register device
+    if (dto.deviceId) {
+      const userAgent = req.headers['user-agent'] || 'Unknown';
+      await this.usersService.ensureUserDevice(user, userAgent, dto.deviceId);
+    }
+
+    // Issue backend JWT/access token (user is now complete)
+    const payload = this.authService.buildPayload(user);
+    const access_token = await this.authService.signAccessToken(payload);
+    const refresh_token = await this.authService.signRefreshToken(payload);
+    
+    return { 
+      access_token, 
+      refresh_token,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        gender: user.gender,
+        birthDate: user.birthDate,
+      }
+    };
+  }
 }
