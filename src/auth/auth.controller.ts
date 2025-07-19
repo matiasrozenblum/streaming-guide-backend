@@ -209,10 +209,10 @@ export class AuthController {
   @ApiOperation({ summary: 'Complete social signup profile and return backend JWT/access token' })
   async completeProfile(
     @Request() req: any,
-    @Body() dto: { registration_token: string; firstName?: string; lastName?: string; password: string; gender: string; birthDate: string; deviceId?: string }
+    @Body() dto: { registration_token: string; firstName?: string; lastName?: string; gender: string; birthDate: string; deviceId?: string }
   ) {
-    if (!dto.gender || !dto.birthDate || !dto.password) {
-      throw new BadRequestException('Género, fecha de nacimiento y contraseña son obligatorios');
+    if (!dto.gender || !dto.birthDate) {
+      throw new BadRequestException('Género y fecha de nacimiento son obligatorios');
     }
     // Validate registration token and get email
     const { email } = await this.authService.verifyRegistrationToken(dto.registration_token);
@@ -221,7 +221,7 @@ export class AuthController {
     if (!user) {
       throw new BadRequestException('Usuario no encontrado para completar el perfil');
     }
-    // Update user with missing fields
+    // Update user with missing fields (personal data only)
     const allowedGenders = ['male', 'female', 'non_binary', 'rather_not_say'];
     let gender: 'male' | 'female' | 'non_binary' | 'rather_not_say' | undefined = undefined;
     if (dto.gender && allowedGenders.includes(dto.gender)) {
@@ -230,7 +230,6 @@ export class AuthController {
     user = await this.usersService.update(user.id, {
       firstName: dto.firstName || user.firstName,
       lastName: dto.lastName || user.lastName,
-      password: dto.password,
       gender,
       birthDate: dto.birthDate,
     });
@@ -244,5 +243,30 @@ export class AuthController {
     const access_token = await this.authService.signAccessToken(payload);
     const refresh_token = await this.authService.signRefreshToken(payload);
     return { access_token, refresh_token };
+  }
+
+  @Post('set-password')
+  @ApiOperation({ summary: 'Set password for social login user (bypasses email verification)' })
+  async setPassword(
+    @Body() dto: { registration_token: string; password: string; deviceId?: string }
+  ) {
+    if (!dto.password) {
+      throw new BadRequestException('Contraseña es obligatoria');
+    }
+    // Validate registration token and get email
+    const { email } = await this.authService.verifyRegistrationToken(dto.registration_token);
+    // Find the user by email
+    const user = await this.usersService.findByEmail(email);
+    if (!user) {
+      throw new BadRequestException('Usuario no encontrado');
+    }
+    // Update user password (password hashing is handled in UsersService)
+    await this.usersService.update(user.id, {
+      password: dto.password,
+    });
+    return { 
+      success: true, 
+      message: 'Contraseña establecida correctamente' 
+    };
   }
 }
