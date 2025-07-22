@@ -28,6 +28,7 @@ describe('AuthController', () => {
     updatedAt: new Date(),
     isActive: true,
     lastLogin: new Date(),
+    origin: 'traditional' as const,
     devices: [],
     subscriptions: [],
   };
@@ -321,7 +322,7 @@ describe('AuthController', () => {
         email: 'test@example.com',
         firstName: 'Test',
         lastName: 'User',
-        provider: 'google'
+        origin: 'google'
       });
 
       expect(result).toEqual(mockTokens);
@@ -344,7 +345,7 @@ describe('AuthController', () => {
         email: 'new@example.com',
         firstName: 'New',
         lastName: 'User',
-        provider: 'facebook'
+        origin: 'facebook'
       });
 
       expect(result).toEqual({
@@ -362,7 +363,8 @@ describe('AuthController', () => {
         firstName: 'New',
         lastName: 'User',
         gender: undefined,
-        birthDate: undefined
+        birthDate: undefined,
+        origin: 'facebook'
       });
     });
 
@@ -378,7 +380,7 @@ describe('AuthController', () => {
         email: 'test@example.com',
         firstName: 'Updated',
         lastName: 'Name',
-        provider: 'google'
+        origin: 'google'
       });
 
       expect(result).toEqual({
