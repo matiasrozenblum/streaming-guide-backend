@@ -26,6 +26,7 @@ describe('SubscriptionService', () => {
     gender: 'male' as const,
     birthDate: new Date('1990-01-01'),
     createdAt: new Date(),
+    origin: 'traditional',
     devices: [],
     subscriptions: [],
   };

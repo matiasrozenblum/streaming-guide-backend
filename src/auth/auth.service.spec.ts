@@ -26,6 +26,7 @@ describe('AuthService', () => {
     updatedAt: new Date(),
     isActive: true,
     lastLogin: new Date(),
+    origin: 'traditional' as const,
     devices: [],
     subscriptions: [],
   };
