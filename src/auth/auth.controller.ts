@@ -186,8 +186,8 @@ export class AuthController {
     }
     // If user is missing gender, birthDate, or password, require profile completion
     if (!user.gender || !user.birthDate) {
-      // Issue a registration token (like verify-code flow)
-      const registration_token = await this.authService.signRegistrationToken(user.email);
+      // Issue a registration token (like verify-code flow) with user origin
+      const registration_token = await this.authService.signRegistrationToken(user.email, { origin: user.origin });
       return {
         profileIncomplete: true,
         registration_token,
@@ -211,7 +211,7 @@ export class AuthController {
 
 
   @Post('complete-profile')
-  @ApiOperation({ summary: 'Complete social signup profile with all data including password and return backend JWT/access token' })
+  @ApiOperation({ summary: 'Complete social signup profile with all data and return backend JWT/access token' })
   async completeProfile(
     @Request() req: any,
     @Body() dto: { 
@@ -220,12 +220,12 @@ export class AuthController {
       lastName: string; 
       gender: string; 
       birthDate: string; 
-      password: string;
+      password?: string;
       deviceId?: string 
     }
   ) {
-    if (!dto.gender || !dto.birthDate || !dto.password) {
-      throw new BadRequestException('Género, fecha de nacimiento y contraseña son obligatorios');
+    if (!dto.gender || !dto.birthDate) {
+      throw new BadRequestException('Género y fecha de nacimiento son obligatorios');
     }
 
     // Validate age
@@ -240,8 +240,8 @@ export class AuthController {
       throw new BadRequestException('Debes ser mayor de 18 años para registrarte');
     }
 
-    // Validate registration token and get email
-    const { email } = await this.authService.verifyRegistrationToken(dto.registration_token);
+    // Validate registration token and get email and origin
+    const { email, origin } = await this.authService.verifyRegistrationToken(dto.registration_token);
     
     // Find the user by email
     let user = await this.usersService.findByEmail(email);
@@ -258,14 +258,20 @@ export class AuthController {
       throw new BadRequestException('Género no válido');
     }
 
-    // Update user with all missing fields (personal data + password)
-    user = await this.usersService.update(user.id, {
+    // Update user with all missing fields (personal data + password if provided)
+    const updateData: any = {
       firstName: dto.firstName,
       lastName: dto.lastName,
       gender,
       birthDate: dto.birthDate,
-      password: dto.password, // Password hashing is handled in UsersService
-    });
+    };
+    
+    // Only include password if provided (for traditional users)
+    if (dto.password) {
+      updateData.password = dto.password; // Password hashing is handled in UsersService
+    }
+    
+    user = await this.usersService.update(user.id, updateData);
 
     // Optionally register device
     if (dto.deviceId) {
