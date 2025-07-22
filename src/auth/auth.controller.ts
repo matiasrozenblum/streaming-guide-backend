@@ -224,6 +224,8 @@ export class AuthController {
       deviceId?: string 
     }
   ) {
+    const startTime = Date.now();
+    console.log('🚀 [AuthController] completeProfile started:', { timestamp: new Date().toISOString() });
     if (!dto.gender || !dto.birthDate) {
       throw new BadRequestException('Género y fecha de nacimiento son obligatorios');
     }
@@ -241,10 +243,14 @@ export class AuthController {
     }
 
     // Validate registration token and get email and origin
+    const tokenStart = Date.now();
     const { email, origin } = await this.authService.verifyRegistrationToken(dto.registration_token);
+    console.log('⏱️ [AuthController] Token verification took:', Date.now() - tokenStart, 'ms');
     
     // Find the user by email
+    const userStart = Date.now();
     let user = await this.usersService.findByEmail(email);
+    console.log('⏱️ [AuthController] User lookup took:', Date.now() - userStart, 'ms');
     if (!user) {
       throw new BadRequestException('Usuario no encontrado para completar el perfil');
     }
@@ -271,18 +277,29 @@ export class AuthController {
       updateData.password = dto.password; // Password hashing is handled in UsersService
     }
     
+    const updateStart = Date.now();
     user = await this.usersService.update(user.id, updateData);
+    console.log('⏱️ [AuthController] User update took:', Date.now() - updateStart, 'ms');
 
-    // Optionally register device
+    // Optionally register device (moved to background to improve performance)
     if (dto.deviceId) {
       const userAgent = req.headers['user-agent'] || 'Unknown';
-      await this.usersService.ensureUserDevice(user, userAgent, dto.deviceId);
+      // Fire and forget - don't wait for device registration
+      this.usersService.ensureUserDevice(user, userAgent, dto.deviceId).catch(error => {
+        console.warn('⚠️ [AuthController] Device registration failed (non-blocking):', error);
+      });
+      console.log('⏱️ [AuthController] Device registration queued (non-blocking)');
     }
 
     // Issue backend JWT/access token (user is now complete)
+    const jwtStart = Date.now();
     const payload = this.authService.buildPayload(user);
     const access_token = await this.authService.signAccessToken(payload);
     const refresh_token = await this.authService.signRefreshToken(payload);
+    console.log('⏱️ [AuthController] JWT generation took:', Date.now() - jwtStart, 'ms');
+    
+    const totalTime = Date.now() - startTime;
+    console.log('✅ [AuthController] completeProfile completed in:', totalTime, 'ms');
     
     return { 
       access_token, 
