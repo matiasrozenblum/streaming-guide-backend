@@ -83,18 +83,19 @@ export class AuthService {
     return await this.jwtService.sign(payload);
   }
 
-  async signRegistrationToken(identifier: string): Promise<string> {
-    // firmamos un token que contiene solo el email y un flag
-    return await this.jwtService.sign({ email: identifier, type: 'registration' }, { expiresIn: '1h' });
+  async signRegistrationToken(identifier: string, additionalData?: Record<string, any>): Promise<string> {
+    // firmamos un token que contiene el email, un flag y datos adicionales
+    const payload = { email: identifier, type: 'registration', ...additionalData };
+    return await this.jwtService.sign(payload, { expiresIn: '1h' });
   }
 
-  async verifyRegistrationToken(token: string): Promise<{ email: string }> {
+  async verifyRegistrationToken(token: string): Promise<{ email: string; [key: string]: any }> {
     try {
       const payload: any = await this.jwtService.verify(token);
       if (payload.type !== 'registration' || !payload.email) {
         throw new Error();
       }
-      return { email: payload.email };
+      return payload;
     } catch {
       throw new UnauthorizedException('Invalid registration token');
     }

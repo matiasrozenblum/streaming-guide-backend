@@ -471,27 +471,60 @@ describe('AuthController', () => {
             password: 'password123'
           }
         )
-      ).rejects.toThrow('Género, fecha de nacimiento y contraseña son obligatorios');
+      ).rejects.toThrow('Género y fecha de nacimiento son obligatorios');
     });
 
-    it('should throw BadRequestException if password is missing', async () => {
-      await expect(
-        controller.completeProfile(
-          { headers: { 'user-agent': 'test-agent' } },
-          {
-            registration_token: 'valid-token',
-            firstName: 'Test',
-            lastName: 'User',
-            gender: 'female',
-            birthDate: '1995-01-01',
-            password: ''
-          }
-        )
-      ).rejects.toThrow('Género, fecha de nacimiento y contraseña son obligatorios');
+    it('should not require password for social users', async () => {
+      const mockTokens = {
+        access_token: 'test-token',
+        refresh_token: 'refresh-token'
+      };
+      const updatedUser = { ...mockUser, gender: 'female' as const, birthDate: new Date('1995-01-01') };
+
+      jest.spyOn(authService, 'verifyRegistrationToken').mockResolvedValue({ email: 'test@example.com', origin: 'google' });
+      jest.spyOn(usersService, 'findByEmail').mockResolvedValue(mockUser);
+      jest.spyOn(usersService, 'update').mockResolvedValue(updatedUser);
+      jest.spyOn(usersService, 'ensureUserDevice').mockResolvedValue('test-device-id');
+      jest.spyOn(authService, 'buildPayload').mockReturnValue({
+        sub: 1,
+        type: 'public',
+        role: 'user',
+        gender: 'female',
+        birthDate: '1995-01-01',
+        name: 'Test User',
+        email: 'test@example.com'
+      });
+      jest.spyOn(authService, 'signAccessToken').mockResolvedValue('test-token');
+      jest.spyOn(authService, 'signRefreshToken').mockResolvedValue('refresh-token');
+
+      const result = await controller.completeProfile(
+        { headers: { 'user-agent': 'test-agent' } },
+        {
+          registration_token: 'valid-token',
+          firstName: 'Test',
+          lastName: 'User',
+          gender: 'female',
+          birthDate: '1995-01-01',
+          // No password provided for social user
+        }
+      );
+
+      expect(result).toEqual({
+        access_token: 'test-token',
+        refresh_token: 'refresh-token',
+        user: {
+          id: 1,
+          email: 'test@example.com',
+          firstName: 'Test',
+          lastName: 'User',
+          gender: 'female',
+          birthDate: new Date('1995-01-01'),
+        }
+      });
     });
 
     it('should throw BadRequestException if user is under 18', async () => {
-      jest.spyOn(authService, 'verifyRegistrationToken').mockResolvedValue({ email: 'test@example.com' });
+      jest.spyOn(authService, 'verifyRegistrationToken').mockResolvedValue({ email: 'test@example.com', origin: 'traditional' });
       jest.spyOn(usersService, 'findByEmail').mockResolvedValue(mockUser);
 
       await expect(
@@ -510,7 +543,7 @@ describe('AuthController', () => {
     });
 
     it('should throw BadRequestException if gender is invalid', async () => {
-      jest.spyOn(authService, 'verifyRegistrationToken').mockResolvedValue({ email: 'test@example.com' });
+      jest.spyOn(authService, 'verifyRegistrationToken').mockResolvedValue({ email: 'test@example.com', origin: 'traditional' });
       jest.spyOn(usersService, 'findByEmail').mockResolvedValue(mockUser);
 
       await expect(
@@ -529,7 +562,7 @@ describe('AuthController', () => {
     });
 
     it('should throw BadRequestException if user not found', async () => {
-      jest.spyOn(authService, 'verifyRegistrationToken').mockResolvedValue({ email: 'test@example.com' });
+      jest.spyOn(authService, 'verifyRegistrationToken').mockResolvedValue({ email: 'test@example.com', origin: 'traditional' });
       jest.spyOn(usersService, 'findByEmail').mockResolvedValue(null);
 
       await expect(
@@ -554,7 +587,7 @@ describe('AuthController', () => {
       };
       const updatedUser = { ...mockUser, gender: 'female' as const, birthDate: new Date('1995-01-01') };
 
-      jest.spyOn(authService, 'verifyRegistrationToken').mockResolvedValue({ email: 'test@example.com' });
+      jest.spyOn(authService, 'verifyRegistrationToken').mockResolvedValue({ email: 'test@example.com', origin: 'traditional' });
       jest.spyOn(usersService, 'findByEmail').mockResolvedValue(mockUser);
       jest.spyOn(usersService, 'update').mockResolvedValue(updatedUser);
       jest.spyOn(usersService, 'ensureUserDevice').mockResolvedValue('test-device-id');
