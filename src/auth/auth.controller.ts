@@ -247,9 +247,9 @@ export class AuthController {
     const { email, origin } = await this.authService.verifyRegistrationToken(dto.registration_token);
     console.log('⏱️ [AuthController] Token verification took:', Date.now() - tokenStart, 'ms');
     
-    // Find the user by email
+    // Find the user by email (fast lookup without relations for profile completion)
     const userStart = Date.now();
-    let user = await this.usersService.findByEmail(email);
+    let user = await this.usersService.findByEmailFast(email);
     console.log('⏱️ [AuthController] User lookup took:', Date.now() - userStart, 'ms');
     if (!user) {
       throw new BadRequestException('Usuario no encontrado para completar el perfil');

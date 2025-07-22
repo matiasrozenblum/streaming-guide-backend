@@ -61,6 +61,7 @@ describe('AuthController', () => {
           provide: UsersService,
           useValue: {
             findByEmail: jest.fn(),
+            findByEmailFast: jest.fn(),
             findOne: jest.fn(),
             create: jest.fn(),
             createSocialUser: jest.fn(),
@@ -410,7 +411,7 @@ describe('AuthController', () => {
       const updatedUser = { ...mockUser, gender: 'female' as const, birthDate: new Date('1995-01-01') };
 
       jest.spyOn(authService, 'verifyRegistrationToken').mockResolvedValue({ email: 'test@example.com' });
-      jest.spyOn(usersService, 'findByEmail').mockResolvedValue(mockUser);
+      jest.spyOn(usersService, 'findByEmailFast').mockResolvedValue(mockUser);
       jest.spyOn(usersService, 'updateProfile').mockResolvedValue(updatedUser);
       jest.spyOn(usersService, 'ensureUserDevice').mockResolvedValue('test-device-id');
       jest.spyOn(authService, 'buildPayload').mockReturnValue({
@@ -483,7 +484,7 @@ describe('AuthController', () => {
       const updatedUser = { ...mockUser, gender: 'female' as const, birthDate: new Date('1995-01-01') };
 
       jest.spyOn(authService, 'verifyRegistrationToken').mockResolvedValue({ email: 'test@example.com', origin: 'google' });
-      jest.spyOn(usersService, 'findByEmail').mockResolvedValue(mockUser);
+      jest.spyOn(usersService, 'findByEmailFast').mockResolvedValue(mockUser);
       jest.spyOn(usersService, 'updateProfile').mockResolvedValue(updatedUser);
       jest.spyOn(usersService, 'ensureUserDevice').mockResolvedValue('test-device-id');
       jest.spyOn(authService, 'buildPayload').mockReturnValue({
@@ -545,7 +546,7 @@ describe('AuthController', () => {
 
     it('should throw BadRequestException if gender is invalid', async () => {
       jest.spyOn(authService, 'verifyRegistrationToken').mockResolvedValue({ email: 'test@example.com', origin: 'traditional' });
-      jest.spyOn(usersService, 'findByEmail').mockResolvedValue(mockUser);
+      jest.spyOn(usersService, 'findByEmailFast').mockResolvedValue(mockUser);
 
       await expect(
         controller.completeProfile(
@@ -564,7 +565,7 @@ describe('AuthController', () => {
 
     it('should throw BadRequestException if user not found', async () => {
       jest.spyOn(authService, 'verifyRegistrationToken').mockResolvedValue({ email: 'test@example.com', origin: 'traditional' });
-      jest.spyOn(usersService, 'findByEmail').mockResolvedValue(null);
+      jest.spyOn(usersService, 'findByEmailFast').mockResolvedValue(null);
 
       await expect(
         controller.completeProfile(
@@ -589,7 +590,7 @@ describe('AuthController', () => {
       const updatedUser = { ...mockUser, gender: 'female' as const, birthDate: new Date('1995-01-01') };
 
       jest.spyOn(authService, 'verifyRegistrationToken').mockResolvedValue({ email: 'test@example.com', origin: 'traditional' });
-      jest.spyOn(usersService, 'findByEmail').mockResolvedValue(mockUser);
+      jest.spyOn(usersService, 'findByEmailFast').mockResolvedValue(mockUser);
       jest.spyOn(usersService, 'updateProfile').mockResolvedValue(updatedUser);
       jest.spyOn(usersService, 'ensureUserDevice').mockResolvedValue('test-device-id');
       jest.spyOn(authService, 'buildPayload').mockReturnValue({
