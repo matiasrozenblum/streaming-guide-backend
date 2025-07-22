@@ -48,7 +48,7 @@ export class UsersService {
   }
 
   /** Create user for social login (no password required) */
-  async createSocialUser(body: { firstName: string; lastName: string; email: string; gender?: string; birthDate?: string }): Promise<User> {
+  async createSocialUser(body: { firstName: string; lastName: string; email: string; gender?: string; birthDate?: string; origin?: string }): Promise<User> {
     // Generate a random password (not used for login)
     const randomPassword = randomBytes(16).toString('hex'); // always a string
     // Validate gender
@@ -57,12 +57,19 @@ export class UsersService {
     if (body.gender && allowedGenders.includes(body.gender)) {
       gender = body.gender as 'male' | 'female' | 'non_binary' | 'rather_not_say';
     }
+    // Validate origin
+    const allowedOrigins = ['traditional', 'google', 'facebook'];
+    let origin: 'traditional' | 'google' | 'facebook' = 'traditional';
+    if (body.origin && allowedOrigins.includes(body.origin)) {
+      origin = body.origin as 'traditional' | 'google' | 'facebook';
+    }
     const userData: any = {
       firstName: body.firstName,
       lastName: body.lastName,
       email: body.email,
       password: await bcrypt.hash(randomPassword, 10),
       role: 'user',
+      origin: origin,
     };
     if (gender) userData.gender = gender;
     if (body.birthDate) userData.birthDate = new Date(body.birthDate);

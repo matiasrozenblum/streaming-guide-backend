@@ -159,7 +159,7 @@ export class AuthController {
   @Post('social-login')
   @ApiOperation({ summary: 'Social login: upsert user and return backend JWT/access token or registration token if incomplete' })
   async socialLogin(
-    @Body() body: { email: string; firstName?: string; lastName?: string; provider: string; gender?: string; birthDate?: string }
+    @Body() body: { email: string; firstName?: string; lastName?: string; origin: string; gender?: string; birthDate?: string }
   ) {
     // Upsert user by email
     let user = await this.usersService.findByEmail(body.email);
@@ -181,6 +181,7 @@ export class AuthController {
         lastName,
         gender: body.gender,
         birthDate: body.birthDate,
+        origin: body.origin,
       });
     }
     // If user is missing gender, birthDate, or password, require profile completion

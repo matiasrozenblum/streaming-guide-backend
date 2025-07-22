@@ -93,7 +93,17 @@ export class UsersController {
     if (!user) {
       throw new NotFoundException(`Usuario con email ${email} no encontrado`);
     }
-    return user;
+    return {
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      gender: user.gender,
+      birthDate: user.birthDate,
+      origin: user.origin,
+    };
   }
 
   /** Upsert user for social login (no password required) */
