@@ -278,7 +278,14 @@ export class AuthController {
     }
     
     const updateStart = Date.now();
-    user = await this.usersService.update(user.id, updateData);
+    // Use optimized profile update method
+    user = await this.usersService.updateProfile(user.id, {
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+      gender,
+      birthDate: dto.birthDate,
+      ...(dto.password && { password: dto.password })
+    });
     console.log('⏱️ [AuthController] User update took:', Date.now() - updateStart, 'ms');
 
     // Optionally register device (moved to background to improve performance)

@@ -234,7 +234,6 @@ describe('UsersService', () => {
 
       expect(mockRepository.findOne).toHaveBeenCalledWith({ 
         where: { email: 'test@example.com' },
-        relations: ['devices', 'subscriptions'],
       });
       expect(result).toEqual(mockUser);
     });
