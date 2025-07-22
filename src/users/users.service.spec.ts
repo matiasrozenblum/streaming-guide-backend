@@ -234,6 +234,18 @@ describe('UsersService', () => {
 
       expect(mockRepository.findOne).toHaveBeenCalledWith({ 
         where: { email: 'test@example.com' },
+        relations: ['devices', 'subscriptions'],
+      });
+      expect(result).toEqual(mockUser);
+    });
+
+    it('should return a user by email (fast lookup without relations)', async () => {
+      mockRepository.findOne.mockResolvedValue(mockUser);
+
+      const result = await service.findByEmailFast('test@example.com');
+
+      expect(mockRepository.findOne).toHaveBeenCalledWith({ 
+        where: { email: 'test@example.com' },
       });
       expect(result).toEqual(mockUser);
     });

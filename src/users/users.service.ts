@@ -192,7 +192,17 @@ export class UsersService {
   async findByEmail(email: string): Promise<User | null> {
     return this.usersRepository.findOne({ 
       where: { email },
-      // Removed relations for better performance - not needed for profile completion
+      relations: ['devices', 'subscriptions'],
+    });
+  }
+
+  /**
+   * Fast user lookup by email without relations - for performance-critical operations
+   */
+  async findByEmailFast(email: string): Promise<User | null> {
+    return this.usersRepository.findOne({ 
+      where: { email },
+      // No relations for better performance
     });
   }
 
