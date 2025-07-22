@@ -176,7 +176,7 @@ describe('AuthService', () => {
 
       const result = await service.verifyRegistrationToken('valid-token');
 
-      expect(result).toEqual({ email: 'test@example.com' });
+      expect(result).toEqual({ email: 'test@example.com', type: 'registration' });
       expect(jwtService.verify).toHaveBeenCalledWith('valid-token');
     });
 

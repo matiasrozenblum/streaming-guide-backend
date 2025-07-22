@@ -65,6 +65,7 @@ describe('AuthController', () => {
             create: jest.fn(),
             createSocialUser: jest.fn(),
             update: jest.fn(),
+            updateProfile: jest.fn(),
             ensureUserDevice: jest.fn(),
           },
         },
@@ -410,7 +411,7 @@ describe('AuthController', () => {
 
       jest.spyOn(authService, 'verifyRegistrationToken').mockResolvedValue({ email: 'test@example.com' });
       jest.spyOn(usersService, 'findByEmail').mockResolvedValue(mockUser);
-      jest.spyOn(usersService, 'update').mockResolvedValue(updatedUser);
+      jest.spyOn(usersService, 'updateProfile').mockResolvedValue(updatedUser);
       jest.spyOn(usersService, 'ensureUserDevice').mockResolvedValue('test-device-id');
       jest.spyOn(authService, 'buildPayload').mockReturnValue({
         sub: 1,
@@ -448,7 +449,7 @@ describe('AuthController', () => {
           birthDate: new Date('1995-01-01')
         }
       });
-      expect(usersService.update).toHaveBeenCalledWith(1, {
+      expect(usersService.updateProfile).toHaveBeenCalledWith(1, {
         firstName: 'Test',
         lastName: 'User',
         gender: 'female',
@@ -483,7 +484,7 @@ describe('AuthController', () => {
 
       jest.spyOn(authService, 'verifyRegistrationToken').mockResolvedValue({ email: 'test@example.com', origin: 'google' });
       jest.spyOn(usersService, 'findByEmail').mockResolvedValue(mockUser);
-      jest.spyOn(usersService, 'update').mockResolvedValue(updatedUser);
+      jest.spyOn(usersService, 'updateProfile').mockResolvedValue(updatedUser);
       jest.spyOn(usersService, 'ensureUserDevice').mockResolvedValue('test-device-id');
       jest.spyOn(authService, 'buildPayload').mockReturnValue({
         sub: 1,
@@ -589,7 +590,7 @@ describe('AuthController', () => {
 
       jest.spyOn(authService, 'verifyRegistrationToken').mockResolvedValue({ email: 'test@example.com', origin: 'traditional' });
       jest.spyOn(usersService, 'findByEmail').mockResolvedValue(mockUser);
-      jest.spyOn(usersService, 'update').mockResolvedValue(updatedUser);
+      jest.spyOn(usersService, 'updateProfile').mockResolvedValue(updatedUser);
       jest.spyOn(usersService, 'ensureUserDevice').mockResolvedValue('test-device-id');
       jest.spyOn(authService, 'buildPayload').mockReturnValue({
         sub: 1,
