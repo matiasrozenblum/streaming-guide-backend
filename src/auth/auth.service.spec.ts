@@ -26,6 +26,7 @@ describe('AuthService', () => {
     updatedAt: new Date(),
     isActive: true,
     lastLogin: new Date(),
+    origin: 'traditional' as const,
     devices: [],
     subscriptions: [],
   };
@@ -175,7 +176,7 @@ describe('AuthService', () => {
 
       const result = await service.verifyRegistrationToken('valid-token');
 
-      expect(result).toEqual({ email: 'test@example.com' });
+      expect(result).toEqual({ email: 'test@example.com', type: 'registration' });
       expect(jwtService.verify).toHaveBeenCalledWith('valid-token');
     });
 

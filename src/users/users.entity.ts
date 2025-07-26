@@ -41,6 +41,14 @@ export class User {
   @Column({ type: 'date', nullable: true, name: 'birth_date' })
   birthDate: Date;
 
+  @Column({ 
+    type: 'enum', 
+    enum: ['traditional', 'google', 'facebook'], 
+    default: 'traditional',
+    name: 'origin'
+  })
+  origin: 'traditional' | 'google' | 'facebook';
+
   @OneToMany(() => Device, (device) => device.user, { cascade: true })
   devices: Device[];
 

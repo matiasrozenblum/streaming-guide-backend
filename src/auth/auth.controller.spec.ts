@@ -28,6 +28,7 @@ describe('AuthController', () => {
     updatedAt: new Date(),
     isActive: true,
     lastLogin: new Date(),
+    origin: 'traditional' as const,
     devices: [],
     subscriptions: [],
   };
@@ -60,8 +61,12 @@ describe('AuthController', () => {
           provide: UsersService,
           useValue: {
             findByEmail: jest.fn(),
+            findByEmailFast: jest.fn(),
             findOne: jest.fn(),
             create: jest.fn(),
+            createSocialUser: jest.fn(),
+            update: jest.fn(),
+            updateProfile: jest.fn(),
             ensureUserDevice: jest.fn(),
           },
         },
@@ -291,6 +296,339 @@ describe('AuthController', () => {
           headers: { authorization: 'Bearer invalid-token' }
         })
       ).rejects.toThrow('Invalid refresh token');
+    });
+  });
+
+  describe('socialLogin', () => {
+    it('should return access and refresh tokens for existing complete user', async () => {
+      const mockTokens = {
+        access_token: 'test-token',
+        refresh_token: 'refresh-token'
+      };
+
+      jest.spyOn(usersService, 'findByEmail').mockResolvedValue(mockUser);
+      jest.spyOn(usersService, 'update').mockResolvedValue(mockUser);
+      jest.spyOn(authService, 'buildPayload').mockReturnValue({
+        sub: 1,
+        type: 'public',
+        role: 'user',
+        gender: 'male',
+        birthDate: '1990-01-01',
+        name: 'Test User',
+        email: 'test@example.com'
+      });
+      jest.spyOn(authService, 'signAccessToken').mockResolvedValue('test-token');
+      jest.spyOn(authService, 'signRefreshToken').mockResolvedValue('refresh-token');
+
+      const result = await controller.socialLogin({
+        email: 'test@example.com',
+        firstName: 'Test',
+        lastName: 'User',
+        origin: 'google'
+      });
+
+      expect(result).toEqual(mockTokens);
+      expect(usersService.findByEmail).toHaveBeenCalledWith('test@example.com');
+      expect(usersService.update).toHaveBeenCalledWith(1, {
+        firstName: 'Test',
+        lastName: 'User'
+      });
+    });
+
+    it('should create new user and return registration token for incomplete profile', async () => {
+      const incompleteUser = { ...mockUser, gender: null as any, birthDate: null as any };
+      const mockRegistrationToken = 'registration-token';
+
+      jest.spyOn(usersService, 'findByEmail').mockResolvedValue(null);
+      jest.spyOn(usersService, 'createSocialUser').mockResolvedValue(incompleteUser);
+      jest.spyOn(authService, 'signRegistrationToken').mockResolvedValue(mockRegistrationToken);
+
+      const result = await controller.socialLogin({
+        email: 'new@example.com',
+        firstName: 'New',
+        lastName: 'User',
+        origin: 'facebook'
+      });
+
+      expect(result).toEqual({
+        profileIncomplete: true,
+        registration_token: mockRegistrationToken,
+        user: {
+          id: 1,
+          email: 'test@example.com',
+          firstName: 'Test',
+          lastName: 'User'
+        }
+      });
+      expect(usersService.createSocialUser).toHaveBeenCalledWith({
+        email: 'new@example.com',
+        firstName: 'New',
+        lastName: 'User',
+        gender: undefined,
+        birthDate: undefined,
+        origin: 'facebook'
+      });
+    });
+
+    it('should update existing user with new data and return registration token if incomplete', async () => {
+      const incompleteUser = { ...mockUser, gender: null as any, birthDate: null as any };
+      const mockRegistrationToken = 'registration-token';
+
+      jest.spyOn(usersService, 'findByEmail').mockResolvedValue(incompleteUser);
+      jest.spyOn(usersService, 'update').mockResolvedValue(incompleteUser);
+      jest.spyOn(authService, 'signRegistrationToken').mockResolvedValue(mockRegistrationToken);
+
+      const result = await controller.socialLogin({
+        email: 'test@example.com',
+        firstName: 'Updated',
+        lastName: 'Name',
+        origin: 'google'
+      });
+
+      expect(result).toEqual({
+        profileIncomplete: true,
+        registration_token: mockRegistrationToken,
+        user: {
+          id: 1,
+          email: 'test@example.com',
+          firstName: 'Test',
+          lastName: 'User'
+        }
+      });
+      expect(usersService.update).toHaveBeenCalledWith(1, {
+        firstName: 'Updated',
+        lastName: 'Name'
+      });
+    });
+  });
+
+  describe('completeProfile', () => {
+    it('should complete profile and return access and refresh tokens', async () => {
+      const mockTokens = {
+        access_token: 'test-token',
+        refresh_token: 'refresh-token'
+      };
+      const updatedUser = { ...mockUser, gender: 'female' as const, birthDate: new Date('1995-01-01') };
+
+      jest.spyOn(authService, 'verifyRegistrationToken').mockResolvedValue({ email: 'test@example.com' });
+      jest.spyOn(usersService, 'findByEmailFast').mockResolvedValue(mockUser);
+      jest.spyOn(usersService, 'updateProfile').mockResolvedValue(updatedUser);
+      jest.spyOn(usersService, 'ensureUserDevice').mockResolvedValue('test-device-id');
+      jest.spyOn(authService, 'buildPayload').mockReturnValue({
+        sub: 1,
+        type: 'public',
+        role: 'user',
+        gender: 'female',
+        birthDate: '1995-01-01',
+        name: 'Test User',
+        email: 'test@example.com'
+      });
+      jest.spyOn(authService, 'signAccessToken').mockResolvedValue('test-token');
+      jest.spyOn(authService, 'signRefreshToken').mockResolvedValue('refresh-token');
+
+      const result = await controller.completeProfile(
+        { headers: { 'user-agent': 'test-agent' } },
+        {
+          registration_token: 'valid-token',
+          firstName: 'Test',
+          lastName: 'User',
+          gender: 'female',
+          birthDate: '1995-01-01',
+          password: 'password123',
+          deviceId: 'test-device-id'
+        }
+      );
+
+      expect(result).toEqual({
+        ...mockTokens,
+        user: {
+          id: 1,
+          email: 'test@example.com',
+          firstName: 'Test',
+          lastName: 'User',
+          gender: 'female',
+          birthDate: new Date('1995-01-01')
+        }
+      });
+      expect(usersService.updateProfile).toHaveBeenCalledWith(1, {
+        firstName: 'Test',
+        lastName: 'User',
+        gender: 'female',
+        birthDate: '1995-01-01',
+        password: 'password123'
+      });
+      expect(usersService.ensureUserDevice).toHaveBeenCalledWith(updatedUser, 'test-agent', 'test-device-id');
+    });
+
+    it('should throw BadRequestException if gender or birthDate is missing', async () => {
+      await expect(
+        controller.completeProfile(
+          { headers: { 'user-agent': 'test-agent' } },
+          {
+            registration_token: 'valid-token',
+            firstName: 'Test',
+            lastName: 'User',
+            gender: '',
+            birthDate: '1995-01-01',
+            password: 'password123'
+          }
+        )
+      ).rejects.toThrow('Género y fecha de nacimiento son obligatorios');
+    });
+
+    it('should not require password for social users', async () => {
+      const mockTokens = {
+        access_token: 'test-token',
+        refresh_token: 'refresh-token'
+      };
+      const updatedUser = { ...mockUser, gender: 'female' as const, birthDate: new Date('1995-01-01') };
+
+      jest.spyOn(authService, 'verifyRegistrationToken').mockResolvedValue({ email: 'test@example.com', origin: 'google' });
+      jest.spyOn(usersService, 'findByEmailFast').mockResolvedValue(mockUser);
+      jest.spyOn(usersService, 'updateProfile').mockResolvedValue(updatedUser);
+      jest.spyOn(usersService, 'ensureUserDevice').mockResolvedValue('test-device-id');
+      jest.spyOn(authService, 'buildPayload').mockReturnValue({
+        sub: 1,
+        type: 'public',
+        role: 'user',
+        gender: 'female',
+        birthDate: '1995-01-01',
+        name: 'Test User',
+        email: 'test@example.com'
+      });
+      jest.spyOn(authService, 'signAccessToken').mockResolvedValue('test-token');
+      jest.spyOn(authService, 'signRefreshToken').mockResolvedValue('refresh-token');
+
+      const result = await controller.completeProfile(
+        { headers: { 'user-agent': 'test-agent' } },
+        {
+          registration_token: 'valid-token',
+          firstName: 'Test',
+          lastName: 'User',
+          gender: 'female',
+          birthDate: '1995-01-01',
+          // No password provided for social user
+        }
+      );
+
+      expect(result).toEqual({
+        access_token: 'test-token',
+        refresh_token: 'refresh-token',
+        user: {
+          id: 1,
+          email: 'test@example.com',
+          firstName: 'Test',
+          lastName: 'User',
+          gender: 'female',
+          birthDate: new Date('1995-01-01'),
+        }
+      });
+    });
+
+    it('should throw BadRequestException if user is under 18', async () => {
+      jest.spyOn(authService, 'verifyRegistrationToken').mockResolvedValue({ email: 'test@example.com', origin: 'traditional' });
+      jest.spyOn(usersService, 'findByEmail').mockResolvedValue(mockUser);
+
+      await expect(
+        controller.completeProfile(
+          { headers: { 'user-agent': 'test-agent' } },
+          {
+            registration_token: 'valid-token',
+            firstName: 'Test',
+            lastName: 'User',
+            gender: 'female',
+            birthDate: '2010-01-01',
+            password: 'password123'
+          }
+        )
+      ).rejects.toThrow('Debes ser mayor de 18 años para registrarte');
+    });
+
+    it('should throw BadRequestException if gender is invalid', async () => {
+      jest.spyOn(authService, 'verifyRegistrationToken').mockResolvedValue({ email: 'test@example.com', origin: 'traditional' });
+      jest.spyOn(usersService, 'findByEmailFast').mockResolvedValue(mockUser);
+
+      await expect(
+        controller.completeProfile(
+          { headers: { 'user-agent': 'test-agent' } },
+          {
+            registration_token: 'valid-token',
+            firstName: 'Test',
+            lastName: 'User',
+            gender: 'invalid-gender',
+            birthDate: '1995-01-01',
+            password: 'password123'
+          }
+        )
+      ).rejects.toThrow('Género no válido');
+    });
+
+    it('should throw BadRequestException if user not found', async () => {
+      jest.spyOn(authService, 'verifyRegistrationToken').mockResolvedValue({ email: 'test@example.com', origin: 'traditional' });
+      jest.spyOn(usersService, 'findByEmailFast').mockResolvedValue(null);
+
+      await expect(
+        controller.completeProfile(
+          { headers: { 'user-agent': 'test-agent' } },
+          {
+            registration_token: 'valid-token',
+            firstName: 'Test',
+            lastName: 'User',
+            gender: 'female',
+            birthDate: '1995-01-01',
+            password: 'password123'
+          }
+        )
+      ).rejects.toThrow('Usuario no encontrado para completar el perfil');
+    });
+
+    it('should return user data in response', async () => {
+      const mockTokens = {
+        access_token: 'test-token',
+        refresh_token: 'refresh-token'
+      };
+      const updatedUser = { ...mockUser, gender: 'female' as const, birthDate: new Date('1995-01-01') };
+
+      jest.spyOn(authService, 'verifyRegistrationToken').mockResolvedValue({ email: 'test@example.com', origin: 'traditional' });
+      jest.spyOn(usersService, 'findByEmailFast').mockResolvedValue(mockUser);
+      jest.spyOn(usersService, 'updateProfile').mockResolvedValue(updatedUser);
+      jest.spyOn(usersService, 'ensureUserDevice').mockResolvedValue('test-device-id');
+      jest.spyOn(authService, 'buildPayload').mockReturnValue({
+        sub: 1,
+        type: 'public',
+        role: 'user',
+        gender: 'female',
+        birthDate: '1995-01-01',
+        name: 'Test User',
+        email: 'test@example.com'
+      });
+      jest.spyOn(authService, 'signAccessToken').mockResolvedValue('test-token');
+      jest.spyOn(authService, 'signRefreshToken').mockResolvedValue('refresh-token');
+
+      const result = await controller.completeProfile(
+        { headers: { 'user-agent': 'test-agent' } },
+        {
+          registration_token: 'valid-token',
+          firstName: 'Test',
+          lastName: 'User',
+          gender: 'female',
+          birthDate: '1995-01-01',
+          password: 'password123',
+          deviceId: 'test-device-id'
+        }
+      );
+
+      expect(result).toEqual({
+        ...mockTokens,
+        user: {
+          id: 1,
+          email: 'test@example.com',
+          firstName: 'Test',
+          lastName: 'User',
+          gender: 'female',
+          birthDate: new Date('1995-01-01')
+        }
+      });
     });
   });
 }); 
