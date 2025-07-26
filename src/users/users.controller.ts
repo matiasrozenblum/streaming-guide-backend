@@ -26,11 +26,16 @@ import { OtpService } from '../auth/otp.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { User } from './users.entity';
+import { AuthService } from '../auth/auth.service';
 
 @ApiTags('users')
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService, public otpService: OtpService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    public otpService: OtpService,
+    private readonly authService: AuthService,
+  ) {}
 
   /** Registro público */
   @Post()
@@ -87,6 +92,43 @@ export class UsersController {
     const user = await this.usersService.findByEmail(email);
     if (!user) {
       throw new NotFoundException(`Usuario con email ${email} no encontrado`);
+    }
+    return {
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      gender: user.gender,
+      birthDate: user.birthDate,
+      origin: user.origin,
+    };
+  }
+
+  /** Upsert user for social login (no password required) */
+  @Post('social-upsert')
+  @ApiOperation({ summary: 'Upsert user for social login (no password required)' })
+  async socialUpsert(@Body() body: { firstName: string; lastName: string; email: string; gender?: string; birthDate?: string }) {
+    // Try to find user by email
+    let user = await this.usersService.findByEmail(body.email);
+    const allowedGenders = ['male', 'female', 'non_binary', 'rather_not_say'];
+    if (user) {
+      // Prepare update DTO
+      const updateDto: any = {
+        firstName: body.firstName || user.firstName,
+        lastName: body.lastName || user.lastName,
+      };
+      if (body.gender && allowedGenders.includes(body.gender)) {
+        updateDto.gender = body.gender;
+      }
+      if (body.birthDate) {
+        updateDto.birthDate = body.birthDate;
+      }
+      user = await this.usersService.update(user.id, updateDto);
+    } else {
+      // Create user without password
+      user = await this.usersService.createSocialUser(body);
     }
     return user;
   }
