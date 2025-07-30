@@ -53,6 +53,7 @@ describe('PushScheduler', () => {
     id: 1,
     name: 'Test Channel',
     logo_url: 'https://example.com/channel-logo.png',
+    is_visible: true,
   };
 
   const mockProgram = {

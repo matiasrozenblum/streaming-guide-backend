@@ -62,4 +62,22 @@ describe('CreateChannelDto', () => {
     const errors = await validate(dto);
     expect(errors).toHaveLength(0);
   });
+
+  it('should validate with is_visible field', async () => {
+    const dto = new CreateChannelDto();
+    dto.name = 'Test Channel';
+    dto.handle = 'stream';
+    dto.is_visible = false;
+    const errors = await validate(dto);
+    expect(errors).toHaveLength(0);
+  });
+
+  it('should validate with is_visible as true', async () => {
+    const dto = new CreateChannelDto();
+    dto.name = 'Test Channel';
+    dto.handle = 'stream';
+    dto.is_visible = true;
+    const errors = await validate(dto);
+    expect(errors).toHaveLength(0);
+  });
 });

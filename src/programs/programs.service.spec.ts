@@ -27,6 +27,7 @@ describe('ProgramsService', () => {
     handle: 'luzu',
     programs: [],
     youtube_channel_id: 'test-channel-id',
+    is_visible: true,
   };
 
   const mockProgram = {
@@ -53,6 +54,7 @@ describe('ProgramsService', () => {
       handle: 'luzu',
       programs: [],
       youtube_channel_id: 'test-channel-id',
+      is_visible: true,
     },
     panelists: [],
     logo_url: null,
