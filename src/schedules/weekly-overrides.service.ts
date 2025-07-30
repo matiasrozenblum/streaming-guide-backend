@@ -280,9 +280,12 @@ export class WeeklyOverridesService {
    * Apply weekly overrides to schedules for a specific week
    */
   async applyWeeklyOverrides(schedules: Schedule[], weekStartDate: string): Promise<Schedule[]> {
+    const start = Date.now();
+    console.log('[applyWeeklyOverrides] START for week', weekStartDate, 'with', schedules.length, 'schedules');
     const overrides = await this.getOverridesForWeek(weekStartDate);
     
     if (overrides.length === 0) {
+      console.log('[applyWeeklyOverrides] No overrides. Completed in', Date.now() - start, 'ms');
       return schedules;
     }
 
@@ -500,7 +503,7 @@ export class WeeklyOverridesService {
         modifiedSchedules.push(virtualSchedule);
       }
     }
-
+    console.log('[applyWeeklyOverrides] Completed in', Date.now() - start, 'ms');
     return modifiedSchedules;
   }
 
