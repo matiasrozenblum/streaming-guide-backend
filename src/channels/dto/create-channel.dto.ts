@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsUrl } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsUrl, IsBoolean } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateChannelDto {
@@ -22,4 +22,9 @@ export class CreateChannelDto {
   @IsString()
   @IsNotEmpty()
   handle: string;
+
+  @ApiProperty({ description: 'Whether the channel is visible on the frontend', default: false })
+  @IsBoolean()
+  @IsOptional()
+  is_visible?: boolean;
 }

@@ -19,6 +19,7 @@ describe('ChannelsController', () => {
     programs: [],
     youtube_channel_id: 'test-channel-id',
     order: 1,
+    is_visible: true,
   };
 
   const mockChannelsService = {

@@ -74,6 +74,7 @@ describe('SchedulesService', () => {
     handle: 'test',
     youtube_channel_id: 'test-channel-id',
     programs: [],
+    is_visible: true,
   };
 
   const mockProgram = {

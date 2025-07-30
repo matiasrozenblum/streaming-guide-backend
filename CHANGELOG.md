@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.6.0] - 2025-07-29
+
+### Added
+- Added is_visible column to channel table
+
 ## [1.5.0] - 2025-07-26
 
 ### Added

@@ -40,6 +40,7 @@ describe('SubscriptionService', () => {
     youtube_channel_id: 'test-channel-id',
     order: 1,
     programs: [],
+    is_visible: true,
   };
 
   const mockProgram: Program = {
