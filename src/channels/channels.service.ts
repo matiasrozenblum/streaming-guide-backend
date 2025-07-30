@@ -187,6 +187,9 @@ export class ChannelsService {
 
     const channelsStart = Date.now();
     const channels = await this.channelsRepository.find({
+      where: {
+        is_visible: true,
+      },
       order: {
         order: 'ASC',
       },

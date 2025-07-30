@@ -24,6 +24,9 @@ export class Channel {
   @Column({ type: 'int', nullable: true })
   order: number;
 
+  @Column({ type: 'boolean', default: true })
+  is_visible: boolean;
+
   @OneToMany(() => Program, (program) => program.channel, { cascade: true, onDelete: 'CASCADE' })
   programs: Program[];
 }
