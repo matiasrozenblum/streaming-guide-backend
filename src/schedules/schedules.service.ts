@@ -61,15 +61,18 @@ export class SchedulesService {
     const { dayOfWeek, relations = ['program', 'program.channel', 'program.panelists'], select, skipCache = false, deviceId, applyOverrides = true } = options;
 
     const cacheKey = `schedules:all:${dayOfWeek || 'all'}`;
-    
     let schedules: Schedule[] | null = null;
     if (!skipCache) {
+      console.log('[findAll] Checking Redis cache for', cacheKey);
       schedules = await this.redisService.get<Schedule[]>(cacheKey);
+      if (schedules) {
+        console.log('[findAll] Cache HIT for', cacheKey, 'in', Date.now() - startTime, 'ms');
+      }
     }
 
     if (!schedules) {
-      console.log(`Cache MISS for ${cacheKey}`);
-
+      console.log('[findAll] Cache MISS for', cacheKey);
+      const dbStart = Date.now();
       const queryBuilder = this.schedulesRepository
         .createQueryBuilder('schedule')
         .leftJoinAndSelect('schedule.program', 'program')
@@ -77,38 +80,43 @@ export class SchedulesService {
         .leftJoinAndSelect('program.panelists', 'panelists')
         .orderBy('schedule.start_time', 'ASC')
         .addOrderBy('panelists.id', 'ASC');
-
       if (dayOfWeek) {
         queryBuilder.where('schedule.day_of_week = :dayOfWeek', { dayOfWeek });
       }
-
       schedules = await queryBuilder.getMany();
+      console.log('[findAll] DB query completed in', Date.now() - dbStart, 'ms');
       schedules.sort((a, b) => {
         const aOrder = a.program?.channel?.order ?? 999;
         const bOrder = b.program?.channel?.order ?? 999;
         if (aOrder !== bOrder) return aOrder - bOrder;
         return a.start_time.localeCompare(b.start_time);
       });
-
       await this.redisService.set(cacheKey, schedules, 1800);
-      console.log(`Database query and cache SET. Total time: ${Date.now() - startTime}ms`);
+      console.log('[findAll] Database query and cache SET. Total time:', Date.now() - startTime, 'ms');
     }
 
     // Apply weekly overrides for current week (unless raw=true)
     if (applyOverrides) {
       const currentWeekStart = this.weeklyOverridesService.getWeekStartDate('current');
+      const overridesStart = Date.now();
+      console.log('[findAll] Applying weekly overrides...');
       schedules = await this.weeklyOverridesService.applyWeeklyOverrides(schedules!, currentWeekStart);
+      console.log('[findAll] Weekly overrides applied in', Date.now() - overridesStart, 'ms');
     }
 
+    const enrichStart = Date.now();
+    console.log('[findAll] Enriching schedules...');
     const enriched = await this.enrichSchedules(schedules!);
+    console.log('[findAll] Enriched schedules in', Date.now() - enrichStart, 'ms');
 
     if (!deviceId) {
+      console.log('[findAll] TOTAL time:', Date.now() - startTime, 'ms');
       return enriched;
     }
 
     const prefs = await this.notificationsService.list(deviceId);
     const subscribedSet = new Set(prefs.map((p) => p.programId));
-
+    console.log('[findAll] TOTAL time (with deviceId):', Date.now() - startTime, 'ms');
     return enriched.map((block) => ({
       ...block,
       subscribed: subscribedSet.has(Number(block.program.id)),

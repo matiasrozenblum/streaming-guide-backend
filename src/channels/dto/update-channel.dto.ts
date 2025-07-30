@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsUrl, ValidateIf } from 'class-validator';
+import { IsString, IsOptional, IsUrl, ValidateIf, IsBoolean } from 'class-validator';
 
 export class UpdateChannelDto {
   @ApiProperty({ required: false })
@@ -23,4 +23,9 @@ export class UpdateChannelDto {
   @IsString()
   @IsOptional()
   description?: string;
+
+  @ApiProperty({ required: false, description: 'Whether the channel is visible on the frontend' })
+  @IsBoolean()
+  @IsOptional()
+  is_visible?: boolean;
 } 

@@ -17,6 +17,12 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.5.0] - 2025-07-26
+
+### Added
+- Added social sign up and login with google integration
+- Added backend logic to complete incomplete user from social sign up
+
 ## [1.4.1] - 2025-07-11
 
 ### Fixed
