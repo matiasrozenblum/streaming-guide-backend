@@ -9,6 +9,7 @@ import * as DateHolidays from 'date-holidays';
 import { SchedulesService } from '../schedules/schedules.service';
 import { RedisService } from '../redis/redis.service';
 import { ConfigService } from '../config/config.service';
+import { SentryService } from '../sentry/sentry.service';
 import { getCurrentBlockTTL } from '@/utils/getBlockTTL.util';
 
 const HolidaysClass = (DateHolidays as any).default ?? DateHolidays;
@@ -23,6 +24,7 @@ export class YoutubeLiveService {
     @Inject(forwardRef(() => SchedulesService))
     private readonly schedulesService: SchedulesService,
     private readonly redisService: RedisService,
+    private readonly sentryService: SentryService,
   ) {
     dayjs.extend(utc);
     dayjs.extend(timezone);
@@ -130,7 +132,57 @@ export class YoutubeLiveService {
 
       return videoId;
     } catch (err) {
-      console.error(`❌ Error fetching live video for ${handle}:`, err.message || err);
+      const errorMessage = err.message || err;
+      console.error(`❌ Error fetching live video for ${handle}:`, errorMessage);
+      
+      // Enhanced error reporting with Sentry
+      const is403Error = errorMessage.includes('403') || errorMessage.includes('forbidden');
+      const isQuotaError = errorMessage.includes('quota') || errorMessage.includes('exceeded');
+      
+      if (is403Error) {
+        this.sentryService.captureMessage(
+          `YouTube API 403 Forbidden for channel ${handle}`,
+          'error',
+          {
+            channelId,
+            handle,
+            context,
+            errorMessage,
+            apiUrl: `${this.apiUrl}/search`,
+            timestamp: new Date().toISOString(),
+          }
+        );
+        
+        // Set tags for better alerting
+        this.sentryService.setTag('service', 'youtube-api');
+        this.sentryService.setTag('error_type', '403_forbidden');
+        this.sentryService.setTag('channel', handle);
+      } else if (isQuotaError) {
+        this.sentryService.captureMessage(
+          `YouTube API quota exceeded for channel ${handle}`,
+          'warning',
+          {
+            channelId,
+            handle,
+            context,
+            errorMessage,
+            timestamp: new Date().toISOString(),
+          }
+        );
+        
+        this.sentryService.setTag('service', 'youtube-api');
+        this.sentryService.setTag('error_type', 'quota_exceeded');
+        this.sentryService.setTag('channel', handle);
+      } else {
+        // Capture other errors
+        this.sentryService.captureException(err as Error, {
+          channelId,
+          handle,
+          context,
+          apiUrl: `${this.apiUrl}/search`,
+        });
+      }
+      
       return null;
     }
   }

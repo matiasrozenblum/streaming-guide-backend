@@ -21,9 +21,6 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ### Added
 - Added is_visible column to channel table
-- Added channel visibility toggle functionality in backoffice
-- Added filtering to only show visible channels on frontend
-- Added Switch component for channel visibility in create/edit dialogs
 
 ## [1.5.0] - 2025-07-26
 
