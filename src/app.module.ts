@@ -26,6 +26,7 @@ import { PushModule } from './push/push.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { UsersModule } from './users/users.module';
 import { StatisticsModule } from './statistics/statistics.module';
+import { SentryModule } from './sentry/sentry.module';
 
 @Module({
   imports: [
@@ -77,6 +78,7 @@ import { StatisticsModule } from './statistics/statistics.module';
     NotificationsModule,
     UsersModule,
     StatisticsModule,
+    SentryModule,
   ],
   controllers: [AppController],
   providers: [

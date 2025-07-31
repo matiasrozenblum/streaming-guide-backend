@@ -11,6 +11,9 @@ import { RedisService } from './redis/redis.service'; // 🔥
 import { AuthGuard } from '@nestjs/passport';
 import * as DateHolidays from 'date-holidays';
 import { Roles } from './auth/roles.decorator';
+import { Response } from 'express';
+import { AppService } from './app.service';
+import { SentryService } from './sentry/sentry.service';
 
 const HolidaysClass = (DateHolidays as any).default ?? DateHolidays;
 
@@ -30,8 +33,50 @@ export class AppController {
     private readonly youtubeDiscoveryService: YoutubeDiscoveryService,
     private readonly youtubeLiveService: YoutubeLiveService,
     private readonly redisService: RedisService, // 🔥
+    private readonly appService: AppService,
+    private readonly sentryService: SentryService,
   ) {
     console.log('🚀 AppController initialized');
+  }
+
+  @Get()
+  getHello(): string {
+    return this.appService.getHello();
+  }
+
+  @Get('health')
+  health() {
+    return { status: 'ok', timestamp: new Date().toISOString() };
+  }
+
+  @Post('test-error')
+  testError() {
+    // Test Sentry error reporting
+    this.sentryService.captureMessage('Test error for monitoring setup', 'error', {
+      test: true,
+      timestamp: new Date().toISOString(),
+    });
+    
+    return { message: 'Test error sent to Sentry' };
+  }
+
+  @Post('test-youtube-error')
+  testYoutubeError() {
+    // Test YouTube API error simulation
+    this.sentryService.captureMessage('YouTube API 403 Forbidden for channel test-channel', 'error', {
+      channelId: 'test-channel-id',
+      handle: 'test-channel',
+      context: 'test',
+      errorMessage: 'Request failed with status code 403',
+      apiUrl: 'https://www.googleapis.com/youtube/v3/search',
+      timestamp: new Date().toISOString(),
+    });
+    
+    this.sentryService.setTag('service', 'youtube-api');
+    this.sentryService.setTag('error_type', '403_forbidden');
+    this.sentryService.setTag('channel', 'test-channel');
+    
+    return { message: 'Test YouTube API error sent to Sentry' };
   }
 
   @Get('youtube/resolve-handles')
