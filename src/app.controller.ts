@@ -79,6 +79,72 @@ export class AppController {
     return { message: 'Test YouTube API error sent to Sentry' };
   }
 
+  @Post('test-database-error')
+  testDatabaseError() {
+    // Test database connection error simulation
+    this.sentryService.captureMessage('Database connection timeout - PostgreSQL unreachable', 'error', {
+      service: 'database',
+      error_type: 'connection_timeout',
+      database_url: process.env.DATABASE_URL?.split('@')[1] || 'unknown',
+      timestamp: new Date().toISOString(),
+    });
+    
+    this.sentryService.setTag('service', 'database');
+    this.sentryService.setTag('error_type', 'connection_timeout');
+    
+    return { message: 'Test database connection error sent to Sentry' };
+  }
+
+  @Post('test-jwt-error')
+  testJwtError() {
+    // Test JWT authentication error simulation
+    this.sentryService.captureMessage('JWT token validation failed - Invalid JWT_SECRET', 'error', {
+      service: 'authentication',
+      error_type: 'jwt_validation_failed',
+      jwt_secret_length: process.env.JWT_SECRET?.length || 0,
+      timestamp: new Date().toISOString(),
+    });
+    
+    this.sentryService.setTag('service', 'authentication');
+    this.sentryService.setTag('error_type', 'jwt_validation_failed');
+    
+    return { message: 'Test JWT authentication error sent to Sentry' };
+  }
+
+  @Post('test-redis-error')
+  testRedisError() {
+    // Test Redis connection error simulation
+    this.sentryService.captureMessage('Redis connection timeout - Cache service unavailable', 'error', {
+      service: 'redis',
+      error_type: 'connection_timeout',
+      redis_url: process.env.REDIS_URL?.split('@')[1] || 'unknown',
+      timestamp: new Date().toISOString(),
+    });
+    
+    this.sentryService.setTag('service', 'redis');
+    this.sentryService.setTag('error_type', 'connection_timeout');
+    
+    return { message: 'Test Redis connection error sent to Sentry' };
+  }
+
+  @Post('test-migration-error')
+  testMigrationError() {
+    // Test database migration error simulation
+    this.sentryService.captureMessage('Database migration failed - Missing column gender in users table', 'error', {
+      service: 'database',
+      error_type: 'migration_failed',
+      missing_column: 'gender',
+      table: 'users',
+      migration: 'AddGenderAndBirthDate',
+      timestamp: new Date().toISOString(),
+    });
+    
+    this.sentryService.setTag('service', 'database');
+    this.sentryService.setTag('error_type', 'migration_failed');
+    
+    return { message: 'Test database migration error sent to Sentry' };
+  }
+
   @Get('youtube/resolve-handles')
   async getChannelsFromHandles() {
     // Get all channels from the database
