@@ -186,6 +186,28 @@ export class AppController {
     return this.resourceMonitorService.getResourceStats();
   }
 
+  @Get('debug/schedules')
+  async debugSchedules() {
+    const schedulesRepo = this.appService.getSchedulesRepository();
+    const totalSchedules = await schedulesRepo.count();
+    const sampleSchedules = await schedulesRepo.find({
+      take: 5,
+      relations: ['program', 'program.channel']
+    });
+    
+    return {
+      totalSchedules,
+      sampleSchedules: sampleSchedules.map(s => ({
+        id: s.id,
+        day_of_week: s.day_of_week,
+        start_time: s.start_time,
+        program_id: s.program_id,
+        program: s.program ? { id: s.program.id, name: s.program.name } : null,
+        channel: s.program?.channel ? { id: s.program.channel.id, name: s.program.channel.name } : null
+      }))
+    };
+  }
+
   @Get('youtube/resolve-handles')
   async getChannelsFromHandles() {
     // Get all channels from the database

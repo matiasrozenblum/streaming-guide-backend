@@ -88,9 +88,23 @@ export class SchedulesService {
         queryBuilder.where('schedule.day_of_week = :dayOfWeek', { dayOfWeek });
       }
       
+      // Debug: Log the SQL query
+      const sql = queryBuilder.getSql();
+      console.log('[findAll] Generated SQL:', sql);
+      console.log('[findAll] SQL parameters:', queryBuilder.getParameters());
+      
       schedules = await queryBuilder.getMany();
       const dbQueryTime = Date.now() - dbStart;
       console.log('[findAll] DB query completed in', dbQueryTime, 'ms');
+      console.log('[findAll] Raw schedules count:', schedules.length);
+      console.log('[findAll] First few schedules:', schedules.slice(0, 3).map(s => ({
+        id: s.id,
+        day_of_week: s.day_of_week,
+        start_time: s.start_time,
+        program_id: s.program_id,
+        program: s.program ? { id: s.program.id, name: s.program.name } : null,
+        channel: s.program?.channel ? { id: s.program.channel.id, name: s.program.channel.name } : null
+      })));
       
       // Alert on slow database queries
       if (dbQueryTime > 3000) { // 3 seconds
