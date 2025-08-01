@@ -52,7 +52,7 @@ import { PerformanceInterceptor } from './interceptors/performance.interceptor';
           url: dbUrl,
           ssl: { rejectUnauthorized: false },
           autoLoadEntities: true,
-          synchronize: !isProduction,
+          synchronize: false, // Temporarily disabled to prevent schema conflicts
           logging: false,
           extra: {
             max: 20,
