@@ -135,9 +135,10 @@ export class SchedulesService {
     }
 
     const enrichStart = Date.now();
-    console.log('[findAll] Enriching schedules...');
+    console.log('[findAll] Enriching schedules...', schedules!.length, 'schedules');
     const enriched = await this.enrichSchedules(schedules!);
     console.log('[findAll] Enriched schedules in', Date.now() - enrichStart, 'ms');
+    console.log('[findAll] Enriched result length:', enriched.length);
 
     if (!deviceId) {
       console.log('[findAll] TOTAL time:', Date.now() - startTime, 'ms');
@@ -154,6 +155,7 @@ export class SchedulesService {
   }
 
   async enrichSchedules(schedules: Schedule[]): Promise<any[]> {
+    console.log('[enrichSchedules] Starting enrichment of', schedules.length, 'schedules');
     const now = this.dayjs().tz('America/Argentina/Buenos_Aires');
     const currentNum = now.hour() * 100 + now.minute();
     const currentDay = now.format('dddd').toLowerCase();
@@ -217,6 +219,7 @@ export class SchedulesService {
       });
     }
 
+    console.log('[enrichSchedules] Enriched', enriched.length, 'schedules');
     return enriched;
   }
 
