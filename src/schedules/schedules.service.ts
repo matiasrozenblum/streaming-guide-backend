@@ -75,14 +75,13 @@ export class SchedulesService {
     if (!schedules) {
       console.log('[findAll] Cache MISS for', cacheKey);
       const dbStart = Date.now();
-      // Optimized query with database-level sorting
+      // Reverted to original query structure
       const queryBuilder = this.schedulesRepository
         .createQueryBuilder('schedule')
         .leftJoinAndSelect('schedule.program', 'program')
         .leftJoinAndSelect('program.channel', 'channel')
         .leftJoinAndSelect('program.panelists', 'panelists')
-        .orderBy('channel.order', 'ASC') // Database-level sorting
-        .addOrderBy('schedule.start_time', 'ASC')
+        .orderBy('schedule.start_time', 'ASC')
         .addOrderBy('panelists.id', 'ASC');
       
       if (dayOfWeek) {
@@ -112,15 +111,13 @@ export class SchedulesService {
         this.sentryService.setTag('error_type', 'slow_database_query');
       }
       
-      // Only sort in memory if channel order is not available in DB
-      if (schedules.some(s => !s.program?.channel?.order)) {
-        schedules.sort((a, b) => {
-          const aOrder = a.program?.channel?.order ?? 999;
-          const bOrder = b.program?.channel?.order ?? 999;
-          if (aOrder !== bOrder) return aOrder - bOrder;
-          return a.start_time.localeCompare(b.start_time);
-        });
-      }
+      // Original sorting logic
+      schedules.sort((a, b) => {
+        const aOrder = a.program?.channel?.order ?? 999;
+        const bOrder = b.program?.channel?.order ?? 999;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return a.start_time.localeCompare(b.start_time);
+      });
       await this.redisService.set(cacheKey, schedules, 1800);
       console.log('[findAll] Database query and cache SET. Total time:', Date.now() - startTime, 'ms');
     }
