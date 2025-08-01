@@ -9,10 +9,12 @@ import { UserSubscription } from '../users/user-subscription.entity';
 import { Program } from '../programs/programs.entity';
 import { Channel } from '../channels/channels.entity';
 import { EmailService } from '../email/email.service';
+import { SentryModule } from '../sentry/sentry.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User, UserSubscription, Program, Channel]),
+    SentryModule,
   ],
   controllers: [StatisticsController, WeeklyReportController],
   providers: [StatisticsService, ReportsProxyService, EmailService],
