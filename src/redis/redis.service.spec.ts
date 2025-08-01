@@ -14,13 +14,23 @@ jest.mock('ioredis', () => ({
 
 import { RedisService } from './redis.service';
 import Redis from 'ioredis';
+import { SentryService } from '../sentry/sentry.service';
 
 describe('RedisService', () => {
   let service: RedisService;
+  let mockSentryService: jest.Mocked<SentryService>;
 
   beforeEach(() => {
     Object.values(mockClient).forEach(fn => fn.mockReset && fn.mockReset());
-    service = new RedisService();
+    
+    mockSentryService = {
+      captureMessage: jest.fn(),
+      captureException: jest.fn(),
+      setTag: jest.fn(),
+      addBreadcrumb: jest.fn(),
+    } as any;
+    
+    service = new RedisService(mockSentryService);
   });
 
   afterEach(() => {

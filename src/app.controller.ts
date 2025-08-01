@@ -14,6 +14,7 @@ import { Roles } from './auth/roles.decorator';
 import { Response } from 'express';
 import { AppService } from './app.service';
 import { SentryService } from './sentry/sentry.service';
+import { ResourceMonitorService } from './services/resource-monitor.service';
 
 const HolidaysClass = (DateHolidays as any).default ?? DateHolidays;
 
@@ -35,6 +36,7 @@ export class AppController {
     private readonly redisService: RedisService, // 🔥
     private readonly appService: AppService,
     private readonly sentryService: SentryService,
+    private readonly resourceMonitorService: ResourceMonitorService,
   ) {
     console.log('🚀 AppController initialized');
   }
@@ -143,6 +145,45 @@ export class AppController {
     this.sentryService.setTag('error_type', 'migration_failed');
     
     return { message: 'Test database migration error sent to Sentry' };
+  }
+
+  @Post('test-email-error')
+  testEmailError() {
+    // Test email service error simulation
+    this.sentryService.captureMessage('Email service failure - SMTP connection timeout', 'error', {
+      service: 'email',
+      error_type: 'smtp_connection_failed',
+      smtp_host: process.env.SMTP_HOST || 'unknown',
+      smtp_port: process.env.SMTP_PORT || 'unknown',
+      error_message: 'Connection timeout to SMTP server',
+      timestamp: new Date().toISOString(),
+    });
+    
+    this.sentryService.setTag('service', 'email');
+    this.sentryService.setTag('error_type', 'smtp_connection_failed');
+    
+    return { message: 'Test email service error sent to Sentry' };
+  }
+
+  @Post('test-slow-api')
+  testSlowApi() {
+    // Simulate a slow API response
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve({ message: 'Slow API response simulated' });
+      }, 6000); // 6 seconds - should trigger slow response alert
+    });
+  }
+
+  @Post('test-api-error')
+  testApiError() {
+    // Simulate an API error
+    throw new Error('Simulated API error for testing');
+  }
+
+  @Get('health/resources')
+  getResourceStats() {
+    return this.resourceMonitorService.getResourceStats();
   }
 
   @Get('youtube/resolve-handles')
