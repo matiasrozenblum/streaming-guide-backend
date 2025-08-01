@@ -145,6 +145,24 @@ export class AppController {
     return { message: 'Test database migration error sent to Sentry' };
   }
 
+  @Post('test-email-error')
+  testEmailError() {
+    // Test email service error simulation
+    this.sentryService.captureMessage('Email service failure - SMTP connection timeout', 'error', {
+      service: 'email',
+      error_type: 'smtp_connection_failed',
+      smtp_host: process.env.SMTP_HOST || 'unknown',
+      smtp_port: process.env.SMTP_PORT || 'unknown',
+      error_message: 'Connection timeout to SMTP server',
+      timestamp: new Date().toISOString(),
+    });
+    
+    this.sentryService.setTag('service', 'email');
+    this.sentryService.setTag('error_type', 'smtp_connection_failed');
+    
+    return { message: 'Test email service error sent to Sentry' };
+  }
+
   @Get('youtube/resolve-handles')
   async getChannelsFromHandles() {
     // Get all channels from the database
