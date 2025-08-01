@@ -60,6 +60,15 @@ import { SentryModule } from './sentry/sentry.module';
             query_timeout: 10000,
           },
           cache: { duration: 30000 },
+          // Enhanced error handling for database connection
+          onConnect: async (connection) => {
+            console.log('✅ Database connected successfully');
+          },
+          onError: (error) => {
+            console.error('❌ Database connection error:', error);
+            // Sentry will be available after module initialization
+            // We'll handle this in the main.ts file
+          },
         };
       },
     }),

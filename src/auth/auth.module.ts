@@ -12,6 +12,7 @@ import { UsersModule } from '../users/users.module';
 import { User } from '../users/users.entity';
 import { EmailModule } from '../email/email.module';
 import { JwtService } from './jwt.service';
+import { SentryModule } from '../sentry/sentry.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { JwtService } from './jwt.service';
     TypeOrmModule.forFeature([User]),
     forwardRef(() => UsersModule),
     EmailModule,
+    SentryModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (cs: ConfigService) => ({

@@ -1,13 +1,39 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import Redis from 'ioredis';
+import { SentryService } from '../sentry/sentry.service';
 
 @Injectable()
-export class RedisService {
+export class RedisService implements OnModuleInit {
   public readonly client: Redis;
 
-  constructor() {
+  constructor(private readonly sentryService: SentryService) {
     this.client = new Redis(process.env.REDIS_URL + '?family=0');
     console.log('🚀 Connected to Redis:', process.env.REDIS_URL);
+  }
+
+  onModuleInit() {
+    // Set up Redis error handlers
+    this.client.on('error', (error) => {
+      console.error('❌ Redis connection error:', error);
+      this.sentryService.captureMessage('Redis connection error - Cache service unavailable', 'error', {
+        service: 'redis',
+        error_type: 'connection_error',
+        error_message: error.message,
+        redis_url: process.env.REDIS_URL?.split('@')[1] || 'unknown',
+        timestamp: new Date().toISOString(),
+      });
+      
+      this.sentryService.setTag('service', 'redis');
+      this.sentryService.setTag('error_type', 'connection_error');
+    });
+
+    this.client.on('connect', () => {
+      console.log('✅ Redis connected successfully');
+    });
+
+    this.client.on('ready', () => {
+      console.log('✅ Redis ready for commands');
+    });
   }
 
   async get<T>(key: string): Promise<T | null> {
