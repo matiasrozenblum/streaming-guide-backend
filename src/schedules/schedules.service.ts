@@ -8,6 +8,7 @@ import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { YoutubeLiveService } from '../youtube/youtube-live.service';
 import { RedisService } from '../redis/redis.service';
 import { WeeklyOverridesService } from './weekly-overrides.service';
+import { SentryService } from '../sentry/sentry.service';
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
@@ -45,6 +46,7 @@ export class SchedulesService {
     private readonly notificationsService: NotificationsService,
     private readonly weeklyOverridesService: WeeklyOverridesService,
     private readonly configService: ConfigService,
+    private readonly sentryService: SentryService,
   ) {
     this.dayjs = dayjs;
     this.dayjs.extend(utc);
@@ -73,24 +75,52 @@ export class SchedulesService {
     if (!schedules) {
       console.log('[findAll] Cache MISS for', cacheKey);
       const dbStart = Date.now();
+      // Optimized query with database-level sorting
       const queryBuilder = this.schedulesRepository
         .createQueryBuilder('schedule')
         .leftJoinAndSelect('schedule.program', 'program')
         .leftJoinAndSelect('program.channel', 'channel')
         .leftJoinAndSelect('program.panelists', 'panelists')
-        .orderBy('schedule.start_time', 'ASC')
+        .orderBy('channel.order', 'ASC') // Database-level sorting
+        .addOrderBy('schedule.start_time', 'ASC')
         .addOrderBy('panelists.id', 'ASC');
+      
       if (dayOfWeek) {
         queryBuilder.where('schedule.day_of_week = :dayOfWeek', { dayOfWeek });
       }
+      
       schedules = await queryBuilder.getMany();
-      console.log('[findAll] DB query completed in', Date.now() - dbStart, 'ms');
-      schedules.sort((a, b) => {
-        const aOrder = a.program?.channel?.order ?? 999;
-        const bOrder = b.program?.channel?.order ?? 999;
-        if (aOrder !== bOrder) return aOrder - bOrder;
-        return a.start_time.localeCompare(b.start_time);
-      });
+      const dbQueryTime = Date.now() - dbStart;
+      console.log('[findAll] DB query completed in', dbQueryTime, 'ms');
+      
+      // Alert on slow database queries
+      if (dbQueryTime > 3000) { // 3 seconds
+        this.sentryService.captureMessage(
+          `Slow database query in schedules service - ${dbQueryTime}ms`,
+          'warning',
+          {
+            service: 'schedules',
+            error_type: 'slow_database_query',
+            query_time: dbQueryTime,
+            day_of_week: dayOfWeek,
+            cache_key: cacheKey,
+            timestamp: new Date().toISOString(),
+          }
+        );
+        
+        this.sentryService.setTag('service', 'schedules');
+        this.sentryService.setTag('error_type', 'slow_database_query');
+      }
+      
+      // Only sort in memory if channel order is not available in DB
+      if (schedules.some(s => !s.program?.channel?.order)) {
+        schedules.sort((a, b) => {
+          const aOrder = a.program?.channel?.order ?? 999;
+          const bOrder = b.program?.channel?.order ?? 999;
+          if (aOrder !== bOrder) return aOrder - bOrder;
+          return a.start_time.localeCompare(b.start_time);
+        });
+      }
       await this.redisService.set(cacheKey, schedules, 1800);
       console.log('[findAll] Database query and cache SET. Total time:', Date.now() - startTime, 'ms');
     }

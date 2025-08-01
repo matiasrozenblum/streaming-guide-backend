@@ -15,6 +15,7 @@ import { YoutubeLiveModule } from '../youtube/youtube-live.module';
 import { RedisModule } from '../redis/redis.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ConfigModule } from '../config/config.module';
+import { SentryModule } from '../sentry/sentry.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { ConfigModule } from '../config/config.module';
     RedisModule,
     NotificationsModule,
     ConfigModule,
+    SentryModule,
   ],
   controllers: [
     SchedulesController, 
