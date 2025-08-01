@@ -189,13 +189,32 @@ export class AppController {
   @Get('debug/schedules')
   async debugSchedules() {
     const schedulesRepo = this.appService.getSchedulesRepository();
+    
+    // Check database connection info
+    const connection = schedulesRepo.manager.connection;
+    const databaseName = connection.options.database;
+    const host = (connection.options as any).host;
+    
+    // Check table existence and structure
+    const tableExists = await connection.query(
+      "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'schedules')"
+    );
+    
     const totalSchedules = await schedulesRepo.count();
     const sampleSchedules = await schedulesRepo.find({
       take: 5,
       relations: ['program', 'program.channel']
     });
     
+    // Raw SQL query to check data
+    const rawSchedules = await connection.query('SELECT * FROM schedules LIMIT 5');
+    
     return {
+      databaseInfo: {
+        database: databaseName,
+        host: host,
+        tableExists: tableExists[0]?.exists
+      },
       totalSchedules,
       sampleSchedules: sampleSchedules.map(s => ({
         id: s.id,
@@ -204,7 +223,8 @@ export class AppController {
         program_id: s.program_id,
         program: s.program ? { id: s.program.id, name: s.program.name } : null,
         channel: s.program?.channel ? { id: s.program.channel.id, name: s.program.channel.name } : null
-      }))
+      })),
+      rawSchedules: rawSchedules
     };
   }
 
