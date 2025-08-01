@@ -27,6 +27,8 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { UsersModule } from './users/users.module';
 import { StatisticsModule } from './statistics/statistics.module';
 import { SentryModule } from './sentry/sentry.module';
+import { ResourceMonitorService } from './services/resource-monitor.service';
+import { PerformanceInterceptor } from './interceptors/performance.interceptor';
 
 @Module({
   imports: [
@@ -94,6 +96,11 @@ import { SentryModule } from './sentry/sentry.module';
     AppService,
     YoutubeDiscoveryService,
     RedisService, // 🔥 Agregado
+    ResourceMonitorService,
+    {
+      provide: 'APP_INTERCEPTOR',
+      useClass: PerformanceInterceptor,
+    },
   ],
 })
 export class AppModule {}
