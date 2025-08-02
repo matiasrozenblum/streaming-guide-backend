@@ -175,6 +175,16 @@ export class AppController {
     });
   }
 
+  @Post('test-critical-slow-api')
+  testCriticalSlowApi() {
+    // Simulate a critical slow API response
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve({ message: 'Critical slow API response simulated' });
+      }, 12000); // 12 seconds - should trigger critical slow response alert
+    });
+  }
+
   @Post('test-api-error')
   testApiError() {
     // Simulate an API error
