@@ -5,8 +5,10 @@ import * as os from 'os';
 @Injectable()
 export class ResourceMonitorService implements OnModuleInit {
   private monitoringInterval: NodeJS.Timeout;
-  private lastMemoryAlert: number = 0;
-  private lastCpuAlert: number = 0;
+  private lastHighMemoryAlert: number = 0;
+  private lastCriticalMemoryAlert: number = 0;
+  private lastHighCpuAlert: number = 0;
+  private lastCriticalCpuAlert: number = 0;
 
   constructor(private readonly sentryService: SentryService) {}
 
@@ -30,7 +32,7 @@ export class ResourceMonitorService implements OnModuleInit {
     if (memoryUsage.percentage > 85) {
       const now = Date.now();
       // Only alert once every 5 minutes to avoid spam
-      if (now - this.lastMemoryAlert > 300000) {
+      if (now - this.lastHighMemoryAlert > 300000) {
         this.sentryService.captureMessage(
           `Server Resource Warning - Memory usage at ${memoryUsage.percentage.toFixed(1)}%`,
           'warning',
@@ -48,14 +50,14 @@ export class ResourceMonitorService implements OnModuleInit {
 
         this.sentryService.setTag('service', 'server');
         this.sentryService.setTag('error_type', 'high_memory_usage');
-        this.lastMemoryAlert = now;
+        this.lastHighMemoryAlert = now;
       }
     }
 
     // Alert on critical memory usage (P1 - Critical)
     if (memoryUsage.percentage > 95) {
       const now = Date.now();
-      if (now - this.lastMemoryAlert > 300000) {
+      if (now - this.lastCriticalMemoryAlert > 300000) {
         this.sentryService.captureMessage(
           `Server Resource Critical - Memory usage at ${memoryUsage.percentage.toFixed(1)}%`,
           'error',
@@ -73,14 +75,14 @@ export class ResourceMonitorService implements OnModuleInit {
 
         this.sentryService.setTag('service', 'server');
         this.sentryService.setTag('error_type', 'critical_memory_usage');
-        this.lastMemoryAlert = now;
+        this.lastCriticalMemoryAlert = now;
       }
     }
 
     // Alert on high CPU usage (P2 - High Priority)
     if (cpuUsage > 80) {
       const now = Date.now();
-      if (now - this.lastCpuAlert > 300000) {
+      if (now - this.lastHighCpuAlert > 300000) {
         this.sentryService.captureMessage(
           `Server Resource Warning - CPU usage at ${cpuUsage.toFixed(1)}%`,
           'warning',
@@ -96,14 +98,14 @@ export class ResourceMonitorService implements OnModuleInit {
 
         this.sentryService.setTag('service', 'server');
         this.sentryService.setTag('error_type', 'high_cpu_usage');
-        this.lastCpuAlert = now;
+        this.lastHighCpuAlert = now;
       }
     }
 
     // Alert on critical CPU usage (P1 - Critical)
     if (cpuUsage > 90) {
       const now = Date.now();
-      if (now - this.lastCpuAlert > 300000) {
+      if (now - this.lastCriticalCpuAlert > 300000) {
         this.sentryService.captureMessage(
           `Server Resource Critical - CPU usage at ${cpuUsage.toFixed(1)}%`,
           'error',
@@ -119,7 +121,7 @@ export class ResourceMonitorService implements OnModuleInit {
 
         this.sentryService.setTag('service', 'server');
         this.sentryService.setTag('error_type', 'critical_cpu_usage');
-        this.lastCpuAlert = now;
+        this.lastCriticalCpuAlert = now;
       }
     }
   }
@@ -128,7 +130,7 @@ export class ResourceMonitorService implements OnModuleInit {
     const total = os.totalmem();
     const free = os.freemem();
     const used = total - free;
-    const percentage = (used / total) * 100;
+    const percentage = total > 0 ? (used / total) * 100 : 0;
 
     return {
       total: this.formatBytes(total),
