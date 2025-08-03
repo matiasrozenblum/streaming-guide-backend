@@ -13,6 +13,7 @@ import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
 import { ConfigService } from '../config/config.service';
 import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
+import { SentryService } from '../sentry/sentry.service';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -103,12 +104,21 @@ describe('SchedulesService', () => {
 
     const mockQueryBuilder = {
       leftJoinAndSelect: jest.fn().mockReturnThis(),
+      leftJoin: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
       addOrderBy: jest.fn().mockReturnThis(),
       getMany: jest.fn().mockResolvedValue([mockSchedule]),
       getOne: jest.fn().mockResolvedValue(mockSchedule),
+      getSql: jest.fn().mockReturnValue('SELECT * FROM schedule'),
+      getParameters: jest.fn().mockReturnValue({}),
+      getRawMany: jest.fn().mockResolvedValue([]),
+      getRawOne: jest.fn().mockResolvedValue(null),
     };
+
+    // Debug: Log the mock query builder
+    console.log('Mock query builder created:', Object.keys(mockQueryBuilder));
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -162,6 +172,15 @@ describe('SchedulesService', () => {
           provide: ConfigService,
           useValue: {
             canFetchLive: jest.fn().mockResolvedValue(true),
+          },
+        },
+        {
+          provide: SentryService,
+          useValue: {
+            captureMessage: jest.fn(),
+            captureException: jest.fn(),
+            setTag: jest.fn(),
+            addBreadcrumb: jest.fn(),
           },
         },
       ],

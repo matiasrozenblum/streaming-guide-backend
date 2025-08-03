@@ -8,6 +8,7 @@ import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { YoutubeLiveService } from '../youtube/youtube-live.service';
 import { RedisService } from '../redis/redis.service';
 import { WeeklyOverridesService } from './weekly-overrides.service';
+import { SentryService } from '../sentry/sentry.service';
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
@@ -45,6 +46,7 @@ export class SchedulesService {
     private readonly notificationsService: NotificationsService,
     private readonly weeklyOverridesService: WeeklyOverridesService,
     private readonly configService: ConfigService,
+    private readonly sentryService: SentryService,
   ) {
     this.dayjs = dayjs;
     this.dayjs.extend(utc);
@@ -73,6 +75,7 @@ export class SchedulesService {
     if (!schedules) {
       console.log('[findAll] Cache MISS for', cacheKey);
       const dbStart = Date.now();
+      // Reverted to original query structure
       const queryBuilder = this.schedulesRepository
         .createQueryBuilder('schedule')
         .leftJoinAndSelect('schedule.program', 'program')
@@ -80,11 +83,44 @@ export class SchedulesService {
         .leftJoinAndSelect('program.panelists', 'panelists')
         .orderBy('schedule.start_time', 'ASC')
         .addOrderBy('panelists.id', 'ASC');
+      
       if (dayOfWeek) {
         queryBuilder.where('schedule.day_of_week = :dayOfWeek', { dayOfWeek });
       }
+      
       schedules = await queryBuilder.getMany();
-      console.log('[findAll] DB query completed in', Date.now() - dbStart, 'ms');
+      const dbQueryTime = Date.now() - dbStart;
+      console.log('[findAll] DB query completed in', dbQueryTime, 'ms');
+      console.log('[findAll] Raw schedules count:', schedules.length);
+      console.log('[findAll] First few schedules:', schedules.slice(0, 3).map(s => ({
+        id: s.id,
+        day_of_week: s.day_of_week,
+        start_time: s.start_time,
+        program_id: s.program_id,
+        program: s.program ? { id: s.program.id, name: s.program.name } : null,
+        channel: s.program?.channel ? { id: s.program.channel.id, name: s.program.channel.name } : null
+      })));
+      
+      // Alert on slow database queries
+      if (dbQueryTime > 3000) { // 3 seconds
+        this.sentryService.captureMessage(
+          `Slow database query in schedules service - ${dbQueryTime}ms`,
+          'warning',
+          {
+            service: 'schedules',
+            error_type: 'slow_database_query',
+            query_time: dbQueryTime,
+            day_of_week: dayOfWeek,
+            cache_key: cacheKey,
+            timestamp: new Date().toISOString(),
+          }
+        );
+        
+        this.sentryService.setTag('service', 'schedules');
+        this.sentryService.setTag('error_type', 'slow_database_query');
+      }
+      
+      // Original sorting logic
       schedules.sort((a, b) => {
         const aOrder = a.program?.channel?.order ?? 999;
         const bOrder = b.program?.channel?.order ?? 999;
@@ -105,9 +141,10 @@ export class SchedulesService {
     }
 
     const enrichStart = Date.now();
-    console.log('[findAll] Enriching schedules...');
+    console.log('[findAll] Enriching schedules...', schedules!.length, 'schedules');
     const enriched = await this.enrichSchedules(schedules!);
     console.log('[findAll] Enriched schedules in', Date.now() - enrichStart, 'ms');
+    console.log('[findAll] Enriched result length:', enriched.length);
 
     if (!deviceId) {
       console.log('[findAll] TOTAL time:', Date.now() - startTime, 'ms');
@@ -124,6 +161,7 @@ export class SchedulesService {
   }
 
   async enrichSchedules(schedules: Schedule[]): Promise<any[]> {
+    console.log('[enrichSchedules] Starting enrichment of', schedules.length, 'schedules');
     const now = this.dayjs().tz('America/Argentina/Buenos_Aires');
     const currentNum = now.hour() * 100 + now.minute();
     const currentDay = now.format('dddd').toLowerCase();
@@ -187,6 +225,7 @@ export class SchedulesService {
       });
     }
 
+    console.log('[enrichSchedules] Enriched', enriched.length, 'schedules');
     return enriched;
   }
 
