@@ -118,14 +118,4 @@ export class EmailService {
       throw error; // Re-throw to maintain original behavior
     }
   }
-
-  async sendReportWithAttachments(to: string, attachments: { filename: string, content: Buffer }[]) {
-    await this.mailerService.sendMail({
-      to,
-      subject: 'Reportes solicitados • La Guía del Streaming',
-      text: 'Adjuntamos los reportes solicitados.',
-      html: '<p>Adjuntamos los reportes solicitados.</p>',
-      attachments,
-    });
-  }
 }

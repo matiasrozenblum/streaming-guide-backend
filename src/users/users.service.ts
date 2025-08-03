@@ -81,10 +81,22 @@ export class UsersService {
     return saved;
   }
 
-  async findAll(): Promise<User[]> {
-    return this.usersRepository.find({
+  async findAll(page: number = 1, pageSize: number = 20): Promise<{ users: User[]; total: number; page: number; pageSize: number }> {
+    const skip = (page - 1) * pageSize;
+    
+    const [users, total] = await this.usersRepository.findAndCount({
       relations: ['devices', 'subscriptions', 'subscriptions.program'],
+      skip,
+      take: pageSize,
+      order: { id: 'DESC' }, // Show newest users first
     });
+
+    return {
+      users,
+      total,
+      page,
+      pageSize,
+    };
   }
 
   async findOne(id: number): Promise<User> {
