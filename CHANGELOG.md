@@ -17,6 +17,13 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.7.0] - 2025-08-03
+
+### Added
+- Added sentry integration for alerts
+- Added performance monitoring
+- Added several alerts for email, performance, errors, JWT, database errors
+
 ## [1.6.0] - 2025-07-29
 
 ### Added
