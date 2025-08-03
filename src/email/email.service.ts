@@ -118,4 +118,9 @@ export class EmailService {
       throw error; // Re-throw to maintain original behavior
     }
   }
+
+  // Alias for backward compatibility (in case of cached builds)
+  async sendReportWithAttachments(params: { to: string, subject: string, text: string, html: string, attachments: { filename: string, content: Buffer, contentType: string }[] }) {
+    return this.sendReportWithAttachment(params);
+  }
 }
