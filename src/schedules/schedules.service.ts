@@ -88,11 +88,6 @@ export class SchedulesService {
         queryBuilder.where('schedule.day_of_week = :dayOfWeek', { dayOfWeek });
       }
       
-      // Debug: Log the SQL query
-      const sql = queryBuilder.getSql();
-      console.log('[findAll] Generated SQL:', sql);
-      console.log('[findAll] SQL parameters:', queryBuilder.getParameters());
-      
       schedules = await queryBuilder.getMany();
       const dbQueryTime = Date.now() - dbStart;
       console.log('[findAll] DB query completed in', dbQueryTime, 'ms');

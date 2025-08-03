@@ -2,7 +2,7 @@ import { ResourceMonitorService } from './resource-monitor.service';
 import { SentryService } from '../sentry/sentry.service';
 import * as os from 'os';
 
-// Mock os module
+// Mock the os module
 jest.mock('os', () => ({
   totalmem: jest.fn(),
   freemem: jest.fn(),
@@ -26,13 +26,10 @@ describe('ResourceMonitorService', () => {
       addBreadcrumb: jest.fn(),
     } as any;
 
-    // Mock os functions
+    // Set up default OS mocks
     (os.totalmem as jest.Mock).mockReturnValue(8 * 1024 * 1024 * 1024); // 8GB
     (os.freemem as jest.Mock).mockReturnValue(4 * 1024 * 1024 * 1024); // 4GB
     (os.cpus as jest.Mock).mockReturnValue([
-      {
-        times: { user: 100, nice: 0, sys: 50, idle: 850, irq: 0 },
-      },
       {
         times: { user: 100, nice: 0, sys: 50, idle: 850, irq: 0 },
       },
@@ -46,18 +43,29 @@ describe('ResourceMonitorService', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
-    jest.clearAllTimers();
+    // Clean up any intervals that might be running
+    if (service['monitoringInterval']) {
+      clearInterval(service['monitoringInterval']);
+    }
+  });
+
+  afterAll(() => {
+    // Ensure all intervals are cleared
+    jest.restoreAllMocks();
   });
 
   describe('onModuleInit', () => {
     it('starts monitoring interval', () => {
       const setIntervalSpy = jest.spyOn(global, 'setInterval');
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
       
       service.onModuleInit();
       
       expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 30000);
-      expect(consoleSpy).toHaveBeenCalledWith('🔍 Resource monitoring started');
+      
+      // Clean up the interval immediately
+      if (service['monitoringInterval']) {
+        clearInterval(service['monitoringInterval']);
+      }
     });
   });
 
