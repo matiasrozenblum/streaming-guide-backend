@@ -38,7 +38,7 @@ export class PerformanceInterceptor implements NestInterceptor {
         console.log(`📊 API Performance: ${endpoint} - ${responseTime}ms`);
         
         // Alert on slow responses (P3 - Medium Priority)
-        if (responseTime > 5000) { // 5 seconds
+        if (responseTime > 5000 && responseTime <= 10000) { // 5-10 seconds
           this.sentryService.captureMessage(
             `API Performance Issue - ${endpoint} taking ${responseTime}ms`,
             'warning',
@@ -60,7 +60,7 @@ export class PerformanceInterceptor implements NestInterceptor {
         }
         
         // Alert on very slow responses (P2 - High Priority)
-        if (responseTime > 10000) { // 10 seconds
+        if (responseTime > 10000) { // 10+ seconds
           this.sentryService.captureMessage(
             `API Critical Performance Issue - ${endpoint} taking ${responseTime}ms`,
             'error',
