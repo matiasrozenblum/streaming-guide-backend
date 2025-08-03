@@ -26,6 +26,9 @@ import { PushModule } from './push/push.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { UsersModule } from './users/users.module';
 import { StatisticsModule } from './statistics/statistics.module';
+import { SentryModule } from './sentry/sentry.module';
+import { ResourceMonitorService } from './services/resource-monitor.service';
+import { PerformanceInterceptor } from './interceptors/performance.interceptor';
 
 @Module({
   imports: [
@@ -49,7 +52,7 @@ import { StatisticsModule } from './statistics/statistics.module';
           url: dbUrl,
           ssl: { rejectUnauthorized: false },
           autoLoadEntities: true,
-          synchronize: !isProduction,
+          synchronize: false, // Temporarily disabled to prevent schema conflicts
           logging: false,
           extra: {
             max: 20,
@@ -59,6 +62,15 @@ import { StatisticsModule } from './statistics/statistics.module';
             query_timeout: 10000,
           },
           cache: { duration: 30000 },
+          // Enhanced error handling for database connection
+          onConnect: async (connection) => {
+            console.log('✅ Database connected successfully');
+          },
+          onError: (error) => {
+            console.error('❌ Database connection error:', error);
+            // Sentry will be available after module initialization
+            // We'll handle this in the main.ts file
+          },
         };
       },
     }),
@@ -77,12 +89,18 @@ import { StatisticsModule } from './statistics/statistics.module';
     NotificationsModule,
     UsersModule,
     StatisticsModule,
+    SentryModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
     YoutubeDiscoveryService,
     RedisService, // 🔥 Agregado
+    ResourceMonitorService,
+    {
+      provide: 'APP_INTERCEPTOR',
+      useClass: PerformanceInterceptor,
+    },
   ],
 })
 export class AppModule {}
