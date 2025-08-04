@@ -25,7 +25,6 @@ interface FindAllOptions {
   relations?: string[];
   select?: string[];
   skipCache?: boolean;
-  deviceId?: string;
   applyOverrides?: boolean;
 }
 
@@ -60,7 +59,7 @@ export class SchedulesService {
 
   async findAll(options: FindAllOptions = {}): Promise<any[]> {
     const startTime = Date.now();
-    const { dayOfWeek, relations = ['program', 'program.channel', 'program.panelists'], select, skipCache = false, deviceId, applyOverrides = true } = options;
+    const { dayOfWeek, relations = ['program', 'program.channel', 'program.panelists'], select, skipCache = false, applyOverrides = true } = options;
 
     const cacheKey = `schedules:all:${dayOfWeek || 'all'}`;
     let schedules: Schedule[] | null = null;
@@ -146,18 +145,8 @@ export class SchedulesService {
     console.log('[findAll] Enriched schedules in', Date.now() - enrichStart, 'ms');
     console.log('[findAll] Enriched result length:', enriched.length);
 
-    if (!deviceId) {
-      console.log('[findAll] TOTAL time:', Date.now() - startTime, 'ms');
-      return enriched;
-    }
-
-    const prefs = await this.notificationsService.list(deviceId);
-    const subscribedSet = new Set(prefs.map((p) => p.programId));
-    console.log('[findAll] TOTAL time (with deviceId):', Date.now() - startTime, 'ms');
-    return enriched.map((block) => ({
-      ...block,
-      subscribed: subscribedSet.has(Number(block.program.id)),
-    }));
+    console.log('[findAll] TOTAL time:', Date.now() - startTime, 'ms');
+    return enriched;
   }
 
   async enrichSchedules(schedules: Schedule[]): Promise<any[]> {
