@@ -166,10 +166,11 @@ export class AuthController {
     const firstName = body.firstName || '';
     const lastName = body.lastName || '';
     if (user) {
-      // Update user fields if provided
+      // Update user fields if provided, but preserve existing role
       const updateDto: any = {
         firstName: firstName || user.firstName,
         lastName: lastName || user.lastName,
+        role: user.role, // Preserve existing role
       };
       if (body.gender) updateDto.gender = body.gender;
       if (body.birthDate) updateDto.birthDate = body.birthDate;
