@@ -17,6 +17,17 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.7.4] - 2025-08-04
+
+### Fixed
+- Removed reference to non existing table notification_preferences
+
+## [1.7.3] - 2025-08-04
+
+### Fixed
+- Fixed is_live status
+- Fixed caching mecahanism
+
 ## [1.7.2] - 2025-08-04
 
 ### Changed
