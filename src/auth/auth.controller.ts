@@ -161,11 +161,26 @@ export class AuthController {
   async socialLogin(
     @Body() body: { email: string; firstName?: string; lastName?: string; origin: string; gender?: string; birthDate?: string }
   ) {
+    console.log('🔍 [AuthController] socialLogin called with:', {
+      email: body.email,
+      origin: body.origin,
+      timestamp: new Date().toISOString()
+    });
+    
     // Upsert user by email
     let user = await this.usersService.findByEmail(body.email);
+    console.log('🔍 [AuthController] findByEmail result:', {
+      found: !!user,
+      userId: user?.id,
+      userRole: user?.role,
+      userOrigin: user?.origin,
+      email: body.email
+    });
+    
     const firstName = body.firstName || '';
     const lastName = body.lastName || '';
     if (user) {
+      console.log('✅ [AuthController] Found existing user, updating...');
       // Update user fields if provided
       const updateDto: any = {
         firstName: firstName || user.firstName,
@@ -174,7 +189,9 @@ export class AuthController {
       if (body.gender) updateDto.gender = body.gender;
       if (body.birthDate) updateDto.birthDate = body.birthDate;
       user = await this.usersService.update(user.id, updateDto);
+      console.log('✅ [AuthController] User updated:', user.id);
     } else {
+      console.log('🆕 [AuthController] No existing user found, creating new social user...');
       user = await this.usersService.createSocialUser({
         email: body.email,
         firstName,
@@ -183,6 +200,7 @@ export class AuthController {
         birthDate: body.birthDate,
         origin: body.origin,
       });
+      console.log('🆕 [AuthController] New social user created:', user.id);
     }
     // If user is missing gender, birthDate, or password, require profile completion
     if (!user.gender || !user.birthDate) {
