@@ -1,10 +1,9 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, ManyToMany, JoinTable, JoinColumn, Index } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, ManyToMany, JoinTable, JoinColumn } from 'typeorm';
 import { Channel } from '../channels/channels.entity';
 import { Schedule } from '../schedules/schedules.entity';
 import { Panelist } from '../panelists/panelists.entity';
 
 @Entity()
-@Index(['channel_id']) // Index for channel joins
 export class Program {
   @PrimaryGeneratedColumn()
   id: number;
