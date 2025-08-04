@@ -32,6 +32,7 @@ describe('UsersService', () => {
     find: jest.fn(),
     findOne: jest.fn(),
     delete: jest.fn(),
+    findAndCount: jest.fn(),
   };
 
   const mockDeviceService = {
@@ -161,12 +162,45 @@ describe('UsersService', () => {
 
   describe('findAll', () => {
     it('should return an array of users', async () => {
-      mockRepository.find.mockResolvedValue([mockUser]);
+      const mockUsers = [mockUser];
+      const mockTotal = 1;
+      mockRepository.findAndCount.mockResolvedValue([mockUsers, mockTotal]);
 
       const result = await service.findAll();
 
-      expect(mockRepository.find).toHaveBeenCalled();
-      expect(result).toEqual([mockUser]);
+      expect(mockRepository.findAndCount).toHaveBeenCalledWith({
+        relations: ['devices', 'subscriptions', 'subscriptions.program'],
+        skip: 0,
+        take: 20,
+        order: { id: 'DESC' },
+      });
+      expect(result).toEqual({
+        users: mockUsers,
+        total: mockTotal,
+        page: 1,
+        pageSize: 20,
+      });
+    });
+
+    it('should return paginated users with custom page and pageSize', async () => {
+      const mockUsers = [mockUser];
+      const mockTotal = 50;
+      mockRepository.findAndCount.mockResolvedValue([mockUsers, mockTotal]);
+
+      const result = await service.findAll(2, 10);
+
+      expect(mockRepository.findAndCount).toHaveBeenCalledWith({
+        relations: ['devices', 'subscriptions', 'subscriptions.program'],
+        skip: 10, // (page - 1) * pageSize = (2 - 1) * 10 = 10
+        take: 10,
+        order: { id: 'DESC' },
+      });
+      expect(result).toEqual({
+        users: mockUsers,
+        total: mockTotal,
+        page: 2,
+        pageSize: 10,
+      });
     });
   });
 

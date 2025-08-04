@@ -13,6 +13,13 @@ import { UserSubscription } from '@/users/user-subscription.entity';
 import { Device } from '@/users/device.entity';
 import { User } from '@/users/users.entity';
 import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
+import { ConfigService } from '@/config/config.service';
+import { WeeklyOverridesService } from '@/schedules/weekly-overrides.service';
+import { YoutubeLiveService } from '@/youtube/youtube-live.service';
+import { getCurrentBlockTTL } from '@/utils/getBlockTTL.util';
+import * as dayjs from 'dayjs';
+import * as utc from 'dayjs/plugin/utc';
+import * as timezone from 'dayjs/plugin/timezone';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
 const REVALIDATE_SECRET = process.env.REVALIDATE_SECRET || 'changeme';
@@ -47,6 +54,7 @@ type ChannelWithSchedules = {
 @Injectable()
 export class ChannelsService {
   private notifyUtil: NotifyAndRevalidateUtil;
+  private dayjs: typeof dayjs;
 
   constructor(
     @InjectRepository(Channel)
@@ -63,7 +71,13 @@ export class ChannelsService {
     private readonly schedulesService: SchedulesService,
     private readonly redisService: RedisService,
     private readonly youtubeDiscovery: YoutubeDiscoveryService,
+    private readonly configService: ConfigService,
+    private readonly weeklyOverridesService: WeeklyOverridesService,
+    private readonly youtubeLiveService: YoutubeLiveService,
   ) {
+    this.dayjs = dayjs;
+    this.dayjs.extend(utc);
+    this.dayjs.extend(timezone);
     this.notifyUtil = new NotifyAndRevalidateUtil(
       this.redisService,
       FRONTEND_URL,
@@ -185,26 +199,7 @@ export class ChannelsService {
     const overallStart = Date.now();
     console.log('[getChannelsWithSchedules] START');
 
-    const channelsStart = Date.now();
-    const channels = await this.channelsRepository.find({
-      where: {
-        is_visible: true,
-      },
-      order: {
-        order: 'ASC',
-      },
-    });
-    console.log('[getChannelsWithSchedules] Channels fetched in', Date.now() - channelsStart, 'ms');
-
-    const schedulesStart = Date.now();
-    const schedules = await this.schedulesService.findAll({
-      dayOfWeek: day ? day.toLowerCase() : undefined,
-      skipCache: liveStatus === true,
-      applyOverrides: raw !== 'true',
-    });
-    console.log('[getChannelsWithSchedules] Schedules fetched in', Date.now() - schedulesStart, 'ms');
-
-    // Get user subscriptions based on deviceId
+    // Pre-fetch user subscriptions if deviceId is provided
     let subscribedProgramIds: Set<number> = new Set();
     if (deviceId) {
       const device = await this.deviceRepo.findOne({
@@ -220,8 +215,62 @@ export class ChannelsService {
       }
     }
 
+    // Use optimized single query with all necessary joins
+    const queryStart = Date.now();
+    const queryBuilder = this.channelsRepository
+      .createQueryBuilder('channel')
+      .leftJoinAndSelect('channel.programs', 'program')
+      .leftJoinAndSelect('program.schedules', 'schedule')
+      .leftJoinAndSelect('program.panelists', 'panelists')
+      .where('channel.is_visible = :isVisible', { isVisible: true })
+      .orderBy('channel.order', 'ASC')
+      .addOrderBy('schedule.start_time', 'ASC')
+      .addOrderBy('panelists.id', 'ASC');
+
+    if (day) {
+      queryBuilder.andWhere('schedule.day_of_week = :dayOfWeek', { dayOfWeek: day.toLowerCase() });
+    }
+
+    const channelsWithPrograms = await queryBuilder.getMany();
+    console.log('[getChannelsWithSchedules] Optimized query completed in', Date.now() - queryStart, 'ms');
+
+    // Extract and flatten all schedules for processing
+    const allSchedules: any[] = [];
+    channelsWithPrograms.forEach(channel => {
+      channel.programs?.forEach(program => {
+        program.schedules?.forEach(schedule => {
+          allSchedules.push({
+            ...schedule,
+            program: {
+              ...program,
+              channel: { id: channel.id, name: channel.name, logo_url: channel.logo_url }
+            }
+          });
+        });
+      });
+    });
+
+    console.log('[getChannelsWithSchedules] Extracted', allSchedules.length, 'schedules');
+
+    // Apply weekly overrides if needed
+    let processedSchedules = allSchedules;
+    if (raw !== 'true') {
+      const currentWeekStart = this.weeklyOverridesService.getWeekStartDate('current');
+      const overridesStart = Date.now();
+      console.log('[getChannelsWithSchedules] Applying weekly overrides...');
+      processedSchedules = await this.weeklyOverridesService.applyWeeklyOverrides(allSchedules, currentWeekStart);
+      console.log('[getChannelsWithSchedules] Weekly overrides applied in', Date.now() - overridesStart, 'ms');
+    }
+
+    // Enrich schedules with live status (batch process)
+    const enrichStart = Date.now();
+    console.log('[getChannelsWithSchedules] Enriching schedules...');
+    const enrichedSchedules = await this.enrichSchedulesBatch(processedSchedules);
+    console.log('[getChannelsWithSchedules] Enriched schedules in', Date.now() - enrichStart, 'ms');
+
+    // Group schedules by channel
     const groupStart = Date.now();
-    const schedulesGroupedByChannelId = schedules.reduce((acc, schedule) => {
+    const schedulesGroupedByChannelId = enrichedSchedules.reduce((acc, schedule) => {
       const channelId = schedule.program?.channel?.id;
       if (!channelId) return acc;
       if (!acc[channelId]) acc[channelId] = [];
@@ -230,8 +279,9 @@ export class ChannelsService {
     }, {} as Record<number, any[]>);
     console.log('[getChannelsWithSchedules] Grouped schedules in', Date.now() - groupStart, 'ms');
 
+    // Build final result
     const resultStart = Date.now();
-    const result: ChannelWithSchedules[] = channels.map((channel) => ({
+    const result: ChannelWithSchedules[] = channelsWithPrograms.map(channel => ({
       channel: {
         id: channel.id,
         name: channel.name,
@@ -263,5 +313,138 @@ export class ChannelsService {
     console.log('[getChannelsWithSchedules] Built result in', Date.now() - resultStart, 'ms');
     console.log('[getChannelsWithSchedules] TOTAL time:', Date.now() - overallStart, 'ms');
     return result;
+  }
+
+  // New optimized batch enrichment method
+  private async enrichSchedulesBatch(schedules: any[]): Promise<any[]> {
+    console.log('[enrichSchedulesBatch] Starting batch enrichment of', schedules.length, 'schedules');
+    const now = this.dayjs().tz('America/Argentina/Buenos_Aires');
+    const currentNum = now.hour() * 100 + now.minute();
+    const currentDay = now.format('dddd').toLowerCase();
+
+    // Collect all unique channel IDs and handles for batch processing
+    const channelInfoMap = new Map<string, { channelId: string; handle: string; canFetch: boolean }>();
+    const schedulesToEnrich: any[] = [];
+
+    for (const schedule of schedules) {
+      const { program } = schedule;
+      const channel = program.channel;
+      const channelId = channel?.youtube_channel_id;
+      const handle = channel?.handle;
+
+      const startNum = this.convertTimeToNumber(schedule.start_time);
+      const endNum = this.convertTimeToNumber(schedule.end_time);
+
+      // Check if this schedule should be enriched (is currently live)
+      const isCurrentlyLive = schedule.day_of_week === currentDay &&
+        currentNum >= startNum &&
+        currentNum < endNum &&
+        handle &&
+        channelId;
+
+      if (isCurrentlyLive) {
+        if (!channelInfoMap.has(channelId)) {
+          const canFetch = await this.configService.canFetchLive(handle);
+          channelInfoMap.set(channelId, { channelId, handle, canFetch });
+        }
+        
+        if (channelInfoMap.get(channelId)?.canFetch) {
+          schedulesToEnrich.push(schedule);
+        }
+      }
+    }
+
+          // Batch fetch live video IDs for all channels that need enrichment
+      const liveVideoIds = new Map<string, string>();
+      if (schedulesToEnrich.length > 0) {
+        const uniqueChannelIds = Array.from(channelInfoMap.keys());
+        console.log('[enrichSchedulesBatch] Batch fetching live video IDs for', uniqueChannelIds.length, 'channels');
+        
+        // Batch Redis lookups
+        const redisKeys = uniqueChannelIds.map(id => `liveVideoIdByChannel:${id}`);
+        const cachedIds = await Promise.all(
+          redisKeys.map(key => this.redisService.get<string>(key))
+        );
+        
+        // Process cached results
+        uniqueChannelIds.forEach((channelId, index) => {
+          const cachedId = cachedIds[index];
+          if (cachedId) {
+            liveVideoIds.set(channelId, cachedId);
+          }
+        });
+
+        // Fetch missing video IDs in parallel
+        const missingChannels = uniqueChannelIds.filter(id => !liveVideoIds.has(id));
+        if (missingChannels.length > 0) {
+          console.log('[enrichSchedulesBatch] Fetching', missingChannels.length, 'missing video IDs');
+          const fetchPromises = missingChannels.map(async (channelId) => {
+            const channelInfo = channelInfoMap.get(channelId);
+            if (!channelInfo) return;
+
+            const ttl = await getCurrentBlockTTL(channelId, schedules);
+            const vid = await this.youtubeLiveService.getLiveVideoId(
+              channelId,
+              channelInfo.handle,
+              ttl,
+              'onDemand'
+            );
+            if (vid && vid !== '__SKIPPED__') {
+              liveVideoIds.set(channelId, vid);
+            }
+          });
+
+          await Promise.all(fetchPromises);
+        }
+      }
+
+    // Apply enrichment to all schedules
+    const enriched: any[] = [];
+    for (const schedule of schedules) {
+      const { program } = schedule;
+      const channel = program.channel;
+      const channelId = channel?.youtube_channel_id;
+      const handle = channel?.handle;
+
+      const startNum = this.convertTimeToNumber(schedule.start_time);
+      const endNum = this.convertTimeToNumber(schedule.end_time);
+
+      let isLive = false;
+      let streamUrl = program.youtube_url;
+
+      // Check if currently live and should be enriched
+      if (schedule.day_of_week === currentDay &&
+          currentNum >= startNum &&
+          currentNum < endNum &&
+          handle &&
+          channelId) {
+        
+        const channelInfo = channelInfoMap.get(channelId);
+        if (channelInfo?.canFetch) {
+          isLive = true;
+          const liveVideoId = liveVideoIds.get(channelId);
+          if (liveVideoId) {
+            streamUrl = `https://www.youtube.com/embed/${liveVideoId}?autoplay=1`;
+          }
+        }
+      }
+
+      enriched.push({
+        ...schedule,
+        program: {
+          ...program,
+          is_live: isLive,
+          stream_url: streamUrl,
+        },
+      });
+    }
+
+    console.log('[enrichSchedulesBatch] Enriched', enriched.length, 'schedules');
+    return enriched;
+  }
+
+  private convertTimeToNumber(time: string): number {
+    const [h, m] = time.split(':').map(Number);
+    return h * 100 + m;
   }
 }
