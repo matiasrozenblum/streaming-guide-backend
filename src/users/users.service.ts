@@ -202,10 +202,25 @@ export class UsersService {
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    return this.usersRepository.findOne({ 
+    console.log('🔍 [UsersService] findByEmail called with:', {
+      email,
+      timestamp: new Date().toISOString()
+    });
+    
+    const user = await this.usersRepository.findOne({ 
       where: { email },
       relations: ['devices', 'subscriptions'],
     });
+    
+    console.log('🔍 [UsersService] findByEmail result:', {
+      found: !!user,
+      userId: user?.id,
+      userRole: user?.role,
+      userOrigin: user?.origin,
+      email
+    });
+    
+    return user;
   }
 
   /**
