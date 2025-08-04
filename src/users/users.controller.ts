@@ -11,12 +11,14 @@ import {
   ForbiddenException,
   NotFoundException,
   UnauthorizedException,
+  Query,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiBearerAuth,
   ApiOperation,
   ApiResponse,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -51,9 +53,14 @@ export class UsersController {
   @Get()
   @Roles('admin')
   @ApiOperation({ summary: 'Listar usuarios (solo admin)' })
-  @ApiResponse({ status: 200, type: [User] })
-  findAll() {
-    return this.usersService.findAll();
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)' })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number, description: 'Page size (default: 20)' })
+  @ApiResponse({ status: 200, description: 'Paginated list of users' })
+  findAll(
+    @Query('page') page: number = 1,
+    @Query('pageSize') pageSize: number = 20,
+  ) {
+    return this.usersService.findAll(page, pageSize);
   }
 
   /** Perfil propio */

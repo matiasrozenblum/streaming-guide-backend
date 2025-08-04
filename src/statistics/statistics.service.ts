@@ -16,6 +16,7 @@ export interface UserDemographics {
     female: number;
     non_binary: number;
     rather_not_say: number;
+    unknown: number;
   };
   byAgeGroup: {
     under18: number;
@@ -76,13 +77,21 @@ export class StatisticsService {
       relations: ['subscriptions'],
     });
     const totalUsers = users.length;
-    const byGender = { male: 0, female: 0, non_binary: 0, rather_not_say: 0 };
+    const byGender = { male: 0, female: 0, non_binary: 0, rather_not_say: 0, unknown: 0 };
     const byAgeGroup = { under18: 0, age18to30: 0, age30to45: 0, age45to60: 0, over60: 0, unknown: 0 };
     let usersWithSubscriptions = 0;
     let usersWithoutSubscriptions = 0;
     users.forEach(user => {
-      if (user.gender) byGender[user.gender]++;
-      if (user.birthDate) byAgeGroup[this.calculateAgeGroup(user.birthDate)]++;
+      if (user.gender) {
+        byGender[user.gender]++;
+      } else {
+        byGender.unknown++;
+      }
+      if (user.birthDate) {
+        byAgeGroup[this.calculateAgeGroup(user.birthDate)]++;
+      } else {
+        byAgeGroup.unknown++;
+      }
       if (user.subscriptions && user.subscriptions.length > 0) usersWithSubscriptions++;
       else usersWithoutSubscriptions++;
     });
@@ -149,7 +158,7 @@ export class StatisticsService {
       .leftJoinAndSelect('subscription.program', 'program')
       .leftJoinAndSelect('program.channel', 'channel')
       .where('subscription.createdAt >= :from', { from })
-      .andWhere('subscription.createdAt <= :to', { to });
+      .andWhere('subscription.createdAt <= :to');
     if (programId) qb.andWhere('program.id = :programId', { programId });
     if (channelId) qb.andWhere('channel.id = :channelId', { channelId });
     qb.orderBy('subscription.createdAt', 'DESC').skip(skip).take(pageSize);
@@ -225,7 +234,7 @@ export class StatisticsService {
       programName: string;
       channelName: string;
       totalSubscriptions: number;
-      byGender: { male: number; female: number; non_binary: number; rather_not_say: number; };
+      byGender: { male: number; female: number; non_binary: number; rather_not_say: number; unknown: number; };
       byAgeGroup: { under18: number; age18to30: number; age30to45: number; age45to60: number; over60: number; unknown: number; };
     }>();
 
@@ -235,7 +244,7 @@ export class StatisticsService {
         programName: program.name,
         channelName: program.channel?.name || '',
         totalSubscriptions: 0,
-        byGender: { male: 0, female: 0, non_binary: 0, rather_not_say: 0 },
+        byGender: { male: 0, female: 0, non_binary: 0, rather_not_say: 0, unknown: 0 },
         byAgeGroup: { under18: 0, age18to30: 0, age30to45: 0, age45to60: 0, over60: 0, unknown: 0 },
       });
     }
@@ -245,9 +254,16 @@ export class StatisticsService {
       const stat = statsMap.get(sub.program.id);
       if (!stat) continue;
       stat.totalSubscriptions++;
-      if (sub.user && sub.user.gender) stat.byGender[sub.user.gender]++;
-      if (sub.user && sub.user.birthDate) stat.byAgeGroup[this.calculateAgeGroup(sub.user.birthDate)]++;
-      else stat.byAgeGroup.unknown++;
+      if (sub.user && sub.user.gender) {
+        stat.byGender[sub.user.gender]++;
+      } else {
+        stat.byGender.unknown++;
+      }
+      if (sub.user && sub.user.birthDate) {
+        stat.byAgeGroup[this.calculateAgeGroup(sub.user.birthDate)]++;
+      } else {
+        stat.byAgeGroup.unknown++;
+      }
     }
 
     return Array.from(statsMap.values());

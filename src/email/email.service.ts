@@ -118,4 +118,31 @@ export class EmailService {
       throw error; // Re-throw to maintain original behavior
     }
   }
+
+  // Alias for backward compatibility (in case of cached builds)
+  async sendReportWithAttachments(
+    toOrParams: string | { to: string, subject: string, text: string, html: string, attachments: { filename: string, content: Buffer, contentType: string }[] },
+    attachments?: { filename: string, content: Buffer, contentType: string }[]
+  ) {
+    // Handle both calling patterns:
+    // 1. sendReportWithAttachments(params) - single object
+    // 2. sendReportWithAttachments(to, attachments) - separate parameters
+    
+    if (typeof toOrParams === 'string') {
+      // Called with separate parameters: sendReportWithAttachments(to, attachments)
+      if (!attachments) {
+        throw new Error('Attachments parameter is required when calling with separate parameters');
+      }
+      return this.sendReportWithAttachment({
+        to: toOrParams,
+        subject: 'Reporte solicitado',
+        text: 'Adjuntamos el reporte solicitado.',
+        html: '<p>Adjuntamos el reporte solicitado.</p>',
+        attachments,
+      });
+    } else {
+      // Called with single object parameter: sendReportWithAttachments(params)
+      return this.sendReportWithAttachment(toOrParams);
+    }
+  }
 }
