@@ -11,6 +11,7 @@ import { RedisModule } from '../redis/redis.module';
 import { YoutubeDiscoveryModule } from '../youtube/youtube-discovery.module';
 import { UserSubscription } from '../users/user-subscription.entity';
 import { Device } from '../users/device.entity';
+import { ConfigModule } from '../config/config.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { Device } from '../users/device.entity';
     forwardRef(() => SchedulesModule),
     RedisModule,
     YoutubeDiscoveryModule,
+    ConfigModule,
   ],
   controllers: [ChannelsController],
   providers: [ChannelsService],

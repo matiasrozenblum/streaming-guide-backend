@@ -1,7 +1,8 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany, Index } from 'typeorm';
 import { Program } from '../programs/programs.entity';
 
 @Entity()
+@Index(['is_visible', 'order']) // Composite index for filtering visible channels and ordering
 export class Channel {
   @PrimaryGeneratedColumn()
   id: number;
