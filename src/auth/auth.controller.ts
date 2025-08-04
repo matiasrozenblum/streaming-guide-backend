@@ -203,7 +203,17 @@ export class AuthController {
     const payload = this.authService.buildPayload(user);
     const access_token = await this.authService.signAccessToken(payload);
     const refresh_token = await this.authService.signRefreshToken(payload);
-    return { access_token, refresh_token };
+    return { 
+      access_token, 
+      refresh_token,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+      }
+    };
   }
 
 

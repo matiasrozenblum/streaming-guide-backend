@@ -17,6 +17,14 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.7.2] - 2025-08-04
+
+### Changed
+- Optimized GET /channels/with-schedules
+
+### Fixed
+- Fixed social login response format
+
 ## [1.7.1] - 2025-08-03
 
 ### Changed
