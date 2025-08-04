@@ -15,6 +15,9 @@ import { SchedulesService } from '../schedules/schedules.service';
 import { RedisService } from '../redis/redis.service';
 import { YoutubeDiscoveryService } from '../youtube/youtube-discovery.service';
 import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
+import { ConfigService } from '../config/config.service';
+import { WeeklyOverridesService } from '../schedules/weekly-overrides.service';
+import { YoutubeLiveService } from '../youtube/youtube-live.service';
 
 describe('ChannelsService', () => {
   let service: ChannelsService;
@@ -106,6 +109,19 @@ describe('ChannelsService', () => {
     getChannelIdFromHandle: jest.fn(),
   };
 
+  const mockConfigService = {
+    canFetchLive: jest.fn().mockResolvedValue(true),
+  };
+
+  const mockWeeklyOverridesService = {
+    getWeekStartDate: jest.fn(),
+    applyWeeklyOverrides: jest.fn(),
+  };
+
+  const mockYoutubeLiveService = {
+    getLiveVideoId: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -145,6 +161,18 @@ describe('ChannelsService', () => {
         {
           provide: YoutubeDiscoveryService,
           useValue: mockYoutubeDiscoveryService,
+        },
+        {
+          provide: ConfigService,
+          useValue: mockConfigService,
+        },
+        {
+          provide: WeeklyOverridesService,
+          useValue: mockWeeklyOverridesService,
+        },
+        {
+          provide: YoutubeLiveService,
+          useValue: mockYoutubeLiveService,
         },
       ],
     }).compile();

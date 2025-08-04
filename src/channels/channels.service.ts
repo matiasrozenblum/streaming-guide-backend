@@ -419,13 +419,16 @@ export class ChannelsService {
           handle &&
           channelId) {
         
+        // Set isLive to true if schedule is currently running
+        isLive = true;
+        
         const channelInfo = channelInfoMap.get(channelId);
         if (channelInfo?.canFetch) {
-          isLive = true;
           const liveVideoId = liveVideoIds.get(channelId);
           if (liveVideoId) {
             streamUrl = `https://www.youtube.com/embed/${liveVideoId}?autoplay=1`;
           }
+          // If no liveVideoId, keep the original streamUrl
         }
       }
 

@@ -327,7 +327,16 @@ describe('AuthController', () => {
         origin: 'google'
       });
 
-      expect(result).toEqual(mockTokens);
+      expect(result).toEqual({
+        ...mockTokens,
+        user: {
+          id: 1,
+          email: 'test@example.com',
+          firstName: 'Test',
+          lastName: 'User',
+          role: 'user'
+        }
+      });
       expect(usersService.findByEmail).toHaveBeenCalledWith('test@example.com');
       expect(usersService.update).toHaveBeenCalledWith(1, {
         firstName: 'Test',
