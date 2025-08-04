@@ -188,11 +188,13 @@ export class SchedulesService {
         handle &&
         channelId
       ) {
+        // Set isLive to true if schedule is currently running
+        isLive = true;
+        
         // Validar feature-flag + feriado (fallback true si no existe)
         const canFetch = await this.configService.canFetchLive(handle);
 
         if (canFetch) {
-          isLive = true;
           const liveKey = `liveVideoIdByChannel:${channelId}`;
 
           // Intentar reutilizar cache
