@@ -165,15 +165,35 @@ export class AuthController {
     let user = await this.usersService.findByEmail(body.email);
     const firstName = body.firstName || '';
     const lastName = body.lastName || '';
+    
+    console.log('🔍 [AuthController] socialLogin - Found user:', {
+      email: body.email,
+      userId: user?.id,
+      currentRole: user?.role,
+      firstName: user?.firstName,
+      lastName: user?.lastName
+    });
+    
     if (user) {
-      // Update user fields if provided
+      // Update user fields if provided, but preserve existing role
       const updateDto: any = {
         firstName: firstName || user.firstName,
         lastName: lastName || user.lastName,
+        role: user.role, // Preserve existing role
       };
       if (body.gender) updateDto.gender = body.gender;
       if (body.birthDate) updateDto.birthDate = body.birthDate;
+      
+      console.log('🔍 [AuthController] socialLogin - Updating user with:', updateDto);
+      
       user = await this.usersService.update(user.id, updateDto);
+      
+      console.log('🔍 [AuthController] socialLogin - User after update:', {
+        userId: user.id,
+        role: user.role,
+        firstName: user.firstName,
+        lastName: user.lastName
+      });
     } else {
       user = await this.usersService.createSocialUser({
         email: body.email,

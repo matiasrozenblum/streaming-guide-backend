@@ -340,7 +340,8 @@ describe('AuthController', () => {
       expect(usersService.findByEmail).toHaveBeenCalledWith('test@example.com');
       expect(usersService.update).toHaveBeenCalledWith(1, {
         firstName: 'Test',
-        lastName: 'User'
+        lastName: 'User',
+        role: 'user'
       });
     });
 
@@ -406,7 +407,8 @@ describe('AuthController', () => {
       });
       expect(usersService.update).toHaveBeenCalledWith(1, {
         firstName: 'Updated',
-        lastName: 'Name'
+        lastName: 'Name',
+        role: 'user'
       });
     });
   });
