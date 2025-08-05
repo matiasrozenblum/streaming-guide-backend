@@ -158,7 +158,7 @@ export class StatisticsService {
       .leftJoinAndSelect('subscription.program', 'program')
       .leftJoinAndSelect('program.channel', 'channel')
       .where('subscription.createdAt >= :from', { from })
-      .andWhere('subscription.createdAt <= :to');
+      .andWhere('subscription.createdAt <= :to', { to });
     if (programId) qb.andWhere('program.id = :programId', { programId });
     if (channelId) qb.andWhere('channel.id = :channelId', { channelId });
     qb.orderBy('subscription.createdAt', 'DESC').skip(skip).take(pageSize);
