@@ -17,7 +17,7 @@ export class JwtService {
 
   async signAccessToken(payload: Record<string, any>) {
     return this.jwtService.sign(payload, {
-      expiresIn: '15m',
+      expiresIn: '7d', // Extended from '15m' to '7d' as temporary fix
     });
   }
 
