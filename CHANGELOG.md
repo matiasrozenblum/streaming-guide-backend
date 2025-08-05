@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.7.5] - 2025-08-05
+
+### Fixed
+- Now not losing user role during social login
+
 ## [1.7.4] - 2025-08-04
 
 ### Fixed
