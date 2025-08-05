@@ -179,6 +179,15 @@ export class AuthController {
     
     const firstName = body.firstName || '';
     const lastName = body.lastName || '';
+    
+    console.log('🔍 [AuthController] socialLogin - Found user:', {
+      email: body.email,
+      userId: user?.id,
+      currentRole: user?.role,
+      firstName: user?.firstName,
+      lastName: user?.lastName
+    });
+    
     if (user) {
       // Update user fields if provided, but preserve existing role
       const updateDto: any = {
@@ -188,8 +197,17 @@ export class AuthController {
       };
       if (body.gender) updateDto.gender = body.gender;
       if (body.birthDate) updateDto.birthDate = body.birthDate;
+      
+      console.log('🔍 [AuthController] socialLogin - Updating user with:', updateDto);
+      
       user = await this.usersService.update(user.id, updateDto);
-      console.log('✅ [AuthController] User updated:', user.id);
+      
+      console.log('🔍 [AuthController] socialLogin - User after update:', {
+        userId: user.id,
+        role: user.role,
+        firstName: user.firstName,
+        lastName: user.lastName
+      });
     } else {
       console.log('🆕 [AuthController] No existing user found, creating new social user...');
       user = await this.usersService.createSocialUser({
