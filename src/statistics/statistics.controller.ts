@@ -173,31 +173,57 @@ export class StatisticsController {
   @ApiBody({ type: UnifiedReportDto })
   @ApiResponse({ status: 200, description: 'Report generated or emailed successfully' })
   async unifiedReport(@Body() body: UnifiedReportDto, @Res() res: Response) {
-    const { action, toEmail, ...reportParams } = body;
+    // Handle array of reports
+    if (body.reports && body.reports.length > 0) {
+      const results: any[] = [];
+      for (const report of body.reports) {
+        const result = await this.processSingleReport(report);
+        if (result) results.push(result);
+      }
+      return res.json({ success: true, results });
+    }
+    
+    // Handle single report
+    if (body.report) {
+      const result = await this.processSingleReport(body.report);
+      return res.json(result);
+    }
+    
+    return res.status(400).json({ error: 'No report data provided' });
+  }
+
+  private async processSingleReport(report: any) {
+    const { action, toEmail, ...reportParams } = report;
+    
     if (action === 'table') {
-      if (body.type === 'users') {
+      if (report.type === 'users') {
         const result = await this.statisticsService.getNewUsersReport(
-          body.from, body.to, body.page ?? 1, body.pageSize ?? 20
+          report.from, report.to, report.page ?? 1, report.pageSize ?? 20
         );
-        return res.json(result);
-      } else if (body.type === 'subscriptions') {
+        return result;
+      } else if (report.type === 'subscriptions') {
         const result = await this.statisticsService.getNewSubscriptionsReport(
-          body.from, body.to, body.page ?? 1, body.pageSize ?? 20, body.channelId, body.programId
+          report.from, report.to, report.page ?? 1, report.pageSize ?? 20, report.channelId, report.programId
         );
-        return res.json(result);
+        return result;
       } else {
-        return res.status(400).json({ error: 'Invalid type for table action' });
+        throw new Error('Invalid type for table action');
       }
     }
+    
     let file = await this.reportsProxyService.generateReport(reportParams);
     if (typeof file === 'string') {
       file = Buffer.from(file);
     }
-    const filename = `${body.type}_report_${body.from}_to_${body.to}.${body.format}`;
+    const filename = `${report.type}_report_${report.from}_to_${report.to}.${report.format}`;
+    
     if (action === 'download') {
-      res.setHeader('Content-Type', body.format === 'csv' ? 'text/csv' : 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      res.send(file);
+      return { 
+        success: true, 
+        filename,
+        contentType: report.format === 'csv' ? 'text/csv' : 'application/pdf',
+        data: file.toString('base64')
+      };
     } else if (action === 'email') {
       const recipient = toEmail || 'laguiadelstreaming@gmail.com';
       await this.emailService.sendReportWithAttachment({
@@ -205,11 +231,11 @@ export class StatisticsController {
         subject: `Reporte solicitado: ${filename}`,
         text: `Adjuntamos el reporte solicitado (${filename}).`,
         html: `<p>Adjuntamos el reporte solicitado (<b>${filename}</b>).</p>`,
-        attachments: [{ filename, content: file, contentType: body.format === 'csv' ? 'text/csv' : 'application/pdf' }],
+        attachments: [{ filename, content: file, contentType: report.format === 'csv' ? 'text/csv' : 'application/pdf' }],
       });
-      res.json({ success: true, message: `Reporte enviado a ${recipient}` });
+      return { success: true, message: `Reporte enviado a ${recipient}` };
     } else {
-      res.status(400).json({ error: 'Invalid action' });
+      throw new Error('Invalid action');
     }
   }
 
