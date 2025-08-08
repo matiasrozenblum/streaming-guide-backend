@@ -71,8 +71,8 @@ export class ComprehensiveReportController {
     try {
       const result = await this.comprehensiveReportService.generatePeriodicReport(
         body.period,
-        body.customFrom,
-        body.customTo,
+        body.from,
+        body.to,
         body.channelId,
         body.format,
         body.action,
