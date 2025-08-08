@@ -28,7 +28,7 @@ export class ReportsProxyService {
         }
       );
       
-      return response.data;
+      return Buffer.from(response.data);
     } catch (error) {
       console.error('Error calling reports service:', error.message);
       throw new HttpException(

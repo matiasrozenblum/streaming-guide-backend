@@ -48,8 +48,18 @@ export class DeviceService {
       if (!device.user || device.user.id !== user.id) {
         console.log('🔄 [DeviceService] Updating device user association');
         device.user = user;
+        device.lastSeen = new Date();
+      } else {
+        // Only update lastSeen if it's been more than 5 minutes since last update
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+        if (!device.lastSeen || device.lastSeen < fiveMinutesAgo) {
+          console.log('🔄 [DeviceService] Updating lastSeen (more than 5 minutes since last update)');
+          device.lastSeen = new Date();
+        } else {
+          console.log('⏭️ [DeviceService] Skipping lastSeen update (updated recently)');
+        }
       }
-      device.lastSeen = new Date();
+      
       device.userAgent = userAgent;
       const updatedDevice = await this.deviceRepository.save(device);
       console.log('✅ [DeviceService] Updated existing device');
@@ -97,8 +107,14 @@ export class DeviceService {
           // Update the existing device
           if (!device.user || device.user.id !== user.id) {
             device.user = user;
+            device.lastSeen = new Date();
+          } else {
+            // Only update lastSeen if it's been more than 5 minutes since last update
+            const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+            if (!device.lastSeen || device.lastSeen < fiveMinutesAgo) {
+              device.lastSeen = new Date();
+            }
           }
-          device.lastSeen = new Date();
           device.userAgent = userAgent;
           const updatedDevice = await this.deviceRepository.save(device);
           console.log('✅ [DeviceService] Updated device after constraint violation');
@@ -108,7 +124,6 @@ export class DeviceService {
         }
       }
       
-      // Re-throw if it's not a unique constraint violation or device still not found
       throw error;
     }
   }

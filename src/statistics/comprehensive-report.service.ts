@@ -60,7 +60,11 @@ export class ComprehensiveReportService {
     const filename = `${channel.name}_report_${from}_to_${to}.${format}`;
 
     if (action === ReportAction.DOWNLOAD) {
-      return { filename, data: file, contentType: format === 'csv' ? 'text/csv' : 'application/pdf' };
+      return { 
+        filename, 
+        data: Buffer.isBuffer(file) ? file.toString('base64') : file, 
+        contentType: format === 'csv' ? 'text/csv' : 'application/pdf' 
+      };
     } else if (action === ReportAction.EMAIL) {
       const recipient = toEmail || 'laguiadelstreaming@gmail.com';
       await this.emailService.sendReportWithAttachment({
@@ -112,7 +116,11 @@ export class ComprehensiveReportService {
     const filename = `${period}_${reportType}_${reportFrom}_to_${reportTo}.${format}`;
 
     if (action === ReportAction.DOWNLOAD) {
-      return { filename, data: file, contentType: format === 'csv' ? 'text/csv' : 'application/pdf' };
+      return { 
+        filename, 
+        data: Buffer.isBuffer(file) ? file.toString('base64') : file, 
+        contentType: format === 'csv' ? 'text/csv' : 'application/pdf' 
+      };
     } else if (action === ReportAction.EMAIL) {
       await this.emailService.sendReportWithAttachment({
         to: 'laguiadelstreaming@gmail.com',
@@ -123,6 +131,9 @@ export class ComprehensiveReportService {
       });
       return { success: true, message: `Reporte ${period} enviado automáticamente` };
     }
+    
+    // Default return for other actions
+    return { success: true, message: `Reporte ${period} generado correctamente` };
   }
 
   /**
