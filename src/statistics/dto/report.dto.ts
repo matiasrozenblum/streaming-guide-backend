@@ -72,17 +72,34 @@ export class ChannelReportDto extends BaseReportDto {
   declare channelId: number;
 }
 
-export class PeriodicReportDto extends BaseReportDto {
+export class PeriodicReportDto {
+  @IsEnum(ReportType)
+  type: ReportType;
+
+  @IsEnum(ReportFormat)
+  format: ReportFormat;
+
   @IsEnum(ReportPeriod)
   period: ReportPeriod;
 
-  @IsOptional()
-  @IsDateString()
-  customFrom?: string;
+  @IsEnum(ReportAction)
+  action: ReportAction;
 
   @IsOptional()
-  @IsDateString()
-  customTo?: string;
+  @IsString()
+  from?: string;
+
+  @IsOptional()
+  @IsString()
+  to?: string;
+
+  @IsOptional()
+  @IsNumber()
+  channelId?: number;
+
+  @IsOptional()
+  @IsString()
+  toEmail?: string;
 }
 
 export class BatchReportDto {

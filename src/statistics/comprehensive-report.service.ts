@@ -92,7 +92,8 @@ export class ComprehensiveReportService {
     let reportFrom: string;
     let reportTo: string;
 
-    if (period === ReportPeriod.CUSTOM && from && to) {
+    // Use provided dates if available, otherwise calculate based on period
+    if (from && to) {
       reportFrom = from;
       reportTo = to;
     } else {
