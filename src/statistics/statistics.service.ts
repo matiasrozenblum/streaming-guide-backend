@@ -268,4 +268,159 @@ export class StatisticsService {
 
     return Array.from(statsMap.values());
   }
+
+  async generateChannelReport(
+    channelId: number,
+    from: string,
+    to: string,
+    format: 'csv' | 'pdf'
+  ): Promise<Buffer | string> {
+    return this.reportsProxyService.generateChannelReport({
+      channelId,
+      from,
+      to,
+      format,
+    });
+  }
+
+  async generateWeeklyReport(
+    from: string,
+    to: string,
+    channelId?: number
+  ): Promise<Buffer> {
+    return this.reportsProxyService.generateWeeklyReport({
+      from,
+      to,
+      channelId,
+    });
+  }
+
+  async generatePeriodicReport(
+    type: 'monthly-summary' | 'quarterly-summary' | 'yearly-summary',
+    from: string,
+    to: string,
+    channelId?: number
+  ): Promise<Buffer> {
+    return this.reportsProxyService.generatePeriodicReport({
+      type,
+      from,
+      to,
+      channelId,
+    });
+  }
+
+  async emailChannelReport(
+    channelId: number,
+    from: string,
+    to: string,
+    format: 'csv' | 'pdf',
+    toEmail: string
+  ): Promise<void> {
+    const report = await this.generateChannelReport(channelId, from, to, format);
+    const filename = `channel_${channelId}_report_${from}_to_${to}.${format}`;
+    
+    // Ensure report is a Buffer
+    const reportBuffer = typeof report === 'string' ? Buffer.from(report) : report;
+    
+    await this.emailService.sendReportWithAttachment({
+      to: toEmail,
+      subject: `Reporte de Canal: ${filename}`,
+      text: `Adjuntamos el reporte del canal solicitado (${filename}).`,
+      html: `<p>Adjuntamos el reporte del canal solicitado (<b>${filename}</b>).</p>`,
+      attachments: [{ 
+        filename, 
+        content: reportBuffer, 
+        contentType: format === 'csv' ? 'text/csv' : 'application/pdf' 
+      }],
+    });
+  }
+
+  async emailPeriodicReport(
+    type: 'monthly-summary' | 'quarterly-summary' | 'yearly-summary',
+    from: string,
+    to: string,
+    channelId: number | undefined,
+    toEmail: string
+  ): Promise<void> {
+    const report = await this.generatePeriodicReport(type, from, to, channelId);
+    const channelSuffix = channelId ? `_channel_${channelId}` : '';
+    const filename = `${type.replace('-summary', '')}_report${channelSuffix}_${from}_to_${to}.pdf`;
+    
+    await this.emailService.sendReportWithAttachment({
+      to: toEmail,
+      subject: `Reporte ${type.replace('-summary', '')}: ${filename}`,
+      text: `Adjuntamos el reporte ${type.replace('-summary', '')} solicitado (${filename}).`,
+      html: `<p>Adjuntamos el reporte ${type.replace('-summary', '')} solicitado (<b>${filename}</b>).</p>`,
+      attachments: [{ 
+        filename, 
+        content: report, 
+        contentType: 'application/pdf' 
+      }],
+    });
+  }
+
+  async getChannelStats(channelId: number, from: string, to: string) {
+    // Get channel information
+    const channel = await this.channelRepository.findOne({
+      where: { id: channelId },
+      relations: ['programs'],
+    });
+
+    if (!channel) {
+      throw new Error('Channel not found');
+    }
+
+    // Get subscriptions for this channel in the date range
+    const subscriptions = await this.subscriptionRepository
+      .createQueryBuilder('subscription')
+      .leftJoinAndSelect('subscription.user', 'user')
+      .leftJoinAndSelect('subscription.program', 'program')
+      .leftJoinAndSelect('program.channel', 'channel')
+      .where('channel.id = :channelId', { channelId })
+      .andWhere('subscription.createdAt >= :from', { from })
+      .andWhere('subscription.createdAt <= :to', { to })
+      .andWhere('subscription.isActive = :isActive', { isActive: true })
+      .getMany();
+
+    // Calculate statistics
+    const totalSubscriptions = subscriptions.length;
+    const uniqueUsers = new Set(subscriptions.map(sub => sub.user?.id)).size;
+    
+    const byGender = { male: 0, female: 0, non_binary: 0, rather_not_say: 0, unknown: 0 };
+    const byAgeGroup = { under18: 0, age18to30: 0, age30to45: 0, age45to60: 0, over60: 0, unknown: 0 };
+    
+    subscriptions.forEach(sub => {
+      if (sub.user && sub.user.gender) {
+        byGender[sub.user.gender]++;
+      } else {
+        byGender.unknown++;
+      }
+      if (sub.user && sub.user.birthDate) {
+        byAgeGroup[this.calculateAgeGroup(sub.user.birthDate)]++;
+      } else {
+        byAgeGroup.unknown++;
+      }
+    });
+
+    // Get program breakdown
+    const programStats = new Map<number, { name: string; subscriptions: number }>();
+    subscriptions.forEach(sub => {
+      if (sub.program) {
+        const existing = programStats.get(sub.program.id) || { name: sub.program.name, subscriptions: 0 };
+        existing.subscriptions++;
+        programStats.set(sub.program.id, existing);
+      }
+    });
+
+    return {
+      channelId: channel.id,
+      channelName: channel.name,
+      period: { from, to },
+      totalSubscriptions,
+      uniqueUsers,
+      byGender,
+      byAgeGroup,
+      programs: Array.from(programStats.values()).sort((a, b) => b.subscriptions - a.subscriptions),
+    };
+  }
 } 
