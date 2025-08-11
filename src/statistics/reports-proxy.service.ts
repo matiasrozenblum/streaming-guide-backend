@@ -119,8 +119,14 @@ export class ReportsProxyService {
   }): Promise<Buffer> {
     try {
       const response = await axios.post(
-        `${this.reportsServiceUrl}/reports/comprehensive-channel`,
-        params,
+        `${this.reportsServiceUrl}/reports/generate`,
+        {
+          type: 'comprehensive-channel-summary',
+          format: params.format,
+          from: params.from,
+          to: params.to,
+          channelId: params.channelId,
+        },
         {
           responseType: 'arraybuffer',
           timeout: 60000, // 60 seconds timeout for comprehensive channel reports
