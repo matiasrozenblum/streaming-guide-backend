@@ -9,6 +9,7 @@ export enum ReportType {
   QUARTERLY_SUMMARY = 'quarterly-summary',
   YEARLY_SUMMARY = 'yearly-summary',
   CHANNEL_SUMMARY = 'channel-summary',
+  COMPREHENSIVE_CHANNEL_SUMMARY = 'comprehensive-channel-summary',
 }
 
 export enum ReportFormat {

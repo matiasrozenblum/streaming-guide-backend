@@ -2,8 +2,8 @@ import { IsString, IsEnum, IsOptional, IsNumber, IsArray, ValidateNested } from 
 import { Type } from 'class-transformer';
 
 export class SingleReportDto {
-  @IsEnum(['users', 'subscriptions', 'weekly-summary', 'monthly-summary', 'quarterly-summary', 'yearly-summary', 'channel-summary'])
-  type: 'users' | 'subscriptions' | 'weekly-summary' | 'monthly-summary' | 'quarterly-summary' | 'yearly-summary' | 'channel-summary';
+  @IsEnum(['users', 'subscriptions', 'weekly-summary', 'monthly-summary', 'quarterly-summary', 'yearly-summary', 'channel-summary', 'comprehensive-channel-summary'])
+  type: 'users' | 'subscriptions' | 'weekly-summary' | 'monthly-summary' | 'quarterly-summary' | 'yearly-summary' | 'channel-summary' | 'comprehensive-channel-summary';
 
   @IsEnum(['csv', 'pdf'])
   format: 'csv' | 'pdf';

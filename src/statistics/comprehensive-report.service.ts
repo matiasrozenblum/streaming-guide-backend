@@ -43,7 +43,7 @@ export class ComprehensiveReportService {
     }
 
     const reportParams = {
-      type: ReportType.CHANNEL_SUMMARY,
+      type: ReportType.COMPREHENSIVE_CHANNEL_SUMMARY,
       format,
       from,
       to,
@@ -56,7 +56,12 @@ export class ComprehensiveReportService {
       return this.getChannelDataTable(channelId, from, to);
     }
 
-    const file = await this.reportsProxyService.generateReport(reportParams);
+    const file = await this.reportsProxyService.generateComprehensiveChannelReport({
+      channelId,
+      from,
+      to,
+      format,
+    });
     const filename = `${channel.name}_report_${from}_to_${to}.${format}`;
 
     if (action === ReportAction.DOWNLOAD) {
