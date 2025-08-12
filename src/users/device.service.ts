@@ -142,6 +142,30 @@ export class DeviceService {
     );
   }
 
+  async findDeviceByUser(userId: number): Promise<Device | null> {
+    console.log('🔍 [DeviceService] findDeviceByUser called with:', {
+      userId,
+      timestamp: new Date().toISOString()
+    });
+
+    const device = await this.deviceRepository.findOne({
+      where: { user: { id: userId } },
+      relations: ['user'],
+    });
+
+    if (device) {
+      console.log('✅ [DeviceService] Found device for user:', {
+        deviceId: device.deviceId,
+        deviceName: device.deviceName,
+        userId: device.user?.id
+      });
+    } else {
+      console.log('❌ [DeviceService] No device found for user:', userId);
+    }
+
+    return device;
+  }
+
   private detectDeviceType(userAgent: string): string {
     if (/Mobile|Android|iPhone|iPad/.test(userAgent)) {
       if (/iPad/.test(userAgent)) return 'tablet';
