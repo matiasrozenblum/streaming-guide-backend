@@ -228,4 +228,55 @@ export class SubscriptionController {
       deviceType: device.deviceType,
     };
   }
+
+  @Get('device')
+  async getDevice(
+    @Request() req: any,
+  ) {
+    const userFromToken = req.user;
+    
+    console.log('🔍 [SubscriptionController] device check called with:', {
+      userId: userFromToken.id,
+      userType: userFromToken.type,
+      userRole: userFromToken.role,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Check if this is a legacy authentication token
+    if (userFromToken.type === 'public' && (typeof userFromToken.id === 'string' || userFromToken.id === 'public')) {
+      console.log('⏭️ [SubscriptionController] Skipping device check for legacy user');
+      return {
+        error: 'Device check not available for legacy authentication',
+        message: 'Please register with a user account to use device features',
+      };
+    }
+    
+    // For real users, fetch the actual User entity from database
+    const user = await this.usersService.findOne(userFromToken.id);
+    if (!user) {
+      console.log('❌ [SubscriptionController] User not found:', userFromToken.id);
+      return {
+        error: 'User not found',
+        message: 'Unable to check device for this user',
+      };
+    }
+    
+    // Find the user's device
+    const device = await this.deviceService.findDeviceByUser(user.id);
+    
+    if (!device) {
+      return {
+        error: 'Device not found',
+        message: 'No device registered for this user',
+      };
+    }
+    
+    console.log('✅ [SubscriptionController] Device found:', device.deviceId);
+    
+    return {
+      deviceId: device.deviceId,
+      deviceName: device.deviceName,
+      deviceType: device.deviceType,
+    };
+  }
 } 

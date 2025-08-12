@@ -17,6 +17,14 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.7.6] - 2025-08-11
+
+### Changed
+- Made several changes to reports feature, adding by channel as well
+
+### Fixed
+- Fixed multiple device save oprations on sign up
+
 ## [1.7.5] - 2025-08-05
 
 ### Fixed
