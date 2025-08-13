@@ -51,6 +51,50 @@ export class AppController {
     return { status: 'ok', timestamp: new Date().toISOString() };
   }
 
+  @Get('health/detailed')
+  async detailedHealth() {
+    const healthChecks = {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      services: {
+        database: 'unknown',
+        redis: 'unknown',
+        youtube: 'unknown',
+      },
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+    };
+
+    try {
+      // Check database connection
+      await this.dataSource.query('SELECT 1');
+      healthChecks.services.database = 'ok';
+    } catch (error) {
+      healthChecks.services.database = 'error';
+      healthChecks.status = 'degraded';
+    }
+
+    try {
+      // Check Redis connection
+      await this.redisService.client.ping();
+      healthChecks.services.redis = 'ok';
+    } catch (error) {
+      healthChecks.services.redis = 'error';
+      healthChecks.status = 'degraded';
+    }
+
+    try {
+      // Check YouTube API (basic check)
+      await this.youtubeDiscoveryService.getChannelIdFromHandle('test');
+      healthChecks.services.youtube = 'ok';
+    } catch (error) {
+      healthChecks.services.youtube = 'error';
+      // Don't mark as degraded for external service
+    }
+
+    return healthChecks;
+  }
+
   @Post('test-error')
   testError() {
     // Test Sentry error reporting
@@ -60,6 +104,18 @@ export class AppController {
     });
     
     return { message: 'Test error sent to Sentry' };
+  }
+
+  @Post('test-betterstack')
+  testBetterStack() {
+    // Test BetterStack error reporting
+    this.sentryService.captureMessage('Test error for BetterStack monitoring setup', 'error', {
+      test: true,
+      service: 'betterstack',
+      timestamp: new Date().toISOString(),
+    });
+    
+    return { message: 'Test error sent to BetterStack' };
   }
 
   @Post('test-youtube-error')

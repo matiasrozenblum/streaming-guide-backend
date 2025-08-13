@@ -27,6 +27,8 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { UsersModule } from './users/users.module';
 import { StatisticsModule } from './statistics/statistics.module';
 import { SentryModule } from './sentry/sentry.module';
+import { BetterStackModule } from './betterstack/betterstack.module';
+import { MonitoringModule } from './monitoring/monitoring.module';
 import { ResourceMonitorService } from './services/resource-monitor.service';
 import { PerformanceInterceptor } from './interceptors/performance.interceptor';
 
@@ -90,6 +92,8 @@ import { PerformanceInterceptor } from './interceptors/performance.interceptor';
     UsersModule,
     StatisticsModule,
     SentryModule,
+    BetterStackModule,
+    MonitoringModule,
   ],
   controllers: [AppController],
   providers: [
