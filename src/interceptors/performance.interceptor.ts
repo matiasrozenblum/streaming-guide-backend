@@ -47,7 +47,7 @@ export class PerformanceInterceptor implements NestInterceptor {
               error_type: 'slow_response',
               endpoint,
               response_time: responseTime,
-              threshold: 5000,
+              threshold: 6000,
               user_agent: userAgent,
               ip,
               timestamp: new Date().toISOString(),
