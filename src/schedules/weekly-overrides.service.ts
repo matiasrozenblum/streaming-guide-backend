@@ -483,7 +483,7 @@ export class WeeklyOverridesService {
             id: `virtual_program_${override.id}`,
             name: override.specialProgram.name,
             description: override.specialProgram.description || '',
-            image_url: override.specialProgram.imageUrl || '',
+            logo_url: override.specialProgram.imageUrl || '',
             channel: channel ? {
               id: channel.id,
               name: channel.name,

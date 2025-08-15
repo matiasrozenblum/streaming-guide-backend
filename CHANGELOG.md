@@ -17,6 +17,12 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.7.7] - 2025-08-15
+
+### Fixed
+- Fixed performance alert test
+- Fixed special programs logo mapping
+
 ## [1.7.6] - 2025-08-11
 
 ### Changed
