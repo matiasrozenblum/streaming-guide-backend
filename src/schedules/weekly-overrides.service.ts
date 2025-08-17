@@ -472,6 +472,12 @@ export class WeeklyOverridesService {
     for (const override of createOverrides) {
       if (override.specialProgram && override.newStartTime && override.newEndTime && override.newDayOfWeek) {
         const channel = channelsMap.get(override.specialProgram.channelId);
+        // Ensure we have a valid channel with required fields for enrichment
+        if (!channel) {
+          console.warn(`[applyWeeklyOverrides] Channel not found for special program ${override.specialProgram.name} (channelId: ${override.specialProgram.channelId})`);
+          continue; // Skip this override if channel is not found
+        }
+
         const virtualSchedule: any = {
           id: `virtual_${override.id}`,
           day_of_week: override.newDayOfWeek,
@@ -484,7 +490,8 @@ export class WeeklyOverridesService {
             name: override.specialProgram.name,
             description: override.specialProgram.description || '',
             logo_url: override.specialProgram.imageUrl || '',
-            channel: channel ? {
+            // Always use the found channel to ensure enrichment works
+            channel: {
               id: channel.id,
               name: channel.name,
               handle: channel.handle,
@@ -492,9 +499,6 @@ export class WeeklyOverridesService {
               logo_url: channel.logo_url,
               description: channel.description,
               order: channel.order,
-            } : {
-              id: override.specialProgram.channelId,
-              name: 'Special Program', // Fallback if channel not found
             },
             // Add panelists if specified in the override
             panelists: override.panelistIds ? override.panelistIds.map(id => panelistsMap.get(id)).filter(Boolean) : [],
