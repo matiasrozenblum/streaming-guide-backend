@@ -220,14 +220,29 @@ export class SchedulesService {
         }
       }
 
-      enriched.push({
+      const enrichedSchedule = {
         ...schedule,
         program: {
           ...program,
           is_live: isLive,
           stream_url: streamUrl,
         },
-      });
+      };
+
+      // Debug virtual schedules enrichment output
+      if ((schedule as any).isWeeklyOverride) {
+        console.log(`[enrichSchedules] Enriched virtual schedule output:`, {
+          id: enrichedSchedule.id,
+          name: enrichedSchedule.program.name,
+          is_live: enrichedSchedule.program.is_live,
+          stream_url: enrichedSchedule.program.stream_url,
+          hasChannel: !!enrichedSchedule.program.channel,
+          channelId: enrichedSchedule.program.channel?.youtube_channel_id,
+          handle: enrichedSchedule.program.channel?.handle
+        });
+      }
+
+      enriched.push(enrichedSchedule);
     }
 
     console.log('[enrichSchedules] Enriched', enriched.length, 'schedules');
