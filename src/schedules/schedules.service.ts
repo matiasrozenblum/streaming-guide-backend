@@ -194,8 +194,29 @@ export class SchedulesService {
         // Set isLive to true if schedule is currently running
         isLive = true;
         
+        // Debug live detection for virtual schedules
+        if ((schedule as any).isWeeklyOverride) {
+          console.log(`[enrichSchedules] Live detection passed for virtual schedule ${program.name}:`, {
+            currentDay,
+            scheduleDay: schedule.day_of_week,
+            currentTime: currentNum,
+            startTime: startNum,
+            endTime: endNum,
+            hasHandle: !!handle,
+            hasChannelId: !!channelId
+          });
+        }
+        
         // Validar feature-flag + feriado (fallback true si no existe)
         const canFetch = await this.configService.canFetchLive(handle);
+
+        // Debug feature flag check for virtual schedules
+        if ((schedule as any).isWeeklyOverride) {
+          console.log(`[enrichSchedules] Feature flag check for virtual schedule ${program.name}:`, {
+            handle,
+            canFetch
+          });
+        }
 
         if (canFetch) {
           const liveKey = `liveVideoIdByChannel:${channelId}`;
