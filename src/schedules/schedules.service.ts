@@ -163,6 +163,20 @@ export class SchedulesService {
       const channelId = channel?.youtube_channel_id;
       const handle = channel?.handle;
 
+      // Debug virtual schedules
+      if ((schedule as any).isWeeklyOverride) {
+        console.log(`[enrichSchedules] Processing virtual schedule:`, {
+          id: schedule.id,
+          name: program.name,
+          hasChannel: !!channel,
+          channelId: channelId,
+          handle: handle,
+          day_of_week: schedule.day_of_week,
+          start_time: schedule.start_time,
+          end_time: schedule.end_time
+        });
+      }
+
       const startNum = this.convertTimeToNumber(schedule.start_time);
       const endNum = this.convertTimeToNumber(schedule.end_time);
 
