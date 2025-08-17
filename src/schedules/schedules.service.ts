@@ -163,19 +163,7 @@ export class SchedulesService {
       const channelId = channel?.youtube_channel_id;
       const handle = channel?.handle;
 
-      // Debug virtual schedules
-      if ((schedule as any).isWeeklyOverride) {
-        console.log(`[enrichSchedules] Processing virtual schedule:`, {
-          id: schedule.id,
-          name: program.name,
-          hasChannel: !!channel,
-          channelId: channelId,
-          handle: handle,
-          day_of_week: schedule.day_of_week,
-          start_time: schedule.start_time,
-          end_time: schedule.end_time
-        });
-      }
+
 
       const startNum = this.convertTimeToNumber(schedule.start_time);
       const endNum = this.convertTimeToNumber(schedule.end_time);
@@ -194,29 +182,12 @@ export class SchedulesService {
         // Set isLive to true if schedule is currently running
         isLive = true;
         
-        // Debug live detection for virtual schedules
-        if ((schedule as any).isWeeklyOverride) {
-          console.log(`[enrichSchedules] Live detection passed for virtual schedule ${program.name}:`, {
-            currentDay,
-            scheduleDay: schedule.day_of_week,
-            currentTime: currentNum,
-            startTime: startNum,
-            endTime: endNum,
-            hasHandle: !!handle,
-            hasChannelId: !!channelId
-          });
-        }
+
         
         // Validar feature-flag + feriado (fallback true si no existe)
         const canFetch = await this.configService.canFetchLive(handle);
 
-        // Debug feature flag check for virtual schedules
-        if ((schedule as any).isWeeklyOverride) {
-          console.log(`[enrichSchedules] Feature flag check for virtual schedule ${program.name}:`, {
-            handle,
-            canFetch
-          });
-        }
+
 
         if (canFetch) {
           const liveKey = `liveVideoIdByChannel:${channelId}`;
@@ -250,18 +221,7 @@ export class SchedulesService {
         },
       };
 
-      // Debug virtual schedules enrichment output
-      if ((schedule as any).isWeeklyOverride) {
-        console.log(`[enrichSchedules] Enriched virtual schedule output:`, {
-          id: enrichedSchedule.id,
-          name: enrichedSchedule.program.name,
-          is_live: enrichedSchedule.program.is_live,
-          stream_url: enrichedSchedule.program.stream_url,
-          hasChannel: !!enrichedSchedule.program.channel,
-          channelId: enrichedSchedule.program.channel?.youtube_channel_id,
-          handle: enrichedSchedule.program.channel?.handle
-        });
-      }
+
 
       enriched.push(enrichedSchedule);
     }

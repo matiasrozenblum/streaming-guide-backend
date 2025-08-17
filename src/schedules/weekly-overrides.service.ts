@@ -339,17 +339,14 @@ export class WeeklyOverridesService {
     // Fetch all channels at once
     const channelsMap = new Map<number, any>();
     if (allChannelIds.size > 0) {
-      console.log('[applyWeeklyOverrides] Fetching channels for IDs:', Array.from(allChannelIds));
       const channels = await this.dataSource.query(`
         SELECT id, name, handle, youtube_channel_id, logo_url, description, "order"
         FROM channel 
         WHERE id IN (${Array.from(allChannelIds).join(',')})
       `);
-      console.log('[applyWeeklyOverrides] Found channels:', channels);
       channels.forEach(channel => {
         channelsMap.set(channel.id, channel);
       });
-      console.log('[applyWeeklyOverrides] Channels map size:', channelsMap.size);
     }
 
     const modifiedSchedules: Schedule[] = [];
@@ -475,22 +472,12 @@ export class WeeklyOverridesService {
     for (const override of createOverrides) {
       if (override.specialProgram && override.newStartTime && override.newEndTime && override.newDayOfWeek) {
         const channel = channelsMap.get(override.specialProgram.channelId);
-        console.log(`[applyWeeklyOverrides] Looking up channel ${override.specialProgram.channelId} for special program ${override.specialProgram.name}`);
-        console.log(`[applyWeeklyOverrides] Channel found:`, channel);
         
         // Ensure we have a valid channel with required fields for enrichment
         if (!channel) {
           console.warn(`[applyWeeklyOverrides] Channel not found for special program ${override.specialProgram.name} (channelId: ${override.specialProgram.channelId})`);
-          console.warn(`[applyWeeklyOverrides] Available channel IDs in map:`, Array.from(channelsMap.keys()));
           continue; // Skip this override if channel is not found
         }
-
-        console.log(`[applyWeeklyOverrides] Creating virtual schedule for ${override.specialProgram.name} with channel:`, {
-          id: channel.id,
-          name: channel.name,
-          handle: channel.handle,
-          youtube_channel_id: channel.youtube_channel_id
-        });
 
         const virtualSchedule: any = {
           id: `virtual_${override.id}`,
@@ -518,21 +505,6 @@ export class WeeklyOverridesService {
             panelists: override.panelistIds ? override.panelistIds.map(id => panelistsMap.get(id)).filter(Boolean) : [],
           },
         };
-        console.log(`[applyWeeklyOverrides] Final virtual schedule structure:`, {
-          id: virtualSchedule.id,
-          day_of_week: virtualSchedule.day_of_week,
-          start_time: virtualSchedule.start_time,
-          end_time: virtualSchedule.end_time,
-          program: {
-            id: virtualSchedule.program.id,
-            name: virtualSchedule.program.name,
-            channel: {
-              id: virtualSchedule.program.channel.id,
-              handle: virtualSchedule.program.channel.handle,
-              youtube_channel_id: virtualSchedule.program.channel.youtube_channel_id
-            }
-          }
-        });
         modifiedSchedules.push(virtualSchedule);
       }
     }
