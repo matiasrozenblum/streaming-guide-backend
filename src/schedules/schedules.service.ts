@@ -163,8 +163,6 @@ export class SchedulesService {
       const channelId = channel?.youtube_channel_id;
       const handle = channel?.handle;
 
-
-
       const startNum = this.convertTimeToNumber(schedule.start_time);
       const endNum = this.convertTimeToNumber(schedule.end_time);
 
@@ -182,12 +180,8 @@ export class SchedulesService {
         // Set isLive to true if schedule is currently running
         isLive = true;
         
-
-        
         // Validar feature-flag + feriado (fallback true si no existe)
         const canFetch = await this.configService.canFetchLive(handle);
-
-
 
         if (canFetch) {
           const liveKey = `liveVideoIdByChannel:${channelId}`;
@@ -220,8 +214,6 @@ export class SchedulesService {
           stream_url: streamUrl,
         },
       };
-
-
 
       enriched.push(enrichedSchedule);
     }
