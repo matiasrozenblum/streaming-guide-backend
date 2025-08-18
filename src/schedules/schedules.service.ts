@@ -184,24 +184,18 @@ export class SchedulesService {
         const canFetch = await this.configService.canFetchLive(handle);
 
         if (canFetch) {
-          const liveKey = `liveVideoIdByChannel:${channelId}`;
-
-          // Intentar reutilizar cache
-          const cachedId = await this.redisService.get<string>(liveKey);
-          if (cachedId) {
-            streamUrl = `https://www.youtube.com/embed/${cachedId}?autoplay=1`;
-          } else {
-            // Obtener on-demand si no estaba en cache
-            const ttl = await getCurrentBlockTTL(channelId, schedules);
-            const vid = await this.youtubeLiveService.getLiveVideoId(
-              channelId,
-              handle,
-              ttl,
-              'onDemand'
-            );
-            if (vid && vid !== '__SKIPPED__') {
-              streamUrl = `https://www.youtube.com/embed/${vid}?autoplay=1`;
-            }
+          // Use new method with program-specific information for better matching
+          const ttl = await getCurrentBlockTTL(channelId, schedules);
+          const vid = await this.youtubeLiveService.getBestLiveStreamMatch(
+            channelId,
+            handle,
+            program.name, // Pass program name for title matching
+            schedule.start_time, // Pass program start time for time-based matching
+            ttl,
+            'onDemand'
+          );
+          if (vid && vid !== '__SKIPPED__') {
+            streamUrl = `https://www.youtube.com/embed/${vid}?autoplay=1`;
           }
         }
       }

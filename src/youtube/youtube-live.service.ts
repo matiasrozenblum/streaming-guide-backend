@@ -14,10 +14,30 @@ import { getCurrentBlockTTL } from '@/utils/getBlockTTL.util';
 
 const HolidaysClass = (DateHolidays as any).default ?? DateHolidays;
 
+// New interface for live streams with metadata
+interface LiveStream {
+  videoId: string;
+  title: string;
+  description: string;
+  publishedAt: string;
+  isLive: boolean;
+  channelId: string;
+}
+
+// Interface for stream matching results
+interface StreamMatch {
+  videoId: string;
+  confidence: number; // 0-100
+  matchType: 'time' | 'title' | 'hybrid';
+  stream: LiveStream;
+}
+
 @Injectable()
 export class YoutubeLiveService {
   private readonly apiKey = process.env.YOUTUBE_API_KEY;
   private readonly apiUrl = 'https://www.googleapis.com/youtube/v3';
+  
+
 
   constructor(
     private readonly configService: ConfigService,
@@ -41,6 +61,8 @@ export class YoutubeLiveService {
       timezone: 'America/Argentina/Buenos_Aires',
     });
   }
+
+
 
   /**
    * Notify connected clients about live status changes
@@ -69,21 +91,63 @@ export class YoutubeLiveService {
   }
 
   /**
-   * Devuelve videoId | null | '__SKIPPED__' según estado de flags, cache y fetch
+   * Migrate existing single video ID cache to new multiple streams structure
+   * This ensures backward compatibility during deployment
    */
-  async getLiveVideoId(
+  private async migrateLegacyCache(channelId: string, handle: string): Promise<void> {
+    try {
+      const legacyKey = `liveVideoIdByChannel:${channelId}`;
+      const newKey = `liveStreamsByChannel:${channelId}`;
+      
+      // Check if legacy cache exists and new cache doesn't
+      const legacyVideoId = await this.redisService.get<string>(legacyKey);
+      const newStreams = await this.redisService.get<LiveStream[]>(newKey);
+      
+      if (legacyVideoId && !newStreams) {
+        console.log(`🔄 Migrating legacy cache for ${handle}: ${legacyVideoId}`);
+        
+        // Create a basic LiveStream object from legacy data
+        const legacyStream: LiveStream = {
+          videoId: legacyVideoId,
+          title: 'Legacy Stream', // We don't have this info
+          description: 'Migrated from legacy cache',
+          publishedAt: new Date().toISOString(),
+          isLive: true,
+          channelId,
+        };
+        
+        // Store in new format
+        await this.redisService.set(newKey, [legacyStream], 3600); // 1 hour TTL
+        
+        console.log(`✅ Migration completed for ${handle}`);
+      }
+    } catch (error) {
+      console.error(`❌ Migration failed for ${handle}:`, error);
+    }
+  }
+
+  /**
+   * Get the best matching live stream for a program
+   */
+  async getBestLiveStreamMatch(
     channelId: string,
     handle: string,
+    programName: string,
+    programStartTime: string,
     blockTTL: number,
     context: 'cron' | 'onDemand',
   ): Promise<string | null | '__SKIPPED__'> {
+    // First, try to migrate legacy cache if needed
+    await this.migrateLegacyCache(channelId, handle);
+    
     // gating centralizado
     if (!(await this.configService.canFetchLive(handle))) {
       console.log(`[YouTube] fetch skipped for ${handle}`);
       return '__SKIPPED__';
     }
 
-    const liveKey = `liveVideoIdByChannel:${channelId}`;
+    const newKey = `liveStreamsByChannel:${channelId}`;
+    const legacyKey = `liveVideoIdByChannel:${channelId}`; // Keep for backward compatibility
     const notFoundKey = `videoIdNotFound:${channelId}`;
 
     // skip rápido si ya está marcado como no-found
@@ -92,18 +156,34 @@ export class YoutubeLiveService {
       return '__SKIPPED__';
     }
 
-    // cache-hit: reuse si sigue vivo
-    const cachedId = await this.redisService.get<string>(liveKey);
-    if (cachedId && (await this.isVideoLive(cachedId))) {
-      console.log(`🔁 Reusing cached videoId for ${handle}`);
-      return cachedId;
-    }
-    if (cachedId) {
-      await this.redisService.del(liveKey);
-      console.log(`🗑️ Deleted cached videoId for ${handle} (no longer live)`);
+    // Try new cache first
+    let cachedStreams = await this.redisService.get<LiveStream[]>(newKey);
+    
+    // Fallback to legacy cache if new cache is empty
+    if (!cachedStreams || cachedStreams.length === 0) {
+      const legacyVideoId = await this.redisService.get<string>(legacyKey);
+      if (legacyVideoId && (await this.isVideoLive(legacyVideoId))) {
+        console.log(`🔁 Using legacy cache for ${handle}: ${legacyVideoId}`);
+        return legacyVideoId;
+      }
     }
 
-    // fetch a YouTube
+    // Filter out non-live streams from cache
+    if (cachedStreams) {
+      cachedStreams = cachedStreams.filter(stream => stream.isLive);
+      if (cachedStreams.length > 0) {
+        console.log(`🔁 Found ${cachedStreams.length} live streams in cache for ${handle}`);
+        const bestMatch = this.findBestStreamMatch(cachedStreams, programName, programStartTime);
+        if (bestMatch) {
+          console.log(`🎯 Best match found for ${handle}: ${bestMatch.videoId} (confidence: ${bestMatch.confidence}%)`);
+          return bestMatch.videoId;
+        }
+      }
+    }
+
+
+
+    // Fetch from YouTube if no valid cache and no mock data
     try {
       const { data } = await axios.get(`${this.apiUrl}/search`, {
         params: {
@@ -112,25 +192,54 @@ export class YoutubeLiveService {
           eventType: 'live',
           type: 'video',
           key: this.apiKey,
+          maxResults: 10, // Increased to capture multiple streams
         },
       });
-      const videoId = data.items?.[0]?.id?.videoId ?? null;
 
-      if (!videoId) {
-        console.log(`🚫 No live video for ${handle} (${context})`);
+      if (!data.items || data.items.length === 0) {
+        console.log(`🚫 No live videos for ${handle} (${context})`);
         await this.redisService.set(notFoundKey, '1', 900);
         return null;
       }
 
-      await this.redisService.set(liveKey, videoId, blockTTL);
-      console.log(`📌 Cached ${handle} → ${videoId} (TTL ${blockTTL}s)`);
+      // Convert to LiveStream objects
+      const liveStreams: LiveStream[] = data.items.map(item => ({
+        videoId: item.id.videoId,
+        title: item.snippet.title,
+        description: item.snippet.description,
+        publishedAt: item.snippet.publishedAt,
+        isLive: true,
+        channelId,
+      }));
 
-      // Notify clients about the new video ID
-      if (context === 'cron') {
-        await this.notifyLiveStatusChange(channelId, videoId, handle);
+      // Store all streams in new cache
+      await this.redisService.set(newKey, liveStreams, blockTTL);
+      
+      // Also update legacy cache for backward compatibility (first stream)
+      if (liveStreams.length > 0) {
+        await this.redisService.set(legacyKey, liveStreams[0].videoId, blockTTL);
       }
 
-      return videoId;
+      console.log(`📌 Cached ${liveStreams.length} live streams for ${handle} (TTL ${blockTTL}s)`);
+
+      // Find best match
+      const bestMatch = this.findBestStreamMatch(liveStreams, programName, programStartTime);
+      if (bestMatch) {
+        console.log(`🎯 Best match found for ${handle}: ${bestMatch.videoId} (confidence: ${bestMatch.confidence}%)`);
+        
+        // Notify clients about the new video ID
+        if (context === 'cron') {
+          await this.notifyLiveStatusChange(channelId, bestMatch.videoId, handle);
+        }
+        
+        return bestMatch.videoId;
+      }
+
+      // Return first stream if no good match found
+      const firstStream = liveStreams[0];
+      console.log(`📺 No good match found, using first stream for ${handle}: ${firstStream.videoId}`);
+      return firstStream.videoId;
+
     } catch (err) {
       const errorMessage = err.message || err;
       console.error(`❌ Error fetching live video for ${handle}:`, errorMessage);
@@ -187,6 +296,133 @@ export class YoutubeLiveService {
     }
   }
 
+  /**
+   * Find the best matching stream for a program
+   */
+  private findBestStreamMatch(
+    streams: LiveStream[],
+    programName: string,
+    programStartTime: string
+  ): StreamMatch | null {
+    if (streams.length === 0) return null;
+    if (streams.length === 1) {
+      return {
+        videoId: streams[0].videoId,
+        confidence: 100,
+        matchType: 'time',
+        stream: streams[0],
+      };
+    }
+
+    const matches: StreamMatch[] = [];
+
+    for (const stream of streams) {
+      let confidence = 0;
+      let matchType: 'time' | 'title' | 'hybrid' = 'time';
+
+      // Time-based matching (primary)
+      const timeConfidence = this.calculateTimeConfidence(stream.publishedAt, programStartTime);
+      confidence = timeConfidence;
+      matchType = 'time';
+
+      // Title-based matching (secondary)
+      const titleConfidence = this.calculateTitleConfidence(stream.title, programName);
+      
+      // Hybrid scoring: combine time and title
+      const hybridConfidence = Math.round((timeConfidence * 0.7) + (titleConfidence * 0.3));
+      
+      if (hybridConfidence > confidence) {
+        confidence = hybridConfidence;
+        matchType = 'hybrid';
+      }
+
+      matches.push({
+        videoId: stream.videoId,
+        confidence,
+        matchType,
+        stream,
+      });
+    }
+
+    // Sort by confidence and return best match
+    matches.sort((a, b) => b.confidence - a.confidence);
+    const bestMatch = matches[0];
+
+    // Only return if confidence is above threshold
+    return bestMatch.confidence >= 50 ? bestMatch : null;
+  }
+
+  /**
+   * Calculate confidence based on time proximity
+   */
+  private calculateTimeConfidence(publishedAt: string, programStartTime: string): number {
+    try {
+      const published = dayjs(publishedAt);
+      const programStart = dayjs(`2000-01-01 ${programStartTime}`);
+      
+      // Calculate minutes difference
+      const diffMinutes = Math.abs(published.diff(programStart, 'minute'));
+      
+      // Higher confidence for closer times
+      if (diffMinutes <= 5) return 100;
+      if (diffMinutes <= 15) return 90;
+      if (diffMinutes <= 30) return 75;
+      if (diffMinutes <= 60) return 50;
+      return 25;
+    } catch (error) {
+      return 0;
+    }
+  }
+
+  /**
+   * Calculate confidence based on title similarity
+   */
+  private calculateTitleConfidence(streamTitle: string, programName: string): number {
+    const streamLower = streamTitle.toLowerCase();
+    const programLower = programName.toLowerCase();
+    
+    // Extract key terms (teams, competitions)
+    const streamTerms = streamLower.split(/\s+/).filter(term => term.length > 2);
+    const programTerms = programLower.split(/\s+/).filter(term => term.length > 2);
+    
+    let matches = 0;
+    let totalTerms = Math.max(streamTerms.length, programTerms.length);
+    
+    for (const programTerm of programTerms) {
+      if (streamTerms.some(streamTerm => 
+        streamTerm.includes(programTerm) || programTerm.includes(streamTerm)
+      )) {
+        matches++;
+      }
+    }
+    
+    if (totalTerms === 0) return 0;
+    return Math.round((matches / totalTerms) * 100);
+  }
+
+  /**
+   * Legacy method for backward compatibility
+   * @deprecated Use getBestLiveStreamMatch instead
+   */
+  async getLiveVideoId(
+    channelId: string,
+    handle: string,
+    blockTTL: number,
+    context: 'cron' | 'onDemand',
+  ): Promise<string | null | '__SKIPPED__'> {
+    console.warn(`⚠️ getLiveVideoId is deprecated, use getBestLiveStreamMatch instead`);
+    
+    // For backward compatibility, we'll use a generic program name
+    return this.getBestLiveStreamMatch(
+      channelId,
+      handle,
+      'Generic Program',
+      '00:00',
+      blockTTL,
+      context
+    );
+  }
+
   private async isVideoLive(videoId: string): Promise<boolean> {
     try {
       const resp = await axios.get(`${this.apiUrl}/videos`, {
@@ -199,7 +435,7 @@ export class YoutubeLiveService {
   }
 
   /**
-   * Itera canales con programación hoy y llama a getLiveVideoId
+   * Itera canales con programación hoy y llama a getBestLiveStreamMatch
    */
   async fetchLiveVideoIds(cronType: 'main' | 'back-to-back-fix' = 'main') {
     const cronLabel = cronType === 'main' ? '🕐 MAIN CRON' : '🔄 BACK-TO-BACK FIX CRON';
@@ -234,7 +470,14 @@ export class YoutubeLiveService {
       const beforeCache = cronType === 'back-to-back-fix' ? await this.redisService.get<string>(`liveVideoIdByChannel:${cid}`) : null;
       
       const ttl = await getCurrentBlockTTL(cid, rawSchedules);
-      const result = await this.getLiveVideoId(cid, handle, ttl, 'cron');
+      const result = await this.getBestLiveStreamMatch(
+        cid, 
+        handle, 
+        'Generic Program', // We don't have specific program info in cron
+        '00:00',
+        ttl, 
+        'cron'
+      );
       
       // Track if the back-to-back fix cron actually updated a video ID
       if (cronType === 'back-to-back-fix' && result && result !== '__SKIPPED__') {
