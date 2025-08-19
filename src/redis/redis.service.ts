@@ -77,4 +77,20 @@ export class RedisService implements OnModuleInit {
 
     await pipeline.exec();
   }
+
+  /**
+   * Get all keys matching a pattern
+   * Note: Use with caution on large datasets
+   */
+  async keys(pattern: string): Promise<string[]> {
+    return await this.client.keys(pattern);
+  }
+
+  /**
+   * Get the TTL (time to live) of a key in seconds
+   * Returns -1 if key has no TTL, -2 if key doesn't exist
+   */
+  async ttl(key: string): Promise<number> {
+    return await this.client.ttl(key);
+  }
 }
