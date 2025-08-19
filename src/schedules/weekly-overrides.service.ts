@@ -40,7 +40,7 @@ export interface WeeklyOverride {
   newDayOfWeek?: string;
   reason?: string;
   createdBy?: string;
-  expiresAt: string;
+  expiresAt: string; // Format: YYYY-MM-DD HH:mm:ss (Buenos Aires time)
   createdAt: Date;
   panelistIds?: number[]; // Array of panelist IDs assigned to this override
   // Fields for special programs
@@ -137,8 +137,8 @@ export class WeeklyOverridesService {
     }
 
     const weekStartDate = targetWeekStart.format('YYYY-MM-DD');
-    // Set expiration to next Monday at 00:00
-    const expiresAt = targetWeekStart.add(1, 'week').format('YYYY-MM-DD');
+    // Set expiration to next Monday at 00:00 Buenos Aires time
+    const expiresAt = targetWeekStart.add(1, 'week').format('YYYY-MM-DD HH:mm:ss');
 
     // Validate override type requirements
     if ((dto.overrideType === 'time_change' || dto.overrideType === 'reschedule') && 
@@ -618,13 +618,14 @@ export class WeeklyOverridesService {
       keys.push(...keyChunk);
     }
 
-    const now = this.dayjs();
+    // Use Buenos Aires timezone for accurate cleanup timing
+    const now = this.dayjs().tz('America/Argentina/Buenos_Aires');
     let cleaned = 0;
 
     // Check each override for expiration
     for (const key of keys) {
       const override = await this.redisService.get<WeeklyOverride>(key);
-      if (override && this.dayjs(override.expiresAt).isBefore(now)) {
+      if (override && this.dayjs(override.expiresAt).tz('America/Argentina/Buenos_Aires').isBefore(now)) {
         await this.redisService.del(key);
         cleaned++;
       }
