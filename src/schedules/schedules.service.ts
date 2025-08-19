@@ -231,7 +231,10 @@ export class SchedulesService {
   }
 
   private convertTimeToNumber(time: string): number {
-    const [h, m] = time.split(':').map(Number);
+    // Handle both "HH:MM" and "HH:MM:SS" formats
+    const parts = time.split(':').map(Number);
+    const h = parts[0];
+    const m = parts[1];
     return h * 100 + m;
   }
 
@@ -538,6 +541,8 @@ export class SchedulesService {
    * Later programs get priority in overlap periods
    */
   private resolveOverlaps(schedules: Schedule[]): Schedule[] {
+    console.log('[resolveOverlaps] Starting overlap resolution for', schedules.length, 'schedules');
+    
     // Group schedules by channel and day
     const channelDayGroups = new Map<string, Schedule[]>();
     
@@ -555,10 +560,29 @@ export class SchedulesService {
 
     // Process each group for overlaps
     for (const [key, groupSchedules] of channelDayGroups) {
-      if (groupSchedules.length < 2) continue;
+      console.log(`[resolveOverlaps] Processing group ${key} with ${groupSchedules.length} schedules`);
+      
+      if (groupSchedules.length < 2) {
+        console.log(`[resolveOverlaps] Single program in group ${key}, adding display fields`);
+        const schedule = groupSchedules[0];
+        (schedule as any).display_start_time = schedule.start_time;
+        (schedule as any).display_end_time = schedule.end_time;
+        (schedule as any).is_overlap = false;
+        (schedule as any).overlap_group_id = key;
+        (schedule as any).overlap_position = 0;
+        (schedule as any).trimmed_end = false;
+        continue;
+      }
       
       // Sort by start time
       groupSchedules.sort((a, b) => this.convertTimeToNumber(a.start_time) - this.convertTimeToNumber(b.start_time));
+      console.log(`[resolveOverlaps] Sorted schedules for ${key}:`, groupSchedules.map(s => ({
+        name: s.program?.name,
+        start: s.start_time,
+        end: s.end_time,
+        startNum: this.convertTimeToNumber(s.start_time),
+        endNum: this.convertTimeToNumber(s.end_time)
+      })));
       
       // Resolve overlaps: later programs get priority
       for (let i = 0; i < groupSchedules.length - 1; i++) {
@@ -568,8 +592,12 @@ export class SchedulesService {
         const currentEnd = this.convertTimeToNumber(current.end_time);
         const nextStart = this.convertTimeToNumber(next.start_time);
         
+        console.log(`[resolveOverlaps] Checking overlap: ${current.program?.name} (ends ${current.end_time} = ${currentEnd}) vs ${next.program?.name} (starts ${next.start_time} = ${nextStart})`);
+        
         // If there's an overlap, adjust the current program's display end time
         if (currentEnd > nextStart) {
+          console.log(`[resolveOverlaps] OVERLAP DETECTED! Adjusting display times`);
+          
           // Add display time fields to the current schedule
           (current as any).display_start_time = current.start_time;
           (current as any).display_end_time = next.start_time;
@@ -586,6 +614,8 @@ export class SchedulesService {
           (next as any).overlap_position = i + 1;
           (next as any).trimmed_end = false;
         } else {
+          console.log(`[resolveOverlaps] No overlap, keeping original times`);
+          
           // No overlap, add display time fields (same as original)
           (current as any).display_start_time = current.start_time;
           (current as any).display_end_time = current.end_time;
@@ -605,17 +635,17 @@ export class SchedulesService {
           }
         }
       }
-      
-      // Handle single program case
-      if (groupSchedules.length === 1) {
-        const schedule = groupSchedules[0];
-        (schedule as any).display_start_time = schedule.start_time;
-        (schedule as any).display_end_time = schedule.end_time;
-        (schedule as any).is_overlap = false;
-        (schedule as any).overlap_group_id = key;
-        (schedule as any).overlap_position = 0;
-        (schedule as any).trimmed_end = false;
-      }
+    }
+
+    // Log final result
+    const schedulesWithOverlaps = schedules.filter(s => (s as any).is_overlap);
+    if (schedulesWithOverlaps.length > 0) {
+      console.log('[resolveOverlaps] Final result - schedules with overlaps:');
+      schedulesWithOverlaps.forEach(s => {
+        console.log(`  - ${s.program?.name}: ${s.start_time}-${s.end_time} → ${(s as any).display_start_time}-${(s as any).display_end_time} (overlap: ${(s as any).is_overlap})`);
+      });
+    } else {
+      console.log('[resolveOverlaps] No overlaps detected, all schedules keep original times');
     }
 
     return schedules;
