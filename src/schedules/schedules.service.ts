@@ -155,6 +155,9 @@ export class SchedulesService {
     // Detect and log overlapping programs for debugging
     this.detectAndLogOverlaps(schedules);
     
+    // Resolve overlaps and add display times
+    const schedulesWithOverlapResolution = this.resolveOverlaps(schedules);
+    
     const now = this.dayjs().tz('America/Argentina/Buenos_Aires');
     const currentNum = now.hour() * 100 + now.minute();
     const currentDay = now.format('dddd').toLowerCase();
@@ -211,6 +214,13 @@ export class SchedulesService {
           is_live: isLive,
           stream_url: streamUrl,
         },
+        // Add overlap resolution fields
+        display_start_time: (schedule as any).display_start_time || schedule.start_time,
+        display_end_time: (schedule as any).display_end_time || schedule.end_time,
+        is_overlap: (schedule as any).is_overlap || false,
+        overlap_group_id: (schedule as any).overlap_group_id || null,
+        overlap_position: (schedule as any).overlap_position || 0,
+        trimmed_end: (schedule as any).trimmed_end || false,
       };
 
       enriched.push(enrichedSchedule);
@@ -521,5 +531,93 @@ export class SchedulesService {
     });
 
     return savedSchedules;
+  }
+
+  /**
+   * Resolve overlapping programs and add display times
+   * Later programs get priority in overlap periods
+   */
+  private resolveOverlaps(schedules: Schedule[]): Schedule[] {
+    // Group schedules by channel and day
+    const channelDayGroups = new Map<string, Schedule[]>();
+    
+    for (const schedule of schedules) {
+      const channelId = schedule.program?.channel?.id;
+      const dayOfWeek = schedule.day_of_week;
+      if (channelId && dayOfWeek) {
+        const key = `${channelId}:${dayOfWeek}`;
+        if (!channelDayGroups.has(key)) {
+          channelDayGroups.set(key, []);
+        }
+        channelDayGroups.get(key)!.push(schedule);
+      }
+    }
+
+    // Process each group for overlaps
+    for (const [key, groupSchedules] of channelDayGroups) {
+      if (groupSchedules.length < 2) continue;
+      
+      // Sort by start time
+      groupSchedules.sort((a, b) => this.convertTimeToNumber(a.start_time) - this.convertTimeToNumber(b.start_time));
+      
+      // Resolve overlaps: later programs get priority
+      for (let i = 0; i < groupSchedules.length - 1; i++) {
+        const current = groupSchedules[i];
+        const next = groupSchedules[i + 1];
+        
+        const currentEnd = this.convertTimeToNumber(current.end_time);
+        const nextStart = this.convertTimeToNumber(next.start_time);
+        
+        // If there's an overlap, adjust the current program's display end time
+        if (currentEnd > nextStart) {
+          // Add display time fields to the current schedule
+          (current as any).display_start_time = current.start_time;
+          (current as any).display_end_time = next.start_time;
+          (current as any).is_overlap = true;
+          (current as any).overlap_group_id = key;
+          (current as any).overlap_position = i;
+          (current as any).trimmed_end = true;
+          
+          // Add display time fields to the next schedule (gets full time)
+          (next as any).display_start_time = next.start_time;
+          (next as any).display_end_time = next.end_time;
+          (next as any).is_overlap = true;
+          (next as any).overlap_group_id = key;
+          (next as any).overlap_position = i + 1;
+          (next as any).trimmed_end = false;
+        } else {
+          // No overlap, add display time fields (same as original)
+          (current as any).display_start_time = current.start_time;
+          (current as any).display_end_time = current.end_time;
+          (current as any).is_overlap = false;
+          (current as any).overlap_group_id = key;
+          (current as any).overlap_position = i;
+          (current as any).trimmed_end = false;
+          
+          // For the last program, also add fields
+          if (i === groupSchedules.length - 2) {
+            (next as any).display_start_time = next.start_time;
+            (next as any).display_end_time = next.end_time;
+            (next as any).is_overlap = false;
+            (next as any).overlap_group_id = key;
+            (next as any).overlap_position = i + 1;
+            (next as any).trimmed_end = false;
+          }
+        }
+      }
+      
+      // Handle single program case
+      if (groupSchedules.length === 1) {
+        const schedule = groupSchedules[0];
+        (schedule as any).display_start_time = schedule.start_time;
+        (schedule as any).display_end_time = schedule.end_time;
+        (schedule as any).is_overlap = false;
+        (schedule as any).overlap_group_id = key;
+        (schedule as any).overlap_position = 0;
+        (schedule as any).trimmed_end = false;
+      }
+    }
+
+    return schedules;
   }
 }
