@@ -156,7 +156,17 @@ export class SchedulesService {
     this.detectAndLogOverlaps(schedules);
     
     // Resolve overlaps and add display times
+    console.log('[enrichSchedules] About to call resolveOverlaps...');
     const schedulesWithOverlapResolution = this.resolveOverlaps(schedules);
+    console.log('[enrichSchedules] resolveOverlaps completed, returned', schedulesWithOverlapResolution.length, 'schedules');
+    console.log('[enrichSchedules] After overlap resolution, checking first schedule:', {
+      id: schedulesWithOverlapResolution[0]?.id,
+      name: schedulesWithOverlapResolution[0]?.program?.name,
+      hasDisplayTime: !!(schedulesWithOverlapResolution[0] as any).display_start_time,
+      displayStart: (schedulesWithOverlapResolution[0] as any).display_start_time,
+      displayEnd: (schedulesWithOverlapResolution[0] as any).display_end_time,
+      isOverlap: (schedulesWithOverlapResolution[0] as any).is_overlap
+    });
     
     const now = this.dayjs().tz('America/Argentina/Buenos_Aires');
     const currentNum = now.hour() * 100 + now.minute();
@@ -164,7 +174,7 @@ export class SchedulesService {
 
     const enriched: any[] = [];
 
-    for (const schedule of schedules) {
+    for (const schedule of schedulesWithOverlapResolution) {
       const { program } = schedule;
       const channel = program.channel;
       const channelId = channel?.youtube_channel_id;
