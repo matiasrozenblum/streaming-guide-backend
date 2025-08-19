@@ -151,6 +151,10 @@ export class SchedulesService {
 
   async enrichSchedules(schedules: Schedule[]): Promise<any[]> {
     console.log('[enrichSchedules] Starting enrichment of', schedules.length, 'schedules');
+    
+    // Detect and log overlapping programs for debugging
+    this.detectAndLogOverlaps(schedules);
+    
     const now = this.dayjs().tz('America/Argentina/Buenos_Aires');
     const currentNum = now.hour() * 100 + now.minute();
     const currentDay = now.format('dddd').toLowerCase();
@@ -226,6 +230,144 @@ export class SchedulesService {
     return h * 60 + m;
   }
 
+  /**
+   * Detect and log overlapping programs for debugging purposes
+   */
+  private detectAndLogOverlaps(schedules: Schedule[]): void {
+    // Group schedules by channel and day
+    const channelDayGroups = new Map<string, Schedule[]>();
+    
+    for (const schedule of schedules) {
+      const channelId = schedule.program?.channel?.id;
+      const dayOfWeek = schedule.day_of_week;
+      if (channelId && dayOfWeek) {
+        const key = `${channelId}:${dayOfWeek}`;
+        if (!channelDayGroups.has(key)) {
+          channelDayGroups.set(key, []);
+        }
+        channelDayGroups.get(key)!.push(schedule);
+      }
+    }
+
+    // Check each group for overlaps
+    for (const [key, groupSchedules] of channelDayGroups) {
+      if (groupSchedules.length < 2) continue;
+      
+      // Sort by start time
+      groupSchedules.sort((a, b) => this.convertTimeToNumber(a.start_time) - this.convertTimeToNumber(b.start_time));
+      
+      let hasOverlaps = false;
+      const overlaps: string[] = [];
+      
+      for (let i = 0; i < groupSchedules.length - 1; i++) {
+        const current = groupSchedules[i];
+        const next = groupSchedules[i + 1];
+        
+        const currentEnd = this.convertTimeToNumber(current.end_time);
+        const nextStart = this.convertTimeToNumber(next.start_time);
+        
+        if (currentEnd > nextStart) {
+          hasOverlaps = true;
+          overlaps.push(
+            `${current.program?.name || 'Unknown'} (${current.start_time}-${current.end_time}) overlaps with ${next.program?.name || 'Unknown'} (${next.start_time}-${next.end_time})`
+          );
+        }
+      }
+      
+      if (hasOverlaps) {
+        const [channelId, dayOfWeek] = key.split(':');
+        console.log(`⚠️ Overlapping programs detected for channel ${channelId} on ${dayOfWeek}:`);
+        overlaps.forEach(overlap => console.log(`   - ${overlap}`));
+      }
+    }
+  }
+
+  /**
+   * Validate that a new schedule doesn't overlap with existing ones
+   */
+  private async validateNoOverlaps(
+    programId: string,
+    dayOfWeek: string,
+    startTime: string,
+    endTime: string
+  ): Promise<void> {
+    const program = await this.programsRepository.findOne({
+      where: { id: +programId },
+      relations: ['channel']
+    });
+    
+    if (!program?.channel) {
+      throw new NotFoundException('Program or channel not found');
+    }
+
+    const channelId = program.channel.id;
+    const existingSchedules = await this.schedulesRepository
+      .createQueryBuilder('schedule')
+      .leftJoinAndSelect('schedule.program', 'program')
+      .where('program.channel.id = :channelId', { channelId })
+      .andWhere('schedule.day_of_week = :dayOfWeek', { dayOfWeek })
+      .andWhere('schedule.program.id != :programId', { programId })
+      .getMany();
+
+    const newStart = this.convertTimeToNumber(startTime);
+    const newEnd = this.convertTimeToNumber(endTime);
+
+    for (const existing of existingSchedules) {
+      const existingStart = this.convertTimeToNumber(existing.start_time);
+      const existingEnd = this.convertTimeToNumber(existing.end_time);
+
+      // Check for overlap: new schedule overlaps with existing
+      if (
+        (newStart < existingEnd && newEnd > existingStart) ||
+        (existingStart < newEnd && existingEnd > newStart)
+      ) {
+        throw new Error(
+          `Schedule overlaps with existing program "${existing.program.name}" (${existing.start_time}-${existing.end_time}). ` +
+          `Please adjust the time range to avoid conflicts.`
+        );
+      }
+    }
+  }
+
+  /**
+   * Validate that bulk schedules don't overlap with each other
+   */
+  private async validateBulkNoOverlaps(schedules: any[]): Promise<void> {
+    // Group by day of week
+    const dayGroups = new Map<string, any[]>();
+    
+    for (const schedule of schedules) {
+      const day = schedule.dayOfWeek;
+      if (!dayGroups.has(day)) {
+        dayGroups.set(day, []);
+      }
+      dayGroups.get(day)!.push(schedule);
+    }
+
+    // Check each day group for overlaps
+    for (const [day, daySchedules] of dayGroups) {
+      if (daySchedules.length < 2) continue;
+      
+      // Sort by start time
+      daySchedules.sort((a, b) => this.convertTimeToNumber(a.startTime) - this.convertTimeToNumber(b.startTime));
+      
+      for (let i = 0; i < daySchedules.length - 1; i++) {
+        const current = daySchedules[i];
+        const next = daySchedules[i + 1];
+        
+        const currentEnd = this.convertTimeToNumber(current.endTime);
+        const nextStart = this.convertTimeToNumber(next.startTime);
+        
+        if (currentEnd > nextStart) {
+          throw new Error(
+            `Bulk schedules overlap on ${day}: "${current.startTime}-${current.endTime}" overlaps with "${next.startTime}-${next.endTime}". ` +
+            `Please adjust the time ranges to avoid conflicts.`
+          );
+        }
+      }
+    }
+  }
+
   async findOne(id: string | number, options: { relations?: string[]; select?: string[] } = {}): Promise<Schedule> {
     const cacheKey = `schedules:${id}`;
     const cached = await this.redisService.get<Schedule>(cacheKey);
@@ -262,6 +404,10 @@ export class SchedulesService {
   async create(dto: CreateScheduleDto): Promise<Schedule> {
     const program = await this.programsRepository.findOne({ where: { id: +dto.programId } });
     if (!program) throw new NotFoundException(`Program with ID ${dto.programId} not found`);
+    
+    // Check for overlapping schedules before creating
+    await this.validateNoOverlaps(dto.programId, dto.dayOfWeek, dto.startTime, dto.endTime);
+    
     const schedule = this.schedulesRepository.create({
       day_of_week: dto.dayOfWeek,
       start_time: dto.startTime,
@@ -285,6 +431,21 @@ export class SchedulesService {
 
   async update(id: string, dto: UpdateScheduleDto): Promise<Schedule> {
     const schedule = await this.findOne(id);
+    
+    // Check for overlapping schedules before updating
+    if (dto.dayOfWeek || dto.startTime || dto.endTime) {
+      const newDayOfWeek = dto.dayOfWeek || schedule.day_of_week;
+      const newStartTime = dto.startTime || schedule.start_time;
+      const newEndTime = dto.endTime || schedule.end_time;
+      
+      await this.validateNoOverlaps(
+        schedule.program_id.toString(),
+        newDayOfWeek,
+        newStartTime,
+        newEndTime
+      );
+    }
+    
     if (dto.dayOfWeek) schedule.day_of_week = dto.dayOfWeek;
     if (dto.startTime) schedule.start_time = dto.startTime;
     if (dto.endTime) schedule.end_time = dto.endTime;
@@ -325,6 +486,19 @@ export class SchedulesService {
     const program = await this.programsRepository.findOne({ where: { id: +dto.programId } });
     if (!program) {
       throw new NotFoundException(`Program with ID ${dto.programId} not found`);
+    }
+
+    // Validate no overlaps within the bulk schedules
+    await this.validateBulkNoOverlaps(dto.schedules);
+
+    // Validate no overlaps with existing schedules
+    for (const scheduleDto of dto.schedules) {
+      await this.validateNoOverlaps(
+        dto.programId,
+        scheduleDto.dayOfWeek,
+        scheduleDto.startTime,
+        scheduleDto.endTime
+      );
     }
 
     const schedules = dto.schedules.map(scheduleDto => this.schedulesRepository.create({
