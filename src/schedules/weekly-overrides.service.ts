@@ -209,6 +209,89 @@ export class WeeklyOverridesService {
   }
 
   /**
+   * Update a weekly override
+   */
+  async updateWeeklyOverride(overrideId: string, dto: Partial<WeeklyOverrideDto>): Promise<WeeklyOverride> {
+    // Get the existing override
+    const existingOverride = await this.getWeeklyOverride(overrideId);
+    if (!existingOverride) {
+      throw new NotFoundException(`Weekly override with ID ${overrideId} not found`);
+    }
+
+    // Validate that either scheduleId or programId is provided (but not both) if they're being updated
+    if (dto.scheduleId && dto.programId) {
+      throw new BadRequestException('Cannot provide both scheduleId and programId. Use one or the other.');
+    }
+
+    // Validate schedule exists (only for non-create overrides with scheduleId)
+    if (dto.overrideType !== 'create' && dto.scheduleId) {
+      const schedule = await this.schedulesRepository.findOne({
+        where: { id: dto.scheduleId },
+        relations: ['program'],
+      });
+
+      if (!schedule) {
+        throw new NotFoundException(`Schedule with ID ${dto.scheduleId} not found`);
+      }
+    }
+
+    // Validate program exists (only for program-level overrides)
+    if (dto.programId) {
+      const program = await this.schedulesRepository.findOne({
+        where: { program: { id: dto.programId } },
+        relations: ['program'],
+      });
+
+      if (!program) {
+        throw new NotFoundException(`Program with ID ${dto.programId} not found`);
+      }
+    }
+
+    // Validate special program data for create overrides
+    if (dto.overrideType === 'create') {
+      if (!dto.specialProgram) {
+        throw new BadRequestException('Special program data is required for create overrides');
+      }
+      if (!dto.specialProgram.name || !dto.specialProgram.channelId) {
+        throw new BadRequestException('Special program name and channelId are required');
+      }
+      if (!dto.newStartTime || !dto.newEndTime || !dto.newDayOfWeek) {
+        throw new BadRequestException('Start time, end time, and day of week are required for create overrides');
+      }
+    }
+
+    // Validate override type requirements
+    if ((dto.overrideType === 'time_change' || dto.overrideType === 'reschedule') && 
+        (!dto.newStartTime || !dto.newEndTime)) {
+      throw new BadRequestException('New start time and end time are required for time changes and reschedules');
+    }
+
+    if (dto.overrideType === 'reschedule' && !dto.newDayOfWeek) {
+      throw new BadRequestException('New day of week is required for reschedules');
+    }
+
+    // Create updated override object
+    const updatedOverride: WeeklyOverride = {
+      ...existingOverride,
+      ...dto,
+      // Preserve the original ID and creation date
+      id: existingOverride.id,
+      createdAt: existingOverride.createdAt,
+      weekStartDate: existingOverride.weekStartDate,
+      expiresAt: existingOverride.expiresAt,
+    };
+
+    // Save to Redis
+    const key = `weekly_override:${overrideId}`;
+    await this.redisService.set(key, updatedOverride, 60 * 60 * 24 * 7); // 7 days
+
+    // Clear cache
+    await this.redisService.delByPattern('schedules:all:*');
+
+    return updatedOverride;
+  }
+
+  /**
    * Get a specific weekly override
    */
   async getWeeklyOverride(overrideId: string): Promise<WeeklyOverride | null> {

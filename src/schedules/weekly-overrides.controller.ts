@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Body, Param, UseGuards, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Param, UseGuards, HttpStatus, Put } from '@nestjs/common';
 import { WeeklyOverridesService, WeeklyOverrideDto } from './weekly-overrides.service';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -15,6 +15,16 @@ export class WeeklyOverridesController {
   @ApiResponse({ status: 201, description: 'Override created successfully' })
   async createOverride(@Body() dto: WeeklyOverrideDto) {
     return this.weeklyOverridesService.createWeeklyOverride(dto);
+  }
+
+  @Put(':overrideId')
+  @ApiOperation({ summary: 'Update a weekly override' })
+  @ApiResponse({ status: 200, description: 'Override updated successfully' })
+  async updateOverride(
+    @Param('overrideId') overrideId: string,
+    @Body() dto: Partial<WeeklyOverrideDto>
+  ) {
+    return this.weeklyOverridesService.updateWeeklyOverride(overrideId, dto);
   }
 
   @Get(':overrideId')
