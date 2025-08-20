@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SchedulesService } from './schedules.service';
 import { SchedulesController } from './schedules.controller';
@@ -19,7 +19,7 @@ import { WeeklyScheduleManagerController } from './weekly-schedule-manager.contr
   imports: [
     TypeOrmModule.forFeature([Schedule, Program, Panelist]),
     RedisModule,
-    YoutubeLiveModule,
+    forwardRef(() => YoutubeLiveModule),
     NotificationsModule,
     ConfigModule,
     SentryModule,
