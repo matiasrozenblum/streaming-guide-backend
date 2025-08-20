@@ -8,10 +8,12 @@ import { Panelist } from '../panelists/panelists.entity';
 import { RedisModule } from '../redis/redis.module';
 import { YoutubeLiveModule } from '../youtube/youtube-live.module';
 import { NotificationsModule } from '../notifications/notifications.module';
-import { WeeklyOverridesModule } from './weekly-overrides.module';
 import { ConfigModule } from '../config/config.module';
 import { SentryModule } from '../sentry/sentry.module';
 import { WeeklyScheduleManagerService } from './weekly-schedule-manager.service';
+import { WeeklyOverridesService } from './weekly-overrides.service';
+import { WeeklyOverridesController } from './weekly-overrides.controller';
+import { WeeklyScheduleManagerController } from './weekly-schedule-manager.controller';
 
 @Module({
   imports: [
@@ -19,12 +21,23 @@ import { WeeklyScheduleManagerService } from './weekly-schedule-manager.service'
     RedisModule,
     YoutubeLiveModule,
     NotificationsModule,
-    WeeklyOverridesModule,
     ConfigModule,
     SentryModule,
   ],
-  controllers: [SchedulesController],
-  providers: [SchedulesService, WeeklyScheduleManagerService],
-  exports: [SchedulesService, TypeOrmModule],
+  controllers: [
+    SchedulesController, 
+    WeeklyOverridesController,
+    WeeklyScheduleManagerController
+  ],
+  providers: [
+    SchedulesService, 
+    WeeklyOverridesService, 
+    WeeklyScheduleManagerService
+  ],
+  exports: [
+    SchedulesService, 
+    WeeklyOverridesService, 
+    WeeklyScheduleManagerService
+  ],
 })
 export class SchedulesModule {}
