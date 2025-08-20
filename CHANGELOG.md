@@ -17,6 +17,20 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.8.1] - 2025-08-19
+
+### Fixed
+- Fixed multiple emails being sent, 3 times each time
+
+## [1.8.0] - 2025-08-19
+
+### Added
+- Now weekly overrides are modifiable
+
+### Fixed
+- Fixed weekly overrides expiration to aling with 00:00 monday bs as time
+- Fixed cleanup process now running at 00:00 monday bs as time
+
 ## [1.7.7] - 2025-08-15
 
 ### Fixed
