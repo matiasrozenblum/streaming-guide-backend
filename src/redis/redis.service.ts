@@ -50,6 +50,16 @@ export class RedisService implements OnModuleInit {
     }
   }
 
+  /**
+   * Set a key with NX (only if not exists) option and TTL
+   * Returns true if the key was set, false if it already existed
+   */
+  async setNX(key: string, value: any, ttlSeconds: number): Promise<boolean> {
+    const serialized = JSON.stringify(value);
+    const result = await this.client.set(key, serialized, 'EX', ttlSeconds, 'NX');
+    return result === 'OK';
+  }
+
   async del(key: string): Promise<void> {
     await this.client.del(key);
   }
