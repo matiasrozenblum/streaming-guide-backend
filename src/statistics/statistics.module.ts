@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ScheduleModule } from '@nestjs/schedule';
 import { StatisticsController } from './statistics.controller';
 import { StatisticsService } from './statistics.service';
 import { WeeklyReportController } from './weekly-report.controller';
@@ -17,7 +16,6 @@ import { SentryModule } from '../sentry/sentry.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([User, UserSubscription, Program, Channel]),
-    ScheduleModule.forRoot(),
     SentryModule,
   ],
   controllers: [
