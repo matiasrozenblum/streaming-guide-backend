@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.8.1] - 2025-08-19
+
+### Fixed
+- Fixed multiple emails being sent, 3 times each time
+
 ## [1.8.0] - 2025-08-19
 
 ### Added
