@@ -167,7 +167,7 @@ export class SchedulesService {
       const endNum = this.convertTimeToNumber(schedule.end_time);
 
       let isLive = false;
-      let streamUrl = program.youtube_url;
+      let streamUrl = program.stream_url || program.youtube_url;
 
       // Si estamos en horario y tenemos canal válido
       if (
