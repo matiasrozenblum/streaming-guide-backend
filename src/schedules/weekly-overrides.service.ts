@@ -26,6 +26,7 @@ export interface WeeklyOverrideDto {
     description?: string;
     channelId: number;
     imageUrl?: string;
+    stream_url?: string;
   };
 }
 
@@ -49,6 +50,7 @@ export interface WeeklyOverride {
     description?: string;
     channelId: number;
     imageUrl?: string;
+    stream_url?: string;
   };
 }
 
@@ -567,6 +569,7 @@ export class WeeklyOverridesService {
             name: override.specialProgram.name,
             description: override.specialProgram.description || '',
             logo_url: override.specialProgram.imageUrl || '',
+            stream_url: override.specialProgram.stream_url || null,
             channel: channel ? {
               id: channel.id,
               name: channel.name,
