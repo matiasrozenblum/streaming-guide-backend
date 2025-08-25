@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.9.0] - 2025-08-25
+
+### Added
+- Now checking every minute for back-to-back programs and updating video id when changed
+
 ## [1.8.2] - 2025-08-23
 
 ### Added
