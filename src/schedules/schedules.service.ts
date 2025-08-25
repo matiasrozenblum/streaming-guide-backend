@@ -352,4 +352,26 @@ export class SchedulesService {
 
     return savedSchedules;
   }
+
+  /**
+   * Find schedules by start time for a specific day
+   * Used for program start detection to validate cached video IDs
+   */
+  async findByStartTime(dayOfWeek: string, startTime: string): Promise<Schedule[]> {
+    try {
+      const schedules = await this.schedulesRepository
+        .createQueryBuilder('schedule')
+        .leftJoinAndSelect('schedule.program', 'program')
+        .leftJoinAndSelect('program.channel', 'channel')
+        .where('schedule.day_of_week = :dayOfWeek', { dayOfWeek })
+        .andWhere('schedule.start_time = :startTime', { startTime })
+        .getMany();
+
+      return schedules;
+    } catch (error) {
+      console.error(`Error finding schedules for ${dayOfWeek} at ${startTime}:`, error);
+      this.sentryService.captureException(error);
+      return [];
+    }
+  }
 }

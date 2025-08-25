@@ -18,6 +18,8 @@ const HolidaysClass = (DateHolidays as any).default ?? DateHolidays;
 export class YoutubeLiveService {
   private readonly apiKey = process.env.YOUTUBE_API_KEY;
   private readonly apiUrl = 'https://www.googleapis.com/youtube/v3';
+  private readonly validationCooldowns = new Map<string, number>(); // Track last validation time per channel
+  private readonly COOLDOWN_PERIOD = 5 * 60 * 1000; // 5 minutes cooldown
 
   constructor(
     private readonly configService: ConfigService,
@@ -38,6 +40,11 @@ export class YoutubeLiveService {
     
     // Back-to-back fix cron: runs 7 minutes after each hour to catch overlapping programs
     cron.schedule('7 * * * *', () => this.fetchLiveVideoIds('back-to-back-fix'), {
+      timezone: 'America/Argentina/Buenos_Aires',
+    });
+
+    // Program start detection: runs every minute to catch program transitions
+    cron.schedule('* * * * *', () => this.checkProgramStarts(), {
       timezone: 'America/Argentina/Buenos_Aires',
     });
   }
@@ -75,7 +82,7 @@ export class YoutubeLiveService {
     channelId: string,
     handle: string,
     blockTTL: number,
-    context: 'cron' | 'onDemand',
+    context: 'cron' | 'onDemand' | 'program-start',
   ): Promise<string | null | '__SKIPPED__'> {
     // gating centralizado
     if (!(await this.configService.canFetchLive(handle))) {
@@ -250,6 +257,125 @@ export class YoutubeLiveService {
       console.log(`${cronLabel} completed - ${updatedCount} channels updated (back-to-back fixes detected)`);
     } else {
       console.log(`${cronLabel} completed`);
+    }
+  }
+
+  /**
+   * Check for programs starting right now and validate cached video IDs
+   * This catches back-to-back program transitions where video IDs might change
+   */
+  async checkProgramStarts() {
+    try {
+      const now = dayjs().tz('America/Argentina/Buenos_Aires');
+      const currentMinute = now.format('HH:mm');
+      const currentDay = now.format('dddd').toLowerCase();
+      
+      // Find programs starting right now
+      const startingPrograms = await this.schedulesService.findByStartTime(currentDay, currentMinute);
+      
+      if (startingPrograms.length === 0) {
+        return; // No programs starting
+      }
+
+      console.log(`🎬 Program start detection: ${startingPrograms.length} programs starting at ${currentMinute}`);
+      
+      // Group by channel to avoid duplicate API calls
+      const channelMap = new Map<string, string>();
+      for (const program of startingPrograms) {
+        if (program.program.channel?.youtube_channel_id && program.program.channel?.handle) {
+          channelMap.set(program.program.channel.youtube_channel_id, program.program.channel.handle);
+        }
+      }
+
+      // Validate cached video IDs for channels with starting programs
+      for (const [channelId, handle] of channelMap.entries()) {
+        await this.validateCachedVideoId(channelId, handle);
+      }
+
+      // Schedule a follow-up check 7 minutes later for delayed starts
+      setTimeout(async () => {
+        await this.checkDelayedProgramStarts(startingPrograms);
+      }, 7 * 60 * 1000); // 7 minutes
+
+    } catch (error) {
+      console.error('Error in program start detection:', error);
+      this.sentryService.captureException(error);
+    }
+  }
+
+  /**
+   * Follow-up check 7 minutes after program start to catch delayed video ID changes
+   */
+  private async checkDelayedProgramStarts(programs: any[]) {
+    try {
+      console.log(`🔄 Delayed program start check: validating ${programs.length} programs`);
+      
+      // Group by channel to avoid duplicate API calls
+      const channelMap = new Map<string, string>();
+      for (const program of programs) {
+        if (program.program.channel?.youtube_channel_id && program.program.channel?.handle) {
+          channelMap.set(program.program.channel.youtube_channel_id, program.program.channel.handle);
+        }
+      }
+
+      // Validate cached video IDs for channels with starting programs
+      for (const [channelId, handle] of channelMap.entries()) {
+        await this.validateCachedVideoId(channelId, handle);
+      }
+    } catch (error) {
+      console.error('Error in delayed program start check:', error);
+      this.sentryService.captureException(error);
+    }
+  }
+
+  /**
+   * Validate if cached video ID is still live and refresh if needed
+   */
+  private async validateCachedVideoId(channelId: string, handle: string) {
+    try {
+      // Check cooldown to prevent excessive API calls
+      const now = Date.now();
+      const lastValidation = this.validationCooldowns.get(channelId);
+      
+      if (lastValidation && (now - lastValidation) < this.COOLDOWN_PERIOD) {
+        console.log(`⏳ Skipping validation for ${handle} (cooldown active)`);
+        return;
+      }
+
+      const liveKey = `liveVideoIdByChannel:${channelId}`;
+      const cachedId = await this.redisService.get<string>(liveKey);
+      
+      if (!cachedId) {
+        return; // No cached video ID to validate
+      }
+
+      // Check if cached video ID is still live
+      if (await this.isVideoLive(cachedId)) {
+        console.log(`✅ Cached video ID still live for ${handle}: ${cachedId}`);
+        this.validationCooldowns.set(channelId, now); // Update cooldown
+        return; // Still live, no action needed
+      }
+
+      // Video ID is no longer live, refresh it
+      console.log(`🔄 Cached video ID no longer live for ${handle}: ${cachedId}, refreshing...`);
+      
+      const schedules = await this.schedulesService.findByDay(dayjs().tz('America/Argentina/Buenos_Aires').format('dddd').toLowerCase());
+      const ttl = await getCurrentBlockTTL(channelId, schedules);
+      
+      const newVideoId = await this.getLiveVideoId(channelId, handle, ttl, 'program-start');
+      
+      if (newVideoId && newVideoId !== '__SKIPPED__') {
+        console.log(`🆕 Refreshed video ID for ${handle}: ${cachedId} → ${newVideoId}`);
+      } else {
+        console.log(`❌ Failed to refresh video ID for ${handle}`);
+      }
+
+      // Update cooldown after validation
+      this.validationCooldowns.set(channelId, now);
+      
+    } catch (error) {
+      console.error(`Error validating cached video ID for ${handle}:`, error);
+      this.sentryService.captureException(error);
     }
   }
 }
