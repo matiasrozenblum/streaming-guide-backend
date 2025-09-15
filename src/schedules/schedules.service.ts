@@ -192,7 +192,7 @@ export class SchedulesService {
             streamUrl = `https://www.youtube.com/embed/${cachedId}?autoplay=1`;
           } else {
             // Obtener on-demand si no estaba en cache
-            const ttl = await getCurrentBlockTTL(channelId, schedules);
+            const ttl = await getCurrentBlockTTL(channelId, schedules, this.sentryService);
             const vid = await this.youtubeLiveService.getLiveVideoId(
               channelId,
               handle,
