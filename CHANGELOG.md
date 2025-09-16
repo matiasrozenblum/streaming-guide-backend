@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.9.1] - 2025-09-15
+
+### Fixed
+- Added negative TTL check and fallback
+
 ## [1.9.0] - 2025-08-25
 
 ### Added

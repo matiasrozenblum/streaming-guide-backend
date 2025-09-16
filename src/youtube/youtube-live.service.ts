@@ -240,7 +240,7 @@ export class YoutubeLiveService {
     for (const [cid, handle] of map.entries()) {
       const beforeCache = cronType === 'back-to-back-fix' ? await this.redisService.get<string>(`liveVideoIdByChannel:${cid}`) : null;
       
-      const ttl = await getCurrentBlockTTL(cid, rawSchedules);
+      const ttl = await getCurrentBlockTTL(cid, rawSchedules, this.sentryService);
       const result = await this.getLiveVideoId(cid, handle, ttl, 'cron');
       
       // Track if the back-to-back fix cron actually updated a video ID
@@ -360,7 +360,7 @@ export class YoutubeLiveService {
       console.log(`🔄 Cached video ID no longer live for ${handle}: ${cachedId}, refreshing...`);
       
       const schedules = await this.schedulesService.findByDay(dayjs().tz('America/Argentina/Buenos_Aires').format('dddd').toLowerCase());
-      const ttl = await getCurrentBlockTTL(channelId, schedules);
+      const ttl = await getCurrentBlockTTL(channelId, schedules, this.sentryService);
       
       const newVideoId = await this.getLiveVideoId(channelId, handle, ttl, 'program-start');
       

@@ -120,5 +120,45 @@ describe('YoutubeLiveService', () => {
       await service.fetchLiveVideoIds();
       expect(service.getLiveVideoId).toHaveBeenCalledTimes(2);
     });
+
+    it('passes SentryService to getCurrentBlockTTL', async () => {
+      const schedules = [
+        { program: { channel: { youtube_channel_id: 'cid1', handle: 'h1' }, is_live: true } },
+      ];
+      schedulesService.findByDay.mockResolvedValue(schedules as any);
+      jest.spyOn(service, 'getLiveVideoId').mockResolvedValue('vid');
+      
+      const getCurrentBlockTTLSpy = jest.spyOn(require('@/utils/getBlockTTL.util'), 'getCurrentBlockTTL').mockResolvedValue(100);
+      
+      await service.fetchLiveVideoIds();
+      
+      expect(getCurrentBlockTTLSpy).toHaveBeenCalledWith('cid1', schedules, sentryService);
+    });
+  });
+
+  describe('validateCachedVideoId', () => {
+    it('passes SentryService to getCurrentBlockTTL when refreshing video ID', async () => {
+      const channelId = 'test-channel';
+      const handle = 'test-handle';
+      
+      // Mock that there's a cached video ID
+      redisService.get.mockResolvedValue('cached-video-id');
+      
+      // Mock that the video is no longer live by mocking the private method
+      (service as any).isVideoLive = jest.fn().mockResolvedValue(false);
+      
+      // Mock schedules service
+      schedulesService.findByDay.mockResolvedValue([]);
+      
+      // Mock getLiveVideoId to return a new video ID
+      jest.spyOn(service, 'getLiveVideoId').mockResolvedValue('new-video-id');
+      
+      const getCurrentBlockTTLSpy = jest.spyOn(require('@/utils/getBlockTTL.util'), 'getCurrentBlockTTL').mockResolvedValue(100);
+      
+      // Call the private method through the service
+      await (service as any).validateCachedVideoId(channelId, handle);
+      
+      expect(getCurrentBlockTTLSpy).toHaveBeenCalledWith(channelId, [], sentryService);
+    });
   });
 }); 
