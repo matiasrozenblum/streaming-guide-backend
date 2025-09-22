@@ -52,6 +52,40 @@ jest.mock('dayjs', () => {
         return parseInt(m);
       },
       tz: () => mockDayjs(),
+      startOf: (unit: string) => {
+        // Return a mock object with the add method
+        return {
+          add: (amount: number, unit: string) => {
+            // Return a mock object with the diff method
+            return {
+              diff: (date: any, unit: string) => {
+                // Return a reasonable TTL value for testing
+                return 3600; // 1 hour in seconds
+              }
+            };
+          }
+        };
+      },
+      add: (amount: number, unit: string) => {
+        return {
+          diff: (date: any, unit: string) => {
+            // Return a reasonable TTL value for testing
+            return 3600; // 1 hour in seconds
+          }
+        };
+      },
+      diff: (date: any, unit: string) => {
+        // Return a reasonable TTL value for testing
+        return 3600; // 1 hour in seconds
+      },
+      endOf: (unit: string) => {
+        return {
+          diff: (date: any, unit: string) => {
+            // Return a reasonable TTL value for testing
+            return 3600; // 1 hour in seconds
+          }
+        };
+      }
     };
   };
 
@@ -153,6 +187,7 @@ describe('SchedulesService', () => {
           provide: YoutubeLiveService,
           useValue: {
             getLiveVideoId: jest.fn(),
+            getLiveStreams: jest.fn(),
           },
         },
         {
@@ -240,6 +275,10 @@ describe('SchedulesService', () => {
       
       jest.spyOn(schedulesRepo, 'createQueryBuilder').mockReturnValue(mockQueryBuilder as any);
       jest.spyOn(redisService, 'get').mockResolvedValueOnce(null).mockResolvedValueOnce('live-video-id');
+      
+      // Mock getLiveStreams to return null (no multiple streams), which will fallback to getLiveVideoId
+      jest.spyOn(youtubeLiveService, 'getLiveStreams').mockResolvedValue(null);
+      jest.spyOn(youtubeLiveService, 'getLiveVideoId').mockResolvedValue('live-video-id');
 
       currentTime = '11:00';
       currentDay = 'monday';

@@ -168,6 +168,8 @@ export class SchedulesService {
 
       let isLive = false;
       let streamUrl = program.stream_url || program.youtube_url;
+      let liveStreams: any[] | null = null;
+      let streamCount = 0;
 
       // Si estamos en horario y tenemos canal válido
       if (
@@ -184,23 +186,75 @@ export class SchedulesService {
         const canFetch = await this.configService.canFetchLive(handle);
 
         if (canFetch) {
+          const streamsKey = `liveStreamsByChannel:${channelId}`;
           const liveKey = `liveVideoIdByChannel:${channelId}`;
 
-          // Intentar reutilizar cache
-          const cachedId = await this.redisService.get<string>(liveKey);
-          if (cachedId) {
-            streamUrl = `https://www.youtube.com/embed/${cachedId}?autoplay=1`;
-          } else {
-            // Obtener on-demand si no estaba en cache
-            const ttl = await getCurrentBlockTTL(channelId, schedules, this.sentryService);
-            const vid = await this.youtubeLiveService.getLiveVideoId(
-              channelId,
-              handle,
-              ttl,
-              'onDemand'
-            );
-            if (vid && vid !== '__SKIPPED__') {
-              streamUrl = `https://www.youtube.com/embed/${vid}?autoplay=1`;
+          // Intentar reutilizar cache de streams múltiples
+          const cachedStreams = await this.redisService.get<string>(streamsKey);
+          if (cachedStreams) {
+            try {
+              const parsedStreams = JSON.parse(cachedStreams);
+              if (parsedStreams.length > 0) {
+                liveStreams = parsedStreams;
+                streamCount = parsedStreams.length;
+                streamUrl = `https://www.youtube.com/embed/${parsedStreams[0].videoId}?autoplay=1`;
+              }
+            } catch (error) {
+              console.warn(`Failed to parse cached streams for ${handle}:`, error);
+            }
+          }
+
+          // Fallback to single video ID cache if streams cache is not available
+          if (!liveStreams) {
+            const cachedId = await this.redisService.get<string>(liveKey);
+            if (cachedId) {
+              streamUrl = `https://www.youtube.com/embed/${cachedId}?autoplay=1`;
+              // Create a single stream object for backward compatibility
+              liveStreams = [{
+                videoId: cachedId,
+                title: program.name,
+                publishedAt: new Date().toISOString(),
+                description: program.description || '',
+                channelTitle: channel.name
+              }];
+              streamCount = 1;
+            } else {
+              // Obtener on-demand si no estaba en cache
+              const ttl = await getCurrentBlockTTL(channelId, schedules, this.sentryService);
+              
+              // Try to get multiple streams first
+              const streamsResult = await this.youtubeLiveService.getLiveStreams(
+                channelId,
+                handle,
+                ttl,
+                'onDemand'
+              );
+              
+              if (streamsResult && streamsResult !== '__SKIPPED__') {
+                liveStreams = streamsResult.streams;
+                streamCount = streamsResult.streamCount;
+                streamUrl = `https://www.youtube.com/embed/${streamsResult.primaryVideoId}?autoplay=1`;
+              } else {
+                // Fallback to old single video ID method
+                const vid = await this.youtubeLiveService.getLiveVideoId(
+                  channelId,
+                  handle,
+                  ttl,
+                  'onDemand'
+                );
+                if (vid && vid !== '__SKIPPED__') {
+                  streamUrl = `https://www.youtube.com/embed/${vid}?autoplay=1`;
+                  // Create a single stream object for backward compatibility
+                  liveStreams = [{
+                    videoId: vid,
+                    title: program.name,
+                    publishedAt: new Date().toISOString(),
+                    description: program.description || '',
+                    channelTitle: channel.name
+                  }];
+                  streamCount = 1;
+                }
+              }
             }
           }
         }
@@ -212,6 +266,8 @@ export class SchedulesService {
           ...program,
           is_live: isLive,
           stream_url: streamUrl,
+          live_streams: liveStreams,
+          stream_count: streamCount,
         },
       });
     }
