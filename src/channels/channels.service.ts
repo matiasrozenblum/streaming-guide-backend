@@ -222,6 +222,7 @@ export class ChannelsService {
     const allSchedules = await this.schedulesService.findAll({
       dayOfWeek: day,
       applyOverrides: raw !== 'true',
+      liveStatus: liveStatus || false,
     });
     console.log('[getChannelsWithSchedules] SchedulesService query completed in', Date.now() - queryStart, 'ms');
 

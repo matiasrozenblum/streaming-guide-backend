@@ -26,6 +26,7 @@ interface FindAllOptions {
   select?: string[];
   skipCache?: boolean;
   applyOverrides?: boolean;
+  liveStatus?: boolean;
 }
 
 @Injectable()
@@ -59,7 +60,7 @@ export class SchedulesService {
 
   async findAll(options: FindAllOptions = {}): Promise<any[]> {
     const startTime = Date.now();
-    const { dayOfWeek, relations = ['program', 'program.channel', 'program.panelists'], select, skipCache = false, applyOverrides = true } = options;
+    const { dayOfWeek, relations = ['program', 'program.channel', 'program.panelists'], select, skipCache = false, applyOverrides = true, liveStatus = false } = options;
 
     const cacheKey = `schedules:all:${dayOfWeek || 'all'}`;
     let schedules: Schedule[] | null = null;
@@ -141,7 +142,7 @@ export class SchedulesService {
 
     const enrichStart = Date.now();
     console.log('[findAll] Enriching schedules...', schedules!.length, 'schedules');
-    const enriched = await this.enrichSchedules(schedules!);
+    const enriched = await this.enrichSchedules(schedules!, liveStatus);
     console.log('[findAll] Enriched schedules in', Date.now() - enrichStart, 'ms');
     console.log('[findAll] Enriched result length:', enriched.length);
 
@@ -149,7 +150,7 @@ export class SchedulesService {
     return enriched;
   }
 
-  async enrichSchedules(schedules: Schedule[]): Promise<any[]> {
+  async enrichSchedules(schedules: Schedule[], liveStatus: boolean = false): Promise<any[]> {
     console.log('[enrichSchedules] Starting enrichment of', schedules.length, 'schedules');
     const now = this.dayjs().tz('America/Argentina/Buenos_Aires');
     const currentNum = now.hour() * 100 + now.minute();
@@ -182,10 +183,12 @@ export class SchedulesService {
         // Set isLive to true if schedule is currently running
         isLive = true;
         
-        // Validar feature-flag + feriado (fallback true si no existe)
-        const canFetch = await this.configService.canFetchLive(handle);
+        // Only fetch live status if requested
+        if (liveStatus) {
+          // Validar feature-flag + feriado (fallback true si no existe)
+          const canFetch = await this.configService.canFetchLive(handle);
 
-        if (canFetch) {
+          if (canFetch) {
           const streamsKey = `liveStreamsByChannel:${channelId}`;
           const liveKey = `liveVideoIdByChannel:${channelId}`;
 
@@ -257,6 +260,7 @@ export class SchedulesService {
               }
             }
           }
+        }
         }
       }
 
