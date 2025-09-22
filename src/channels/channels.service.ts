@@ -45,6 +45,8 @@ type ChannelWithSchedules = {
       description: string | null;
       stream_url: string | null;
       is_live: boolean;
+      live_streams?: any[] | null;
+      stream_count?: number;
       panelists: { id: string; name: string }[];
       style_override: string | null;
     };
@@ -267,6 +269,8 @@ export class ChannelsService {
           description: schedule.program.description,
           stream_url: schedule.program.stream_url,
           is_live: schedule.program.is_live,
+          live_streams: schedule.program.live_streams,
+          stream_count: schedule.program.stream_count,
           panelists: schedule.program.panelists?.map((p) => ({
             id: p.id.toString(),
             name: p.name,
