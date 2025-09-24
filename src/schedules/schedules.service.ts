@@ -350,7 +350,7 @@ export class SchedulesService {
           stream_url: streamUrl,
           live_streams: assignedStream ? [assignedStream] : null,
           stream_count: assignedStream ? 1 : 0,
-          channel_stream_count: channelStreamCount, // Add channel-level count
+          channel_stream_count: isLive ? liveSchedules.length : 0, // Count of live programs, not total streams
         },
       });
     }
