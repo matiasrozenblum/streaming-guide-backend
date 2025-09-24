@@ -47,6 +47,7 @@ type ChannelWithSchedules = {
       is_live: boolean;
       live_streams?: any[] | null;
       stream_count?: number;
+      channel_stream_count?: number;
       panelists: { id: string; name: string }[];
       style_override: string | null;
     };
@@ -272,6 +273,7 @@ export class ChannelsService {
           is_live: schedule.program.is_live,
           live_streams: schedule.program.live_streams,
           stream_count: schedule.program.stream_count,
+          channel_stream_count: schedule.program.channel_stream_count,
           panelists: schedule.program.panelists?.map((p) => ({
             id: p.id.toString(),
             name: p.name,
