@@ -321,6 +321,11 @@ export class SchedulesService {
       }
     }
 
+    // Count live programs for this channel
+    const liveProgramCount = liveSchedules.length;
+    // Total streams available from YouTube API
+    const totalStreamsAvailable = channelStreamCount;
+
     // Distribute streams to live schedules using title matching
     const usedStreams = new Set<string>();
     
@@ -350,7 +355,8 @@ export class SchedulesService {
           stream_url: streamUrl,
           live_streams: assignedStream ? [assignedStream] : null,
           stream_count: assignedStream ? 1 : 0,
-          channel_stream_count: channelStreamCount, // Total live streams available for the channel
+          // Store the total streams available for badge calculation
+          total_streams_available: totalStreamsAvailable,
         },
       });
     }
@@ -392,7 +398,7 @@ export class SchedulesService {
         stream_url: streamUrl,
         live_streams: null,
         stream_count: 0,
-        channel_stream_count: 0,
+        total_streams_available: 0,
       },
     };
   }
