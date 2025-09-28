@@ -206,8 +206,8 @@ export class SchedulesService {
           ...program,
           is_live: isLive,
           stream_url: streamUrl,
-          live_streams: null,
-          stream_count: 0,
+        live_streams: null,
+        stream_count: 0,
         },
       });
     }
@@ -355,8 +355,6 @@ export class SchedulesService {
           stream_url: streamUrl,
           live_streams: assignedStream ? [assignedStream] : null,
           stream_count: assignedStream ? 1 : 0,
-          // Store the total streams available for badge calculation
-          total_streams_available: totalStreamsAvailable,
         },
       });
     }
@@ -388,9 +386,44 @@ export class SchedulesService {
       currentNum < endNum
     ) {
       isLive = true;
+
+      // If live and we have channel info, try to fetch live streams
+      if (liveStatus && channelId && handle) {
+        try {
+          const canFetch = await this.configService.canFetchLive(handle);
+          if (canFetch) {
+            // Try to get multiple streams first
+            const liveStreams = await this.youtubeLiveService.getLiveStreams(
+              channelId,
+              handle,
+              100, // Default TTL
+              'onDemand'
+            );
+            
+            if (liveStreams && typeof liveStreams === 'object' && 'streams' in liveStreams && liveStreams.streams.length > 0) {
+              // Use the first stream for individual enrichment
+              const firstStream = liveStreams.streams[0];
+              streamUrl = `https://www.youtube.com/embed/${firstStream.videoId}?autoplay=1`;
+            } else {
+              // Fallback to single video ID method
+              const videoId = await this.youtubeLiveService.getLiveVideoId(
+                channelId,
+                handle,
+                100, // Default TTL
+                'onDemand'
+              );
+              if (videoId && videoId !== '__SKIPPED__') {
+                streamUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+              }
+            }
+          }
+        } catch (error) {
+          console.warn(`Failed to fetch live stream for ${handle}:`, error);
+        }
+      }
     }
 
-    return {
+    const result = {
       ...schedule,
       program: {
         ...program,
@@ -398,9 +431,10 @@ export class SchedulesService {
         stream_url: streamUrl,
         live_streams: null,
         stream_count: 0,
-        total_streams_available: 0,
       },
     };
+    
+    return result;
   }
 
   private findBestMatchingStream(programName: string, availableStreams: any[]): any | null {

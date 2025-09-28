@@ -252,26 +252,11 @@ export class ChannelsService {
     // Build final result
     const resultStart = Date.now();
     const result: ChannelWithSchedules[] = channels.map(channel => {
-      // Count live programs for this channel
-      const channelSchedules = schedulesGroupedByChannelId[channel.id] || [];
-      const liveProgramCount = channelSchedules.filter(schedule => schedule.program.is_live).length;
-      
-      // Get total streams available from any live program
-      let totalStreamsAvailable = 0;
-      if (liveProgramCount > 0) {
-        const firstLiveProgram = channelSchedules.find(schedule => schedule.program.is_live);
-        totalStreamsAvailable = firstLiveProgram?.program.total_streams_available || 0;
-      }
-      
-      // Badge count is the minimum of available streams and live programs
-      const badgeCount = Math.min(totalStreamsAvailable, liveProgramCount);
-      
       return {
         channel: {
           id: channel.id,
           name: channel.name,
           logo_url: channel.logo_url,
-          stream_count: badgeCount, // Badge count based on min(streams, programs)
         },
       schedules: (schedulesGroupedByChannelId[channel.id] || []).map((schedule) => ({
         id: schedule.id,
