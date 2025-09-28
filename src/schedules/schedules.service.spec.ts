@@ -52,6 +52,40 @@ jest.mock('dayjs', () => {
         return parseInt(m);
       },
       tz: () => mockDayjs(),
+      startOf: (unit: string) => {
+        // Return a mock object with the add method
+        return {
+          add: (amount: number, unit: string) => {
+            // Return a mock object with the diff method
+            return {
+              diff: (date: any, unit: string) => {
+                // Return a reasonable TTL value for testing
+                return 3600; // 1 hour in seconds
+              }
+            };
+          }
+        };
+      },
+      add: (amount: number, unit: string) => {
+        return {
+          diff: (date: any, unit: string) => {
+            // Return a reasonable TTL value for testing
+            return 3600; // 1 hour in seconds
+          }
+        };
+      },
+      diff: (date: any, unit: string) => {
+        // Return a reasonable TTL value for testing
+        return 3600; // 1 hour in seconds
+      },
+      endOf: (unit: string) => {
+        return {
+          diff: (date: any, unit: string) => {
+            // Return a reasonable TTL value for testing
+            return 3600; // 1 hour in seconds
+          }
+        };
+      }
     };
   };
 
@@ -65,6 +99,7 @@ describe('SchedulesService', () => {
   let programsRepo: Repository<Program>;
   let redisService: RedisService;
   let youtubeLiveService: YoutubeLiveService;
+  let configService: ConfigService;
   let notifyUtil: NotifyAndRevalidateUtil;
 
   const mockChannel = {
@@ -153,6 +188,7 @@ describe('SchedulesService', () => {
           provide: YoutubeLiveService,
           useValue: {
             getLiveVideoId: jest.fn(),
+            getLiveStreams: jest.fn(),
           },
         },
         {
@@ -191,6 +227,7 @@ describe('SchedulesService', () => {
     programsRepo = module.get<Repository<Program>>(getRepositoryToken(Program));
     redisService = module.get<RedisService>(RedisService);
     youtubeLiveService = module.get<YoutubeLiveService>(YoutubeLiveService);
+    configService = module.get<ConfigService>(ConfigService);
     notifyUtil = new NotifyAndRevalidateUtil(
       redisService as any,
       'https://frontend.test',
@@ -208,7 +245,7 @@ describe('SchedulesService', () => {
         end_time: '12:00',
         program: {
           id: 1,
-          name: 'Test Program',
+          name: 'Live Stream',
           description: 'Test Description',
           logo_url: 'test-logo.png',
           youtube_url: 'https://youtube.com/test',
@@ -239,12 +276,20 @@ describe('SchedulesService', () => {
       };
       
       jest.spyOn(schedulesRepo, 'createQueryBuilder').mockReturnValue(mockQueryBuilder as any);
-      jest.spyOn(redisService, 'get').mockResolvedValueOnce(null).mockResolvedValueOnce('live-video-id');
+      // Mock Redis: first call for schedules cache (miss), then calls for streams cache (miss), then single video ID cache (hit)
+      jest.spyOn(redisService, 'get')
+        .mockResolvedValueOnce(null) // schedules cache miss
+        .mockResolvedValueOnce(null) // streams cache miss  
+        .mockResolvedValueOnce('live-video-id'); // single video ID cache hit
+      
+      // Mock getLiveStreams to return null (no multiple streams), which will fallback to getLiveVideoId
+      jest.spyOn(youtubeLiveService, 'getLiveStreams').mockResolvedValue(null);
+      jest.spyOn(youtubeLiveService, 'getLiveVideoId').mockResolvedValue('live-video-id');
 
       currentTime = '11:00';
       currentDay = 'monday';
 
-      const result = await service.findByDay('monday');
+      const result = await service.findAll({ dayOfWeek: 'monday', liveStatus: true });
 
       expect(result).toHaveLength(1);
       expect(result[0].program.is_live).toBe(true);
@@ -323,6 +368,343 @@ describe('SchedulesService', () => {
       jest.spyOn(schedulesRepo, 'delete').mockResolvedValue({ affected: 1 } as any);
       await service.remove('1');
       expect(spy).toHaveBeenCalled();
+    });
+  });
+
+  describe('Multiple Streams Feature', () => {
+    beforeEach(() => {
+      // Reset mocks
+      jest.clearAllMocks();
+      
+      // Mock dayjs to return consistent time
+      jest.spyOn(service as any, 'dayjs').mockReturnValue({
+        tz: jest.fn().mockReturnThis(),
+        hour: jest.fn().mockReturnValue(11),
+        minute: jest.fn().mockReturnValue(0),
+        format: jest.fn().mockReturnValue('monday')
+      });
+    });
+
+    it('should distribute multiple streams to overlapping programs', async () => {
+      const testSchedules = [
+        {
+          id: 1,
+          day_of_week: 'monday',
+          start_time: '10:00',
+          end_time: '12:00',
+          program: {
+            id: 1,
+            name: 'Live Stream 1',
+            description: 'Description A',
+            logo_url: 'logo-a.png',
+            youtube_url: 'https://youtube.com/program-a',
+            is_live: false,
+            stream_url: '',
+            channel: {
+              id: 1,
+              name: 'Test Channel',
+              description: 'Test Description',
+              logo_url: 'test-logo.png',
+              handle: 'testchannel',
+              youtube_channel_id: 'test-channel-id',
+              programs: [],
+            },
+            panelists: [],
+            schedules: [],
+          },
+        },
+        {
+          id: 2,
+          day_of_week: 'monday',
+          start_time: '11:00',
+          end_time: '13:00',
+          program: {
+            id: 2,
+            name: 'Live Stream 2',
+            description: 'Description B',
+            logo_url: 'logo-b.png',
+            youtube_url: 'https://youtube.com/program-b',
+            is_live: false,
+            stream_url: '',
+            channel: {
+              id: 1,
+              name: 'Test Channel',
+              description: 'Test Description',
+              logo_url: 'test-logo.png',
+              handle: 'testchannel',
+              youtube_channel_id: 'test-channel-id',
+              programs: [],
+            },
+            panelists: [],
+            schedules: [],
+          },
+        }
+      ] as unknown as Schedule[];
+
+      const mockStreams = {
+        streams: [
+          {
+            videoId: 'stream1',
+            title: 'Live Stream 1',
+            publishedAt: '2023-01-01T00:00:00Z',
+            description: 'Stream 1 Description',
+            thumbnailUrl: 'thumb1.jpg',
+            channelTitle: 'Test Channel'
+          },
+          {
+            videoId: 'stream2',
+            title: 'Live Stream 2',
+            publishedAt: '2023-01-01T01:00:00Z',
+            description: 'Stream 2 Description',
+            thumbnailUrl: 'thumb2.jpg',
+            channelTitle: 'Test Channel'
+          }
+        ],
+        primaryVideoId: 'stream1',
+        streamCount: 2
+      };
+
+      // Mock config service
+      jest.spyOn(configService, 'canFetchLive').mockResolvedValue(true);
+      
+      // Mock YouTube service
+      jest.spyOn(youtubeLiveService, 'getLiveStreams').mockResolvedValue(mockStreams);
+      jest.spyOn(youtubeLiveService, 'getLiveVideoId').mockResolvedValue('fallback-video-id');
+
+      const result = await service.enrichSchedules(testSchedules, true);
+
+      expect(result).toHaveLength(2);
+      
+      // Both programs should be live (overlapping at 11:00)
+      expect(result[0].program.is_live).toBe(true);
+      expect(result[1].program.is_live).toBe(true);
+      
+      // Both should have live streams assigned
+      expect(result[0].program.live_streams).toBeDefined();
+      expect(result[1].program.live_streams).toBeDefined();
+      
+      // Each program should get 1 stream (stream_count = 1)
+      expect(result[0].program.stream_count).toBe(1);
+      expect(result[1].program.stream_count).toBe(1);
+      
+    });
+
+    it('should handle single program with multiple available streams', async () => {
+      const testSchedule = {
+        id: 1,
+        day_of_week: 'monday',
+        start_time: '10:00',
+        end_time: '12:00',
+        program: {
+          id: 1,
+          name: 'Live Stream 1',
+          description: 'Description A',
+          logo_url: 'logo-a.png',
+          youtube_url: 'https://youtube.com/program-a',
+          is_live: false,
+          stream_url: '',
+          channel: {
+            id: 1,
+            name: 'Test Channel',
+            description: 'Test Description',
+            logo_url: 'test-logo.png',
+            handle: 'testchannel',
+            youtube_channel_id: 'test-channel-id',
+            programs: [],
+          },
+          panelists: [],
+          schedules: [],
+        },
+      } as unknown as Schedule;
+
+      const mockStreams = {
+        streams: [
+          {
+            videoId: 'stream1',
+            title: 'Live Stream 1',
+            publishedAt: '2023-01-01T00:00:00Z',
+            description: 'Stream 1 Description',
+            thumbnailUrl: 'thumb1.jpg',
+            channelTitle: 'Test Channel'
+          },
+          {
+            videoId: 'stream2',
+            title: 'Live Stream 2',
+            publishedAt: '2023-01-01T01:00:00Z',
+            description: 'Stream 2 Description',
+            thumbnailUrl: 'thumb2.jpg',
+            channelTitle: 'Test Channel'
+          }
+        ],
+        primaryVideoId: 'stream1',
+        streamCount: 2
+      };
+
+      // Mock config service
+      jest.spyOn(configService, 'canFetchLive').mockResolvedValue(true);
+      
+      // Mock YouTube service
+      jest.spyOn(youtubeLiveService, 'getLiveStreams').mockResolvedValue(mockStreams);
+
+      const result = await service.enrichSchedules([testSchedule], true);
+
+      expect(result).toHaveLength(1);
+      
+      // Program should be live
+      expect(result[0].program.is_live).toBe(true);
+      
+      // Should get 1 stream assigned (best match)
+      expect(result[0].program.stream_count).toBe(1);
+      expect(result[0].program.live_streams).toHaveLength(1);
+      
+    });
+
+    it('should fallback to getLiveVideoId when getLiveStreams returns null', async () => {
+      const testSchedule = {
+        id: 1,
+        day_of_week: 'monday',
+        start_time: '10:00',
+        end_time: '12:00',
+        program: {
+          id: 1,
+          name: 'Live Stream',
+          description: 'Description A',
+          logo_url: 'logo-a.png',
+          youtube_url: 'https://youtube.com/program-a',
+          is_live: false,
+          stream_url: '',
+          channel: {
+            id: 1,
+            name: 'Test Channel',
+            description: 'Test Description',
+            logo_url: 'test-logo.png',
+            handle: 'testchannel',
+            youtube_channel_id: 'test-channel-id',
+            programs: [],
+          },
+          panelists: [],
+          schedules: [],
+        },
+      } as unknown as Schedule;
+
+      // Mock config service
+      jest.spyOn(configService, 'canFetchLive').mockResolvedValue(true);
+      
+      // Mock YouTube service - getLiveStreams returns null, getLiveVideoId returns video ID
+      jest.spyOn(youtubeLiveService, 'getLiveStreams').mockResolvedValue(null);
+      jest.spyOn(youtubeLiveService, 'getLiveVideoId').mockResolvedValue('fallback-video-id');
+
+      const result = await service.enrichSchedules([testSchedule], true);
+
+      expect(result).toHaveLength(1);
+      
+      // Program should be live
+      expect(result[0].program.is_live).toBe(true);
+      
+      // Should use fallback video ID
+      expect(result[0].program.stream_url).toBe('https://www.youtube.com/embed/fallback-video-id?autoplay=1');
+      
+      // Should have live_streams from fallback
+      expect(result[0].program.live_streams).toHaveLength(1);
+      expect(result[0].program.live_streams[0].videoId).toBe('fallback-video-id');
+      expect(result[0].program.stream_count).toBe(1);
+    });
+
+    it('should handle programs without channel info (individual enrichment)', async () => {
+      const testSchedule = {
+        id: 1,
+        day_of_week: 'monday',
+        start_time: '10:00',
+        end_time: '12:00',
+        program: {
+          id: 1,
+          name: 'Test Program',
+          description: 'Description A',
+          logo_url: 'logo-a.png',
+          youtube_url: 'https://youtube.com/program-a',
+          is_live: false,
+          stream_url: '',
+          channel: {
+            id: 1,
+            name: 'Test Channel',
+            description: 'Test Description',
+            logo_url: 'test-logo.png',
+            handle: null, // No handle
+            youtube_channel_id: null, // No channel ID
+            programs: [],
+          },
+          panelists: [],
+          schedules: [],
+        },
+      } as unknown as Schedule;
+
+      const result = await service.enrichSchedules([testSchedule], true);
+
+      expect(result).toHaveLength(1);
+      
+      // Program should be live (time-based)
+      expect(result[0].program.is_live).toBe(true);
+      
+      // Should use original stream_url/youtube_url (no live stream fetching)
+      expect(result[0].program.stream_url).toBe('https://youtube.com/program-a');
+      
+      // Should have no live streams data
+      expect(result[0].program.live_streams).toBeNull();
+      expect(result[0].program.stream_count).toBe(0);
+    });
+
+    it('should not fetch live streams when liveStatus is false', async () => {
+      const testSchedule = {
+        id: 1,
+        day_of_week: 'monday',
+        start_time: '10:00',
+        end_time: '12:00',
+        program: {
+          id: 1,
+          name: 'Test Program',
+          description: 'Description A',
+          logo_url: 'logo-a.png',
+          youtube_url: 'https://youtube.com/program-a',
+          is_live: false,
+          stream_url: '',
+          channel: {
+            id: 1,
+            name: 'Test Channel',
+            description: 'Test Description',
+            logo_url: 'test-logo.png',
+            handle: 'testchannel',
+            youtube_channel_id: 'test-channel-id',
+            programs: [],
+          },
+          panelists: [],
+          schedules: [],
+        },
+      } as unknown as Schedule;
+
+      // Mock config service
+      jest.spyOn(configService, 'canFetchLive').mockResolvedValue(true);
+      
+      // Mock YouTube service
+      const getLiveStreamsSpy = jest.spyOn(youtubeLiveService, 'getLiveStreams').mockResolvedValue({
+        streams: [],
+        primaryVideoId: null,
+        streamCount: 0
+      });
+      const getLiveVideoIdSpy = jest.spyOn(youtubeLiveService, 'getLiveVideoId').mockResolvedValue('video-id');
+
+      const result = await service.enrichSchedules([testSchedule], false); // liveStatus = false
+
+      expect(result).toHaveLength(1);
+      
+      // Program should be live (time-based)
+      expect(result[0].program.is_live).toBe(true);
+      
+      // Should use original stream_url/youtube_url (no live stream fetching)
+      expect(result[0].program.stream_url).toBe('https://youtube.com/program-a');
+      
+      // YouTube service should not be called
+      expect(getLiveStreamsSpy).not.toHaveBeenCalled();
+      expect(getLiveVideoIdSpy).not.toHaveBeenCalled();
     });
   });
 });

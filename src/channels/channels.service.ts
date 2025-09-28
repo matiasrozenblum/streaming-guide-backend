@@ -29,6 +29,7 @@ type ChannelWithSchedules = {
     id: number;
     name: string;
     logo_url: string | null;
+    stream_count?: number;
   };
   schedules: Array<{
     id: number;
@@ -45,6 +46,9 @@ type ChannelWithSchedules = {
       description: string | null;
       stream_url: string | null;
       is_live: boolean;
+      live_streams?: any[] | null;
+      stream_count?: number;
+      channel_stream_count?: number;
       panelists: { id: string; name: string }[];
       style_override: string | null;
     };
@@ -220,6 +224,7 @@ export class ChannelsService {
     const allSchedules = await this.schedulesService.findAll({
       dayOfWeek: day,
       applyOverrides: raw !== 'true',
+      liveStatus: liveStatus || false,
     });
     console.log('[getChannelsWithSchedules] SchedulesService query completed in', Date.now() - queryStart, 'ms');
 
@@ -246,12 +251,13 @@ export class ChannelsService {
 
     // Build final result
     const resultStart = Date.now();
-    const result: ChannelWithSchedules[] = channels.map(channel => ({
-      channel: {
-        id: channel.id,
-        name: channel.name,
-        logo_url: channel.logo_url,
-      },
+    const result: ChannelWithSchedules[] = channels.map(channel => {
+      return {
+        channel: {
+          id: channel.id,
+          name: channel.name,
+          logo_url: channel.logo_url,
+        },
       schedules: (schedulesGroupedByChannelId[channel.id] || []).map((schedule) => ({
         id: schedule.id,
         day_of_week: schedule.day_of_week,
@@ -267,6 +273,9 @@ export class ChannelsService {
           description: schedule.program.description,
           stream_url: schedule.program.stream_url,
           is_live: schedule.program.is_live,
+          live_streams: schedule.program.live_streams,
+          stream_count: schedule.program.stream_count,
+          channel_stream_count: schedule.program.channel_stream_count,
           panelists: schedule.program.panelists?.map((p) => ({
             id: p.id.toString(),
             name: p.name,
@@ -274,7 +283,8 @@ export class ChannelsService {
           style_override: schedule.program.style_override,
         },
       })),
-    }));
+      };
+    });
     console.log('[getChannelsWithSchedules] Built result in', Date.now() - resultStart, 'ms');
     console.log('[getChannelsWithSchedules] TOTAL time:', Date.now() - overallStart, 'ms');
     return result;

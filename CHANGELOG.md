@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.10.0] - 2025-09-27
+
+### Added
+- Added support for multiple live streams in parallel for one channel
+
 ## [1.9.1] - 2025-09-15
 
 ### Fixed
