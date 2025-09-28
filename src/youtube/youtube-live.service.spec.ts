@@ -109,16 +109,20 @@ describe('YoutubeLiveService', () => {
       expect(spy).not.toHaveBeenCalled();
     });
 
-    it('calls getLiveVideoId for each channel with schedule', async () => {
+    it('calls getLiveStreams for each channel with schedule', async () => {
       const schedules = [
         { program: { channel: { youtube_channel_id: 'cid1', handle: 'h1' }, is_live: true } },
         { program: { channel: { youtube_channel_id: 'cid2', handle: 'h2' }, is_live: true } },
       ];
       schedulesService.findByDay.mockResolvedValue(schedules as any);
-      jest.spyOn(service, 'getLiveVideoId').mockResolvedValue('vid');
+      jest.spyOn(service, 'getLiveStreams').mockResolvedValue({
+        streams: [{ videoId: 'vid', title: 'Test Stream', publishedAt: '2023-01-01', description: 'Test' }],
+        primaryVideoId: 'vid',
+        streamCount: 1
+      });
       jest.spyOn(require('@/utils/getBlockTTL.util'), 'getCurrentBlockTTL').mockResolvedValue(100);
       await service.fetchLiveVideoIds();
-      expect(service.getLiveVideoId).toHaveBeenCalledTimes(2);
+      expect(service.getLiveStreams).toHaveBeenCalledTimes(2);
     });
 
     it('passes SentryService to getCurrentBlockTTL', async () => {
@@ -150,8 +154,12 @@ describe('YoutubeLiveService', () => {
       // Mock schedules service
       schedulesService.findByDay.mockResolvedValue([]);
       
-      // Mock getLiveVideoId to return a new video ID
-      jest.spyOn(service, 'getLiveVideoId').mockResolvedValue('new-video-id');
+      // Mock getLiveStreams to return a new streams result
+      jest.spyOn(service, 'getLiveStreams').mockResolvedValue({
+        streams: [{ videoId: 'new-video-id', title: 'Test Stream', publishedAt: '2023-01-01', description: 'Test' }],
+        primaryVideoId: 'new-video-id',
+        streamCount: 1
+      });
       
       const getCurrentBlockTTLSpy = jest.spyOn(require('@/utils/getBlockTTL.util'), 'getCurrentBlockTTL').mockResolvedValue(100);
       
@@ -159,6 +167,171 @@ describe('YoutubeLiveService', () => {
       await (service as any).validateCachedVideoId(channelId, handle);
       
       expect(getCurrentBlockTTLSpy).toHaveBeenCalledWith(channelId, [], sentryService);
+    });
+  });
+
+  describe('getLiveStreams', () => {
+    beforeEach(() => {
+      configService.canFetchLive.mockResolvedValue(true);
+    });
+
+    it('returns __SKIPPED__ if canFetchLive is false', async () => {
+      configService.canFetchLive.mockResolvedValue(false);
+      const result = await service.getLiveStreams('cid', 'handle', 100, 'cron');
+      expect(result).toBe('__SKIPPED__');
+    });
+
+    it('returns __SKIPPED__ if notFoundKey is set in redis', async () => {
+      redisService.get.mockImplementation(async (key: string) => key === 'videoIdNotFound:cid' ? '1' : null);
+      const result = await service.getLiveStreams('cid', 'handle', 100, 'cron');
+      expect(result).toBe('__SKIPPED__');
+    });
+
+    it('returns cached streams if they are still live', async () => {
+      const mockStreams = [
+        { videoId: 'vid1', title: 'Stream 1', publishedAt: '2023-01-01', description: 'Desc 1' },
+        { videoId: 'vid2', title: 'Stream 2', publishedAt: '2023-01-01', description: 'Desc 2' }
+      ];
+      redisService.get.mockImplementation(async (key: string) => 
+        key === 'liveStreamsByChannel:cid' ? JSON.stringify(mockStreams) : null
+      );
+      jest.spyOn(service as any, 'isVideoLive').mockResolvedValue(true);
+      
+      const result = await service.getLiveStreams('cid', 'handle', 100, 'cron');
+      
+      expect(result).toEqual({
+        streams: mockStreams,
+        primaryVideoId: 'vid1',
+        streamCount: 2
+      });
+    });
+
+    it('deletes cached streams if they are not live', async () => {
+      const mockStreams = [{ videoId: 'vid1', title: 'Stream 1', publishedAt: '2023-01-01', description: 'Desc 1' }];
+      redisService.get.mockImplementation(async (key: string) => 
+        key === 'liveStreamsByChannel:cid' ? JSON.stringify(mockStreams) : null
+      );
+      jest.spyOn(service as any, 'isVideoLive').mockResolvedValue(false);
+      redisService.del.mockResolvedValue(undefined);
+      jest.spyOn(axios, 'get').mockResolvedValue({ data: { items: [] } });
+      
+      const result = await service.getLiveStreams('cid', 'handle', 100, 'cron');
+      
+      expect(redisService.del).toHaveBeenCalledWith('liveStreamsByChannel:cid');
+      expect(result).toBe(null);
+    });
+
+    it('fetches from YouTube and caches multiple streams', async () => {
+      const mockApiResponse = {
+        data: {
+          items: [
+            {
+              id: { videoId: 'vid1' },
+              snippet: {
+                title: 'Stream 1',
+                publishedAt: '2023-01-01T00:00:00Z',
+                description: 'Description 1',
+                thumbnails: { medium: { url: 'thumb1.jpg' } },
+                channelTitle: 'Test Channel'
+              }
+            },
+            {
+              id: { videoId: 'vid2' },
+              snippet: {
+                title: 'Stream 2',
+                publishedAt: '2023-01-01T01:00:00Z',
+                description: 'Description 2',
+                thumbnails: { medium: { url: 'thumb2.jpg' } },
+                channelTitle: 'Test Channel'
+              }
+            }
+          ]
+        }
+      };
+      
+      redisService.get.mockResolvedValue(null);
+      jest.spyOn(axios, 'get').mockResolvedValue(mockApiResponse);
+      jest.spyOn(service as any, 'isVideoLive').mockResolvedValue(false);
+      
+      const result = await service.getLiveStreams('cid', 'handle', 100, 'cron');
+      
+      expect(redisService.set).toHaveBeenCalledWith(
+        'liveStreamsByChannel:cid',
+        JSON.stringify([
+          {
+            videoId: 'vid1',
+            title: 'Stream 1',
+            publishedAt: '2023-01-01T00:00:00Z',
+            description: 'Description 1',
+            thumbnailUrl: 'thumb1.jpg',
+            channelTitle: 'Test Channel'
+          },
+          {
+            videoId: 'vid2',
+            title: 'Stream 2',
+            publishedAt: '2023-01-01T01:00:00Z',
+            description: 'Description 2',
+            thumbnailUrl: 'thumb2.jpg',
+            channelTitle: 'Test Channel'
+          }
+        ]),
+        100
+      );
+      
+      expect(result).toEqual({
+        streams: [
+          {
+            videoId: 'vid1',
+            title: 'Stream 1',
+            publishedAt: '2023-01-01T00:00:00Z',
+            description: 'Description 1',
+            thumbnailUrl: 'thumb1.jpg',
+            channelTitle: 'Test Channel'
+          },
+          {
+            videoId: 'vid2',
+            title: 'Stream 2',
+            publishedAt: '2023-01-01T01:00:00Z',
+            description: 'Description 2',
+            thumbnailUrl: 'thumb2.jpg',
+            channelTitle: 'Test Channel'
+          }
+        ],
+        primaryVideoId: 'vid1',
+        streamCount: 2
+      });
+    });
+
+    it('returns null and sets notFoundKey if no streams found', async () => {
+      redisService.get.mockResolvedValue(null);
+      jest.spyOn(axios, 'get').mockResolvedValue({ data: { items: [] } });
+      
+      const result = await service.getLiveStreams('cid', 'handle', 100, 'cron');
+      
+      expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:cid', '1', 900);
+      expect(result).toBe(null);
+    });
+
+    it('returns null on axios error', async () => {
+      redisService.get.mockResolvedValue(null);
+      jest.spyOn(axios, 'get').mockRejectedValue(new Error('API Error'));
+      
+      const result = await service.getLiveStreams('cid', 'handle', 100, 'cron');
+      
+      expect(result).toBe(null);
+    });
+
+    it('handles malformed cached streams gracefully', async () => {
+      redisService.get.mockImplementation(async (key: string) => 
+        key === 'liveStreamsByChannel:cid' ? 'invalid-json' : null
+      );
+      redisService.del.mockResolvedValue(undefined);
+      jest.spyOn(axios, 'get').mockResolvedValue({ data: { items: [] } });
+      
+      const result = await service.getLiveStreams('cid', 'handle', 100, 'cron');
+      
+      expect(redisService.del).toHaveBeenCalledWith('liveStreamsByChannel:cid');
+      expect(result).toBe(null);
     });
   });
 }); 

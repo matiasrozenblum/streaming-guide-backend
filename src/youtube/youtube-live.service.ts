@@ -11,6 +11,7 @@ import { RedisService } from '../redis/redis.service';
 import { ConfigService } from '../config/config.service';
 import { SentryService } from '../sentry/sentry.service';
 import { getCurrentBlockTTL } from '@/utils/getBlockTTL.util';
+import { LiveStream, LiveStreamsResult } from './interfaces/live-stream.interface';
 
 const HolidaysClass = (DateHolidays as any).default ?? DateHolidays;
 
@@ -77,6 +78,7 @@ export class YoutubeLiveService {
 
   /**
    * Devuelve videoId | null | '__SKIPPED__' según estado de flags, cache y fetch
+   * @deprecated Use getLiveStreams() for multiple streams support
    */
   async getLiveVideoId(
     channelId: string,
@@ -194,6 +196,153 @@ export class YoutubeLiveService {
     }
   }
 
+  /**
+   * Gets all live streams for a channel (new method supporting multiple streams)
+   */
+  async getLiveStreams(
+    channelId: string,
+    handle: string,
+    blockTTL: number,
+    context: 'cron' | 'onDemand' | 'program-start',
+  ): Promise<LiveStreamsResult | null | '__SKIPPED__'> {
+    // gating centralizado
+    if (!(await this.configService.canFetchLive(handle))) {
+      console.log(`[YouTube] fetch skipped for ${handle}`);
+      return '__SKIPPED__';
+    }
+
+    const liveKey = `liveStreamsByChannel:${channelId}`;
+    const notFoundKey = `videoIdNotFound:${channelId}`;
+
+    // skip rápido si ya está marcado como no-found
+    if (await this.redisService.get<string>(notFoundKey)) {
+      console.log(`🚫 Skipping ${handle}, marked as not-found`);
+      return '__SKIPPED__';
+    }
+
+    // cache-hit: reuse si sigue vivo
+    const cachedStreams = await this.redisService.get<string>(liveKey);
+    if (cachedStreams) {
+      try {
+        const parsedStreams: LiveStream[] = JSON.parse(cachedStreams);
+        // Validate that at least the primary stream is still live
+        if (parsedStreams.length > 0 && (await this.isVideoLive(parsedStreams[0].videoId))) {
+          console.log(`🔁 Reusing cached streams for ${handle} (${parsedStreams.length} streams)`);
+          return {
+            streams: parsedStreams,
+            primaryVideoId: parsedStreams[0].videoId,
+            streamCount: parsedStreams.length
+          };
+        }
+      } catch (error) {
+        console.warn(`Failed to parse cached streams for ${handle}:`, error);
+      }
+      
+      // If cached streams are invalid, delete them
+      await this.redisService.del(liveKey);
+      console.log(`🗑️ Deleted cached streams for ${handle} (no longer live)`);
+    }
+
+    // fetch from YouTube
+    try {
+      const { data } = await axios.get(`${this.apiUrl}/search`, {
+        params: {
+          part: 'snippet',
+          channelId,
+          eventType: 'live',
+          type: 'video',
+          key: this.apiKey,
+          maxResults: 10, // Get up to 10 live streams
+        },
+      });
+
+      const liveStreams: LiveStream[] = (data.items || []).map((item: any) => ({
+        videoId: item.id.videoId,
+        title: item.snippet.title,
+        publishedAt: item.snippet.publishedAt,
+        description: item.snippet.description,
+        thumbnailUrl: item.snippet.thumbnails?.medium?.url,
+        channelTitle: item.snippet.channelTitle,
+      }));
+
+      if (liveStreams.length === 0) {
+        console.log(`🚫 No live streams for ${handle} (${context})`);
+        await this.redisService.set(notFoundKey, '1', 900);
+        return null;
+      }
+
+      const result: LiveStreamsResult = {
+        streams: liveStreams,
+        primaryVideoId: liveStreams[0].videoId,
+        streamCount: liveStreams.length
+      };
+
+      // Cache the streams
+      await this.redisService.set(liveKey, JSON.stringify(liveStreams), blockTTL);
+      console.log(`📌 Cached ${handle} → ${liveStreams.length} streams (TTL ${blockTTL}s)`);
+
+      // Notify clients about the new streams
+      if (context === 'cron') {
+        await this.notifyLiveStatusChange(channelId, liveStreams[0].videoId, handle);
+      }
+
+      return result;
+    } catch (err) {
+      const errorMessage = err.message || err;
+      console.error(`❌ Error fetching live streams for ${handle}:`, errorMessage);
+      
+      // Enhanced error reporting with Sentry
+      const is403Error = errorMessage.includes('403') || errorMessage.includes('forbidden');
+      const isQuotaError = errorMessage.includes('quota') || errorMessage.includes('exceeded');
+      
+      if (is403Error) {
+        this.sentryService.captureMessage(
+          `YouTube API 403 Forbidden for channel ${handle}`,
+          'error',
+          {
+            channelId,
+            handle,
+            context,
+            errorMessage,
+            apiUrl: `${this.apiUrl}/search`,
+            timestamp: new Date().toISOString(),
+          }
+        );
+        
+        // Set tags for better alerting
+        this.sentryService.setTag('service', 'youtube-api');
+        this.sentryService.setTag('error_type', '403_forbidden');
+        this.sentryService.setTag('channel', handle);
+      } else if (isQuotaError) {
+        this.sentryService.captureMessage(
+          `YouTube API quota exceeded for channel ${handle}`,
+          'warning',
+          {
+            channelId,
+            handle,
+            context,
+            errorMessage,
+            timestamp: new Date().toISOString(),
+          }
+        );
+        
+        this.sentryService.setTag('service', 'youtube-api');
+        this.sentryService.setTag('error_type', 'quota_exceeded');
+        this.sentryService.setTag('channel', handle);
+      } else {
+        // Capture other errors
+        this.sentryService.captureException(err as Error, {
+          channelId,
+          handle,
+          context,
+          apiUrl: `${this.apiUrl}/search`,
+        });
+      }
+      
+      return null;
+    }
+  }
+
   private async isVideoLive(videoId: string): Promise<boolean> {
     try {
       const resp = await axios.get(`${this.apiUrl}/videos`, {
@@ -241,10 +390,21 @@ export class YoutubeLiveService {
       const beforeCache = cronType === 'back-to-back-fix' ? await this.redisService.get<string>(`liveVideoIdByChannel:${cid}`) : null;
       
       const ttl = await getCurrentBlockTTL(cid, rawSchedules, this.sentryService);
-      const result = await this.getLiveVideoId(cid, handle, ttl, 'cron');
+      
+      // Use the new getLiveStreams method to support multiple streams
+      const streamsResult = await this.getLiveStreams(cid, handle, ttl, 'cron');
+      
+      // For backward compatibility, also update the old single video ID cache
+      if (streamsResult && streamsResult !== '__SKIPPED__') {
+        await this.redisService.set(`liveVideoIdByChannel:${cid}`, streamsResult.primaryVideoId, ttl);
+        console.log(`📌 Updated single video ID cache for ${handle}: ${streamsResult.primaryVideoId} (from ${streamsResult.streamCount} streams)`);
+      } else if (streamsResult === null) {
+        // Clear the old cache if no streams found
+        await this.redisService.del(`liveVideoIdByChannel:${cid}`);
+      }
       
       // Track if the back-to-back fix cron actually updated a video ID
-      if (cronType === 'back-to-back-fix' && result && result !== '__SKIPPED__') {
+      if (cronType === 'back-to-back-fix' && streamsResult && streamsResult !== '__SKIPPED__') {
         const afterCache = await this.redisService.get<string>(`liveVideoIdByChannel:${cid}`);
         if (beforeCache && afterCache && beforeCache !== afterCache) {
           updatedCount++;
@@ -342,32 +502,56 @@ export class YoutubeLiveService {
         return;
       }
 
+      // Check both old single video ID cache and new streams cache
       const liveKey = `liveVideoIdByChannel:${channelId}`;
-      const cachedId = await this.redisService.get<string>(liveKey);
+      const streamsKey = `liveStreamsByChannel:${channelId}`;
       
-      if (!cachedId) {
-        return; // No cached video ID to validate
+      const cachedId = await this.redisService.get<string>(liveKey);
+      const cachedStreams = await this.redisService.get<string>(streamsKey);
+      
+      if (!cachedId && !cachedStreams) {
+        return; // No cached data to validate
       }
 
       // Check if cached video ID is still live
-      if (await this.isVideoLive(cachedId)) {
+      if (cachedId && (await this.isVideoLive(cachedId))) {
         console.log(`✅ Cached video ID still live for ${handle}: ${cachedId}`);
         this.validationCooldowns.set(channelId, now); // Update cooldown
         return; // Still live, no action needed
       }
 
-      // Video ID is no longer live, refresh it
-      console.log(`🔄 Cached video ID no longer live for ${handle}: ${cachedId}, refreshing...`);
+      // Check if cached streams are still live
+      if (cachedStreams) {
+        try {
+          const parsedStreams: LiveStream[] = JSON.parse(cachedStreams);
+          if (parsedStreams.length > 0 && (await this.isVideoLive(parsedStreams[0].videoId))) {
+            console.log(`✅ Cached streams still live for ${handle}: ${parsedStreams.length} streams`);
+            this.validationCooldowns.set(channelId, now); // Update cooldown
+            return; // Still live, no action needed
+          }
+        } catch (error) {
+          console.warn(`Failed to parse cached streams for ${handle}:`, error);
+        }
+      }
+
+      // Video ID/streams are no longer live, refresh them
+      console.log(`🔄 Cached data no longer live for ${handle}, refreshing...`);
       
       const schedules = await this.schedulesService.findByDay(dayjs().tz('America/Argentina/Buenos_Aires').format('dddd').toLowerCase());
       const ttl = await getCurrentBlockTTL(channelId, schedules, this.sentryService);
       
-      const newVideoId = await this.getLiveVideoId(channelId, handle, ttl, 'program-start');
+      // Use the new getLiveStreams method to refresh
+      const streamsResult = await this.getLiveStreams(channelId, handle, ttl, 'program-start');
       
-      if (newVideoId && newVideoId !== '__SKIPPED__') {
-        console.log(`🆕 Refreshed video ID for ${handle}: ${cachedId} → ${newVideoId}`);
+      if (streamsResult && streamsResult !== '__SKIPPED__') {
+        // Also update the old single video ID cache for backward compatibility
+        await this.redisService.set(liveKey, streamsResult.primaryVideoId, ttl);
+        console.log(`🆕 Refreshed streams for ${handle}: ${streamsResult.streamCount} streams, primary: ${streamsResult.primaryVideoId}`);
       } else {
-        console.log(`❌ Failed to refresh video ID for ${handle}`);
+        // Clear both caches if no streams found
+        await this.redisService.del(liveKey);
+        await this.redisService.del(streamsKey);
+        console.log(`❌ Failed to refresh streams for ${handle}, cleared caches`);
       }
 
       // Update cooldown after validation

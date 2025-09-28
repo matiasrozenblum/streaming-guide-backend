@@ -26,6 +26,7 @@ interface FindAllOptions {
   select?: string[];
   skipCache?: boolean;
   applyOverrides?: boolean;
+  liveStatus?: boolean;
 }
 
 @Injectable()
@@ -59,7 +60,7 @@ export class SchedulesService {
 
   async findAll(options: FindAllOptions = {}): Promise<any[]> {
     const startTime = Date.now();
-    const { dayOfWeek, relations = ['program', 'program.channel', 'program.panelists'], select, skipCache = false, applyOverrides = true } = options;
+    const { dayOfWeek, relations = ['program', 'program.channel', 'program.panelists'], select, skipCache = false, applyOverrides = true, liveStatus = false } = options;
 
     const cacheKey = `schedules:all:${dayOfWeek || 'all'}`;
     let schedules: Schedule[] | null = null;
@@ -141,7 +142,7 @@ export class SchedulesService {
 
     const enrichStart = Date.now();
     console.log('[findAll] Enriching schedules...', schedules!.length, 'schedules');
-    const enriched = await this.enrichSchedules(schedules!);
+    const enriched = await this.enrichSchedules(schedules!, liveStatus);
     console.log('[findAll] Enriched schedules in', Date.now() - enrichStart, 'ms');
     console.log('[findAll] Enriched result length:', enriched.length);
 
@@ -149,61 +150,54 @@ export class SchedulesService {
     return enriched;
   }
 
-  async enrichSchedules(schedules: Schedule[]): Promise<any[]> {
+  async enrichSchedules(schedules: Schedule[], liveStatus: boolean = false): Promise<any[]> {
     console.log('[enrichSchedules] Starting enrichment of', schedules.length, 'schedules');
     const now = this.dayjs().tz('America/Argentina/Buenos_Aires');
     const currentNum = now.hour() * 100 + now.minute();
     const currentDay = now.format('dddd').toLowerCase();
 
+    // Group schedules by channel for stream distribution
+    const channelGroups = new Map<string, Schedule[]>();
+    for (const schedule of schedules) {
+      const channelId = schedule.program.channel?.youtube_channel_id;
+      if (channelId) {
+        if (!channelGroups.has(channelId)) {
+          channelGroups.set(channelId, []);
+        }
+        channelGroups.get(channelId)!.push(schedule);
+      }
+    }
+
     const enriched: any[] = [];
 
-    for (const schedule of schedules) {
-      const { program } = schedule;
-      const channel = program.channel;
-      const channelId = channel?.youtube_channel_id;
-      const handle = channel?.handle;
+    // Process each channel group to distribute streams
+    for (const [channelId, channelSchedules] of channelGroups) {
+      const enrichedChannelSchedules = await this.enrichSchedulesForChannel(
+        channelSchedules,
+        currentDay,
+        currentNum,
+        liveStatus
+      );
+      enriched.push(...enrichedChannelSchedules);
+    }
 
+    // Add schedules without channels (no grouping needed)
+    const schedulesWithoutChannels = schedules.filter(s => !s.program.channel?.youtube_channel_id);
+    for (const schedule of schedulesWithoutChannels) {
+      const { program } = schedule;
       const startNum = this.convertTimeToNumber(schedule.start_time);
       const endNum = this.convertTimeToNumber(schedule.end_time);
 
       let isLive = false;
       let streamUrl = program.stream_url || program.youtube_url;
 
-      // Si estamos en horario y tenemos canal válido
+      // Si estamos en horario
       if (
         schedule.day_of_week === currentDay &&
         currentNum >= startNum &&
-        currentNum < endNum &&
-        handle &&
-        channelId
+        currentNum < endNum
       ) {
-        // Set isLive to true if schedule is currently running
         isLive = true;
-        
-        // Validar feature-flag + feriado (fallback true si no existe)
-        const canFetch = await this.configService.canFetchLive(handle);
-
-        if (canFetch) {
-          const liveKey = `liveVideoIdByChannel:${channelId}`;
-
-          // Intentar reutilizar cache
-          const cachedId = await this.redisService.get<string>(liveKey);
-          if (cachedId) {
-            streamUrl = `https://www.youtube.com/embed/${cachedId}?autoplay=1`;
-          } else {
-            // Obtener on-demand si no estaba en cache
-            const ttl = await getCurrentBlockTTL(channelId, schedules, this.sentryService);
-            const vid = await this.youtubeLiveService.getLiveVideoId(
-              channelId,
-              handle,
-              ttl,
-              'onDemand'
-            );
-            if (vid && vid !== '__SKIPPED__') {
-              streamUrl = `https://www.youtube.com/embed/${vid}?autoplay=1`;
-            }
-          }
-        }
       }
 
       enriched.push({
@@ -212,12 +206,262 @@ export class SchedulesService {
           ...program,
           is_live: isLive,
           stream_url: streamUrl,
+        live_streams: null,
+        stream_count: 0,
         },
       });
     }
 
     console.log('[enrichSchedules] Enriched', enriched.length, 'schedules');
     return enriched;
+  }
+
+  private async enrichSchedulesForChannel(
+    schedules: Schedule[],
+    currentDay: string,
+    currentNum: number,
+    liveStatus: boolean
+  ): Promise<any[]> {
+    const enriched: any[] = [];
+    
+    // Get channel info from first schedule
+    const channel = schedules[0].program.channel;
+    const channelId = channel?.youtube_channel_id;
+    const handle = channel?.handle;
+    
+    if (!channelId || !handle) {
+      // No channel info, process individually
+      for (const schedule of schedules) {
+        enriched.push(await this.enrichScheduleIndividually(schedule, currentDay, currentNum, liveStatus));
+      }
+      return enriched;
+    }
+
+    // Find live schedules for this channel
+    const liveSchedules = schedules.filter(schedule => {
+      const startNum = this.convertTimeToNumber(schedule.start_time);
+      const endNum = this.convertTimeToNumber(schedule.end_time);
+      return schedule.day_of_week === currentDay &&
+             currentNum >= startNum &&
+             currentNum < endNum;
+    });
+
+    let allStreams: any[] = [];
+    let channelStreamCount = 0;
+
+    // Fetch streams once for the channel if there are live schedules
+    if (liveSchedules.length > 0 && liveStatus) {
+      const canFetch = await this.configService.canFetchLive(handle);
+      
+      if (canFetch) {
+        const streamsKey = `liveStreamsByChannel:${channelId}`;
+        const liveKey = `liveVideoIdByChannel:${channelId}`;
+
+        // Try cached streams first
+        const cachedStreams = await this.redisService.get<string>(streamsKey);
+        if (cachedStreams) {
+          try {
+            const parsedStreams = JSON.parse(cachedStreams);
+            if (parsedStreams.length > 0) {
+              allStreams = parsedStreams;
+              channelStreamCount = parsedStreams.length;
+            }
+          } catch (error) {
+            console.warn(`Failed to parse cached streams for ${handle}:`, error);
+          }
+        }
+
+        // Fallback to single video ID cache
+        if (allStreams.length === 0) {
+          const cachedId = await this.redisService.get<string>(liveKey);
+          if (cachedId) {
+            allStreams = [{
+              videoId: cachedId,
+              title: 'Live Stream',
+              publishedAt: new Date().toISOString(),
+              description: '',
+              channelTitle: channel.name
+            }];
+            channelStreamCount = 1;
+          } else {
+            // Fetch on-demand
+            const ttl = await getCurrentBlockTTL(channelId, schedules, this.sentryService);
+            
+            const streamsResult = await this.youtubeLiveService.getLiveStreams(
+              channelId,
+              handle,
+              ttl,
+              'onDemand'
+            );
+            
+            if (streamsResult && streamsResult !== '__SKIPPED__') {
+              allStreams = streamsResult.streams;
+              channelStreamCount = streamsResult.streamCount;
+            } else {
+              // Final fallback to old method
+              const vid = await this.youtubeLiveService.getLiveVideoId(
+                channelId,
+                handle,
+                ttl,
+                'onDemand'
+              );
+              if (vid && vid !== '__SKIPPED__') {
+                allStreams = [{
+                  videoId: vid,
+                  title: 'Live Stream',
+                  publishedAt: new Date().toISOString(),
+                  description: '',
+                  channelTitle: channel.name
+                }];
+                channelStreamCount = 1;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Count live programs for this channel
+    const liveProgramCount = liveSchedules.length;
+    // Total streams available from YouTube API
+    const totalStreamsAvailable = channelStreamCount;
+
+    // Distribute streams to live schedules using title matching
+    const usedStreams = new Set<string>();
+    
+    for (const schedule of schedules) {
+      const isLive = liveSchedules.includes(schedule);
+      let assignedStream: any = null;
+      let streamUrl = schedule.program.stream_url || schedule.program.youtube_url;
+
+      if (isLive && allStreams.length > 0) {
+        // Find best matching stream for this program
+        assignedStream = this.findBestMatchingStream(
+          schedule.program.name,
+          allStreams.filter(s => !usedStreams.has(s.videoId))
+        );
+        
+        if (assignedStream) {
+          usedStreams.add(assignedStream.videoId);
+          streamUrl = `https://www.youtube.com/embed/${assignedStream.videoId}?autoplay=1`;
+        }
+      }
+
+      enriched.push({
+        ...schedule,
+        program: {
+          ...schedule.program,
+          is_live: isLive,
+          stream_url: streamUrl,
+          live_streams: assignedStream ? [assignedStream] : null,
+          stream_count: assignedStream ? 1 : 0,
+        },
+      });
+    }
+
+    return enriched;
+  }
+
+  private async enrichScheduleIndividually(
+    schedule: Schedule,
+    currentDay: string,
+    currentNum: number,
+    liveStatus: boolean
+  ): Promise<any> {
+    const { program } = schedule;
+    const channel = program.channel;
+    const channelId = channel?.youtube_channel_id;
+    const handle = channel?.handle;
+
+    const startNum = this.convertTimeToNumber(schedule.start_time);
+    const endNum = this.convertTimeToNumber(schedule.end_time);
+
+    let isLive = false;
+    let streamUrl = program.stream_url || program.youtube_url;
+
+    // Si estamos en horario
+    if (
+      schedule.day_of_week === currentDay &&
+      currentNum >= startNum &&
+      currentNum < endNum
+    ) {
+      isLive = true;
+
+      // If live and we have channel info, try to fetch live streams
+      if (liveStatus && channelId && handle) {
+        try {
+          const canFetch = await this.configService.canFetchLive(handle);
+          if (canFetch) {
+            // Try to get multiple streams first
+            const liveStreams = await this.youtubeLiveService.getLiveStreams(
+              channelId,
+              handle,
+              100, // Default TTL
+              'onDemand'
+            );
+            
+            if (liveStreams && typeof liveStreams === 'object' && 'streams' in liveStreams && liveStreams.streams.length > 0) {
+              // Use the first stream for individual enrichment
+              const firstStream = liveStreams.streams[0];
+              streamUrl = `https://www.youtube.com/embed/${firstStream.videoId}?autoplay=1`;
+            } else {
+              // Fallback to single video ID method
+              const videoId = await this.youtubeLiveService.getLiveVideoId(
+                channelId,
+                handle,
+                100, // Default TTL
+                'onDemand'
+              );
+              if (videoId && videoId !== '__SKIPPED__') {
+                streamUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+              }
+            }
+          }
+        } catch (error) {
+          console.warn(`Failed to fetch live stream for ${handle}:`, error);
+        }
+      }
+    }
+
+    const result = {
+      ...schedule,
+      program: {
+        ...program,
+        is_live: isLive,
+        stream_url: streamUrl,
+        live_streams: null,
+        stream_count: 0,
+      },
+    };
+    
+    return result;
+  }
+
+  private findBestMatchingStream(programName: string, availableStreams: any[]): any | null {
+    if (availableStreams.length === 0) return null;
+    
+    // Simple title similarity matching (Jaccard similarity)
+    const calculateSimilarity = (str1: string, str2: string): number => {
+      const words1 = new Set(str1.toLowerCase().split(/\s+/));
+      const words2 = new Set(str2.toLowerCase().split(/\s+/));
+      const intersection = new Set([...words1].filter(x => words2.has(x)));
+      const union = new Set([...words1, ...words2]);
+      return intersection.size / union.size;
+    };
+
+    let bestMatch = availableStreams[0];
+    let bestScore = calculateSimilarity(programName, availableStreams[0].title);
+
+    for (let i = 1; i < availableStreams.length; i++) {
+      const score = calculateSimilarity(programName, availableStreams[i].title);
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = availableStreams[i];
+      }
+    }
+
+    // Return best match if similarity is above threshold (0.1 = 10%)
+    return bestScore > 0.1 ? bestMatch : null;
   }
 
   private convertTimeToNumber(time: string): number {
