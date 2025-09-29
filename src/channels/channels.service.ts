@@ -257,6 +257,8 @@ export class ChannelsService {
           id: channel.id,
           name: channel.name,
           logo_url: channel.logo_url,
+          background_color: channel.background_color,
+          show_only_when_scheduled: channel.show_only_when_scheduled,
         },
       schedules: (schedulesGroupedByChannelId[channel.id] || []).map((schedule) => ({
         id: schedule.id,
