@@ -28,6 +28,12 @@ export class Channel {
   @Column({ type: 'boolean', default: true })
   is_visible: boolean;
 
+  @Column({ type: 'text', nullable: true })
+  background_color: string | null;
+
+  @Column({ type: 'boolean', default: false })
+  show_only_when_scheduled: boolean;
+
   @OneToMany(() => Program, (program) => program.channel, { cascade: true, onDelete: 'CASCADE' })
   programs: Program[];
 }

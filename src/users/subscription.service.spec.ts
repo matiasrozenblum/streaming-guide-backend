@@ -41,6 +41,8 @@ describe('SubscriptionService', () => {
     order: 1,
     programs: [],
     is_visible: true,
+    background_color: null,
+    show_only_when_scheduled: false,
   };
 
   const mockProgram: Program = {

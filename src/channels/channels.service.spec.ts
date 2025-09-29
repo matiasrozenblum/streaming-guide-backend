@@ -25,8 +25,8 @@ describe('ChannelsService', () => {
   let notifyUtil: NotifyAndRevalidateUtil;
 
   const mockChannels: Channel[] = [
-    { id: 1, name: 'Luzu TV', logo_url: 'https://logo1.png', handle: 'stream1', programs: [], description: 'Luzu TV is a streaming channel.', youtube_channel_id: 'channel1', order: 1, is_visible: true },
-    { id: 2, name: 'Olga', logo_url: 'https://logo2.png', handle: 'stream2', programs: [], description: 'Olga is a streaming channel.', youtube_channel_id: 'channel2', order: 2, is_visible: true },
+    { id: 1, name: 'Luzu TV', logo_url: 'https://logo1.png', handle: 'stream1', programs: [], description: 'Luzu TV is a streaming channel.', youtube_channel_id: 'channel1', order: 1, is_visible: true, background_color: null, show_only_when_scheduled: false },
+    { id: 2, name: 'Olga', logo_url: 'https://logo2.png', handle: 'stream2', programs: [], description: 'Olga is a streaming channel.', youtube_channel_id: 'channel2', order: 2, is_visible: true, background_color: null, show_only_when_scheduled: false },
   ];
 
   const mockQueryBuilder = {
