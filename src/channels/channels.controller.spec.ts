@@ -20,6 +20,8 @@ describe('ChannelsController', () => {
     youtube_channel_id: 'test-channel-id',
     order: 1,
     is_visible: true,
+    background_color: null,
+    show_only_when_scheduled: false,
   };
 
   const mockChannelsService = {
