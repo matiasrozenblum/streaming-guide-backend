@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.10.1] - 2025-09-29
+
+### Added
+- Added background color and visibility on schedule only fields to channels
+
 ## [1.10.0] - 2025-09-27
 
 ### Added

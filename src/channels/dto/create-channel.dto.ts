@@ -27,4 +27,14 @@ export class CreateChannelDto {
   @IsBoolean()
   @IsOptional()
   is_visible?: boolean;
+
+  @ApiProperty({ description: 'Background color for the channel logo (hex color or CSS gradient)', required: false })
+  @IsString()
+  @IsOptional()
+  background_color?: string;
+
+  @ApiProperty({ description: 'Whether the channel should only show on days it has programming', default: false })
+  @IsBoolean()
+  @IsOptional()
+  show_only_when_scheduled?: boolean;
 }
