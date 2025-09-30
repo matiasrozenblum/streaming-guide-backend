@@ -31,6 +31,13 @@ type ChannelWithSchedules = {
     name: string;
     logo_url: string | null;
     stream_count?: number;
+    categories?: Array<{
+      id: number;
+      name: string;
+      description?: string;
+      color?: string;
+      order?: number;
+    }>;
   };
   schedules: Array<{
     id: number;
@@ -273,6 +280,7 @@ export class ChannelsService {
     const channels = await this.channelsRepository.find({
       where: { is_visible: true },
       order: { order: 'ASC' },
+      relations: ['categories'],
     });
     console.log('[getChannelsWithSchedules] Channels query completed in', Date.now() - channelsQueryStart, 'ms');
 
@@ -286,6 +294,7 @@ export class ChannelsService {
           logo_url: channel.logo_url,
           background_color: channel.background_color,
           show_only_when_scheduled: channel.show_only_when_scheduled,
+          categories: channel.categories,
         },
       schedules: (schedulesGroupedByChannelId[channel.id] || []).map((schedule) => ({
         id: schedule.id,
