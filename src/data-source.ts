@@ -10,6 +10,7 @@ import { User } from './users/users.entity';
 import { Device } from './users/device.entity';
 import { UserSubscription } from './users/user-subscription.entity';
 import { PushSubscriptionEntity } from './push/push-subscription.entity';
+import { Category } from './categories/categories.entity';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -27,6 +28,7 @@ export const AppDataSource = new DataSource({
     Device,
     UserSubscription,
     PushSubscriptionEntity,
+    Category,
   ],
   migrations: ['src/migrations/*.ts'],
   synchronize: false,

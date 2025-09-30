@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsUrl, ValidateIf, IsBoolean } from 'class-validator';
+import { IsString, IsOptional, IsUrl, ValidateIf, IsBoolean, IsArray, IsNumber } from 'class-validator';
 
 export class UpdateChannelDto {
   @ApiProperty({ required: false })
@@ -38,4 +38,10 @@ export class UpdateChannelDto {
   @IsBoolean()
   @IsOptional()
   show_only_when_scheduled?: boolean;
+
+  @ApiProperty({ description: 'Array of category IDs to associate with this channel', required: false })
+  @IsArray()
+  @IsNumber({}, { each: true })
+  @IsOptional()
+  category_ids?: number[];
 } 

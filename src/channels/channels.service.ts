@@ -17,6 +17,7 @@ import { ConfigService } from '@/config/config.service';
 import { WeeklyOverridesService } from '@/schedules/weekly-overrides.service';
 import { YoutubeLiveService } from '@/youtube/youtube-live.service';
 import { getCurrentBlockTTL } from '@/utils/getBlockTTL.util';
+import { Category } from '../categories/categories.entity';
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
@@ -71,6 +72,8 @@ export class ChannelsService {
     private readonly userSubscriptionRepo: Repository<UserSubscription>,
     @InjectRepository(Device)
     private readonly deviceRepo: Repository<Device>,
+    @InjectRepository(Category)
+    private readonly categoriesRepository: Repository<Category>,
     private readonly dataSource: DataSource,
     private readonly schedulesService: SchedulesService,
     private readonly redisService: RedisService,
@@ -91,6 +94,7 @@ export class ChannelsService {
 
   async findAll(): Promise<Channel[]> {
     return this.channelsRepository.find({
+      relations: ['categories'],
       order: {
         order: 'ASC',
       },
@@ -98,7 +102,10 @@ export class ChannelsService {
   }
 
   async findOne(id: number): Promise<Channel> {
-    const channel = await this.channelsRepository.findOne({ where: { id } });
+    const channel = await this.channelsRepository.findOne({ 
+      where: { id },
+      relations: ['categories']
+    });
     if (!channel) {
       throw new NotFoundException(`Channel with ID ${id} not found`);
     }
@@ -114,10 +121,18 @@ export class ChannelsService {
   
     const newOrder = lastChannel ? (lastChannel.order || 0) + 1 : 1;
   
+    const { category_ids, ...channelData } = createChannelDto;
+    
     const channel = this.channelsRepository.create({
-      ...createChannelDto,
+      ...channelData,
       order: newOrder,
     });
+
+    // Load categories if provided
+    if (category_ids && category_ids.length > 0) {
+      const categories = await this.categoriesRepository.findByIds(category_ids);
+      channel.categories = categories;
+    }
   
     await this.redisService.delByPattern('schedules:all:*');
     const saved = await this.channelsRepository.save(channel);
@@ -143,11 +158,23 @@ export class ChannelsService {
   async update(id: number, updateChannelDto: UpdateChannelDto): Promise<Channel> {
     const channel = await this.findOne(id);
     
-    Object.keys(updateChannelDto).forEach((key) => {
-      if (updateChannelDto[key] !== undefined) {
-        channel[key] = updateChannelDto[key];
+    const { category_ids, ...channelData } = updateChannelDto;
+    
+    Object.keys(channelData).forEach((key) => {
+      if (channelData[key] !== undefined) {
+        channel[key] = channelData[key];
       }
     });
+
+    // Handle categories update
+    if (category_ids !== undefined) {
+      if (category_ids.length > 0) {
+        const categories = await this.categoriesRepository.findByIds(category_ids);
+        channel.categories = categories;
+      } else {
+        channel.categories = [];
+      }
+    }
 
     await this.redisService.delByPattern('schedules:all:*');
     const updated = await this.channelsRepository.save(channel);
