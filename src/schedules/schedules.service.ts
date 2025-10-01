@@ -252,6 +252,7 @@ export class SchedulesService {
     // Fetch streams once for the channel if there are live schedules
     if (liveSchedules.length > 0 && liveStatus) {
       const canFetch = await this.configService.canFetchLive(handle);
+      console.log(`[DEBUG] Channel ${handle} (${channelId}) canFetch: ${canFetch}, liveSchedules: ${liveSchedules.length}`);
       
       if (canFetch) {
         const streamsKey = `liveStreamsByChannel:${channelId}`;
@@ -348,6 +349,7 @@ export class SchedulesService {
           }
         } else {
           // Fallback to individual enrichment when no streams found for channel
+          console.log(`[DEBUG] No streams found for channel ${handle}, falling back to individual enrichment for program: ${schedule.program.name}`);
           const individualEnriched = await this.enrichScheduleIndividually(
             schedule,
             currentDay,
@@ -406,6 +408,7 @@ export class SchedulesService {
       if (liveStatus && channelId && handle) {
         try {
           const canFetch = await this.configService.canFetchLive(handle);
+          console.log(`[DEBUG] Individual enrichment for ${handle} (${channelId}) - canFetch: ${canFetch}, program: ${program.name}`);
           if (canFetch) {
             // Try to get multiple streams first
             const liveStreams = await this.youtubeLiveService.getLiveStreams(
