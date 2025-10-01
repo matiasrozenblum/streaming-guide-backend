@@ -215,9 +215,8 @@ export class YoutubeLiveService {
     const notFoundKey = `videoIdNotFound:${channelId}`;
 
     // skip rápido si ya está marcado como no-found
-    const notFoundValue = await this.redisService.get<string>(notFoundKey);
-    if (notFoundValue) {
-      console.log(`🚫 Skipping ${handle}, marked as not-found (key: ${notFoundKey}, value: ${notFoundValue})`);
+    if (await this.redisService.get<string>(notFoundKey)) {
+      console.log(`🚫 Skipping ${handle}, marked as not-found`);
       return '__SKIPPED__';
     }
 
@@ -246,7 +245,6 @@ export class YoutubeLiveService {
 
     // fetch from YouTube
     try {
-      console.log(`[DEBUG] Making YouTube API call for ${handle} (${channelId})`);
       const { data } = await axios.get(`${this.apiUrl}/search`, {
         params: {
           part: 'snippet',
@@ -258,14 +256,6 @@ export class YoutubeLiveService {
         },
       });
       
-      console.log(`[DEBUG] YouTube API response for ${handle}:`, {
-        itemCount: data.items?.length || 0,
-        hasItems: !!data.items,
-        items: data.items?.map((item: any) => ({
-          videoId: item.id.videoId,
-          title: item.snippet.title
-        })) || []
-      });
 
       const liveStreams: LiveStream[] = (data.items || []).map((item: any) => ({
         videoId: item.id.videoId,
