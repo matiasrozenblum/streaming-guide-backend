@@ -436,8 +436,10 @@ export class SchedulesService {
                 100, // Default TTL
                 'onDemand'
               );
+              console.log(`[DEBUG] Individual enrichment - getLiveVideoId result for ${program.name}:`, videoId);
               if (videoId && videoId !== '__SKIPPED__') {
                 streamUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+                console.log(`[DEBUG] Individual enrichment - updated streamUrl for ${program.name}:`, streamUrl);
               }
             }
           }
