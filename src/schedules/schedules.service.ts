@@ -256,7 +256,6 @@ export class SchedulesService {
       
       if (canFetch) {
         const streamsKey = `liveStreamsByChannel:${channelId}`;
-        const liveKey = `liveVideoIdByChannel:${channelId}`;
 
         // Try cached streams first
         const cachedStreams = await this.redisService.get<string>(streamsKey);
@@ -272,54 +271,23 @@ export class SchedulesService {
           }
         }
 
-        // Fallback to single video ID cache
+        // Fetch on-demand if no cached streams
         if (allStreams.length === 0) {
-          const cachedId = await this.redisService.get<string>(liveKey);
-          if (cachedId) {
-            allStreams = [{
-              videoId: cachedId,
-              title: 'Live Stream',
-              publishedAt: new Date().toISOString(),
-              description: '',
-              channelTitle: channel.name
-            }];
-            channelStreamCount = 1;
-          } else {
-            // Fetch on-demand
-            const ttl = await getCurrentBlockTTL(channelId, schedules, this.sentryService);
-            
-            const streamsResult = await this.youtubeLiveService.getLiveStreams(
-              channelId,
-              handle,
-              ttl,
-              'onDemand'
-            );
-            
-            console.log(`[DEBUG] YouTube API result for ${handle}:`, streamsResult);
-            
-            if (streamsResult && streamsResult !== '__SKIPPED__') {
-              allStreams = streamsResult.streams;
-              console.log(`[DEBUG] Found ${allStreams.length} streams for ${handle}`);
-              channelStreamCount = streamsResult.streamCount;
-            } else {
-              // Final fallback to old method
-              const vid = await this.youtubeLiveService.getLiveVideoId(
-                channelId,
-                handle,
-                ttl,
-                'onDemand'
-              );
-              if (vid && vid !== '__SKIPPED__') {
-                allStreams = [{
-                  videoId: vid,
-                  title: 'Live Stream',
-                  publishedAt: new Date().toISOString(),
-                  description: '',
-                  channelTitle: channel.name
-                }];
-                channelStreamCount = 1;
-              }
-            }
+          const ttl = await getCurrentBlockTTL(channelId, schedules, this.sentryService);
+          
+          const streamsResult = await this.youtubeLiveService.getLiveStreams(
+            channelId,
+            handle,
+            ttl,
+            'onDemand'
+          );
+          
+          console.log(`[DEBUG] YouTube API result for ${handle}:`, streamsResult);
+          
+          if (streamsResult && streamsResult !== '__SKIPPED__') {
+            allStreams = streamsResult.streams;
+            console.log(`[DEBUG] Found ${allStreams.length} streams for ${handle}`);
+            channelStreamCount = streamsResult.streamCount;
           }
         }
       }
@@ -398,6 +366,7 @@ export class SchedulesService {
 
     let isLive = false;
     let streamUrl = program.stream_url || program.youtube_url;
+    let assignedStream: any = null;
 
     // Si estamos en horario
     if (
@@ -429,16 +398,18 @@ export class SchedulesService {
           streamUrl = `https://www.youtube.com/embed/${firstStream.videoId}?autoplay=1`;
           console.log(`[DEBUG] Individual enrichment - using stream ${firstStream.videoId} for ${program.name}`);
         } else {
-              // Fallback to single video ID method
-              const videoId = await this.youtubeLiveService.getLiveVideoId(
+              // Fallback to getLiveStreams method (same as bulk enrichment)
+              const streamsResult = await this.youtubeLiveService.getLiveStreams(
                 channelId,
                 handle,
                 100, // Default TTL
                 'onDemand'
               );
-              console.log(`[DEBUG] Individual enrichment - getLiveVideoId result for ${program.name}:`, videoId);
-              if (videoId && videoId !== '__SKIPPED__') {
-                streamUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+              console.log(`[DEBUG] Individual enrichment - getLiveStreams result for ${program.name}:`, streamsResult);
+              if (streamsResult && streamsResult !== '__SKIPPED__' && typeof streamsResult === 'object' && 'streams' in streamsResult && streamsResult.streams.length > 0) {
+                const firstStream = streamsResult.streams[0];
+                streamUrl = `https://www.youtube.com/embed/${firstStream.videoId}?autoplay=1`;
+                assignedStream = firstStream;
                 console.log(`[DEBUG] Individual enrichment - updated streamUrl for ${program.name}:`, streamUrl);
               }
             }
@@ -455,8 +426,8 @@ export class SchedulesService {
         ...program,
         is_live: isLive,
         stream_url: streamUrl,
-        live_streams: null,
-        stream_count: 0,
+        live_streams: assignedStream ? [assignedStream] : null,
+        stream_count: assignedStream ? 1 : 0,
       },
     };
     
