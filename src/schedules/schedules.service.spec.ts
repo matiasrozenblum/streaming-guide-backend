@@ -278,13 +278,20 @@ describe('SchedulesService', () => {
       jest.spyOn(schedulesRepo, 'createQueryBuilder').mockReturnValue(mockQueryBuilder as any);
       // Mock Redis: first call for schedules cache (miss), then calls for streams cache (miss), then single video ID cache (hit)
       jest.spyOn(redisService, 'get')
-        .mockResolvedValueOnce(null) // schedules cache miss
-        .mockResolvedValueOnce(null) // streams cache miss  
-        .mockResolvedValueOnce('live-video-id'); // single video ID cache hit
+        .mockResolvedValueOnce(null); // schedules cache miss
       
-      // Mock getLiveStreams to return null (no multiple streams), which will fallback to getLiveVideoId
-      jest.spyOn(youtubeLiveService, 'getLiveStreams').mockResolvedValue(null);
-      jest.spyOn(youtubeLiveService, 'getLiveVideoId').mockResolvedValue('live-video-id');
+      // Mock getLiveStreams to return actual stream data
+      jest.spyOn(youtubeLiveService, 'getLiveStreams').mockResolvedValue({
+        streams: [{
+          videoId: 'live-video-id',
+          title: 'Live Stream',
+          publishedAt: new Date().toISOString(),
+          description: '',
+          channelTitle: 'Test Channel'
+        }],
+        primaryVideoId: 'live-video-id',
+        streamCount: 1
+      });
 
       currentTime = '11:00';
       currentDay = 'monday';
@@ -559,7 +566,7 @@ describe('SchedulesService', () => {
       
     });
 
-    it('should fallback to getLiveVideoId when getLiveStreams returns null', async () => {
+    it('should use getLiveStreams to enrich live programs', async () => {
       const testSchedule = {
         id: 1,
         day_of_week: 'monday',
@@ -590,9 +597,18 @@ describe('SchedulesService', () => {
       // Mock config service
       jest.spyOn(configService, 'canFetchLive').mockResolvedValue(true);
       
-      // Mock YouTube service - getLiveStreams returns null, getLiveVideoId returns video ID
-      jest.spyOn(youtubeLiveService, 'getLiveStreams').mockResolvedValue(null);
-      jest.spyOn(youtubeLiveService, 'getLiveVideoId').mockResolvedValue('fallback-video-id');
+      // Mock YouTube service - getLiveStreams returns actual stream data
+      jest.spyOn(youtubeLiveService, 'getLiveStreams').mockResolvedValue({
+        streams: [{
+          videoId: 'fallback-video-id',
+          title: 'Live Stream',
+          publishedAt: new Date().toISOString(),
+          description: '',
+          channelTitle: 'Test Channel'
+        }],
+        primaryVideoId: 'fallback-video-id',
+        streamCount: 1
+      });
 
       const result = await service.enrichSchedules([testSchedule], true);
 
@@ -601,10 +617,10 @@ describe('SchedulesService', () => {
       // Program should be live
       expect(result[0].program.is_live).toBe(true);
       
-      // Should use fallback video ID
+      // Should use stream video ID
       expect(result[0].program.stream_url).toBe('https://www.youtube.com/embed/fallback-video-id?autoplay=1');
       
-      // Should have live_streams from fallback
+      // Should have live_streams from getLiveStreams
       expect(result[0].program.live_streams).toHaveLength(1);
       expect(result[0].program.live_streams[0].videoId).toBe('fallback-video-id');
       expect(result[0].program.stream_count).toBe(1);
