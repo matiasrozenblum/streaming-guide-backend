@@ -295,8 +295,11 @@ export class SchedulesService {
               'onDemand'
             );
             
+            console.log(`[DEBUG] YouTube API result for ${handle}:`, streamsResult);
+            
             if (streamsResult && streamsResult !== '__SKIPPED__') {
               allStreams = streamsResult.streams;
+              console.log(`[DEBUG] Found ${allStreams.length} streams for ${handle}`);
               channelStreamCount = streamsResult.streamCount;
             } else {
               // Final fallback to old method
@@ -410,19 +413,22 @@ export class SchedulesService {
           const canFetch = await this.configService.canFetchLive(handle);
           console.log(`[DEBUG] Individual enrichment for ${handle} (${channelId}) - canFetch: ${canFetch}, program: ${program.name}`);
           if (canFetch) {
-            // Try to get multiple streams first
-            const liveStreams = await this.youtubeLiveService.getLiveStreams(
-              channelId,
-              handle,
-              100, // Default TTL
-              'onDemand'
-            );
-            
-            if (liveStreams && typeof liveStreams === 'object' && 'streams' in liveStreams && liveStreams.streams.length > 0) {
-              // Use the first stream for individual enrichment
-              const firstStream = liveStreams.streams[0];
-              streamUrl = `https://www.youtube.com/embed/${firstStream.videoId}?autoplay=1`;
-            } else {
+        // Try to get multiple streams first
+        const liveStreams = await this.youtubeLiveService.getLiveStreams(
+          channelId,
+          handle,
+          100, // Default TTL
+          'onDemand'
+        );
+        
+        console.log(`[DEBUG] Individual enrichment - liveStreams result for ${handle}:`, liveStreams);
+        
+        if (liveStreams && typeof liveStreams === 'object' && 'streams' in liveStreams && liveStreams.streams.length > 0) {
+          // Use the first stream for individual enrichment
+          const firstStream = liveStreams.streams[0];
+          streamUrl = `https://www.youtube.com/embed/${firstStream.videoId}?autoplay=1`;
+          console.log(`[DEBUG] Individual enrichment - using stream ${firstStream.videoId} for ${program.name}`);
+        } else {
               // Fallback to single video ID method
               const videoId = await this.youtubeLiveService.getLiveVideoId(
                 channelId,
