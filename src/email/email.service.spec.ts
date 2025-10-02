@@ -22,7 +22,11 @@ describe('EmailService', () => {
       addBreadcrumb: jest.fn(),
     } as any;
 
-    service = new EmailService(mockMailerService, mockSentryService);
+    const mockConfigService = {
+      get: jest.fn().mockReturnValue('test-value'),
+    } as any;
+
+    service = new EmailService(mockMailerService, mockSentryService, mockConfigService);
   });
 
   afterEach(() => {

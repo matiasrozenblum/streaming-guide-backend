@@ -3,12 +3,14 @@ import { MailerService } from '@nestjs-modules/mailer';
 import { ProposedChange } from '../proposed-changes/proposed-changes.entity';
 import { buildProposedChangesReportHtml } from './email.templates';
 import { SentryService } from '../sentry/sentry.service';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class EmailService {
   constructor(
     private readonly mailerService: MailerService,
     private readonly sentryService: SentryService,
+    private readonly configService: ConfigService,
   ) {}
 
   async sendProposedChangesReport(changes: ProposedChange[]) {
@@ -49,13 +51,28 @@ export class EmailService {
   async sendOtpCode(to: string, code: string, ttlMinutes: number) {
     const html = this.buildOtpHtml(code, ttlMinutes);
     
+    // Try SendGrid first if configured, fallback to SMTP
+    const sendGridApiKey = this.configService.get('SENDGRID_API_KEY');
+    
+    if (sendGridApiKey) {
+      try {
+        await this.sendViaSendGrid(to, 'Tu código de acceso • La Guía del Streaming', html);
+        console.log(`OTP enviado a ${to} via SendGrid: ${code}`);
+        return;
+      } catch (error) {
+        console.error('❌ SendGrid failed, falling back to SMTP:', error);
+        // Fall through to SMTP
+      }
+    }
+    
+    // Fallback to SMTP
     try {
       await this.mailerService.sendMail({
         to,
         subject: 'Tu código de acceso • La Guía del Streaming',
         html,
       });
-      console.log(`OTP enviado a ${to}: ${code}`);
+      console.log(`OTP enviado a ${to} via SMTP: ${code}`);
     } catch (error) {
       console.error('❌ Error sending OTP email:', error);
       
@@ -73,6 +90,22 @@ export class EmailService {
       
       throw error; // Re-throw to maintain original behavior
     }
+  }
+
+  private async sendViaSendGrid(to: string, subject: string, html: string) {
+    const sgMail = require('@sendgrid/mail');
+    const apiKey = this.configService.get('SENDGRID_API_KEY');
+    
+    sgMail.setApiKey(apiKey);
+    
+    const msg = {
+      to,
+      from: this.configService.get('SMTP_USER'), // Use same from address
+      subject,
+      html,
+    };
+    
+    await sgMail.send(msg);
   }
 
   private buildOtpHtml(code: string, ttl: number) {
