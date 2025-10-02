@@ -495,6 +495,75 @@ describe('SchedulesService', () => {
       
     });
 
+    it('should skip title matching when only one program and one stream exist', async () => {
+      const testSchedules = [
+        {
+          id: 1,
+          program_id: '1',
+          day_of_week: 'monday',
+          start_time: '10:00',
+          end_time: '12:00',
+          program: {
+            id: 1,
+            name: 'Dejá que entre el sol', // Different name from YouTube title
+            description: 'Description A',
+            logo_url: 'logo-a.png',
+            youtube_url: 'https://youtube.com/program-a',
+            is_live: false,
+            stream_url: '',
+            style_override: null,
+            channel: {
+              id: 1,
+              name: 'Vorterix',
+              description: 'Test Description',
+              logo_url: 'test-logo.png',
+              handle: 'vorterix',
+              youtube_channel_id: 'vorterix-channel-id',
+              order: 1,
+              is_visible: true,
+              background_color: '#ff0000',
+              show_only_when_scheduled: false,
+              programs: [],
+            },
+            panelists: [],
+            schedules: [],
+          },
+        },
+      ];
+
+      const mockStreams = {
+        streams: [
+          {
+            videoId: 'IDJ6Wn4DBQ4',
+            title: '🔴 MAÑANA VA A ESTAR BUENO con Pablo Kenny | VORTERIX EN VIVO', // Different from program name
+            description: 'Test description',
+            thumbnailUrl: 'test-thumb.jpg',
+            publishedAt: '2025-10-02T10:18:19Z',
+            channelTitle: 'Vorterix'
+          }
+        ],
+        primaryVideoId: 'IDJ6Wn4DBQ4',
+        streamCount: 1
+      };
+
+      // Mock config service
+      jest.spyOn(configService, 'canFetchLive').mockResolvedValue(true);
+      
+      // Mock YouTube service
+      jest.spyOn(youtubeLiveService, 'getLiveStreams').mockResolvedValue(mockStreams);
+
+      const result = await service.enrichSchedules(testSchedules, true);
+
+      expect(result).toHaveLength(1);
+      
+      // Should use the stream even though titles don't match
+      expect(result[0].program.stream_url).toBe('https://www.youtube.com/embed/IDJ6Wn4DBQ4?autoplay=1');
+      expect(result[0].program.is_live).toBe(true);
+      expect(result[0].program.live_streams).toHaveLength(1);
+      expect(result[0].program.live_streams[0].videoId).toBe('IDJ6Wn4DBQ4');
+      expect(result[0].program.stream_count).toBe(1);
+    });
+
     it('should handle single program with multiple available streams', async () => {
       const testSchedule = {
         id: 1,
