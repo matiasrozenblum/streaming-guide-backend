@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.10.2] - 2025-10-01
+
+### Fixed
+- Fixed live stream storing and usage
+
 ## [1.10.1] - 2025-09-29
 
 ### Added
