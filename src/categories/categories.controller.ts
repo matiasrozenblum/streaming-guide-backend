@@ -30,13 +30,6 @@ export class CategoriesController {
     return this.categoriesService.create(createCategoryDto);
   }
 
-  @Get()
-  @ApiOperation({ summary: 'Get all categories' })
-  @ApiResponse({ status: 200, description: 'Categories retrieved successfully', type: [Category] })
-  findAll(): Promise<Category[]> {
-    return this.categoriesService.findAll();
-  }
-
   @Get('search')
   @ApiOperation({ summary: 'Search categories by name' })
   @ApiResponse({ status: 200, description: 'Categories found', type: [Category] })
@@ -50,6 +43,13 @@ export class CategoriesController {
   @ApiResponse({ status: 404, description: 'Category not found' })
   findOne(@Param('id') id: string): Promise<Category> {
     return this.categoriesService.findOne(+id);
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'Get all categories' })
+  @ApiResponse({ status: 200, description: 'Categories retrieved successfully', type: [Category] })
+  findAll(): Promise<Category[]> {
+    return this.categoriesService.findAll();
   }
 
   @Patch(':id')
