@@ -17,6 +17,12 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.10.3] - 2025-10-02
+
+### Fixed
+- Fixed title matching when only 1 live program
+- Replaced SMTP with Sendgrid for email sending service
+
 ## [1.10.2] - 2025-10-01
 
 ### Fixed
