@@ -305,15 +305,24 @@ export class SchedulesService {
 
       if (isLive) {
         if (allStreams.length > 0) {
-          // Find best matching stream for this program
-          assignedStream = this.findBestMatchingStream(
-            schedule.program.name,
-            allStreams.filter(s => !usedStreams.has(s.videoId))
-          );
+          const availableStreams = allStreams.filter(s => !usedStreams.has(s.videoId));
           
-          if (assignedStream) {
+          // Skip title matching if there's only one live program and one stream
+          if (liveSchedules.length === 1 && availableStreams.length === 1) {
+            assignedStream = availableStreams[0];
             usedStreams.add(assignedStream.videoId);
             streamUrl = `https://www.youtube.com/embed/${assignedStream.videoId}?autoplay=1`;
+          } else {
+            // Find best matching stream for this program when multiple options exist
+            assignedStream = this.findBestMatchingStream(
+              schedule.program.name,
+              availableStreams
+            );
+            
+            if (assignedStream) {
+              usedStreams.add(assignedStream.videoId);
+              streamUrl = `https://www.youtube.com/embed/${assignedStream.videoId}?autoplay=1`;
+            }
           }
         } else {
           // Fallback to individual enrichment when no streams found for channel
