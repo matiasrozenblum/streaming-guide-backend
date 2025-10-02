@@ -165,6 +165,67 @@ export class AppController {
     return { message: 'Test email service error sent to Sentry' };
   }
 
+  @Post('test-smtp-connection')
+  async testSmtpConnection() {
+    const nodemailer = require('nodemailer');
+    
+    try {
+      console.log('🔍 Testing SMTP connection...');
+      console.log('📧 SMTP_HOST:', process.env.SMTP_HOST);
+      console.log('🔌 SMTP_PORT:', process.env.SMTP_PORT);
+      console.log('👤 SMTP_USER:', process.env.SMTP_USER);
+      console.log('🔑 SMTP_PASS:', process.env.SMTP_PASS ? '***' : 'NOT SET');
+      
+      const transporter = nodemailer.createTransporter({
+        host: process.env.SMTP_HOST,
+        port: Number(process.env.SMTP_PORT),
+        secure: false,
+        requireTLS: true,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+        connectionTimeout: 60000,
+        greetingTimeout: 30000,
+        socketTimeout: 60000,
+      });
+
+      console.log('🔄 Verifying SMTP connection...');
+      await transporter.verify();
+      console.log('✅ SMTP connection successful!');
+      
+      return { 
+        success: true, 
+        message: 'SMTP connection test successful',
+        config: {
+          host: process.env.SMTP_HOST,
+          port: process.env.SMTP_PORT,
+          user: process.env.SMTP_USER,
+          passSet: !!process.env.SMTP_PASS
+        }
+      };
+    } catch (error) {
+      console.error('❌ SMTP connection test failed:', error);
+      
+      this.sentryService.captureMessage('SMTP connection test failed', 'error', {
+        service: 'email',
+        error_type: 'smtp_test_failed',
+        error_message: error.message,
+        error_code: error.code,
+        smtp_host: process.env.SMTP_HOST,
+        smtp_port: process.env.SMTP_PORT,
+        timestamp: new Date().toISOString(),
+      });
+      
+      return { 
+        success: false, 
+        message: 'SMTP connection test failed',
+        error: error.message,
+        code: error.code
+      };
+    }
+  }
+
   @Post('test-slow-api')
   testSlowApi() {
     // Simulate a slow API response
