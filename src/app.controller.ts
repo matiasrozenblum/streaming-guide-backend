@@ -168,6 +168,8 @@ export class AppController {
   @Post('test-smtp-connection')
   async testSmtpConnection() {
     const nodemailer = require('nodemailer');
+    const dns = require('dns').promises;
+    const net = require('net');
     
     try {
       console.log('🔍 Testing SMTP connection...');
@@ -176,6 +178,35 @@ export class AppController {
       console.log('👤 SMTP_USER:', process.env.SMTP_USER);
       console.log('🔑 SMTP_PASS:', process.env.SMTP_PASS ? '***' : 'NOT SET');
       
+      // Test DNS resolution first
+      console.log('🌐 Testing DNS resolution...');
+      const dnsResult = await dns.resolve4(process.env.SMTP_HOST);
+      console.log('✅ DNS resolved to:', dnsResult);
+      
+      // Test basic TCP connection
+      console.log('🔌 Testing TCP connection...');
+      const socket = new net.Socket();
+      const tcpPromise = new Promise((resolve, reject) => {
+        socket.setTimeout(10000); // 10 second timeout for TCP test
+        socket.connect(Number(process.env.SMTP_PORT), process.env.SMTP_HOST, () => {
+          console.log('✅ TCP connection successful!');
+          socket.destroy();
+          resolve(true);
+        });
+        socket.on('error', (err) => {
+          console.log('❌ TCP connection failed:', err.message);
+          reject(err);
+        });
+        socket.on('timeout', () => {
+          console.log('❌ TCP connection timeout');
+          socket.destroy();
+          reject(new Error('TCP connection timeout'));
+        });
+      });
+      
+      await tcpPromise;
+      
+      // Now test SMTP
       const transporter = nodemailer.createTransport({
         host: process.env.SMTP_HOST,
         port: Number(process.env.SMTP_PORT),
@@ -185,9 +216,9 @@ export class AppController {
           user: process.env.SMTP_USER,
           pass: process.env.SMTP_PASS,
         },
-        connectionTimeout: 60000,
-        greetingTimeout: 30000,
-        socketTimeout: 60000,
+        connectionTimeout: 30000, // Reduced to 30 seconds
+        greetingTimeout: 15000,   // Reduced to 15 seconds
+        socketTimeout: 30000,     // Reduced to 30 seconds
       });
 
       console.log('🔄 Verifying SMTP connection...');
@@ -202,7 +233,8 @@ export class AppController {
           port: process.env.SMTP_PORT,
           user: process.env.SMTP_USER,
           passSet: !!process.env.SMTP_PASS
-        }
+        },
+        dns: dnsResult
       };
     } catch (error) {
       console.error('❌ SMTP connection test failed:', error);
