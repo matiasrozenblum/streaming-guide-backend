@@ -128,7 +128,7 @@ describe('ChannelsService', () => {
   };
 
   const mockYoutubeLiveService = {
-    getLiveVideoId: jest.fn(),
+    getLiveStreams: jest.fn(),
   };
 
   beforeEach(async () => {
