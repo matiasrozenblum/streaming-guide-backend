@@ -165,6 +165,55 @@ export class AppController {
     return { message: 'Test email service error sent to Sentry' };
   }
 
+  @Post('test-sendgrid')
+  async testSendGrid() {
+    const sgMail = require('@sendgrid/mail');
+    const apiKey = process.env.SENDGRID_API_KEY;
+    
+    try {
+      console.log('🔍 Testing SendGrid connection...');
+      console.log('🔑 API Key present:', !!apiKey);
+      console.log('🔑 API Key starts with SG.:', apiKey?.startsWith('SG.'));
+      console.log('🔑 API Key length:', apiKey?.length);
+      
+      if (!apiKey) {
+        return { 
+          success: false, 
+          message: 'SENDGRID_API_KEY not found in environment variables' 
+        };
+      }
+      
+      sgMail.setApiKey(apiKey);
+      
+      const msg = {
+        to: 'test@example.com', // This won't actually send
+        from: process.env.SMTP_USER,
+        subject: 'Test Email',
+        text: 'This is a test email',
+        html: '<p>This is a test email</p>',
+      };
+      
+      console.log('🔄 Testing SendGrid API call...');
+      // This will fail but give us better error info
+      await sgMail.send(msg);
+      
+      return { 
+        success: true, 
+        message: 'SendGrid API test successful' 
+      };
+    } catch (error) {
+      console.error('❌ SendGrid test failed:', error);
+      
+      return { 
+        success: false, 
+        message: 'SendGrid test failed',
+        error: error.message,
+        code: error.code,
+        response: error.response?.body
+      };
+    }
+  }
+
   @Post('test-smtp-connection')
   async testSmtpConnection() {
     const nodemailer = require('nodemailer');
