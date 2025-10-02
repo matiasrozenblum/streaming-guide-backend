@@ -100,9 +100,31 @@ export class EmailService {
     
     const msg = {
       to,
-      from: this.configService.get('SMTP_USER'), // Use same from address
+      from: {
+        email: this.configService.get('SMTP_USER'),
+        name: 'La Guía del Streaming'
+      },
       subject,
       html,
+      // Add text version for better deliverability
+      text: `Tu código de acceso para La Guía del Streaming. Este código expirará en 5 minutos. Si no solicitaste este código, puedes ignorar este mensaje.`,
+      // Add tracking and categorization
+      categories: ['otp', 'authentication'],
+      // Add custom headers for better deliverability
+      headers: {
+        'X-Mailer': 'La Guía del Streaming',
+        'X-Priority': '1',
+        'X-MSMail-Priority': 'High',
+        'X-Auto-Response-Suppress': 'All',
+        'Precedence': 'bulk'
+      },
+      // Add reply-to for better deliverability
+      replyTo: this.configService.get('SMTP_USER'),
+      // Add custom args for tracking
+      customArgs: {
+        'source': 'password_recovery',
+        'app': 'streaming_guide'
+      }
     };
     
     await sgMail.send(msg);
@@ -110,16 +132,47 @@ export class EmailService {
 
   private buildOtpHtml(code: string, ttl: number) {
     return `
-      <div style="font-family: sans-serif; line-height:1.4;">
-        <h2>Tu código de acceso</h2>
-        <p>Usa este código para acceder a <strong>La Guía del Streaming</strong>:</p>
-        <p style="font-size: 2rem; margin: .5em 0;"><strong>${code}</strong></p>
-        <p>Va a expirar en ${ttl} minutos.</p>
-        <hr/>
-        <p style="font-size:.8em; color: #666;">
-          Si no solicitaste este código, puedes ignorar este mensaje.
-        </p>
-      </div>
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Tu código de acceso - La Guía del Streaming</title>
+      </head>
+      <body style="margin: 0; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f5f5f5;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: white; border-radius: 8px; padding: 40px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="color: #333; margin: 0; font-size: 24px;">La Guía del Streaming</h1>
+          </div>
+          
+          <h2 style="color: #333; text-align: center; margin-bottom: 20px;">Tu código de acceso</h2>
+          
+          <p style="color: #666; text-align: center; margin-bottom: 30px; font-size: 16px;">
+            Usa este código para acceder a tu cuenta:
+          </p>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <div style="display: inline-block; background-color: #f8f9fa; border: 2px solid #e9ecef; border-radius: 8px; padding: 20px; font-family: 'Courier New', monospace; font-size: 32px; font-weight: bold; color: #333; letter-spacing: 4px;">
+              ${code}
+            </div>
+          </div>
+          
+          <p style="color: #666; text-align: center; margin-bottom: 30px; font-size: 14px;">
+            ⏰ Este código expirará en ${ttl} minutos
+          </p>
+          
+          <hr style="border: none; border-top: 1px solid #e9ecef; margin: 30px 0;">
+          
+          <p style="color: #999; text-align: center; font-size: 12px; margin: 0;">
+            Si no solicitaste este código, puedes ignorar este mensaje de forma segura.
+          </p>
+          
+          <p style="color: #999; text-align: center; font-size: 12px; margin: 10px 0 0 0;">
+            © 2024 La Guía del Streaming. Todos los derechos reservados.
+          </p>
+        </div>
+      </body>
+      </html>
     `;
   }
 
