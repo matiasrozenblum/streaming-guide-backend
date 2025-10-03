@@ -351,4 +351,9 @@ export class ChannelsService {
     const [h, m] = time.split(':').map(Number);
     return h * 100 + m;
   }
+
+  async areCategoriesEnabled(): Promise<boolean> {
+    const enabled = await this.configService.get('categories_enabled');
+    return enabled === 'true';
+  }
 }
