@@ -167,6 +167,9 @@ export class ChannelsService {
     
     const { category_ids, ...channelData } = updateChannelDto;
     
+    // Check if handle is being updated
+    const handleChanged = channelData.handle !== undefined && channelData.handle !== channel.handle;
+    
     Object.keys(channelData).forEach((key) => {
       if (channelData[key] !== undefined) {
         channel[key] = channelData[key];
@@ -185,6 +188,22 @@ export class ChannelsService {
 
     await this.redisService.delByPattern('schedules:all:*');
     const updated = await this.channelsRepository.save(channel);
+
+    // Update YouTube channel ID if handle changed
+    if (handleChanged && updateChannelDto.handle) {
+      try {
+        const info = await this.youtubeDiscovery.getChannelIdFromHandle(updateChannelDto.handle);
+        if (info) {
+          updated.youtube_channel_id = info.channelId;
+          await this.channelsRepository.save(updated);
+          console.log(`🔄 Updated YouTube channel ID for ${updated.name}: ${info.channelId}`);
+        } else {
+          console.log(`⚠️ Could not resolve YouTube channel ID for handle: ${updateChannelDto.handle}`);
+        }
+      } catch (error) {
+        console.error(`❌ Error updating YouTube channel ID for ${updated.name}:`, error.message);
+      }
+    }
 
     // Notify and revalidate
     await this.notifyUtil.notifyAndRevalidate({
