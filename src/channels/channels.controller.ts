@@ -30,6 +30,14 @@ export class ChannelsController {
     return this.channelsService.getChannelsWithSchedules(day, deviceId, liveStatus, raw);
   }
 
+  @Get('categories-enabled')
+  @ApiOperation({ summary: 'Check if categories feature is enabled' })
+  @ApiResponse({ status: 200, description: 'Categories enabled status' })
+  async areCategoriesEnabled() {
+    const enabled = await this.channelsService.areCategoriesEnabled();
+    return { categories_enabled: enabled };
+  }
+
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -72,13 +80,5 @@ export class ChannelsController {
   async reorder(@Body() body: { ids: number[] }) {
     await this.channelsService.reorder(body.ids);
     return { message: 'Channels reordered successfully' };
-  }
-
-  @Get('categories-enabled')
-  @ApiOperation({ summary: 'Check if categories feature is enabled' })
-  @ApiResponse({ status: 200, description: 'Categories enabled status' })
-  async areCategoriesEnabled() {
-    const enabled = await this.channelsService.areCategoriesEnabled();
-    return { categories_enabled: enabled };
   }
 }
