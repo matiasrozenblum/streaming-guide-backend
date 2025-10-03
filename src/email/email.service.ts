@@ -20,15 +20,32 @@ export class EmailService {
     }
 
     const htmlContent = buildProposedChangesReportHtml(changes);
+    const to = 'laguiadelstreaming@gmail.com';
+    const subject = '📋 Nuevos cambios detectados en la programación';
 
+    // Try SendGrid first if configured, fallback to SMTP
+    const sendGridApiKey = this.configService.get('SENDGRID_API_KEY');
+    
+    if (sendGridApiKey) {
+      try {
+        await this.sendViaSendGrid(to, subject, htmlContent, 'proposed_changes_report');
+        console.log('📬 Email de cambios enviado via SendGrid.');
+        return;
+      } catch (error) {
+        console.error('❌ SendGrid failed, falling back to SMTP:', error);
+        // Fall through to SMTP
+      }
+    }
+
+    // Fallback to SMTP
     try {
       await this.mailerService.sendMail({
-        to: 'laguiadelstreaming@gmail.com',
-        subject: '📋 Nuevos cambios detectados en la programación',
+        to,
+        subject,
         html: htmlContent,
       });
 
-      console.log('📬 Email de cambios enviado.');
+      console.log('📬 Email de cambios enviado via SMTP.');
     } catch (error) {
       console.error('❌ Error sending proposed changes email:', error);
       
@@ -37,7 +54,7 @@ export class EmailService {
         error_type: 'send_failure',
         error_message: error.message,
         email_type: 'proposed_changes_report',
-        recipient: 'laguiadelstreaming@gmail.com',
+        recipient: to,
         timestamp: new Date().toISOString(),
       });
       
@@ -54,9 +71,9 @@ export class EmailService {
     // Try SendGrid first if configured, fallback to SMTP
     const sendGridApiKey = this.configService.get('SENDGRID_API_KEY');
     
-    if (sendGridApiKey) {
-      try {
-        await this.sendViaSendGrid(to, 'Tu código de acceso • La Guía del Streaming', html);
+      if (sendGridApiKey) {
+        try {
+        await this.sendViaSendGrid(to, 'Tu código de acceso • La Guía del Streaming', html, 'otp_code');
         console.log(`OTP enviado a ${to} via SendGrid: ${code}`);
         return;
       } catch (error) {
@@ -92,12 +109,26 @@ export class EmailService {
     }
   }
 
-  private async sendViaSendGrid(to: string, subject: string, html: string) {
+  private async sendViaSendGrid(to: string, subject: string, html: string, emailType: string = 'general') {
     const sgMail = require('@sendgrid/mail');
     const apiKey = this.configService.get('SENDGRID_API_KEY');
     
     sgMail.setApiKey(apiKey);
     
+    // Generate appropriate text version based on email type
+    let textContent = 'Mensaje de La Guía del Streaming.';
+    let categories = ['general'];
+    let customArgs = { 'source': 'general', 'app': 'streaming_guide' };
+    
+    if (emailType === 'otp_code') {
+      textContent = 'Tu código de acceso para La Guía del Streaming. Este código expirará en 5 minutos. Si no solicitaste este código, puedes ignorar este mensaje.';
+      categories = ['otp', 'authentication'];
+      customArgs = { 'source': 'password_recovery', 'app': 'streaming_guide' };
+    } else if (emailType === 'proposed_changes_report') {
+      textContent = 'Nuevos cambios detectados en la programación. Revisa el contenido HTML para más detalles.';
+      categories = ['reports', 'programming_changes'];
+      customArgs = { 'source': 'programming_changes', 'app': 'streaming_guide' };
+    }
     const msg = {
       to,
       from: {
@@ -107,9 +138,9 @@ export class EmailService {
       subject,
       html,
       // Add text version for better deliverability
-      text: `Tu código de acceso para La Guía del Streaming. Este código expirará en 5 minutos. Si no solicitaste este código, puedes ignorar este mensaje.`,
+      text: textContent,
       // Add tracking and categorization
-      categories: ['otp', 'authentication'],
+      categories,
       // Add custom headers for better deliverability
       headers: {
         'X-Mailer': 'La Guía del Streaming',
@@ -121,10 +152,58 @@ export class EmailService {
       // Add reply-to for better deliverability
       replyTo: this.configService.get('SMTP_USER'),
       // Add custom args for tracking
-      customArgs: {
-        'source': 'password_recovery',
-        'app': 'streaming_guide'
-      }
+      customArgs
+    };
+    
+    await sgMail.send(msg);
+  }
+
+  private async sendViaSendGridWithAttachments(to: string, subject: string, html: string, text: string, attachments: { filename: string, content: Buffer, contentType: string }[], emailType: string = 'general') {
+    const sgMail = require('@sendgrid/mail');
+    const apiKey = this.configService.get('SENDGRID_API_KEY');
+    
+    sgMail.setApiKey(apiKey);
+    
+    // Convert attachments to SendGrid format
+    const sendGridAttachments = attachments.map(attachment => ({
+      content: attachment.content.toString('base64'),
+      filename: attachment.filename,
+      type: attachment.contentType,
+      disposition: 'attachment'
+    }));
+    
+    let categories = ['reports'];
+    let customArgs = { 'source': 'reports', 'app': 'streaming_guide' };
+    
+    if (emailType === 'report_with_attachment') {
+      categories = ['reports', 'attachments'];
+      customArgs = { 'source': 'reports', 'app': 'streaming_guide' };
+    }
+    
+    const msg = {
+      to,
+      from: {
+        email: this.configService.get('SMTP_USER'),
+        name: 'La Guía del Streaming'
+      },
+      subject,
+      html,
+      text,
+      attachments: sendGridAttachments,
+      // Add tracking and categorization
+      categories,
+      // Add custom headers for better deliverability
+      headers: {
+        'X-Mailer': 'La Guía del Streaming',
+        'X-Priority': '1',
+        'X-MSMail-Priority': 'High',
+        'X-Auto-Response-Suppress': 'All',
+        'Precedence': 'bulk'
+      },
+      // Add reply-to for better deliverability
+      replyTo: this.configService.get('SMTP_USER'),
+      // Add custom args for tracking
+      customArgs
     };
     
     await sgMail.send(msg);
@@ -177,6 +256,21 @@ export class EmailService {
   }
 
   async sendReportWithAttachment({ to, subject, text, html, attachments }: { to: string, subject: string, text: string, html: string, attachments: { filename: string, content: Buffer, contentType: string }[] }) {
+    // Try SendGrid first if configured, fallback to SMTP
+    const sendGridApiKey = this.configService.get('SENDGRID_API_KEY');
+    
+    if (sendGridApiKey) {
+      try {
+        await this.sendViaSendGridWithAttachments(to, subject, html, text, attachments, 'report_with_attachment');
+        console.log(`📬 Report with attachment enviado a ${to} via SendGrid.`);
+        return;
+      } catch (error) {
+        console.error('❌ SendGrid failed, falling back to SMTP:', error);
+        // Fall through to SMTP
+      }
+    }
+
+    // Fallback to SMTP
     try {
       await this.mailerService.sendMail({
         to,
@@ -185,6 +279,7 @@ export class EmailService {
         html,
         attachments,
       });
+      console.log(`📬 Report with attachment enviado a ${to} via SMTP.`);
     } catch (error) {
       console.error('❌ Error sending report with attachment:', error);
       

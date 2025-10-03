@@ -23,7 +23,12 @@ describe('EmailService', () => {
     } as any;
 
     const mockConfigService = {
-      get: jest.fn().mockReturnValue('test-value'),
+      get: jest.fn().mockImplementation((key: string) => {
+        if (key === 'SENDGRID_API_KEY') {
+          return null; // No SendGrid API key, so it will fall back to SMTP
+        }
+        return 'test-value';
+      }),
     } as any;
 
     service = new EmailService(mockMailerService, mockSentryService, mockConfigService);
@@ -58,7 +63,7 @@ describe('EmailService', () => {
         subject: '📋 Nuevos cambios detectados en la programación',
         html: expect.stringContaining('Cambios propuestos'),
       });
-      expect(consoleSpy).toHaveBeenCalledWith('📬 Email de cambios enviado.');
+      expect(consoleSpy).toHaveBeenCalledWith('📬 Email de cambios enviado via SMTP.');
     });
 
     it('does not send email when no changes exist', async () => {
@@ -103,7 +108,7 @@ describe('EmailService', () => {
         subject: 'Tu código de acceso • La Guía del Streaming',
         html: expect.stringContaining('123456'),
       });
-      expect(consoleSpy).toHaveBeenCalledWith('OTP enviado a test@example.com: 123456');
+      expect(consoleSpy).toHaveBeenCalledWith('OTP enviado a test@example.com via SMTP: 123456');
     });
 
     it('reports error to Sentry when OTP email fails', async () => {
