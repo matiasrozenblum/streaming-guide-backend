@@ -170,13 +170,23 @@ export class SchedulesService {
 
     const enriched: any[] = [];
 
+    // Batch fetch live streams for all channels if live status is enabled
+    let batchStreamsResults = new Map<string, any>();
+    if (liveStatus && channelGroups.size > 0) {
+      console.log('[enrichSchedules] Batch fetching live streams for', channelGroups.size, 'channels');
+      const channelIds = Array.from(channelGroups.keys());
+      batchStreamsResults = await this.youtubeLiveService.getBatchLiveStreams(channelIds, 'onDemand');
+      console.log('[enrichSchedules] Batch fetch completed');
+    }
+
     // Process each channel group to distribute streams
     for (const [channelId, channelSchedules] of channelGroups) {
       const enrichedChannelSchedules = await this.enrichSchedulesForChannel(
         channelSchedules,
         currentDay,
         currentNum,
-        liveStatus
+        liveStatus,
+        batchStreamsResults.get(channelId)
       );
       enriched.push(...enrichedChannelSchedules);
     }
@@ -220,7 +230,8 @@ export class SchedulesService {
     schedules: Schedule[],
     currentDay: string,
     currentNum: number,
-    liveStatus: boolean
+    liveStatus: boolean,
+    batchStreamsResult?: any
   ): Promise<any[]> {
     const enriched: any[] = [];
     
@@ -249,42 +260,52 @@ export class SchedulesService {
     let allStreams: any[] = [];
     let channelStreamCount = 0;
 
-    // Fetch streams once for the channel if there are live schedules
+    // Use batch results or fetch streams individually if needed
     if (liveSchedules.length > 0 && liveStatus) {
       const canFetch = await this.configService.canFetchLive(handle);
       
       if (canFetch) {
-        const streamsKey = `liveStreamsByChannel:${channelId}`;
-
-        // Try cached streams first
-        const cachedStreams = await this.redisService.get<string>(streamsKey);
-        if (cachedStreams) {
-          try {
-            const parsedStreams = JSON.parse(cachedStreams);
-            if (parsedStreams.length > 0) {
-              allStreams = parsedStreams;
-              channelStreamCount = parsedStreams.length;
+        // Use batch results if available
+        if (batchStreamsResult && batchStreamsResult !== '__SKIPPED__' && batchStreamsResult.streams) {
+          allStreams = batchStreamsResult.streams;
+          channelStreamCount = batchStreamsResult.streamCount;
+          console.log(`[enrichSchedulesForChannel] Using batch results for ${handle}: ${allStreams.length} streams`);
+          
+          // Cache the streams for future use
+          const streamsKey = `liveStreamsByChannel:${channelId}`;
+          await this.redisService.set(streamsKey, JSON.stringify(allStreams), await getCurrentBlockTTL(channelId, schedules, this.sentryService));
+        } else {
+          // Fallback to individual fetch if batch didn't work
+          const streamsKey = `liveStreamsByChannel:${channelId}`;
+          const cachedStreams = await this.redisService.get<string>(streamsKey);
+          
+          if (cachedStreams) {
+            try {
+              const parsedStreams = JSON.parse(cachedStreams);
+              if (parsedStreams.length > 0) {
+                allStreams = parsedStreams;
+                channelStreamCount = parsedStreams.length;
+              }
+            } catch (error) {
+              console.warn(`Failed to parse cached streams for ${handle}:`, error);
             }
-          } catch (error) {
-            console.warn(`Failed to parse cached streams for ${handle}:`, error);
           }
-        }
 
-        // Fetch on-demand if no cached streams
-        if (allStreams.length === 0) {
-          const ttl = await getCurrentBlockTTL(channelId, schedules, this.sentryService);
-          
-          const streamsResult = await this.youtubeLiveService.getLiveStreams(
-            channelId,
-            handle,
-            ttl,
-            'onDemand'
-          );
-          
-          
-          if (streamsResult && streamsResult !== '__SKIPPED__') {
-            allStreams = streamsResult.streams;
-            channelStreamCount = streamsResult.streamCount;
+          // Fetch on-demand if no cached streams
+          if (allStreams.length === 0) {
+            const ttl = await getCurrentBlockTTL(channelId, schedules, this.sentryService);
+            
+            const streamsResult = await this.youtubeLiveService.getLiveStreams(
+              channelId,
+              handle,
+              ttl,
+              'onDemand'
+            );
+            
+            if (streamsResult && streamsResult !== '__SKIPPED__') {
+              allStreams = streamsResult.streams;
+              channelStreamCount = streamsResult.streamCount;
+            }
           }
         }
       }
