@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.11.0] - 2025-10-04
+
+### Added
+- Added categories for channels
+
 ## [1.10.3] - 2025-10-02
 
 ### Fixed

@@ -59,29 +59,35 @@ describe('YoutubeLiveService', () => {
       expect(result).toBe('__SKIPPED__');
     });
 
-    it('returns cachedId if it is live', async () => {
-      redisService.get.mockImplementation(async (key: string) => key === 'liveVideoIdByChannel:cid' ? 'cachedId' : null);
+    it('returns cached primary videoId if it is live', async () => {
+      const cachedStreams = JSON.stringify({ primaryVideoId: 'cachedId', streamCount: 1 });
+      redisService.get.mockImplementation(async (key: string) => 
+        key === 'liveStreamsByChannel:cid' ? cachedStreams : null
+      );
       jest.spyOn(service as any, 'isVideoLive').mockResolvedValue(true);
       const result = await service.getLiveVideoId('cid', 'handle', 100, 'cron');
       expect(result).toBe('cachedId');
     });
 
-    it('deletes cachedId if it is not live', async () => {
-      redisService.get.mockImplementation(async (key: string) => key === 'liveVideoIdByChannel:cid' ? 'cachedId' : null);
+    it('deletes cached streams if they are not live', async () => {
+      const cachedStreams = JSON.stringify({ primaryVideoId: 'cachedId', streamCount: 1 });
+      redisService.get.mockImplementation(async (key: string) => 
+        key === 'liveStreamsByChannel:cid' ? cachedStreams : null
+      );
       jest.spyOn(service as any, 'isVideoLive').mockResolvedValue(false);
       redisService.del.mockResolvedValue(undefined);
       jest.spyOn(axios, 'get').mockResolvedValue({ data: { items: [] } });
       const result = await service.getLiveVideoId('cid', 'handle', 100, 'cron');
-      expect(redisService.del).toHaveBeenCalledWith('liveVideoIdByChannel:cid');
+      expect(redisService.del).toHaveBeenCalledWith('liveStreamsByChannel:cid');
       expect(result).toBe(null);
     });
 
-    it('fetches from YouTube and caches videoId', async () => {
+    it('fetches from YouTube and caches streams', async () => {
       redisService.get.mockResolvedValue(null);
       jest.spyOn(axios, 'get').mockResolvedValue({ data: { items: [{ id: { videoId: 'vid123' } }] } });
       jest.spyOn(service as any, 'isVideoLive').mockResolvedValue(false);
       const result = await service.getLiveVideoId('cid', 'handle', 100, 'cron');
-      expect(redisService.set).toHaveBeenCalledWith('liveVideoIdByChannel:cid', 'vid123', 100);
+      expect(redisService.set).toHaveBeenCalledWith('liveStreamsByChannel:cid', expect.any(String), 100);
       expect(result).toBe('vid123');
     });
 

@@ -8,6 +8,7 @@ import { Panelist } from './panelists/panelists.entity';
 import { Config } from './config/config.entity';
 import { Device } from './users/device.entity';
 import { UserSubscription } from './users/user-subscription.entity';
+import { Category } from './categories/categories.entity';
 import { ChannelsModule } from './channels/channels.module';
 import { ProgramsModule } from './programs/programs.module';
 import { SchedulesModule } from './schedules/schedules.module';
@@ -27,6 +28,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { UsersModule } from './users/users.module';
 import { StatisticsModule } from './statistics/statistics.module';
 import { SentryModule } from './sentry/sentry.module';
+import { CategoriesModule } from './categories/categories.module';
 import { ResourceMonitorService } from './services/resource-monitor.service';
 import { PerformanceInterceptor } from './interceptors/performance.interceptor';
 
@@ -74,7 +76,7 @@ import { PerformanceInterceptor } from './interceptors/performance.interceptor';
         };
       },
     }),
-    TypeOrmModule.forFeature([Channel, Program, Schedule, Panelist, Config, Device, UserSubscription]),
+    TypeOrmModule.forFeature([Channel, Program, Schedule, Panelist, Config, Device, UserSubscription, Category]),
     ChannelsModule,
     ProgramsModule,
     SchedulesModule,
@@ -90,6 +92,7 @@ import { PerformanceInterceptor } from './interceptors/performance.interceptor';
     UsersModule,
     StatisticsModule,
     SentryModule,
+    CategoriesModule,
   ],
   controllers: [AppController],
   providers: [

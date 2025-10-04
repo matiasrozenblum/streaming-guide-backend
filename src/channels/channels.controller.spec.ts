@@ -22,6 +22,7 @@ describe('ChannelsController', () => {
     is_visible: true,
     background_color: null,
     show_only_when_scheduled: false,
+    categories: [],
   };
 
   const mockChannelsService = {

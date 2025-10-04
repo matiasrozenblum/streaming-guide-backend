@@ -12,10 +12,11 @@ import { YoutubeDiscoveryModule } from '../youtube/youtube-discovery.module';
 import { UserSubscription } from '../users/user-subscription.entity';
 import { Device } from '../users/device.entity';
 import { ConfigModule } from '../config/config.module';
+import { Category } from '../categories/categories.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Channel, Program, Schedule, UserSubscription, Device]),
+    TypeOrmModule.forFeature([Channel, Program, Schedule, UserSubscription, Device, Category]),
     forwardRef(() => YoutubeLiveModule),
     forwardRef(() => SchedulesModule),
     RedisModule,

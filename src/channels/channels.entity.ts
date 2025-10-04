@@ -1,5 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany, Index } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany, ManyToMany, Index, JoinTable } from 'typeorm';
 import { Program } from '../programs/programs.entity';
+import { Category } from '../categories/categories.entity';
 
 @Entity()
 @Index(['is_visible', 'order']) // Composite index for filtering visible channels and ordering
@@ -36,4 +37,8 @@ export class Channel {
 
   @OneToMany(() => Program, (program) => program.channel, { cascade: true, onDelete: 'CASCADE' })
   programs: Program[];
+
+  @ManyToMany(() => Category, (category) => category.channels)
+  @JoinTable()
+  categories?: Category[];
 }

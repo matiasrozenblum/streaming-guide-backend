@@ -18,6 +18,7 @@ import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
 import { ConfigService } from '../config/config.service';
 import { WeeklyOverridesService } from '../schedules/weekly-overrides.service';
 import { YoutubeLiveService } from '../youtube/youtube-live.service';
+import { Category } from '../categories/categories.entity';
 
 describe('ChannelsService', () => {
   let service: ChannelsService;
@@ -25,8 +26,8 @@ describe('ChannelsService', () => {
   let notifyUtil: NotifyAndRevalidateUtil;
 
   const mockChannels: Channel[] = [
-    { id: 1, name: 'Luzu TV', logo_url: 'https://logo1.png', handle: 'stream1', programs: [], description: 'Luzu TV is a streaming channel.', youtube_channel_id: 'channel1', order: 1, is_visible: true, background_color: null, show_only_when_scheduled: false },
-    { id: 2, name: 'Olga', logo_url: 'https://logo2.png', handle: 'stream2', programs: [], description: 'Olga is a streaming channel.', youtube_channel_id: 'channel2', order: 2, is_visible: true, background_color: null, show_only_when_scheduled: false },
+    { id: 1, name: 'Luzu TV', logo_url: 'https://logo1.png', handle: 'stream1', programs: [], description: 'Luzu TV is a streaming channel.', youtube_channel_id: 'channel1', order: 1, is_visible: true, background_color: null, show_only_when_scheduled: false, categories: [] },
+    { id: 2, name: 'Olga', logo_url: 'https://logo2.png', handle: 'stream2', programs: [], description: 'Olga is a streaming channel.', youtube_channel_id: 'channel2', order: 2, is_visible: true, background_color: null, show_only_when_scheduled: false, categories: [] },
   ];
 
   const mockQueryBuilder = {
@@ -70,6 +71,14 @@ describe('ChannelsService', () => {
   const mockDeviceRepository = {
     find: jest.fn(),
     findOne: jest.fn(),
+    save: jest.fn(),
+    create: jest.fn(),
+  };
+
+  const mockCategoryRepository = {
+    find: jest.fn(),
+    findOne: jest.fn(),
+    findByIds: jest.fn(),
     save: jest.fn(),
     create: jest.fn(),
   };
@@ -119,7 +128,7 @@ describe('ChannelsService', () => {
   };
 
   const mockYoutubeLiveService = {
-    getLiveVideoId: jest.fn(),
+    getLiveStreams: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -145,6 +154,10 @@ describe('ChannelsService', () => {
         {
           provide: getRepositoryToken(Device),
           useValue: mockDeviceRepository,
+        },
+        {
+          provide: getRepositoryToken(Category),
+          useValue: mockCategoryRepository,
         },
         {
           provide: DataSource,
@@ -187,6 +200,10 @@ describe('ChannelsService', () => {
     service['notifyUtil'] = notifyUtil;
   });
 
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
@@ -202,6 +219,7 @@ describe('ChannelsService', () => {
     expect(result).toEqual(mockChannels[0]);
     expect(repo.findOne).toHaveBeenCalledWith({
       where: { id: 1 },
+      relations: ['categories'],
     });
   });
 
@@ -241,6 +259,113 @@ describe('ChannelsService', () => {
     await expect(service.remove(999)).rejects.toThrow(NotFoundException);
   });
 
+  describe('create with categories', () => {
+    const mockCategories: Category[] = [
+      {
+        id: 1,
+        name: 'Deportes',
+        description: 'Canales de deportes',
+        color: '#FF6B6B',
+        order: 1,
+        channels: [],
+      },
+      {
+        id: 2,
+        name: 'Noticias',
+        description: 'Canales de noticias',
+        color: '#4ECDC4',
+        order: 2,
+        channels: [],
+      },
+    ];
+
+    it('should create a channel with categories', async () => {
+      const createDto: CreateChannelDto = {
+        name: 'Test Channel',
+        handle: 'test',
+        description: 'Test Description',
+        category_ids: [1, 2],
+      };
+
+      const createdChannel = {
+        id: 3,
+        ...createDto,
+        programs: [],
+        categories: mockCategories,
+      };
+
+      mockCategoryRepository.findByIds.mockResolvedValue(mockCategories);
+      mockRepository.create.mockReturnValue(createdChannel);
+      mockRepository.save.mockResolvedValue(createdChannel);
+
+      const result = await service.create(createDto);
+
+      expect(mockCategoryRepository.findByIds).toHaveBeenCalledWith([1, 2]);
+      expect(mockRepository.create).toHaveBeenCalledWith(expect.objectContaining({
+        name: createDto.name,
+        handle: createDto.handle,
+        description: createDto.description,
+        order: expect.any(Number),
+      }));
+      expect(mockRepository.save).toHaveBeenCalledWith(createdChannel);
+      expect(result).toEqual(createdChannel);
+    });
+
+    it('should create a channel without categories', async () => {
+      const createDto: CreateChannelDto = {
+        name: 'Test Channel',
+        handle: 'test',
+        description: 'Test Description',
+      };
+
+      const createdChannel = {
+        id: 3,
+        ...createDto,
+        programs: [],
+        categories: [],
+      };
+
+      mockRepository.create.mockReturnValue(createdChannel);
+      mockRepository.save.mockResolvedValue(createdChannel);
+      mockCategoryRepository.findByIds.mockClear();
+
+      const result = await service.create(createDto);
+
+      expect(mockCategoryRepository.findByIds).not.toHaveBeenCalled();
+      expect(mockRepository.create).toHaveBeenCalledWith(expect.objectContaining({
+        ...createDto,
+        order: expect.any(Number),
+      }));
+      expect(result).toEqual(createdChannel);
+    });
+
+    it('should create a channel with empty category_ids array', async () => {
+      const createDto: CreateChannelDto = {
+        name: 'Test Channel',
+        handle: 'test',
+        description: 'Test Description',
+        category_ids: [],
+      };
+
+      const createdChannel = {
+        id: 3,
+        ...createDto,
+        programs: [],
+        categories: [],
+      };
+
+      mockRepository.create.mockReturnValue(createdChannel);
+      mockRepository.save.mockResolvedValue(createdChannel);
+      mockCategoryRepository.findByIds.mockClear();
+      mockCategoryRepository.findByIds.mockResolvedValue([]);
+
+      const result = await service.create(createDto);
+
+      expect(mockCategoryRepository.findByIds).not.toHaveBeenCalled();
+      expect(result).toEqual(createdChannel);
+    });
+  });
+
   describe('update', () => {
     it('should update a channel', async () => {
       const updateDto: UpdateChannelDto = {
@@ -248,8 +373,14 @@ describe('ChannelsService', () => {
         description: 'Updated Description',
       };
 
+      const existingChannel = { ...mockChannels[0], categories: [] };
+      const updatedChannel = { ...existingChannel, ...updateDto };
+
+      mockRepository.findOne.mockResolvedValue(existingChannel);
+      mockRepository.save.mockResolvedValue(updatedChannel);
+
       const result = await service.update(1, updateDto);
-      expect(result).toEqual(mockChannels[0]);
+      expect(result).toEqual(updatedChannel);
       expect(repo.save).toHaveBeenCalled();
     });
 
@@ -258,14 +389,216 @@ describe('ChannelsService', () => {
         name: 'Updated Channel',
       };
 
+      const existingChannel = { ...mockChannels[0], categories: [] };
+      const updatedChannel = { ...existingChannel, ...updateDto };
+
+      mockRepository.findOne.mockResolvedValue(existingChannel);
+      mockRepository.save.mockResolvedValue(updatedChannel);
+
       const result = await service.update(1, updateDto);
-      expect(result).toEqual(mockChannels[0]);
+      expect(result).toEqual(updatedChannel);
       expect(repo.save).toHaveBeenCalled();
     });
 
     it('should throw NotFoundException when channel is not found', async () => {
       jest.spyOn(repo, 'findOne').mockResolvedValueOnce(null);
       await expect(service.update(1, { name: 'Updated Channel' })).rejects.toThrow(NotFoundException);
+    });
+
+    it('should update a channel with categories', async () => {
+      const mockCategories: Category[] = [
+        {
+          id: 1,
+          name: 'Deportes',
+          description: 'Canales de deportes',
+          color: '#FF6B6B',
+          order: 1,
+          channels: [],
+        },
+      ];
+
+      const updateDto: UpdateChannelDto = {
+        name: 'Updated Channel',
+        category_ids: [1],
+      };
+
+      const existingChannel = {
+        ...mockChannels[0],
+        categories: [],
+      };
+
+      const updatedChannel = {
+        ...existingChannel,
+        ...updateDto,
+        categories: mockCategories,
+      };
+
+      mockRepository.findOne.mockResolvedValue(existingChannel);
+      mockCategoryRepository.findByIds.mockResolvedValue(mockCategories);
+      mockRepository.save.mockResolvedValue(updatedChannel);
+
+      const result = await service.update(1, updateDto);
+
+      expect(mockCategoryRepository.findByIds).toHaveBeenCalledWith([1]);
+      expect(repo.save).toHaveBeenCalledWith(expect.objectContaining({
+        ...existingChannel,
+        name: updateDto.name,
+        categories: mockCategories,
+      }));
+      expect(result).toEqual(updatedChannel);
+    });
+
+    it('should update a channel by clearing categories', async () => {
+      const updateDto: UpdateChannelDto = {
+        name: 'Updated Channel',
+        category_ids: [],
+      };
+
+      const existingChannel = {
+        ...mockChannels[0],
+        categories: [{ id: 1, name: 'Deportes' } as Category],
+      };
+
+      const updatedChannel = {
+        ...existingChannel,
+        ...updateDto,
+        categories: [],
+      };
+
+      mockRepository.findOne.mockResolvedValue(existingChannel);
+      mockCategoryRepository.findByIds.mockResolvedValue([]);
+      mockRepository.save.mockResolvedValue(updatedChannel);
+
+      const result = await service.update(1, updateDto);
+
+      expect(mockCategoryRepository.findByIds).not.toHaveBeenCalled();
+      expect(repo.save).toHaveBeenCalledWith(expect.objectContaining({
+        ...existingChannel,
+        name: updateDto.name,
+        categories: [],
+      }));
+      expect(result).toEqual(updatedChannel);
+    });
+
+    it('should update a channel without changing categories', async () => {
+      const updateDto: UpdateChannelDto = {
+        name: 'Updated Channel',
+      };
+
+      const existingChannel = {
+        ...mockChannels[0],
+        categories: [{ id: 1, name: 'Deportes' } as Category],
+      };
+
+      const updatedChannel = {
+        ...existingChannel,
+        ...updateDto,
+      };
+
+      mockRepository.findOne.mockResolvedValue(existingChannel);
+      mockRepository.save.mockResolvedValue(updatedChannel);
+
+      const result = await service.update(1, updateDto);
+
+      expect(mockCategoryRepository.findByIds).not.toHaveBeenCalled();
+      expect(repo.save).toHaveBeenCalledWith(expect.objectContaining({
+        ...existingChannel,
+        ...updateDto,
+        categories: existingChannel.categories,
+      }));
+      expect(result).toEqual(updatedChannel);
+    });
+  });
+
+  describe('getChannelsWithSchedules', () => {
+    it('should include categories in channels with schedules response', async () => {
+      const mockCategories: Category[] = [
+        {
+          id: 1,
+          name: 'Deportes',
+          description: 'Canales de deportes',
+          color: '#FF6B6B',
+          order: 1,
+          channels: [],
+        },
+      ];
+
+      const mockChannelWithCategories = {
+        ...mockChannels[0],
+        categories: mockCategories,
+      };
+
+      const mockSchedules = [
+        {
+          id: 1,
+          day_of_week: 'monday',
+          start_time: '10:00:00',
+          end_time: '11:00:00',
+          program: {
+            id: 1,
+            name: 'Test Program',
+            logo_url: 'test-logo.png',
+            description: 'Test Description',
+            stream_url: null,
+            is_live: false,
+            panelists: [],
+            style_override: null,
+          },
+        },
+      ];
+
+      jest.spyOn(repo, 'find').mockResolvedValueOnce([mockChannelWithCategories]);
+      mockSchedulesService.findAll.mockResolvedValueOnce(mockSchedules);
+
+      const result = await service.getChannelsWithSchedules();
+
+      expect(repo.find).toHaveBeenCalledWith({
+        where: { is_visible: true },
+        order: { order: 'ASC' },
+        relations: ['categories'],
+      });
+
+      expect(result).toEqual([
+        {
+          channel: {
+            id: mockChannelWithCategories.id,
+            name: mockChannelWithCategories.name,
+            logo_url: mockChannelWithCategories.logo_url,
+            background_color: mockChannelWithCategories.background_color,
+            show_only_when_scheduled: mockChannelWithCategories.show_only_when_scheduled,
+            categories: mockCategories,
+          },
+          schedules: expect.any(Array),
+        },
+      ]);
+    });
+
+    it('should handle channels without categories', async () => {
+      const mockChannelWithoutCategories = {
+        ...mockChannels[0],
+        categories: [],
+      };
+
+      const mockSchedules = [];
+
+      jest.spyOn(repo, 'find').mockResolvedValueOnce([mockChannelWithoutCategories]);
+      mockSchedulesService.findAll.mockResolvedValueOnce(mockSchedules);
+
+      const result = await service.getChannelsWithSchedules();
+
+      expect(result).toEqual([
+        {
+          channel: {
+            id: mockChannelWithoutCategories.id,
+            name: mockChannelWithoutCategories.name,
+            logo_url: mockChannelWithoutCategories.logo_url,
+            background_color: mockChannelWithoutCategories.background_color,
+            show_only_when_scheduled: mockChannelWithoutCategories.show_only_when_scheduled,
+            categories: [],
+          },
+          schedules: [],
+        },
+      ]);
     });
   });
 

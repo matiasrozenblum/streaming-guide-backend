@@ -476,7 +476,6 @@ describe('SchedulesService', () => {
       
       // Mock YouTube service
       jest.spyOn(youtubeLiveService, 'getLiveStreams').mockResolvedValue(mockStreams);
-      jest.spyOn(youtubeLiveService, 'getLiveVideoId').mockResolvedValue('fallback-video-id');
 
       const result = await service.enrichSchedules(testSchedules, true);
 
@@ -775,8 +774,6 @@ describe('SchedulesService', () => {
         primaryVideoId: null,
         streamCount: 0
       });
-      const getLiveVideoIdSpy = jest.spyOn(youtubeLiveService, 'getLiveVideoId').mockResolvedValue('video-id');
-
       const result = await service.enrichSchedules([testSchedule], false); // liveStatus = false
 
       expect(result).toHaveLength(1);
@@ -789,7 +786,6 @@ describe('SchedulesService', () => {
       
       // YouTube service should not be called
       expect(getLiveStreamsSpy).not.toHaveBeenCalled();
-      expect(getLiveVideoIdSpy).not.toHaveBeenCalled();
     });
   });
 });
