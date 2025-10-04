@@ -7,8 +7,12 @@ export class RedisService implements OnModuleInit {
   public readonly client: Redis;
 
   constructor(private readonly sentryService: SentryService) {
-    this.client = new Redis(process.env.REDIS_URL + '?family=0');
-    console.log('🚀 Connected to Redis:', process.env.REDIS_URL);
+    const redisUrl = process.env.REDIS_URL;
+    if (!redisUrl) {
+      throw new Error('REDIS_URL environment variable is not set');
+    }
+    this.client = new Redis(redisUrl + '?family=0');
+    console.log('🚀 Connected to Redis:', redisUrl);
   }
 
   onModuleInit() {
