@@ -29,6 +29,7 @@ import { UsersModule } from './users/users.module';
 import { StatisticsModule } from './statistics/statistics.module';
 import { SentryModule } from './sentry/sentry.module';
 import { CategoriesModule } from './categories/categories.module';
+import { RedisModule } from './redis/redis.module';
 import { ResourceMonitorService } from './services/resource-monitor.service';
 import { PerformanceInterceptor } from './interceptors/performance.interceptor';
 
@@ -93,6 +94,7 @@ import { PerformanceInterceptor } from './interceptors/performance.interceptor';
     StatisticsModule,
     SentryModule,
     CategoriesModule,
+    RedisModule,
   ],
   controllers: [AppController],
   providers: [

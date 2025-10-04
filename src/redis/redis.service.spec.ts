@@ -21,6 +21,9 @@ describe('RedisService', () => {
   let mockSentryService: jest.Mocked<SentryService>;
 
   beforeEach(() => {
+    // Set up test environment variables
+    process.env.REDIS_URL = 'redis://localhost:6379';
+    
     Object.values(mockClient).forEach(fn => fn.mockReset && fn.mockReset());
     
     mockSentryService = {
@@ -35,6 +38,8 @@ describe('RedisService', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+    // Clean up environment variables
+    delete process.env.REDIS_URL;
   });
 
   describe('get', () => {
