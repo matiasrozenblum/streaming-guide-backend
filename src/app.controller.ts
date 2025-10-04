@@ -165,6 +165,148 @@ export class AppController {
     return { message: 'Test email service error sent to Sentry' };
   }
 
+  @Post('test-sendgrid')
+  async testSendGrid() {
+    const sgMail = require('@sendgrid/mail');
+    const apiKey = process.env.SENDGRID_API_KEY;
+    
+    try {
+      console.log('🔍 Testing SendGrid connection...');
+      console.log('🔑 API Key present:', !!apiKey);
+      console.log('🔑 API Key starts with SG.:', apiKey?.startsWith('SG.'));
+      console.log('🔑 API Key length:', apiKey?.length);
+      
+      if (!apiKey) {
+        return { 
+          success: false, 
+          message: 'SENDGRID_API_KEY not found in environment variables' 
+        };
+      }
+      
+      sgMail.setApiKey(apiKey);
+      
+      const msg = {
+        to: 'test@example.com', // This won't actually send
+        from: process.env.SMTP_USER,
+        subject: 'Test Email',
+        text: 'This is a test email',
+        html: '<p>This is a test email</p>',
+      };
+      
+      console.log('🔄 Testing SendGrid API call...');
+      // This will fail but give us better error info
+      await sgMail.send(msg);
+      
+      return { 
+        success: true, 
+        message: 'SendGrid API test successful' 
+      };
+    } catch (error) {
+      console.error('❌ SendGrid test failed:', error);
+      
+      return { 
+        success: false, 
+        message: 'SendGrid test failed',
+        error: error.message,
+        code: error.code,
+        response: error.response?.body
+      };
+    }
+  }
+
+  @Post('test-smtp-connection')
+  async testSmtpConnection() {
+    const nodemailer = require('nodemailer');
+    const dns = require('dns').promises;
+    const net = require('net');
+    
+    try {
+      console.log('🔍 Testing SMTP connection...');
+      console.log('📧 SMTP_HOST:', process.env.SMTP_HOST);
+      console.log('🔌 SMTP_PORT:', process.env.SMTP_PORT);
+      console.log('👤 SMTP_USER:', process.env.SMTP_USER);
+      console.log('🔑 SMTP_PASS:', process.env.SMTP_PASS ? '***' : 'NOT SET');
+      
+      // Test DNS resolution first
+      console.log('🌐 Testing DNS resolution...');
+      const dnsResult = await dns.resolve4(process.env.SMTP_HOST);
+      console.log('✅ DNS resolved to:', dnsResult);
+      
+      // Test basic TCP connection
+      console.log('🔌 Testing TCP connection...');
+      const socket = new net.Socket();
+      const tcpPromise = new Promise((resolve, reject) => {
+        socket.setTimeout(10000); // 10 second timeout for TCP test
+        socket.connect(Number(process.env.SMTP_PORT), process.env.SMTP_HOST, () => {
+          console.log('✅ TCP connection successful!');
+          socket.destroy();
+          resolve(true);
+        });
+        socket.on('error', (err) => {
+          console.log('❌ TCP connection failed:', err.message);
+          reject(err);
+        });
+        socket.on('timeout', () => {
+          console.log('❌ TCP connection timeout');
+          socket.destroy();
+          reject(new Error('TCP connection timeout'));
+        });
+      });
+      
+      await tcpPromise;
+      
+      // Now test SMTP
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: Number(process.env.SMTP_PORT),
+        secure: false,
+        requireTLS: true,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+        connectionTimeout: 30000, // Reduced to 30 seconds
+        greetingTimeout: 15000,   // Reduced to 15 seconds
+        socketTimeout: 30000,     // Reduced to 30 seconds
+      });
+
+      console.log('🔄 Verifying SMTP connection...');
+      await transporter.verify();
+      console.log('✅ SMTP connection successful!');
+      
+      return { 
+        success: true, 
+        message: 'SMTP connection test successful',
+        config: {
+          host: process.env.SMTP_HOST,
+          port: process.env.SMTP_PORT,
+          user: process.env.SMTP_USER,
+          passSet: !!process.env.SMTP_PASS
+        },
+        dns: dnsResult
+      };
+    } catch (error) {
+      console.error('❌ SMTP connection test failed:', error);
+      
+      this.sentryService.captureMessage('SMTP connection test failed', 'error', {
+        service: 'email',
+        error_type: 'smtp_test_failed',
+        error_message: error.message,
+        error_code: error.code,
+        smtp_host: process.env.SMTP_HOST,
+        smtp_port: process.env.SMTP_PORT,
+        timestamp: new Date().toISOString(),
+      });
+      
+      return { 
+        success: false, 
+        message: 'SMTP connection test failed',
+        error: error.message,
+        code: error.code
+      };
+    }
+  }
+
   @Post('test-slow-api')
   testSlowApi() {
     // Simulate a slow API response

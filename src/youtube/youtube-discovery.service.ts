@@ -9,7 +9,8 @@ export class YoutubeDiscoveryService {
     channelId: string;
     title: string;
   } | null> {
-    const query = handle.startsWith('@') ? handle : `@${handle}`;
+    // Remove @ prefix for better search results
+    const query = handle.startsWith('@') ? handle.substring(1) : handle;
 
     const response = await axios.get('https://www.googleapis.com/youtube/v3/search', {
       params: {

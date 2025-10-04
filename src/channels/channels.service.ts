@@ -17,6 +17,7 @@ import { ConfigService } from '@/config/config.service';
 import { WeeklyOverridesService } from '@/schedules/weekly-overrides.service';
 import { YoutubeLiveService } from '@/youtube/youtube-live.service';
 import { getCurrentBlockTTL } from '@/utils/getBlockTTL.util';
+import { Category } from '../categories/categories.entity';
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
@@ -30,6 +31,13 @@ type ChannelWithSchedules = {
     name: string;
     logo_url: string | null;
     stream_count?: number;
+    categories?: Array<{
+      id: number;
+      name: string;
+      description?: string;
+      color?: string;
+      order?: number;
+    }>;
   };
   schedules: Array<{
     id: number;
@@ -71,6 +79,8 @@ export class ChannelsService {
     private readonly userSubscriptionRepo: Repository<UserSubscription>,
     @InjectRepository(Device)
     private readonly deviceRepo: Repository<Device>,
+    @InjectRepository(Category)
+    private readonly categoriesRepository: Repository<Category>,
     private readonly dataSource: DataSource,
     private readonly schedulesService: SchedulesService,
     private readonly redisService: RedisService,
@@ -91,6 +101,7 @@ export class ChannelsService {
 
   async findAll(): Promise<Channel[]> {
     return this.channelsRepository.find({
+      relations: ['categories'],
       order: {
         order: 'ASC',
       },
@@ -98,7 +109,10 @@ export class ChannelsService {
   }
 
   async findOne(id: number): Promise<Channel> {
-    const channel = await this.channelsRepository.findOne({ where: { id } });
+    const channel = await this.channelsRepository.findOne({ 
+      where: { id },
+      relations: ['categories']
+    });
     if (!channel) {
       throw new NotFoundException(`Channel with ID ${id} not found`);
     }
@@ -114,10 +128,18 @@ export class ChannelsService {
   
     const newOrder = lastChannel ? (lastChannel.order || 0) + 1 : 1;
   
+    const { category_ids, ...channelData } = createChannelDto;
+    
     const channel = this.channelsRepository.create({
-      ...createChannelDto,
+      ...channelData,
       order: newOrder,
     });
+
+    // Load categories if provided
+    if (category_ids && category_ids.length > 0) {
+      const categories = await this.categoriesRepository.findByIds(category_ids);
+      channel.categories = categories;
+    }
   
     await this.redisService.delByPattern('schedules:all:*');
     const saved = await this.channelsRepository.save(channel);
@@ -143,14 +165,45 @@ export class ChannelsService {
   async update(id: number, updateChannelDto: UpdateChannelDto): Promise<Channel> {
     const channel = await this.findOne(id);
     
-    Object.keys(updateChannelDto).forEach((key) => {
-      if (updateChannelDto[key] !== undefined) {
-        channel[key] = updateChannelDto[key];
+    const { category_ids, ...channelData } = updateChannelDto;
+    
+    // Check if handle is being updated
+    const handleChanged = channelData.handle !== undefined && channelData.handle !== channel.handle;
+    
+    Object.keys(channelData).forEach((key) => {
+      if (channelData[key] !== undefined) {
+        channel[key] = channelData[key];
       }
     });
 
+    // Handle categories update
+    if (category_ids !== undefined) {
+      if (category_ids.length > 0) {
+        const categories = await this.categoriesRepository.findByIds(category_ids);
+        channel.categories = categories;
+      } else {
+        channel.categories = [];
+      }
+    }
+
     await this.redisService.delByPattern('schedules:all:*');
     const updated = await this.channelsRepository.save(channel);
+
+    // Update YouTube channel ID if handle changed
+    if (handleChanged && updateChannelDto.handle) {
+      try {
+        const info = await this.youtubeDiscovery.getChannelIdFromHandle(updateChannelDto.handle);
+        if (info) {
+          updated.youtube_channel_id = info.channelId;
+          await this.channelsRepository.save(updated);
+          console.log(`🔄 Updated YouTube channel ID for ${updated.name}: ${info.channelId}`);
+        } else {
+          console.log(`⚠️ Could not resolve YouTube channel ID for handle: ${updateChannelDto.handle}`);
+        }
+      } catch (error) {
+        console.error(`❌ Error updating YouTube channel ID for ${updated.name}:`, error.message);
+      }
+    }
 
     // Notify and revalidate
     await this.notifyUtil.notifyAndRevalidate({
@@ -246,6 +299,7 @@ export class ChannelsService {
     const channels = await this.channelsRepository.find({
       where: { is_visible: true },
       order: { order: 'ASC' },
+      relations: ['categories'],
     });
     console.log('[getChannelsWithSchedules] Channels query completed in', Date.now() - channelsQueryStart, 'ms');
 
@@ -259,6 +313,7 @@ export class ChannelsService {
           logo_url: channel.logo_url,
           background_color: channel.background_color,
           show_only_when_scheduled: channel.show_only_when_scheduled,
+          categories: channel.categories,
         },
       schedules: (schedulesGroupedByChannelId[channel.id] || []).map((schedule) => ({
         id: schedule.id,

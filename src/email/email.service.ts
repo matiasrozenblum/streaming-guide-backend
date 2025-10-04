@@ -71,8 +71,8 @@ export class EmailService {
     // Try SendGrid first if configured, fallback to SMTP
     const sendGridApiKey = this.configService.get('SENDGRID_API_KEY');
     
-    if (sendGridApiKey) {
-      try {
+      if (sendGridApiKey) {
+        try {
         await this.sendViaSendGrid(to, 'Tu código de acceso • La Guía del Streaming', html, 'otp_code');
         console.log(`OTP enviado a ${to} via SendGrid: ${code}`);
         return;
@@ -129,7 +129,6 @@ export class EmailService {
       categories = ['reports', 'programming_changes'];
       customArgs = { 'source': 'programming_changes', 'app': 'streaming_guide' };
     }
-    
     const msg = {
       to,
       from: {
