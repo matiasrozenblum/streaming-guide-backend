@@ -170,13 +170,39 @@ export class SchedulesService {
 
     const enriched: any[] = [];
 
-    // Batch fetch live streams for all channels if live status is enabled
+    // Smart batch fetch: only fetch channels that have live programs RIGHT NOW
     let batchStreamsResults = new Map<string, any>();
     if (liveStatus && channelGroups.size > 0) {
-      console.log('[enrichSchedules] Batch fetching live streams for', channelGroups.size, 'channels');
-      const channelIds = Array.from(channelGroups.keys());
-      batchStreamsResults = await this.youtubeLiveService.getBatchLiveStreams(channelIds, 'onDemand');
-      console.log('[enrichSchedules] Batch fetch completed');
+      const liveChannelIds: string[] = [];
+      
+      // Filter channels that actually have live programs right now
+      for (const [channelId, channelSchedules] of channelGroups) {
+        const liveSchedules = channelSchedules.filter(schedule => {
+          const startNum = this.convertTimeToNumber(schedule.start_time);
+          const endNum = this.convertTimeToNumber(schedule.end_time);
+          return schedule.day_of_week === currentDay &&
+                 currentNum >= startNum &&
+                 currentNum < endNum;
+        });
+        
+        if (liveSchedules.length > 0) {
+          // Check if this channel is enabled for live fetching
+          const channel = channelSchedules[0].program.channel;
+          const handle = channel?.handle;
+          if (handle && await this.configService.canFetchLive(handle)) {
+            liveChannelIds.push(channelId);
+          }
+        }
+      }
+      
+      if (liveChannelIds.length > 0) {
+        console.log('[enrichSchedules] Smart batch fetching live streams for', liveChannelIds.length, 'channels with live programs (out of', channelGroups.size, 'total channels)');
+        console.log('[enrichSchedules] Live channel IDs:', liveChannelIds);
+        batchStreamsResults = await this.youtubeLiveService.getBatchLiveStreams(liveChannelIds, 'onDemand');
+        console.log('[enrichSchedules] Smart batch fetch completed');
+      } else {
+        console.log('[enrichSchedules] No channels have live programs right now, skipping batch fetch');
+      }
     }
 
     // Process each channel group to distribute streams
