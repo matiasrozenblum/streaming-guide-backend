@@ -239,8 +239,9 @@ export class YoutubeLiveService {
     if (cachedStreams) {
       try {
         const parsedStreams: LiveStream[] = JSON.parse(cachedStreams);
-        // Validate that at least the primary stream is still live
-        if (parsedStreams.length > 0 && (await this.isVideoLive(parsedStreams[0].videoId))) {
+        // Skip validation during bulk operations to improve performance
+        // Validate that at least the primary stream is still live (skip for onDemand context)
+        if (parsedStreams.length > 0 && (context === 'cron' || context === 'program-start' ? (await this.isVideoLive(parsedStreams[0].videoId)) : true)) {
           console.log(`🔁 Reusing cached streams for ${handle} (${parsedStreams.length} streams)`);
           return {
             streams: parsedStreams,
