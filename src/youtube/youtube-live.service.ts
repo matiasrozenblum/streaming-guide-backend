@@ -211,6 +211,87 @@ export class YoutubeLiveService {
   }
 
   /**
+   * Batch fetch live streams for multiple channels in a single API call
+   */
+  async getBatchLiveStreams(
+    channelIds: string[],
+    context: 'cron' | 'onDemand' | 'program-start',
+  ): Promise<Map<string, LiveStreamsResult | null | '__SKIPPED__'>> {
+    const results = new Map<string, LiveStreamsResult | null | '__SKIPPED__'>();
+    
+    if (channelIds.length === 0) return results;
+
+    console.log(`[Batch] Fetching live streams for ${channelIds.length} channels`);
+    
+    try {
+      // YouTube API supports up to 50 channel IDs in a single search request
+      // We'll split into chunks if needed
+      const chunkSize = 50;
+      const chunks: string[][] = [];
+      for (let i = 0; i < channelIds.length; i += chunkSize) {
+        chunks.push(channelIds.slice(i, i + chunkSize));
+      }
+
+      for (const chunk of chunks) {
+        const channelIdsParam = chunk.join(',');
+        
+        const { data } = await axios.get(`${this.apiUrl}/search`, {
+          params: {
+            part: 'snippet',
+            channelId: channelIdsParam,
+            eventType: 'live',
+            type: 'video',
+            key: this.apiKey,
+            maxResults: 50, // Max per channel, but we'll get the first few
+          },
+        });
+
+        // Group results by channel ID
+        const streamsByChannel = new Map<string, LiveStream[]>();
+        
+        (data.items || []).forEach((item: any) => {
+          const channelId = item.snippet.channelId;
+          if (!streamsByChannel.has(channelId)) {
+            streamsByChannel.set(channelId, []);
+          }
+          
+          streamsByChannel.get(channelId)!.push({
+            videoId: item.id.videoId,
+            title: item.snippet.title,
+            publishedAt: item.snippet.publishedAt,
+            description: item.snippet.description,
+            thumbnailUrl: item.snippet.thumbnails?.medium?.url,
+            channelTitle: item.snippet.channelTitle,
+          });
+        });
+
+        // Process results for each channel
+        for (const channelId of chunk) {
+          const streams = streamsByChannel.get(channelId);
+          if (streams && streams.length > 0) {
+            results.set(channelId, {
+              streams,
+              primaryVideoId: streams[0].videoId,
+              streamCount: streams.length
+            });
+          } else {
+            results.set(channelId, null);
+          }
+        }
+      }
+
+      console.log(`[Batch] Completed batch fetch for ${channelIds.length} channels`);
+      return results;
+      
+    } catch (error) {
+      console.error(`[Batch] Error in batch fetch:`, error);
+      // Return null for all channels on error
+      channelIds.forEach(channelId => results.set(channelId, null));
+      return results;
+    }
+  }
+
+  /**
    * Gets all live streams for a channel (new method supporting multiple streams)
    */
   async getLiveStreams(
@@ -239,8 +320,9 @@ export class YoutubeLiveService {
     if (cachedStreams) {
       try {
         const parsedStreams: LiveStream[] = JSON.parse(cachedStreams);
-        // Validate that at least the primary stream is still live
-        if (parsedStreams.length > 0 && (await this.isVideoLive(parsedStreams[0].videoId))) {
+        // Skip validation during bulk operations to improve performance
+        // Validate that at least the primary stream is still live (skip for onDemand context)
+        if (parsedStreams.length > 0 && (context === 'cron' || context === 'program-start' ? (await this.isVideoLive(parsedStreams[0].videoId)) : true)) {
           console.log(`🔁 Reusing cached streams for ${handle} (${parsedStreams.length} streams)`);
           return {
             streams: parsedStreams,
