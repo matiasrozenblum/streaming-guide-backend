@@ -216,6 +216,7 @@ export class YoutubeLiveService {
   async getBatchLiveStreams(
     channelIds: string[],
     context: 'cron' | 'onDemand' | 'program-start',
+    channelTTLs: Map<string, number>, // Required TTL map for each channel
   ): Promise<Map<string, LiveStreamsResult | null | '__SKIPPED__'>> {
     const results = new Map<string, LiveStreamsResult | null | '__SKIPPED__'>();
     
@@ -223,13 +224,66 @@ export class YoutubeLiveService {
 
     console.log(`[Batch] Fetching live streams for ${channelIds.length} channels`);
     
+    // First, check cache for each channel and collect channels that need fresh fetching
+    const channelsToFetch: string[] = [];
+    const channelHandles = new Map<string, string>(); // Map channelId to handle for logging
+    
+    for (const channelId of channelIds) {
+      // We need to get the handle for this channel to check config and for logging
+      // For now, we'll fetch all and let individual channel processing handle the config check
+      const liveKey = `liveStreamsByChannel:${channelId}`;
+      const notFoundKey = `videoIdNotFound:${channelId}`;
+
+      // Skip if marked as not-found
+      if (await this.redisService.get<string>(notFoundKey)) {
+        results.set(channelId, '__SKIPPED__');
+        continue;
+      }
+
+      // Check cache
+      const cachedStreams = await this.redisService.get<string>(liveKey);
+      if (cachedStreams) {
+        try {
+          const parsedStreams: LiveStream[] = JSON.parse(cachedStreams);
+          // Skip validation during bulk operations to improve performance for onDemand context
+          if (parsedStreams.length > 0 && (context === 'onDemand' || (await this.isVideoLive(parsedStreams[0].videoId)))) {
+            console.log(`🔁 [Batch] Reusing cached streams for channel ${channelId} (${parsedStreams.length} streams)`);
+            results.set(channelId, {
+              streams: parsedStreams,
+              primaryVideoId: parsedStreams[0].videoId,
+              streamCount: parsedStreams.length
+            });
+            continue;
+          } else {
+            // If cached streams are invalid, delete them
+            await this.redisService.del(liveKey);
+            console.log(`🗑️ [Batch] Deleted cached streams for channel ${channelId} (no longer live)`);
+          }
+        } catch (error) {
+          console.warn(`[Batch] Failed to parse cached streams for channel ${channelId}:`, error);
+          await this.redisService.del(liveKey);
+        }
+      }
+      
+      // Channel needs fresh fetching
+      channelsToFetch.push(channelId);
+    }
+
+    // Only fetch channels that don't have valid cached data
+    if (channelsToFetch.length === 0) {
+      console.log(`[Batch] All channels served from cache`);
+      return results;
+    }
+
+    console.log(`[Batch] Fresh fetch needed for ${channelsToFetch.length} channels (${channelIds.length - channelsToFetch.length} served from cache)`);
+    
     try {
       // YouTube API supports up to 50 channel IDs in a single search request
       // We'll split into chunks if needed
       const chunkSize = 50;
       const chunks: string[][] = [];
-      for (let i = 0; i < channelIds.length; i += chunkSize) {
-        chunks.push(channelIds.slice(i, i + chunkSize));
+      for (let i = 0; i < channelsToFetch.length; i += chunkSize) {
+        chunks.push(channelsToFetch.slice(i, i + chunkSize));
       }
 
       for (const chunk of chunks) {
@@ -265,22 +319,36 @@ export class YoutubeLiveService {
           });
         });
 
-        // Process results for each channel
+        // Process results for each channel and cache them
         for (const channelId of chunk) {
           const streams = streamsByChannel.get(channelId);
           if (streams && streams.length > 0) {
-            results.set(channelId, {
+            const liveStreamsResult = {
               streams,
               primaryVideoId: streams[0].videoId,
               streamCount: streams.length
-            });
+            };
+            
+            results.set(channelId, liveStreamsResult);
+            
+            // Cache the result with intelligent TTL based on program schedule
+            const liveKey = `liveStreamsByChannel:${channelId}`;
+            const blockTTL = channelTTLs.get(channelId)!;
+            await this.redisService.set(liveKey, JSON.stringify(streams), blockTTL);
+            console.log(`💾 [Batch] Cached ${streams.length} streams for channel ${channelId} (TTL: ${blockTTL}s)`);
           } else {
             results.set(channelId, null);
+            
+            // Cache the "not found" result to avoid repeated API calls
+            const notFoundKey = `videoIdNotFound:${channelId}`;
+            const blockTTL = channelTTLs.get(channelId)!;
+            await this.redisService.set(notFoundKey, '1', blockTTL);
+            console.log(`🚫 [Batch] Cached not-found for channel ${channelId} (TTL: ${blockTTL}s)`);
           }
         }
       }
 
-      console.log(`[Batch] Completed batch fetch for ${channelIds.length} channels`);
+      console.log(`[Batch] Completed batch fetch for ${channelsToFetch.length} channels`);
       return results;
       
     } catch (error) {
