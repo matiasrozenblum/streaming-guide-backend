@@ -17,7 +17,12 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
-## [1.11.0] - 2025-10-04
+## [1.12.0] - 2025-10-04
+
+### Changed
+- Mow batch fetching live youtubev video ids
+
+## [1.11.0] - 2025-10-03
 
 ### Added
 - Added categories for channels
