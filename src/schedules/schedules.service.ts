@@ -198,8 +198,20 @@ export class SchedulesService {
       if (liveChannelIds.length > 0) {
         console.log('[enrichSchedules] Smart batch fetching live streams for', liveChannelIds.length, 'channels with live programs (out of', channelGroups.size, 'total channels)');
         console.log('[enrichSchedules] Live channel IDs:', liveChannelIds);
-        batchStreamsResults = await this.youtubeLiveService.getBatchLiveStreams(liveChannelIds, 'onDemand');
-        console.log('[enrichSchedules] Smart batch fetch completed');
+        
+        // Calculate intelligent TTL for each channel based on their program schedules
+        const channelTTLs = new Map<string, number>();
+        for (const channelId of liveChannelIds) {
+          const channelSchedules = channelGroups.get(channelId);
+          if (channelSchedules) {
+            const ttl = await getCurrentBlockTTL(channelId, channelSchedules, this.sentryService);
+            channelTTLs.set(channelId, ttl);
+            console.log(`[enrichSchedules] TTL for channel ${channelId}: ${ttl}s`);
+          }
+        }
+        
+        batchStreamsResults = await this.youtubeLiveService.getBatchLiveStreams(liveChannelIds, 'onDemand', channelTTLs);
+        console.log('[enrichSchedules] Smart batch fetch completed with intelligent TTL');
       } else {
         console.log('[enrichSchedules] No channels have live programs right now, skipping batch fetch');
       }
