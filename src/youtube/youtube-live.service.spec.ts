@@ -35,7 +35,14 @@ describe('YoutubeLiveService', () => {
       setTag: jest.fn(),
       addBreadcrumb: jest.fn(),
     } as any;
-    service = new YoutubeLiveService(configService, schedulesService, redisService, sentryService);
+    const mockChannelsRepository = {
+      find: jest.fn(),
+      save: jest.fn(),
+      delete: jest.fn(),
+      findOne: jest.fn(),
+    } as any;
+    
+    service = new YoutubeLiveService(configService, schedulesService, redisService, sentryService, mockChannelsRepository);
   });
 
   afterEach(() => {
@@ -115,20 +122,34 @@ describe('YoutubeLiveService', () => {
       expect(spy).not.toHaveBeenCalled();
     });
 
-    it('calls getLiveStreams for each channel with schedule', async () => {
+    it('calls getBatchLiveStreams for channels with schedule', async () => {
       const schedules = [
         { program: { channel: { youtube_channel_id: 'cid1', handle: 'h1' }, is_live: true } },
         { program: { channel: { youtube_channel_id: 'cid2', handle: 'h2' }, is_live: true } },
       ];
       schedulesService.findByDay.mockResolvedValue(schedules as any);
-      jest.spyOn(service, 'getLiveStreams').mockResolvedValue({
-        streams: [{ videoId: 'vid', title: 'Test Stream', publishedAt: '2023-01-01', description: 'Test' }],
-        primaryVideoId: 'vid',
-        streamCount: 1
-      });
+      schedulesService.enrichSchedules.mockResolvedValue(schedules as any);
+      
+      const batchResults = new Map([
+        ['cid1', {
+          streams: [{ videoId: 'vid1', title: 'Test Stream 1', publishedAt: '2023-01-01', description: 'Test' }],
+          primaryVideoId: 'vid1',
+          streamCount: 1
+        }],
+        ['cid2', {
+          streams: [{ videoId: 'vid2', title: 'Test Stream 2', publishedAt: '2023-01-01', description: 'Test' }],
+          primaryVideoId: 'vid2',
+          streamCount: 1
+        }]
+      ]);
+      
+      jest.spyOn(service, 'getBatchLiveStreams').mockResolvedValue(batchResults);
       jest.spyOn(require('@/utils/getBlockTTL.util'), 'getCurrentBlockTTL').mockResolvedValue(100);
+      
       await service.fetchLiveVideoIds();
-      expect(service.getLiveStreams).toHaveBeenCalledTimes(2);
+      
+      expect(service.getBatchLiveStreams).toHaveBeenCalledTimes(1);
+      expect(service.getBatchLiveStreams).toHaveBeenCalledWith(['cid1', 'cid2'], 'cron', expect.any(Map), expect.any(Map));
     });
 
     it('passes SentryService to getCurrentBlockTTL', async () => {
