@@ -149,7 +149,7 @@ describe('YoutubeLiveService', () => {
       await service.fetchLiveVideoIds();
       
       expect(service.getBatchLiveStreams).toHaveBeenCalledTimes(1);
-      expect(service.getBatchLiveStreams).toHaveBeenCalledWith(['cid1', 'cid2'], 'cron', expect.any(Map));
+      expect(service.getBatchLiveStreams).toHaveBeenCalledWith(['cid1', 'cid2'], 'cron', expect.any(Map), expect.any(Map));
     });
 
     it('passes SentryService to getCurrentBlockTTL', async () => {

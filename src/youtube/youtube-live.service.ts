@@ -57,9 +57,9 @@ export class YoutubeLiveService {
     
     // Daily reset for API usage tracking at midnight
     cron.schedule('0 0 * * *', async () => {
-      console.log('📊 Resetting daily YouTube API usage tracker');
-      await this.logDailyUsageStats(); // Log stats before reset
-      this.apiUsageTracker.resetDaily();
+      console.log('📊 Daily YouTube API usage reset - sending summary and resetting counters');
+      await this.logDailyUsageStats(); // Send daily summary to PostHog
+      this.apiUsageTracker.resetDaily(); // Reset counters for new day
     }, {
       timezone: 'America/Argentina/Buenos_Aires',
     });
