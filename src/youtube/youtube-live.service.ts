@@ -118,6 +118,9 @@ export class YoutubeLiveService {
           7 * 24 * 60 * 60 // 7 days TTL
         );
         
+        // Send real-time PostHog event for each channel fetch
+        await this.sendChannelFetchEvent(channelId, channelHandle, newCount);
+        
         // Log frequent fetchers
         if (newCount > 10) {
           console.log(`⚠️ High fetch frequency detected for ${channelHandle} (${channelId}): ${newCount} fetches today`);
@@ -129,6 +132,64 @@ export class YoutubeLiveService {
       
       // Persist to Redis for reliability
       await this.persistUsageToRedis(today, 'video', channelId, channelHandle);
+      
+      // Send real-time PostHog event for video API calls
+      await this.sendVideoApiEvent(channelId, channelHandle);
+    }
+  }
+
+  /**
+   * Send real-time PostHog event for channel fetch
+   */
+  private async sendChannelFetchEvent(channelId: string, channelHandle: string, fetchCount: number) {
+    try {
+      if (process.env.POSTHOG_API_KEY) {
+        const posthog = require('posthog-node').default;
+        const client = new posthog(process.env.POSTHOG_API_KEY);
+        
+        await client.capture({
+          distinctId: `youtube-api-${channelId}`,
+          event: 'youtube_channel_fetch',
+          properties: {
+            channelId,
+            channelHandle,
+            fetchCount,
+            timestamp: new Date().toISOString(),
+            environment: process.env.NODE_ENV || 'development',
+            apiCost: 100 // 100 units per search call
+          }
+        });
+        
+        console.log(`📈 Channel fetch event sent to PostHog: ${channelHandle} (${fetchCount} fetches today)`);
+      }
+    } catch (error) {
+      console.error('Failed to send channel fetch event to PostHog:', error);
+    }
+  }
+
+  /**
+   * Send real-time PostHog event for video API call
+   */
+  private async sendVideoApiEvent(channelId?: string, channelHandle?: string) {
+    try {
+      if (process.env.POSTHOG_API_KEY) {
+        const posthog = require('posthog-node').default;
+        const client = new posthog(process.env.POSTHOG_API_KEY);
+        
+        await client.capture({
+          distinctId: 'youtube-api-service',
+          event: 'youtube_video_api_call',
+          properties: {
+            channelId: channelId || 'unknown',
+            channelHandle: channelHandle || 'unknown',
+            timestamp: new Date().toISOString(),
+            environment: process.env.NODE_ENV || 'development',
+            apiCost: 1 // 1 unit per video call
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Failed to send video API event to PostHog:', error);
     }
   }
 
@@ -514,6 +575,7 @@ export class YoutubeLiveService {
     channelIds: string[],
     context: 'cron' | 'onDemand' | 'program-start',
     channelTTLs: Map<string, number>, // Required TTL map for each channel
+    channelHandleMap?: Map<string, string>, // Optional channel handle mapping for tracking
   ): Promise<Map<string, LiveStreamsResult | null | '__SKIPPED__'>> {
     const results = new Map<string, LiveStreamsResult | null | '__SKIPPED__'>();
     
@@ -586,9 +648,17 @@ export class YoutubeLiveService {
       for (const chunk of chunks) {
         const channelIdsParam = chunk.join(',');
         
-        // Track API usage for batch call
-        await this.trackApiUsage('search');
+        // Track API usage for batch call (this will send individual events for each channel)
         console.log(`[Batch] Making YouTube API call for ${chunk.length} channels: ${chunk.join(', ')}`);
+        
+        // Send individual PostHog events for each channel in the batch
+        for (const channelId of chunk) {
+          // Find the channel handle from the provided mapping
+          const handle = channelHandleMap?.get(channelId) || 'unknown';
+          
+          // Track API usage for this specific channel
+          await this.trackApiUsage('search', channelId, handle);
+        }
         
         const { data } = await axios.get(`${this.apiUrl}/search`, {
           params: {
@@ -887,7 +957,7 @@ export class YoutubeLiveService {
     
     // Execute batch fetch for all live channels
     console.log(`[${cronLabel}] Executing batch fetch for ${channelIds.length} channels`);
-    const batchResults = await this.getBatchLiveStreams(channelIds, 'cron', channelTTLs);
+    const batchResults = await this.getBatchLiveStreams(channelIds, 'cron', channelTTLs, map);
     
     let updatedCount = 0;
     // Track changes for back-to-back fix

@@ -210,7 +210,16 @@ export class SchedulesService {
           }
         }
         
-        batchStreamsResults = await this.youtubeLiveService.getBatchLiveStreams(liveChannelIds, 'onDemand', channelTTLs);
+        // Create channel handle mapping for tracking
+        const channelHandles = new Map<string, string>();
+        for (const channelId of liveChannelIds) {
+          const channel = channelGroups.get(channelId)?.[0]?.program?.channel;
+          if (channel?.handle) {
+            channelHandles.set(channelId, channel.handle);
+          }
+        }
+        
+        batchStreamsResults = await this.youtubeLiveService.getBatchLiveStreams(liveChannelIds, 'onDemand', channelTTLs, channelHandles);
         console.log('[enrichSchedules] Smart batch fetch completed with intelligent TTL');
       } else {
         console.log('[enrichSchedules] No channels have live programs right now, skipping batch fetch');
