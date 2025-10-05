@@ -5,11 +5,14 @@ import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
 import * as DateHolidays from 'date-holidays';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, In } from 'typeorm';
 
 import { SchedulesService } from '../schedules/schedules.service';
 import { RedisService } from '../redis/redis.service';
 import { ConfigService } from '../config/config.service';
 import { SentryService } from '../sentry/sentry.service';
+import { Channel } from '../channels/channels.entity';
 import { getCurrentBlockTTL } from '@/utils/getBlockTTL.util';
 import { LiveStream, LiveStreamsResult } from './interfaces/live-stream.interface';
 
@@ -44,6 +47,8 @@ export class YoutubeLiveService {
     private readonly schedulesService: SchedulesService,
     private readonly redisService: RedisService,
     private readonly sentryService: SentryService,
+    @InjectRepository(Channel)
+    private readonly channelsRepository: Repository<Channel>,
   ) {
     dayjs.extend(utc);
     dayjs.extend(timezone);
@@ -284,9 +289,50 @@ export class YoutubeLiveService {
   }
 
   /**
-   * Get current API usage statistics
+   * Get current API usage statistics with channel names
    */
-  getApiUsageStats() {
+  async getApiUsageStats() {
+    // Get channel names for fetch frequency data
+    const channelFetchFrequencyWithNames: Record<string, { name: string; handle: string; count: number; lastFetch: string }> = {};
+    
+    if (this.apiUsageTracker.channelFetchFrequency.size > 0) {
+      try {
+        // Get all unique channel IDs from fetch frequency
+        const channelIds = Array.from(this.apiUsageTracker.channelFetchFrequency.keys());
+        
+        // Fetch channel information from database
+        const channels = await this.channelsRepository.find({
+          where: { youtube_channel_id: In(channelIds) },
+          select: ['youtube_channel_id', 'name', 'handle']
+        });
+        
+        // Create a map for quick lookup
+        const channelMap = new Map(channels.map(ch => [ch.youtube_channel_id, ch]));
+        
+        // Build the response with channel names
+        for (const [channelId, frequencyData] of this.apiUsageTracker.channelFetchFrequency.entries()) {
+          const channel = channelMap.get(channelId);
+          channelFetchFrequencyWithNames[channelId] = {
+            name: channel?.name || 'Unknown Channel',
+            handle: channel?.handle || 'unknown',
+            count: frequencyData.count,
+            lastFetch: frequencyData.lastFetch.toISOString()
+          };
+        }
+      } catch (error) {
+        console.error('Failed to fetch channel names for API usage stats:', error);
+        // Fallback to channel IDs if database lookup fails
+        for (const [channelId, frequencyData] of this.apiUsageTracker.channelFetchFrequency.entries()) {
+          channelFetchFrequencyWithNames[channelId] = {
+            name: `Channel ${channelId}`,
+            handle: 'unknown',
+            count: frequencyData.count,
+            lastFetch: frequencyData.lastFetch.toISOString()
+          };
+        }
+      }
+    }
+    
     return {
       dailySearchCalls: this.apiUsageTracker.dailySearchCalls,
       dailyVideoCalls: this.apiUsageTracker.dailyVideoCalls,
@@ -294,7 +340,7 @@ export class YoutubeLiveService {
       dailyVideoCost: this.apiUsageTracker.dailyVideoCost,
       totalCost: this.apiUsageTracker.dailySearchCost + this.apiUsageTracker.dailyVideoCost,
       totalCalls: this.apiUsageTracker.dailySearchCalls + this.apiUsageTracker.dailyVideoCalls,
-      channelFetchFrequency: Object.fromEntries(this.apiUsageTracker.channelFetchFrequency)
+      channelFetchFrequency: channelFetchFrequencyWithNames
     };
   }
 

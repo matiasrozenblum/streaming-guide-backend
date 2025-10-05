@@ -35,7 +35,14 @@ describe('YoutubeLiveService', () => {
       setTag: jest.fn(),
       addBreadcrumb: jest.fn(),
     } as any;
-    service = new YoutubeLiveService(configService, schedulesService, redisService, sentryService);
+    const mockChannelsRepository = {
+      find: jest.fn(),
+      save: jest.fn(),
+      delete: jest.fn(),
+      findOne: jest.fn(),
+    } as any;
+    
+    service = new YoutubeLiveService(configService, schedulesService, redisService, sentryService, mockChannelsRepository);
   });
 
   afterEach(() => {
