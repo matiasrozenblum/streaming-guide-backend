@@ -117,4 +117,9 @@ export class YoutubeController {
       return { success: false, error: error.message };
     }
   }
+
+  @Get('api-usage')
+  async getApiUsage() {
+    return this.youtubeLiveService.getApiUsageStats();
+  }
 } 
