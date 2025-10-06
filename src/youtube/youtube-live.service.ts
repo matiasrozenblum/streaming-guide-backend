@@ -144,8 +144,8 @@ export class YoutubeLiveService {
   private async sendChannelFetchEvent(channelId: string, channelHandle: string, fetchCount: number) {
     try {
       if (process.env.POSTHOG_API_KEY) {
-        const posthog = require('posthog-node').default;
-        const client = new posthog(process.env.POSTHOG_API_KEY);
+        const { PostHog } = require('posthog-node');
+        const client = new PostHog(process.env.POSTHOG_API_KEY);
         
         await client.capture({
           distinctId: `youtube-api-${channelId}`,
@@ -173,8 +173,8 @@ export class YoutubeLiveService {
   private async sendVideoApiEvent(channelId?: string, channelHandle?: string) {
     try {
       if (process.env.POSTHOG_API_KEY) {
-        const posthog = require('posthog-node').default;
-        const client = new posthog(process.env.POSTHOG_API_KEY);
+        const { PostHog } = require('posthog-node');
+        const client = new PostHog(process.env.POSTHOG_API_KEY);
         
         await client.capture({
           distinctId: 'youtube-api-service',
@@ -262,8 +262,8 @@ export class YoutubeLiveService {
     try {
       // PostHog event for daily usage
       if (process.env.POSTHOG_API_KEY) {
-        const posthog = require('posthog-node').default;
-        const client = new posthog(process.env.POSTHOG_API_KEY);
+        const { PostHog } = require('posthog-node');
+        const client = new PostHog(process.env.POSTHOG_API_KEY);
         
         await client.capture({
           distinctId: 'youtube-api-service',
