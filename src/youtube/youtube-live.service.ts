@@ -521,7 +521,7 @@ export class YoutubeLiveService {
 
       if (!videoId) {
         console.log(`🚫 No live video for ${handle} (${context})`);
-        await this.redisService.set(notFoundKey, '1', 300);
+        await this.redisService.set(notFoundKey, '1', 900);
         return null;
       }
 
@@ -747,9 +747,9 @@ export class YoutubeLiveService {
             
             // Cache the "not found" result to avoid repeated API calls
             const notFoundKey = `videoIdNotFound:${channelId}`;
-            const blockTTL = channelTTLs.get(channelId)!;
-            await this.redisService.set(notFoundKey, '1', blockTTL);
-            console.log(`🚫 [Batch] Cached not-found for channel ${channelId} (TTL: ${blockTTL}s)`);
+            const notFoundTTL = 900; // 15 minutes - fixed short duration for not-found cache
+            await this.redisService.set(notFoundKey, '1', notFoundTTL);
+            console.log(`🚫 [Batch] Cached not-found for channel ${channelId} (TTL: ${notFoundTTL}s)`);
           }
         }
       }
@@ -841,7 +841,7 @@ export class YoutubeLiveService {
 
       if (liveStreams.length === 0) {
         console.log(`🚫 No live streams for ${handle} (${context})`);
-        await this.redisService.set(notFoundKey, '1', 300);
+        await this.redisService.set(notFoundKey, '1', 900);
         return null;
       }
 
