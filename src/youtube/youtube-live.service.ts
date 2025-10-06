@@ -521,7 +521,7 @@ export class YoutubeLiveService {
 
       if (!videoId) {
         console.log(`🚫 No live video for ${handle} (${context})`);
-        await this.redisService.set(notFoundKey, '1', 900);
+        await this.redisService.set(notFoundKey, '1', 300);
         return null;
       }
 
@@ -841,7 +841,7 @@ export class YoutubeLiveService {
 
       if (liveStreams.length === 0) {
         console.log(`🚫 No live streams for ${handle} (${context})`);
-        await this.redisService.set(notFoundKey, '1', 900);
+        await this.redisService.set(notFoundKey, '1', 300);
         return null;
       }
 
