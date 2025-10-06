@@ -607,7 +607,7 @@ export class YoutubeLiveService {
     context: 'cron' | 'onDemand' | 'program-start',
     channelTTLs: Map<string, number>, // Required TTL map for each channel
     channelHandleMap?: Map<string, string>, // Optional channel handle mapping for tracking
-    cronType?: 'main' | 'back-to-back-fix', // Optional cron type to distinguish between main and back-to-back
+    cronType?: 'main' | 'back-to-back-fix' | 'manual', // Optional cron type to distinguish between main, back-to-back, and manual
   ): Promise<Map<string, LiveStreamsResult | null | '__SKIPPED__'>> {
     const results = new Map<string, LiveStreamsResult | null | '__SKIPPED__'>();
     
@@ -625,17 +625,18 @@ export class YoutubeLiveService {
       const liveKey = `liveStreamsByChannel:${channelId}`;
       const notFoundKey = `videoIdNotFound:${channelId}`;
 
-      // Skip if marked as not-found (except for back-to-back cron which should check anyway)
+      // Skip if marked as not-found (except for back-to-back cron and manual execution which should check anyway)
       const isNotMarkedAsNotFound = await this.redisService.get<string>(notFoundKey);
-      if (isNotMarkedAsNotFound && cronType !== 'back-to-back-fix') {
+      if (isNotMarkedAsNotFound && cronType !== 'back-to-back-fix' && cronType !== 'manual') {
         results.set(channelId, '__SKIPPED__');
         continue;
       }
       
-      // For back-to-back cron, log when we're ignoring not-found flag
-      if (isNotMarkedAsNotFound && cronType === 'back-to-back-fix') {
+      // For back-to-back cron and manual execution, log when we're ignoring not-found flag
+      if (isNotMarkedAsNotFound && (cronType === 'back-to-back-fix' || cronType === 'manual')) {
         const handle = channelHandleMap?.get(channelId) || 'unknown';
-        console.log(`🔄 [Back-to-back] Ignoring not-found flag for ${handle} (${channelId}) - checking anyway`);
+        const executionType = cronType === 'back-to-back-fix' ? 'Back-to-back' : 'Manual';
+        console.log(`🔄 [${executionType}] Ignoring not-found flag for ${handle} (${channelId}) - checking anyway`);
       }
 
       // Check cache
@@ -956,8 +957,8 @@ export class YoutubeLiveService {
   /**
    * Itera canales con programación hoy y llama a getLiveVideoId
    */
-  async fetchLiveVideoIds(cronType: 'main' | 'back-to-back-fix' = 'main') {
-    const cronLabel = cronType === 'main' ? '🕐 MAIN CRON' : '🔄 BACK-TO-BACK FIX CRON';
+  async fetchLiveVideoIds(cronType: 'main' | 'back-to-back-fix' | 'manual' = 'main') {
+    const cronLabel = cronType === 'main' ? '🕐 MAIN CRON' : cronType === 'back-to-back-fix' ? '🔄 BACK-TO-BACK FIX CRON' : '🔧 MANUAL EXECUTION';
     const currentTime = dayjs().tz('America/Argentina/Buenos_Aires').format('HH:mm:ss');
     
     console.log(`${cronLabel} started at ${currentTime}`);
