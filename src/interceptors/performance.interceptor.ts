@@ -12,7 +12,9 @@ export class PerformanceInterceptor implements NestInterceptor {
     const response = context.switchToHttp().getResponse();
     const startTime = Date.now();
     
-    const endpoint = `${request.method} ${request.route?.path || request.url}`;
+    // Ensure we get the correct route path, not the full URL
+    const routePath = request.route?.path || request.path || request.url.split('?')[0];
+    const endpoint = `${request.method} ${routePath}`;
     const userAgent = request.headers['user-agent'] || 'unknown';
     const ip = request.ip || request.connection?.remoteAddress || 'unknown';
 
