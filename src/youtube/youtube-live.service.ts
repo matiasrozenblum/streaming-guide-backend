@@ -532,6 +532,9 @@ export class YoutubeLiveService {
         streamCount: 1
       };
       await this.redisService.set(streamsKey, JSON.stringify(streamsData), blockTTL);
+      
+      // Clear the "not-found" flag since we found live streams
+      await this.redisService.del(notFoundKey);
       console.log(`📌 Cached ${handle} → ${videoId} (TTL ${blockTTL}s)`);
 
       // Notify clients about the new video ID
@@ -732,8 +735,12 @@ export class YoutubeLiveService {
             
             // Cache the result with intelligent TTL based on program schedule
             const liveKey = `liveStreamsByChannel:${channelId}`;
+            const notFoundKey = `videoIdNotFound:${channelId}`;
             const blockTTL = channelTTLs.get(channelId)!;
             await this.redisService.set(liveKey, JSON.stringify(streams), blockTTL);
+            
+            // Clear the "not-found" flag since we found live streams
+            await this.redisService.del(notFoundKey);
             console.log(`💾 [Batch] Cached ${streams.length} streams for channel ${channelId} (TTL: ${blockTTL}s)`);
           } else {
             results.set(channelId, null);
@@ -846,6 +853,9 @@ export class YoutubeLiveService {
 
       // Cache the streams
       await this.redisService.set(liveKey, JSON.stringify(liveStreams), blockTTL);
+      
+      // Clear the "not-found" flag since we found live streams
+      await this.redisService.del(notFoundKey);
       console.log(`📌 Cached ${handle} → ${liveStreams.length} streams (TTL ${blockTTL}s)`);
 
       // Notify clients about the new streams
