@@ -666,6 +666,8 @@ export class YoutubeLiveService {
     }
 
     console.log(`[Batch] Fresh fetch needed for ${channelsToFetch.length} channels (${channelIds.length - channelsToFetch.length} served from cache)`);
+    console.log(`[Batch] Channels to fetch: ${channelsToFetch.map(id => channelHandleMap?.get(id) || id).join(', ')}`);
+    console.log(`[Batch] Channels served from cache: ${Array.from(results.keys()).map(id => channelHandleMap?.get(id) || id).join(', ')}`);
     
     try {
       // YouTube API supports up to 50 channel IDs in a single search request
