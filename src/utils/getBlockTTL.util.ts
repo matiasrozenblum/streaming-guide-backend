@@ -4,6 +4,7 @@ import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
 import { convertTimeToMinutes } from "./convertTimeToMinutes.util";
 import { SentryService } from "../sentry/sentry.service";
+import { TimezoneUtil } from "./timezone.util";
 
 // Simple in-memory cache to prevent duplicate alerts for the same channel within a short time window
 const alertCache = new Map<string, number>();
@@ -13,17 +14,17 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 
 export function getEndOfDayTTL(): number {
-    const now = dayjs().tz('America/Argentina/Buenos_Aires');
-    return now.endOf('day').diff(now, 'second');
-  }
+    return TimezoneUtil.ttlUntilEndOfDay();
+}
 
 export async function getCurrentBlockTTL(
   channelId: string, 
   schedules: Schedule[], 
   sentryService?: SentryService
 ): Promise<number> {
-    const now = dayjs().tz('America/Argentina/Buenos_Aires');
-    const currentTimeInMinutes = now.hour() * 60 + now.minute();
+    // Use centralized timezone utility for consistency
+    const now = TimezoneUtil.now();
+    const currentTimeInMinutes = TimezoneUtil.currentTimeInMinutes();
     
     // Filtrar sólo del canal
     const channelSched = schedules
@@ -65,13 +66,14 @@ export async function getCurrentBlockTTL(
       return getEndOfDayTTL();
     }
     
-    // calcular segundos hasta blockEnd
-    const endMoment = now.startOf('day').add(blockEnd, 'minute');
+    // calcular segundos hasta blockEnd - use centralized timezone utility
+    const endMoment = TimezoneUtil.todayAtTime(`${Math.floor(blockEnd / 60).toString().padStart(2, '0')}:${(blockEnd % 60).toString().padStart(2, '0')}`);
     const ttl = endMoment.diff(now, 'second');
     
     // Check if TTL is negative (program already ended)
     if (ttl < 0) {
       console.warn(`⚠️ Negative TTL detected for channel ${channelId}: ${ttl}s (program ended at ${currentProgram?.endTime || 'unknown'})`);
+      console.warn(`🔍 Debug info - Current time: ${TimezoneUtil.formatForLogging(now)}, End moment: ${TimezoneUtil.formatForLogging(endMoment)}`);
       
       // Send alert to Sentry if service is available and not recently alerted for this channel
       if (sentryService) {
@@ -86,7 +88,7 @@ export async function getCurrentBlockTTL(
               service: 'ttl-calculation',
               error_type: 'negative_ttl',
               channelId,
-              currentTime: now.format('YYYY-MM-DD HH:mm:ss'),
+              currentTime: TimezoneUtil.formatForLogging(now),
               currentTimeInMinutes,
               programName: currentProgram?.programName || 'unknown',
               programEndTime: currentProgram?.endTime || 'unknown',
@@ -114,8 +116,8 @@ export async function getCurrentBlockTTL(
       if (nextProgram) {
         console.log(`🔄 Found next program for ${channelId}: ${nextProgram.programName} starting at ${nextProgram.startTime}`);
         
-        // Calculate TTL until the next program starts
-        const nextStartMoment = now.startOf('day').add(nextProgram.start, 'minute');
+        // Calculate TTL until the next program starts - use centralized timezone utility
+        const nextStartMoment = TimezoneUtil.todayAtTime(`${Math.floor(nextProgram.start / 60).toString().padStart(2, '0')}:${(nextProgram.start % 60).toString().padStart(2, '0')}`);
         const nextProgramTTL = nextStartMoment.diff(now, 'second');
         
         // Use a minimum TTL of 60 seconds to avoid immediate expiration

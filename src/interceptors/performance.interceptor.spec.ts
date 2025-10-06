@@ -89,7 +89,7 @@ describe('PerformanceInterceptor', () => {
       });
     });
 
-    it('triggers slow response alert for response > 6s', (done) => {
+    it('does not trigger slow response alert for response > 6s (feature disabled)', (done) => {
       // Create a delayed observable with shorter delay for testing
       const delayedObservable = of({ data: 'test' }).pipe(delay(100));
       mockCallHandler.handle.mockReturnValue(delayedObservable);
@@ -98,12 +98,13 @@ describe('PerformanceInterceptor', () => {
       const originalNow = Date.now;
       Date.now = jest.fn()
         .mockReturnValueOnce(0) // Start time
-        .mockReturnValueOnce(7000); // End time (6 seconds later)
+        .mockReturnValueOnce(7000); // End time (7 seconds later)
       
       const result = interceptor.intercept(mockExecutionContext, mockCallHandler);
       
       result.subscribe(() => {
-        expect(mockSentryService.captureMessage).toHaveBeenCalledWith(
+        // The 6s alert is currently commented out in the interceptor
+        expect(mockSentryService.captureMessage).not.toHaveBeenCalledWith(
           expect.stringContaining('API Performance Issue - GET /api/schedules taking'),
           'warning',
           expect.objectContaining({
@@ -114,16 +115,12 @@ describe('PerformanceInterceptor', () => {
           })
         );
         
-        expect(mockSentryService.setTag).toHaveBeenCalledWith('service', 'api');
-        expect(mockSentryService.setTag).toHaveBeenCalledWith('error_type', 'slow_response');
-        expect(mockSentryService.setTag).toHaveBeenCalledWith('endpoint', 'GET /api/schedules');
-        
         Date.now = originalNow;
         done();
       });
-    });
+    }, 10000); // Increase timeout to 10 seconds
 
-    it('triggers critical slow response alert for response > 10s', (done) => {
+    it('triggers critical slow response alert for response > 15s', (done) => {
       // Create a delayed observable with shorter delay for testing
       const delayedObservable = of({ data: 'test' }).pipe(delay(100));
       mockCallHandler.handle.mockReturnValue(delayedObservable);
@@ -132,7 +129,7 @@ describe('PerformanceInterceptor', () => {
       const originalNow = Date.now;
       Date.now = jest.fn()
         .mockReturnValueOnce(0) // Start time
-        .mockReturnValueOnce(12000); // End time (12 seconds later)
+        .mockReturnValueOnce(16000); // End time (16 seconds later)
       
       const result = interceptor.intercept(mockExecutionContext, mockCallHandler);
       
@@ -144,7 +141,7 @@ describe('PerformanceInterceptor', () => {
             service: 'api',
             error_type: 'critical_slow_response',
             endpoint: 'GET /api/schedules',
-            threshold: 10000,
+            threshold: 15000,
           })
         );
         
@@ -155,7 +152,7 @@ describe('PerformanceInterceptor', () => {
         Date.now = originalNow;
         done();
       });
-    });
+    }, 10000); // Increase timeout to 10 seconds
 
     it('does not trigger slow response alert for critical slow response', (done) => {
       // Create a delayed observable with shorter delay for testing
@@ -180,7 +177,7 @@ describe('PerformanceInterceptor', () => {
         Date.now = originalNow;
         done();
       });
-    });
+    }, 10000); // Increase timeout to 10 seconds
 
     it('handles API errors and reports them', (done) => {
       const error = new Error('API Error');

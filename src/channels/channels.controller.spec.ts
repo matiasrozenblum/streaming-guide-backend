@@ -31,6 +31,9 @@ describe('ChannelsController', () => {
     create: jest.fn().mockResolvedValue(mockChannel),
     update: jest.fn().mockResolvedValue(mockChannel),
     remove: jest.fn().mockResolvedValue(undefined),
+    getChannelsWithSchedules: jest.fn().mockResolvedValue([]),
+    getTodaySchedules: jest.fn().mockResolvedValue([]),
+    getWeekSchedules: jest.fn().mockResolvedValue([]),
   };
 
   beforeEach(async () => {
@@ -111,6 +114,75 @@ describe('ChannelsController', () => {
       const result = await controller.remove(1);
       expect(result).toBeUndefined();
       expect(service.remove).toHaveBeenCalledWith(1);
+    });
+  });
+
+  describe('getChannelsWithSchedules', () => {
+    it('should call service with correct parameters', async () => {
+      const result = await controller.getChannelsWithSchedules('monday', 'device123', 'true', 'false');
+      
+      expect(result).toEqual([]);
+      expect(service.getChannelsWithSchedules).toHaveBeenCalledWith('monday', 'device123', true, 'false');
+    });
+
+    it('should handle undefined parameters', async () => {
+      const result = await controller.getChannelsWithSchedules();
+      
+      expect(result).toEqual([]);
+      expect(service.getChannelsWithSchedules).toHaveBeenCalledWith(undefined, undefined, undefined, undefined);
+    });
+
+    it('should handle partial parameters', async () => {
+      const result = await controller.getChannelsWithSchedules('tuesday', undefined, 'false');
+      
+      expect(result).toEqual([]);
+      expect(service.getChannelsWithSchedules).toHaveBeenCalledWith('tuesday', undefined, false, undefined);
+    });
+  });
+
+  describe('getTodaySchedules', () => {
+    it('should call getTodaySchedules service method', async () => {
+      const result = await controller.getTodaySchedules('device123', 'true', 'false');
+      
+      expect(result).toEqual([]);
+      expect(service.getTodaySchedules).toHaveBeenCalledWith('device123', true, 'false');
+    });
+
+    it('should handle undefined parameters', async () => {
+      const result = await controller.getTodaySchedules();
+      
+      expect(result).toEqual([]);
+      expect(service.getTodaySchedules).toHaveBeenCalledWith(undefined, undefined, undefined);
+    });
+
+    it('should handle partial parameters', async () => {
+      const result = await controller.getTodaySchedules('device456', 'true');
+      
+      expect(result).toEqual([]);
+      expect(service.getTodaySchedules).toHaveBeenCalledWith('device456', true, undefined);
+    });
+  });
+
+  describe('getWeekSchedules', () => {
+    it('should call getWeekSchedules service method', async () => {
+      const result = await controller.getWeekSchedules('device123', 'true', 'false');
+      
+      expect(result).toEqual([]);
+      expect(service.getWeekSchedules).toHaveBeenCalledWith('device123', true, 'false');
+    });
+
+    it('should handle undefined parameters', async () => {
+      const result = await controller.getWeekSchedules();
+      
+      expect(result).toEqual([]);
+      expect(service.getWeekSchedules).toHaveBeenCalledWith(undefined, undefined, undefined);
+    });
+
+    it('should handle partial parameters', async () => {
+      const result = await controller.getWeekSchedules('device789', 'false');
+      
+      expect(result).toEqual([]);
+      expect(service.getWeekSchedules).toHaveBeenCalledWith('device789', false, undefined);
     });
   });
 });
