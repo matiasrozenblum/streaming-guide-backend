@@ -702,6 +702,13 @@ export class YoutubeLiveService {
           },
         });
 
+        console.log(`🔍 [Batch] YouTube API response for ${chunk.length} channels: ${data.items?.length || 0} live streams found`);
+        if (data.items && data.items.length > 0) {
+          console.log(`🔍 [Batch] Found live streams for channels: ${data.items.map(item => item.snippet.channelTitle).join(', ')}`);
+        } else {
+          console.log(`🔍 [Batch] No live streams found in YouTube API response for channels: ${chunk.join(', ')}`);
+        }
+
         // Group results by channel ID
         const streamsByChannel = new Map<string, LiveStream[]>();
         
@@ -724,6 +731,8 @@ export class YoutubeLiveService {
         // Process results for each channel and cache them
         for (const channelId of chunk) {
           const streams = streamsByChannel.get(channelId);
+          const handle = channelHandleMap?.get(channelId) || 'unknown';
+          
           if (streams && streams.length > 0) {
             const liveStreamsResult = {
               streams,
@@ -741,7 +750,7 @@ export class YoutubeLiveService {
             
             // Clear the "not-found" flag since we found live streams
             await this.redisService.del(notFoundKey);
-            console.log(`💾 [Batch] Cached ${streams.length} streams for channel ${channelId} (TTL: ${blockTTL}s)`);
+            console.log(`💾 [Batch] Cached ${streams.length} streams for ${handle} (${channelId}) (TTL: ${blockTTL}s)`);
           } else {
             results.set(channelId, null);
             
@@ -749,7 +758,7 @@ export class YoutubeLiveService {
             const notFoundKey = `videoIdNotFound:${channelId}`;
             const notFoundTTL = 900; // 15 minutes - fixed short duration for not-found cache
             await this.redisService.set(notFoundKey, '1', notFoundTTL);
-            console.log(`🚫 [Batch] Cached not-found for channel ${channelId} (TTL: ${notFoundTTL}s)`);
+            console.log(`🚫 [Batch] Cached not-found for ${handle} (${channelId}) - YouTube API returned no live streams (TTL: ${notFoundTTL}s)`);
           }
         }
       }
