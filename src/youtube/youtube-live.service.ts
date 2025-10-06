@@ -55,9 +55,20 @@ export class YoutubeLiveService {
 
     console.log('🚀 YoutubeLiveService initialized');
     
-    // Daily reset for API usage tracking at midnight
+    // Log current timezone info for debugging
+    const now = dayjs().tz('America/Argentina/Buenos_Aires');
+    const serverTime = dayjs();
+    console.log(`🌍 Server timezone: ${serverTime.format('Z')} (${serverTime.format('YYYY-MM-DD HH:mm:ss')})`);
+    console.log(`🌍 Argentina timezone: ${now.format('Z')} (${now.format('YYYY-MM-DD HH:mm:ss')})`);
+    console.log(`⏰ Daily reset cron scheduled for midnight Argentina time (00:00:00)`);
+    
+    // Daily reset for API usage tracking at midnight Argentina time
     cron.schedule('0 0 * * *', async () => {
-      console.log('📊 Daily YouTube API usage reset - sending summary and resetting counters');
+      const now = dayjs().tz('America/Argentina/Buenos_Aires');
+      const serverTime = dayjs();
+      console.log(`📊 Daily YouTube API usage reset triggered!`);
+      console.log(`📊 Server time: ${serverTime.format('YYYY-MM-DD HH:mm:ss')} (UTC${serverTime.format('Z')})`);
+      console.log(`📊 Argentina time: ${now.format('YYYY-MM-DD HH:mm:ss')} (UTC${now.format('Z')})`);
       await this.logDailyUsageStats(); // Send daily summary to PostHog
       this.apiUsageTracker.resetDaily(); // Reset counters for new day
     }, {
@@ -144,8 +155,8 @@ export class YoutubeLiveService {
   private async sendChannelFetchEvent(channelId: string, channelHandle: string, fetchCount: number) {
     try {
       if (process.env.POSTHOG_API_KEY) {
-        const posthog = require('posthog-node').default;
-        const client = new posthog(process.env.POSTHOG_API_KEY);
+        const { PostHog } = require('posthog-node');
+        const client = new PostHog(process.env.POSTHOG_API_KEY);
         
         await client.capture({
           distinctId: `youtube-api-${channelId}`,
@@ -173,8 +184,8 @@ export class YoutubeLiveService {
   private async sendVideoApiEvent(channelId?: string, channelHandle?: string) {
     try {
       if (process.env.POSTHOG_API_KEY) {
-        const posthog = require('posthog-node').default;
-        const client = new posthog(process.env.POSTHOG_API_KEY);
+        const { PostHog } = require('posthog-node');
+        const client = new PostHog(process.env.POSTHOG_API_KEY);
         
         await client.capture({
           distinctId: 'youtube-api-service',
@@ -262,8 +273,8 @@ export class YoutubeLiveService {
     try {
       // PostHog event for daily usage
       if (process.env.POSTHOG_API_KEY) {
-        const posthog = require('posthog-node').default;
-        const client = new posthog(process.env.POSTHOG_API_KEY);
+        const { PostHog } = require('posthog-node');
+        const client = new PostHog(process.env.POSTHOG_API_KEY);
         
         await client.capture({
           distinctId: 'youtube-api-service',
