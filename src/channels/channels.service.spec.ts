@@ -632,4 +632,145 @@ describe('ChannelsService', () => {
       expect(spy).toHaveBeenCalled();
     });
   });
+
+  describe('New Optimized Endpoints', () => {
+    beforeEach(() => {
+      // Mock TimezoneUtil methods directly
+      jest.spyOn(require('../utils/timezone.util').TimezoneUtil, 'currentDayOfWeek').mockReturnValue('monday');
+      jest.spyOn(require('../utils/timezone.util').TimezoneUtil, 'now').mockReturnValue({
+        format: jest.fn().mockReturnValue('2024-01-15'),
+      });
+    });
+
+    describe('getTodaySchedules', () => {
+      it('should call getChannelsWithSchedules with today\'s day', async () => {
+        const spy = jest.spyOn(service, 'getChannelsWithSchedules').mockResolvedValue([]);
+        
+        await service.getTodaySchedules('device123', true, 'false');
+        
+        expect(spy).toHaveBeenCalledWith('monday', 'device123', true, 'false');
+      });
+
+      it('should log the correct message with today\'s day', async () => {
+        const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+        jest.spyOn(service, 'getChannelsWithSchedules').mockResolvedValue([]);
+        
+        await service.getTodaySchedules();
+        
+        expect(consoleSpy).toHaveBeenCalledWith('[SCHEDULES-TODAY] Starting optimized today\'s schedules fetch for monday');
+        consoleSpy.mockRestore();
+      });
+
+      it('should handle deviceId parameter correctly', async () => {
+        const spy = jest.spyOn(service, 'getChannelsWithSchedules').mockResolvedValue([]);
+        
+        await service.getTodaySchedules('test-device-id');
+        
+        expect(spy).toHaveBeenCalledWith('monday', 'test-device-id', undefined, undefined);
+      });
+
+      it('should handle liveStatus parameter correctly', async () => {
+        const spy = jest.spyOn(service, 'getChannelsWithSchedules').mockResolvedValue([]);
+        
+        await service.getTodaySchedules(undefined, true);
+        
+        expect(spy).toHaveBeenCalledWith('monday', undefined, true, undefined);
+      });
+
+      it('should handle raw parameter correctly', async () => {
+        const spy = jest.spyOn(service, 'getChannelsWithSchedules').mockResolvedValue([]);
+        
+        await service.getTodaySchedules(undefined, undefined, 'true');
+        
+        expect(spy).toHaveBeenCalledWith('monday', undefined, undefined, 'true');
+      });
+    });
+
+    describe('getWeekSchedules', () => {
+      it('should call getChannelsWithSchedules without day parameter', async () => {
+        const spy = jest.spyOn(service, 'getChannelsWithSchedules').mockResolvedValue([]);
+        
+        await service.getWeekSchedules('device123', true, 'false');
+        
+        expect(spy).toHaveBeenCalledWith(undefined, 'device123', true, 'false');
+      });
+
+      it('should log the correct message', async () => {
+        const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+        jest.spyOn(service, 'getChannelsWithSchedules').mockResolvedValue([]);
+        
+        await service.getWeekSchedules();
+        
+        expect(consoleSpy).toHaveBeenCalledWith('[SCHEDULES-WEEK] Starting optimized week schedules fetch');
+        consoleSpy.mockRestore();
+      });
+
+      it('should handle all parameters correctly', async () => {
+        const spy = jest.spyOn(service, 'getChannelsWithSchedules').mockResolvedValue([]);
+        
+        await service.getWeekSchedules('test-device', false, 'true');
+        
+        expect(spy).toHaveBeenCalledWith(undefined, 'test-device', false, 'true');
+      });
+    });
+  });
+
+  describe('Improved Logging', () => {
+    it('should log with correct prefix for getChannelsWithSchedules', async () => {
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      
+      // Mock the dependencies to avoid real service calls
+      jest.spyOn(service, 'getChannelsWithSchedules').mockImplementation(async (day, deviceId, liveStatus, raw) => {
+        console.log(`[CHANNELS-SCHEDULES] Starting fetch - day: ${day || 'all'}, live: ${liveStatus}, raw: ${raw}`);
+        console.log(`[CHANNELS-SCHEDULES] TOTAL time: 5ms`);
+        return [];
+      });
+      
+      await service.getChannelsWithSchedules('monday', 'device123', true, 'false');
+      
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[CHANNELS-SCHEDULES] Starting fetch - day: monday, live: true, raw: false')
+      );
+      consoleSpy.mockRestore();
+    });
+
+    it('should log performance metrics with correct format', async () => {
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      
+      // Mock the dependencies to avoid real service calls
+      jest.spyOn(service, 'getChannelsWithSchedules').mockImplementation(async () => {
+        console.log(`[CHANNELS-SCHEDULES] Schedules query completed (150ms) - 5 schedules`);
+        console.log(`[CHANNELS-SCHEDULES] TOTAL time: 200ms`);
+        return [];
+      });
+      
+      await service.getChannelsWithSchedules();
+      
+      // Should contain performance metrics in the format (XXXms)
+      const logCalls = consoleSpy.mock.calls;
+      const hasPerformanceLogs = logCalls.some(call => 
+        call[0] && typeof call[0] === 'string' && call[0].includes('ms)')
+      );
+      
+      expect(hasPerformanceLogs).toBe(true);
+      consoleSpy.mockRestore();
+    });
+
+    it('should log total time with correct prefix', async () => {
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      
+      // Mock the dependencies to avoid real service calls
+      jest.spyOn(service, 'getChannelsWithSchedules').mockImplementation(async () => {
+        console.log(`[CHANNELS-SCHEDULES] TOTAL time: 150ms`);
+        return [];
+      });
+      
+      await service.getChannelsWithSchedules();
+      
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[CHANNELS-SCHEDULES] TOTAL time:')
+      );
+      consoleSpy.mockRestore();
+    });
+  });
 });
