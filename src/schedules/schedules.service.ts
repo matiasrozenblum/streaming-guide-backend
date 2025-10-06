@@ -16,6 +16,7 @@ import { getCurrentBlockTTL } from '@/utils/getBlockTTL.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ConfigService } from '../config/config.service';
 import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
+import { TimezoneUtil } from '../utils/timezone.util';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
 const REVALIDATE_SECRET = process.env.REVALIDATE_SECRET || 'changeme';
@@ -152,9 +153,9 @@ export class SchedulesService {
 
   async enrichSchedules(schedules: Schedule[], liveStatus: boolean = false): Promise<any[]> {
     console.log('[enrichSchedules] Starting enrichment of', schedules.length, 'schedules');
-    const now = this.dayjs().tz('America/Argentina/Buenos_Aires');
-    const currentNum = now.hour() * 100 + now.minute();
-    const currentDay = now.format('dddd').toLowerCase();
+    const now = TimezoneUtil.now();
+    const currentNum = TimezoneUtil.currentTimeInMinutes();
+    const currentDay = TimezoneUtil.currentDayOfWeek();
 
     // Group schedules by channel for stream distribution
     const channelGroups = new Map<string, Schedule[]>();

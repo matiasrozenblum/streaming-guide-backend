@@ -14,6 +14,7 @@ import { ConfigService } from '../config/config.service';
 import { SentryService } from '../sentry/sentry.service';
 import { Channel } from '../channels/channels.entity';
 import { getCurrentBlockTTL } from '@/utils/getBlockTTL.util';
+import { TimezoneUtil } from '../utils/timezone.util';
 import { LiveStream, LiveStreamsResult } from './interfaces/live-stream.interface';
 
 const HolidaysClass = (DateHolidays as any).default ?? DateHolidays;
@@ -1026,13 +1027,11 @@ export class YoutubeLiveService {
    */
   async fetchLiveVideoIds(cronType: 'main' | 'back-to-back-fix' | 'manual' = 'main') {
     const cronLabel = cronType === 'main' ? '🕐 MAIN CRON' : cronType === 'back-to-back-fix' ? '🔄 BACK-TO-BACK FIX CRON' : '🔧 MANUAL EXECUTION';
-    const currentTime = dayjs().tz('America/Argentina/Buenos_Aires').format('HH:mm:ss');
+    const currentTime = TimezoneUtil.currentTimeString();
     
     console.log(`${cronLabel} started at ${currentTime}`);
     
-    const today = dayjs().tz('America/Argentina/Buenos_Aires')
-                        .format('dddd')
-                        .toLowerCase();
+    const today = TimezoneUtil.currentDayOfWeek();
   
     // 1) Primero traés y enriquecés los schedules
     const rawSchedules = await this.schedulesService.findByDay(today);
@@ -1133,9 +1132,9 @@ export class YoutubeLiveService {
    */
   async checkProgramStarts() {
     try {
-      const now = dayjs().tz('America/Argentina/Buenos_Aires');
+      const now = TimezoneUtil.now();
       const currentMinute = now.format('HH:mm');
-      const currentDay = now.format('dddd').toLowerCase();
+      const currentDay = TimezoneUtil.currentDayOfWeek();
       
       // Find programs starting right now
       const startingPrograms = await this.schedulesService.findByStartTime(currentDay, currentMinute);
