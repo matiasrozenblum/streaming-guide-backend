@@ -17,6 +17,12 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.12.2] - 2025-10-06
+
+### Fixed
+- FIxed posthog bug
+- Timezone debugging
+
 ## [1.12.1] - 2025-10-05
 
 ### Added
