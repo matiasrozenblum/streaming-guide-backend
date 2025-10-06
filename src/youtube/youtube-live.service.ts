@@ -722,8 +722,8 @@ export class YoutubeLiveService {
           console.log(`🔍 [Batch] No live streams found in YouTube API response for channels: ${chunk.join(', ')}`);
           console.log(`🔍 [Batch] Full API response:`, JSON.stringify(data, null, 2));
           
-          // TEMPORARY DEBUG: Try individual requests for channels that failed in batch
-          console.log(`🔍 [Batch] Attempting individual requests for failed channels...`);
+          // FALLBACK: Try individual requests for channels that failed in batch
+          console.log(`🔄 [Batch] Batch request failed, attempting individual requests for ${chunk.length} channels...`);
           for (const channelId of chunk) {
             try {
               const individualResponse = await axios.get(`${this.apiUrl}/search`, {
@@ -738,12 +738,51 @@ export class YoutubeLiveService {
               });
               
               const handle = channelHandleMap?.get(channelId) || 'unknown';
-              console.log(`🔍 [Individual] Channel ${handle} (${channelId}): ${individualResponse.data.items?.length || 0} live streams found`);
+              console.log(`🔄 [Individual] Channel ${handle} (${channelId}): ${individualResponse.data.items?.length || 0} live streams found`);
+              
               if (individualResponse.data.items && individualResponse.data.items.length > 0) {
-                console.log(`🔍 [Individual] Found live stream: ${individualResponse.data.items[0].id.videoId} for ${individualResponse.data.items[0].snippet.channelTitle}`);
+                console.log(`✅ [Individual] Found live stream: ${individualResponse.data.items[0].id.videoId} for ${individualResponse.data.items[0].snippet.channelTitle}`);
+                
+                // Process the individual result as if it came from batch
+                const streams = individualResponse.data.items.map((item: any) => ({
+                  videoId: item.id.videoId,
+                  title: item.snippet.title,
+                  publishedAt: item.snippet.publishedAt,
+                  description: item.snippet.description,
+                  thumbnailUrl: item.snippet.thumbnails?.medium?.url,
+                  channelTitle: item.snippet.channelTitle,
+                }));
+                
+                const liveStreamsResult = {
+                  streams,
+                  primaryVideoId: streams[0].videoId,
+                  streamCount: streams.length
+                };
+                
+                results.set(channelId, liveStreamsResult);
+                
+                // Cache the result with intelligent TTL based on program schedule
+                const liveKey = `liveStreamsByChannel:${channelId}`;
+                const notFoundKey = `videoIdNotFound:${channelId}`;
+                const blockTTL = channelTTLs.get(channelId)!;
+                await this.redisService.set(liveKey, JSON.stringify(streams), blockTTL);
+                
+                // Clear the "not-found" flag since we found live streams
+                await this.redisService.del(notFoundKey);
+                console.log(`✅ [Individual] Cached ${streams.length} streams for ${handle} (${channelId}) (TTL: ${blockTTL}s)`);
+              } else {
+                console.log(`❌ [Individual] No live streams found for ${handle} (${channelId})`);
+                results.set(channelId, null);
+                
+                // Cache the "not found" result to avoid repeated API calls
+                const notFoundKey = `videoIdNotFound:${channelId}`;
+                const notFoundTTL = 900; // 15 minutes - fixed short duration for not-found cache
+                await this.redisService.set(notFoundKey, '1', notFoundTTL);
+                console.log(`❌ [Individual] Cached not-found for ${handle} (${channelId}) - YouTube API returned no live streams (TTL: ${notFoundTTL}s)`);
               }
             } catch (error) {
-              console.error(`🔍 [Individual] Error testing channel ${channelId}:`, error.message);
+              console.error(`❌ [Individual] Error testing channel ${channelId}:`, error.message);
+              results.set(channelId, null);
             }
           }
         }
