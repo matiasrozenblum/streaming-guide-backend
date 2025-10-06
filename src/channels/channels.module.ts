@@ -13,8 +13,6 @@ import { UserSubscription } from '../users/user-subscription.entity';
 import { Device } from '../users/device.entity';
 import { ConfigModule } from '../config/config.module';
 import { Category } from '../categories/categories.entity';
-import { LiveStatusBackgroundService } from '../youtube/live-status-background.service';
-import { OptimizedSchedulesService } from '../youtube/optimized-schedules.service';
 
 @Module({
   imports: [
@@ -26,6 +24,6 @@ import { OptimizedSchedulesService } from '../youtube/optimized-schedules.servic
     ConfigModule,
   ],
   controllers: [ChannelsController],
-  providers: [ChannelsService, LiveStatusBackgroundService, OptimizedSchedulesService],
+  providers: [ChannelsService],
 })
 export class ChannelsModule {}
