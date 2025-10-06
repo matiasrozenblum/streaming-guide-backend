@@ -714,10 +714,38 @@ export class YoutubeLiveService {
         });
 
         console.log(`🔍 [Batch] YouTube API response for ${chunk.length} channels: ${data.items?.length || 0} live streams found`);
+        console.log(`🔍 [Batch] Request URL: ${this.apiUrl}/search?part=snippet&channelId=${channelIdsParam}&eventType=live&type=video&key=${this.apiKey}&maxResults=50`);
         if (data.items && data.items.length > 0) {
-          console.log(`🔍 [Batch] Found live streams for channels: ${data.items.map(item => item.snippet.channelTitle).join(', ')}`);
+          console.log(`🔍 [Batch] Found live streams for channels: ${data.items.map(item => `${item.snippet.channelTitle} (${item.snippet.channelId})`).join(', ')}`);
+          console.log(`🔍 [Batch] Video IDs found: ${data.items.map(item => item.id.videoId).join(', ')}`);
         } else {
           console.log(`🔍 [Batch] No live streams found in YouTube API response for channels: ${chunk.join(', ')}`);
+          console.log(`🔍 [Batch] Full API response:`, JSON.stringify(data, null, 2));
+          
+          // TEMPORARY DEBUG: Try individual requests for channels that failed in batch
+          console.log(`🔍 [Batch] Attempting individual requests for failed channels...`);
+          for (const channelId of chunk) {
+            try {
+              const individualResponse = await axios.get(`${this.apiUrl}/search`, {
+                params: {
+                  part: 'snippet',
+                  channelId: channelId,
+                  eventType: 'live',
+                  type: 'video',
+                  key: this.apiKey,
+                  maxResults: 50,
+                },
+              });
+              
+              const handle = channelHandleMap?.get(channelId) || 'unknown';
+              console.log(`🔍 [Individual] Channel ${handle} (${channelId}): ${individualResponse.data.items?.length || 0} live streams found`);
+              if (individualResponse.data.items && individualResponse.data.items.length > 0) {
+                console.log(`🔍 [Individual] Found live stream: ${individualResponse.data.items[0].id.videoId} for ${individualResponse.data.items[0].snippet.channelTitle}`);
+              }
+            } catch (error) {
+              console.error(`🔍 [Individual] Error testing channel ${channelId}:`, error.message);
+            }
+          }
         }
 
         // Group results by channel ID
