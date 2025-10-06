@@ -32,6 +32,8 @@ import { CategoriesModule } from './categories/categories.module';
 import { RedisModule } from './redis/redis.module';
 import { ResourceMonitorService } from './services/resource-monitor.service';
 import { PerformanceInterceptor } from './interceptors/performance.interceptor';
+import { LiveStatusBackgroundService } from './youtube/live-status-background.service';
+import { OptimizedSchedulesService } from './youtube/optimized-schedules.service';
 
 @Module({
   imports: [
@@ -102,6 +104,8 @@ import { PerformanceInterceptor } from './interceptors/performance.interceptor';
     YoutubeDiscoveryService,
     RedisService, // 🔥 Agregado
     ResourceMonitorService,
+    LiveStatusBackgroundService,
+    OptimizedSchedulesService,
     {
       provide: 'APP_INTERCEPTOR',
       useClass: PerformanceInterceptor,

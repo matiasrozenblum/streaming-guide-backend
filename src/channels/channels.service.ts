@@ -16,6 +16,7 @@ import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
 import { ConfigService } from '@/config/config.service';
 import { WeeklyOverridesService } from '@/schedules/weekly-overrides.service';
 import { YoutubeLiveService } from '@/youtube/youtube-live.service';
+import { OptimizedSchedulesService } from '@/youtube/optimized-schedules.service';
 import { getCurrentBlockTTL } from '@/utils/getBlockTTL.util';
 import { TimezoneUtil } from '../utils/timezone.util';
 import { Category } from '../categories/categories.entity';
@@ -89,6 +90,7 @@ export class ChannelsService {
     private readonly configService: ConfigService,
     private readonly weeklyOverridesService: WeeklyOverridesService,
     private readonly youtubeLiveService: YoutubeLiveService,
+    private readonly optimizedSchedulesService: OptimizedSchedulesService,
   ) {
     this.dayjs = dayjs;
     this.dayjs.extend(utc);
@@ -273,14 +275,14 @@ export class ChannelsService {
       }
     }
 
-    // Use SchedulesService to get cached schedules with proper enrichment
+    // Use OptimizedSchedulesService for better performance
     const queryStart = Date.now();
-    const allSchedules = await this.schedulesService.findAll({
+    const allSchedules = await this.optimizedSchedulesService.getSchedulesWithOptimizedLiveStatus({
       dayOfWeek: day,
       applyOverrides: raw !== 'true',
       liveStatus: liveStatus || false,
     });
-    console.log(`[CHANNELS-SCHEDULES] Schedules query completed (${Date.now() - queryStart}ms) - ${allSchedules.length} schedules`);
+    console.log(`[CHANNELS-SCHEDULES] Optimized schedules query completed (${Date.now() - queryStart}ms) - ${allSchedules.length} schedules`);
 
     // Group schedules by channel
     const groupStart = Date.now();
