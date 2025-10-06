@@ -70,7 +70,24 @@ export class YoutubeLiveService {
       console.log(`📊 Server time: ${serverTime.format('YYYY-MM-DD HH:mm:ss')} (UTC${serverTime.format('Z')})`);
       console.log(`📊 Argentina time: ${now.format('YYYY-MM-DD HH:mm:ss')} (UTC${now.format('Z')})`);
       await this.logDailyUsageStats(); // Send daily summary to PostHog
-      this.apiUsageTracker.resetDaily(); // Reset counters for new day
+      
+      // Clear Redis data for the previous day
+      const yesterday = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
+      const today = dayjs().format('YYYY-MM-DD');
+      
+      // Clear yesterday's Redis keys
+      await this.redisService.client.del(`youtube_api:usage:${yesterday}:search`);
+      await this.redisService.client.del(`youtube_api:usage:${yesterday}:video`);
+      await this.redisService.client.del(`youtube_api:channel_frequency:${yesterday}:*`);
+      
+      // Clear today's Redis keys (in case service was restarted)
+      await this.redisService.client.del(`youtube_api:usage:${today}:search`);
+      await this.redisService.client.del(`youtube_api:usage:${today}:video`);
+      
+      // Reset in-memory counters
+      this.apiUsageTracker.resetDaily();
+      
+      console.log(`📊 Daily reset completed - Redis and memory cleared for new day`);
     }, {
       timezone: 'America/Argentina/Buenos_Aires',
     });
