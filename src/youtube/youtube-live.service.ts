@@ -1008,7 +1008,7 @@ export class YoutubeLiveService {
     }
   }
 
-  private async isVideoLive(videoId: string): Promise<boolean> {
+  public async isVideoLive(videoId: string): Promise<boolean> {
     try {
       // Track API usage
       await this.trackApiUsage('video');
