@@ -8,6 +8,7 @@ import { RedisService } from '../redis/redis.service';
 import { ConfigService } from '../config/config.service';
 import { TimezoneUtil } from '../utils/timezone.util';
 import { Channel } from '../channels/channels.entity';
+import { getCurrentBlockTTL } from '../utils/getBlockTTL.util';
 
 interface LiveStatusCache {
   channelId: string;
@@ -17,6 +18,10 @@ interface LiveStatusCache {
   videoId: string | null;
   lastUpdated: number;
   ttl: number;
+  // Block-aware fields for accurate timing
+  blockEndTime: number; // When the current block ends (in minutes)
+  validationCooldown: number; // When we can validate again (timestamp)
+  lastValidation: number; // Last time we validated the video ID
 }
 
 @Injectable()
@@ -73,7 +78,7 @@ export class LiveStatusBackgroundService {
           const cacheKey = `${this.CACHE_PREFIX}${channel.youtube_channel_id}`;
           const cached = await this.redisService.get<LiveStatusCache>(cacheKey);
           
-          if (!cached || this.shouldUpdateCache(cached)) {
+          if (!cached || await this.shouldUpdateCache(cached)) {
             channelsToUpdate.push(channel.youtube_channel_id);
           }
         }
@@ -115,7 +120,7 @@ export class LiveStatusBackgroundService {
     // Check cache first
     for (const channelId of channelIds) {
       const cached = await this.getCachedLiveStatus(channelId);
-      if (cached && !this.shouldUpdateCache(cached)) {
+      if (cached && !(await this.shouldUpdateCache(cached))) {
         results.set(channelId, cached);
       } else {
         channelsNeedingUpdate.push(channelId);
@@ -206,13 +211,20 @@ export class LiveStatusBackgroundService {
           videoId: null,
           lastUpdated: Date.now(),
           ttl: 5 * 60, // 5 minutes
+          blockEndTime: 24 * 60, // End of day
+          validationCooldown: Date.now() + (15 * 60 * 1000),
+          lastValidation: Date.now(),
         };
         await this.cacheLiveStatus(channelId, cacheData);
         return cacheData;
       }
 
-      // Calculate TTL based on program schedule
-      const ttl = this.calculateProgramTTL(liveSchedules);
+      // Calculate TTL using block TTL logic for accurate timing
+      const schedules = await this.schedulesService.findByDay(currentDay);
+      const ttl = await getCurrentBlockTTL(channelId, schedules);
+      
+      // Calculate block end time for cache metadata
+      const blockEndTime = this.calculateBlockEndTime(liveSchedules, currentTime);
 
       // Fetch live streams from YouTube
       const liveStreams = await this.youtubeLiveService.getLiveStreams(
@@ -232,6 +244,9 @@ export class LiveStatusBackgroundService {
         videoId: liveStreams && liveStreams !== '__SKIPPED__' ? liveStreams.primaryVideoId : null,
         lastUpdated: Date.now(),
         ttl,
+        blockEndTime,
+        validationCooldown: Date.now() + (15 * 60 * 1000), // Can validate again in 15 minutes
+        lastValidation: Date.now(),
       };
 
       await this.cacheLiveStatus(channelId, cacheData);
@@ -253,36 +268,71 @@ export class LiveStatusBackgroundService {
 
   /**
    * Check if cache should be updated
+   * Considers both TTL and video ID validation needs
    */
-  private shouldUpdateCache(cached: LiveStatusCache): boolean {
+  private async shouldUpdateCache(cached: LiveStatusCache): Promise<boolean> {
     const now = Date.now();
     const age = now - cached.lastUpdated;
-    const maxAge = cached.ttl * 1000 * 0.8; // Update when 80% of TTL has passed
-    return age > maxAge;
+    
+    // Always update if TTL has expired
+    if (age > cached.ttl * 1000) {
+      return true;
+    }
+    
+    // Check if we need to validate the video ID
+    if (cached.isLive && cached.videoId && now > cached.validationCooldown) {
+      // Validate if the cached video ID is still live
+      const isStillLive = await this.youtubeLiveService.isVideoLive(cached.videoId);
+      if (!isStillLive) {
+        this.logger.log(`🔄 Video ID ${cached.videoId} no longer live, updating cache`);
+        return true;
+      }
+      
+      // Update validation cooldown (validate again in 15 minutes)
+      cached.validationCooldown = now + (15 * 60 * 1000);
+      cached.lastValidation = now;
+      await this.cacheLiveStatus(cached.channelId, cached);
+    }
+    
+    // Update when 80% of TTL has passed
+    return age > cached.ttl * 1000 * 0.8;
   }
 
   /**
-   * Calculate TTL based on program schedule
+   * Calculate block end time for cache metadata
+   * Uses the same logic as getCurrentBlockTTL but returns the end time in minutes
    */
-  private calculateProgramTTL(schedules: any[]): number {
-    const currentTime = TimezoneUtil.currentTimeInMinutes();
+  private calculateBlockEndTime(schedules: any[], currentTime: number): number {
+    // Sort schedules by start time
+    const sortedSchedules = schedules
+      .map(s => ({
+        start: this.convertTimeToNumber(s.start_time),
+        end: this.convertTimeToNumber(s.end_time),
+      }))
+      .sort((a, b) => a.start - b.start);
+
+    // Find the current block end time
+    let blockEnd: number | null = null;
+    let prevEnd: number | null = null;
     
-    // Find the next program end time
-    let nextEndTime = Infinity;
-    for (const schedule of schedules) {
-      const endTime = this.convertTimeToNumber(schedule.end_time);
-      if (endTime > currentTime && endTime < nextEndTime) {
-        nextEndTime = endTime;
+    for (const schedule of sortedSchedules) {
+      if (schedule.start <= currentTime && schedule.end > currentTime) {
+        // Start block with this schedule
+        prevEnd = schedule.end;
+        blockEnd = schedule.end;
+        continue;
       }
+      if (prevEnd !== null && schedule.start - prevEnd < 2) {
+        // Extend block (gap < 2 minutes)
+        blockEnd = schedule.end;
+        prevEnd = schedule.end;
+        continue;
+      }
+      // If block already detected and can't extend, break
+      if (blockEnd !== null) break;
     }
-
-    if (nextEndTime === Infinity) {
-      return this.CACHE_TTL; // Default TTL
-    }
-
-    // Calculate seconds until next program ends
-    const secondsUntilEnd = (nextEndTime - currentTime) * 60;
-    return Math.max(60, Math.min(secondsUntilEnd, 30 * 60)); // Between 1 minute and 30 minutes
+    
+    return blockEnd || (24 * 60); // Fallback to end of day
   }
 
   /**
