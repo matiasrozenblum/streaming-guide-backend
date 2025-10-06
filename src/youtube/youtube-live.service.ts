@@ -607,6 +607,7 @@ export class YoutubeLiveService {
     context: 'cron' | 'onDemand' | 'program-start',
     channelTTLs: Map<string, number>, // Required TTL map for each channel
     channelHandleMap?: Map<string, string>, // Optional channel handle mapping for tracking
+    cronType?: 'main' | 'back-to-back-fix', // Optional cron type to distinguish between main and back-to-back
   ): Promise<Map<string, LiveStreamsResult | null | '__SKIPPED__'>> {
     const results = new Map<string, LiveStreamsResult | null | '__SKIPPED__'>();
     
@@ -624,10 +625,17 @@ export class YoutubeLiveService {
       const liveKey = `liveStreamsByChannel:${channelId}`;
       const notFoundKey = `videoIdNotFound:${channelId}`;
 
-      // Skip if marked as not-found
-      if (await this.redisService.get<string>(notFoundKey)) {
+      // Skip if marked as not-found (except for back-to-back cron which should check anyway)
+      const isNotMarkedAsNotFound = await this.redisService.get<string>(notFoundKey);
+      if (isNotMarkedAsNotFound && cronType !== 'back-to-back-fix') {
         results.set(channelId, '__SKIPPED__');
         continue;
+      }
+      
+      // For back-to-back cron, log when we're ignoring not-found flag
+      if (isNotMarkedAsNotFound && cronType === 'back-to-back-fix') {
+        const handle = channelHandleMap?.get(channelId) || 'unknown';
+        console.log(`🔄 [Back-to-back] Ignoring not-found flag for ${handle} (${channelId}) - checking anyway`);
       }
 
       // Check cache
@@ -1006,7 +1014,7 @@ export class YoutubeLiveService {
     
     // Execute batch fetch for all live channels
     console.log(`[${cronLabel}] Executing batch fetch for ${channelIds.length} channels`);
-    const batchResults = await this.getBatchLiveStreams(channelIds, 'cron', channelTTLs, map);
+    const batchResults = await this.getBatchLiveStreams(channelIds, 'cron', channelTTLs, map, cronType);
     
     let updatedCount = 0;
     // Track changes for back-to-back fix
@@ -1015,19 +1023,19 @@ export class YoutubeLiveService {
         const beforeCache = beforeCacheStates.get(cid);
         if (beforeCache) {
           const streamsKey = `liveStreamsByChannel:${cid}`;
-          const afterCache = await this.redisService.get<string>(streamsKey);
+        const afterCache = await this.redisService.get<string>(streamsKey);
           if (afterCache) {
-            try {
-              const beforeStreams = JSON.parse(beforeCache);
-              const afterStreams = JSON.parse(afterCache);
-              if (beforeStreams.primaryVideoId !== afterStreams.primaryVideoId) {
-                updatedCount++;
-                console.log(`🔧 ${cronLabel} - FIXED back-to-back issue for ${handle}: ${beforeStreams.primaryVideoId} → ${afterStreams.primaryVideoId}`);
-              }
-            } catch (error) {
-              // If parsing fails, assume it was updated
+          try {
+            const beforeStreams = JSON.parse(beforeCache);
+            const afterStreams = JSON.parse(afterCache);
+            if (beforeStreams.primaryVideoId !== afterStreams.primaryVideoId) {
               updatedCount++;
-              console.log(`🔧 ${cronLabel} - FIXED back-to-back issue for ${handle} (cache format changed)`);
+              console.log(`🔧 ${cronLabel} - FIXED back-to-back issue for ${handle}: ${beforeStreams.primaryVideoId} → ${afterStreams.primaryVideoId}`);
+            }
+          } catch (error) {
+            // If parsing fails, assume it was updated
+            updatedCount++;
+            console.log(`🔧 ${cronLabel} - FIXED back-to-back issue for ${handle} (cache format changed)`);
             }
           }
         }

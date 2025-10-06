@@ -219,7 +219,7 @@ export class SchedulesService {
           }
         }
         
-        batchStreamsResults = await this.youtubeLiveService.getBatchLiveStreams(liveChannelIds, 'onDemand', channelTTLs, channelHandles);
+        batchStreamsResults = await this.youtubeLiveService.getBatchLiveStreams(liveChannelIds, 'onDemand', channelTTLs, channelHandles, undefined);
         console.log('[enrichSchedules] Smart batch fetch completed with intelligent TTL');
       } else {
         console.log('[enrichSchedules] No channels have live programs right now, skipping batch fetch');
