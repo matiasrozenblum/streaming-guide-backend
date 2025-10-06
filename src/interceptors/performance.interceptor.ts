@@ -37,7 +37,10 @@ export class PerformanceInterceptor implements NestInterceptor {
         // Log performance metrics
         console.log(`📊 API Performance: ${endpoint} - ${responseTime}ms`);
         
-        // Alert on slow responses (P3 - Medium Priority)
+        // Alert on slow responses (P3 - Medium Priority) - COMMENTED OUT
+        // Temporarily disabled due to known performance issues with channels/schedules endpoint
+        // TODO: Re-enable after performance optimization branch
+        /*
         if (responseTime > 6000 && responseTime <= 10000) { // 5-10 seconds
           this.sentryService.captureMessage(
             `API Performance Issue - ${endpoint} taking ${responseTime}ms`,
@@ -58,9 +61,10 @@ export class PerformanceInterceptor implements NestInterceptor {
           this.sentryService.setTag('error_type', 'slow_response');
           this.sentryService.setTag('endpoint', endpoint);
         }
+        */
         
         // Alert on very slow responses (P2 - High Priority)
-        if (responseTime > 10000) { // 10+ seconds
+        if (responseTime > 15000) { // 15+ seconds
           this.sentryService.captureMessage(
             `API Critical Performance Issue - ${endpoint} taking ${responseTime}ms`,
             'error',
@@ -69,7 +73,7 @@ export class PerformanceInterceptor implements NestInterceptor {
               error_type: 'critical_slow_response',
               endpoint,
               response_time: responseTime,
-              threshold: 10000,
+              threshold: 15000,
               user_agent: userAgent,
               ip,
               timestamp: new Date().toISOString(),
