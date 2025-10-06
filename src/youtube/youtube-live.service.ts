@@ -55,9 +55,20 @@ export class YoutubeLiveService {
 
     console.log('🚀 YoutubeLiveService initialized');
     
-    // Daily reset for API usage tracking at midnight
+    // Log current timezone info for debugging
+    const now = dayjs().tz('America/Argentina/Buenos_Aires');
+    const serverTime = dayjs();
+    console.log(`🌍 Server timezone: ${serverTime.format('Z')} (${serverTime.format('YYYY-MM-DD HH:mm:ss')})`);
+    console.log(`🌍 Argentina timezone: ${now.format('Z')} (${now.format('YYYY-MM-DD HH:mm:ss')})`);
+    console.log(`⏰ Daily reset cron scheduled for midnight Argentina time (00:00:00)`);
+    
+    // Daily reset for API usage tracking at midnight Argentina time
     cron.schedule('0 0 * * *', async () => {
-      console.log('📊 Daily YouTube API usage reset - sending summary and resetting counters');
+      const now = dayjs().tz('America/Argentina/Buenos_Aires');
+      const serverTime = dayjs();
+      console.log(`📊 Daily YouTube API usage reset triggered!`);
+      console.log(`📊 Server time: ${serverTime.format('YYYY-MM-DD HH:mm:ss')} (UTC${serverTime.format('Z')})`);
+      console.log(`📊 Argentina time: ${now.format('YYYY-MM-DD HH:mm:ss')} (UTC${now.format('Z')})`);
       await this.logDailyUsageStats(); // Send daily summary to PostHog
       this.apiUsageTracker.resetDaily(); // Reset counters for new day
     }, {
