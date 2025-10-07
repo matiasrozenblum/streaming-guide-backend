@@ -13,6 +13,7 @@ import { PushService } from './push.service';
 import { EmailService } from '../email/email.service';
 import { buildProgramNotificationHtml } from '../email/email.templates';
 import { ConfigService } from '../config/config.service';
+import { TimezoneUtil } from '../utils/timezone.util';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -38,7 +39,7 @@ export class PushScheduler {
   })
   async handleNotificationsCron() {
     // 1) Target = ahora + 10 minutos, sin segundos ni ms
-    const now = dayjs().tz('America/Argentina/Buenos_Aires');
+    const now = TimezoneUtil.now();
     const target = now.add(10, 'minute').second(0).millisecond(0);
     const dayOfWeek = target.isBefore(now) ? target.add(1, 'day').format('dddd').toLowerCase() : target.format('dddd').toLowerCase();
     const timeString = target.format('HH:mm:ss');

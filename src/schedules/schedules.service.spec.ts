@@ -14,6 +14,7 @@ import * as timezone from 'dayjs/plugin/timezone';
 import { ConfigService } from '../config/config.service';
 import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
 import { SentryService } from '../sentry/sentry.service';
+import { TimezoneUtil } from '../utils/timezone.util';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -53,11 +54,20 @@ jest.mock('dayjs', () => {
       },
       tz: () => mockDayjs(),
       startOf: (unit: string) => {
-        // Return a mock object with the add method
+        // Return a mock object with the add method that can be chained
         return {
           add: (amount: number, unit: string) => {
-            // Return a mock object with the diff method
+            // Return a mock object with the diff method and more add methods
             return {
+              add: (amount: number, unit: string) => {
+                // Return a mock object with the diff method
+                return {
+                  diff: (date: any, unit: string) => {
+                    // Return a reasonable TTL value for testing
+                    return 3600; // 1 hour in seconds
+                  }
+                };
+              },
               diff: (date: any, unit: string) => {
                 // Return a reasonable TTL value for testing
                 return 3600; // 1 hour in seconds
@@ -235,6 +245,18 @@ describe('SchedulesService', () => {
       'testsecret'
     );
     service['notifyUtil'] = notifyUtil;
+
+    // Mock TimezoneUtil methods
+    jest.spyOn(TimezoneUtil, 'now').mockReturnValue(dayjs().tz('America/Argentina/Buenos_Aires').hour(10).minute(30));
+    jest.spyOn(TimezoneUtil, 'currentTimeInMinutes').mockReturnValue(630); // 10:30
+    jest.spyOn(TimezoneUtil, 'currentDayOfWeek').mockReturnValue('monday');
+    jest.spyOn(TimezoneUtil, 'isWithinTimeRange').mockImplementation((startTime, endTime) => {
+      // Mock logic: 10:30 is within 10:00-12:00 range but NOT within 08:00-10:00 range
+      const start = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1]);
+      const end = parseInt(endTime.split(':')[0]) * 60 + parseInt(endTime.split(':')[1]);
+      const current = 630; // 10:30
+      return current >= start && current < end; // Use < instead of <= for end time
+    });
   });
 
   describe('findByDay', () => {
@@ -294,7 +316,7 @@ describe('SchedulesService', () => {
         streamCount: 1
       });
 
-      currentTime = '11:00';
+      currentTime = '10:30';
       currentDay = 'monday';
 
       const result = await service.findAll({ dayOfWeek: 'monday', liveStatus: true });
@@ -345,8 +367,15 @@ describe('SchedulesService', () => {
       jest.spyOn(schedulesRepo, 'createQueryBuilder').mockReturnValue(mockQueryBuilder as any);
       jest.spyOn(redisService, 'get').mockResolvedValueOnce(null);
 
-      currentTime = '15:00'; // fuera de rango
-      currentDay = 'monday';
+      // Update TimezoneUtil mock for this specific test (15:00 is outside 08:00-10:00 range)
+      jest.spyOn(TimezoneUtil, 'now').mockReturnValue(dayjs().tz('America/Argentina/Buenos_Aires').hour(15).minute(0));
+      jest.spyOn(TimezoneUtil, 'currentTimeInMinutes').mockReturnValue(900); // 15:00
+      jest.spyOn(TimezoneUtil, 'isWithinTimeRange').mockImplementation((startTime, endTime) => {
+        const start = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1]);
+        const end = parseInt(endTime.split(':')[0]) * 60 + parseInt(endTime.split(':')[1]);
+        const current = 900; // 15:00
+        return current >= start && current < end; // Use < instead of <= for end time
+      });
 
       const result = await service.findByDay('monday');
 
@@ -384,12 +413,15 @@ describe('SchedulesService', () => {
       // Reset mocks
       jest.clearAllMocks();
       
-      // Mock dayjs to return consistent time
-      jest.spyOn(service as any, 'dayjs').mockReturnValue({
-        tz: jest.fn().mockReturnThis(),
-        hour: jest.fn().mockReturnValue(11),
-        minute: jest.fn().mockReturnValue(0),
-        format: jest.fn().mockReturnValue('monday')
+      // Mock TimezoneUtil methods for overlapping programs test (11:00 overlaps both 10:00-12:00 and 11:00-13:00)
+      jest.spyOn(TimezoneUtil, 'now').mockReturnValue(dayjs().tz('America/Argentina/Buenos_Aires').hour(11).minute(0));
+      jest.spyOn(TimezoneUtil, 'currentTimeInMinutes').mockReturnValue(660); // 11:00
+      jest.spyOn(TimezoneUtil, 'currentDayOfWeek').mockReturnValue('monday');
+      jest.spyOn(TimezoneUtil, 'isWithinTimeRange').mockImplementation((startTime, endTime) => {
+        const start = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1]);
+        const end = parseInt(endTime.split(':')[0]) * 60 + parseInt(endTime.split(':')[1]);
+        const current = 660; // 11:00
+        return current >= start && current <= end;
       });
     });
 
@@ -552,6 +584,17 @@ describe('SchedulesService', () => {
       
       // Mock YouTube service
       jest.spyOn(youtubeLiveService, 'getLiveStreams').mockResolvedValue(mockStreams);
+
+      // Mock TimezoneUtil for this test (10:30 is within 10:00-12:00 range)
+      jest.spyOn(TimezoneUtil, 'now').mockReturnValue(dayjs().tz('America/Argentina/Buenos_Aires').hour(10).minute(30));
+      jest.spyOn(TimezoneUtil, 'currentTimeInMinutes').mockReturnValue(630); // 10:30
+      jest.spyOn(TimezoneUtil, 'currentDayOfWeek').mockReturnValue('monday');
+      jest.spyOn(TimezoneUtil, 'isWithinTimeRange').mockImplementation((startTime, endTime) => {
+        const start = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1]);
+        const end = parseInt(endTime.split(':')[0]) * 60 + parseInt(endTime.split(':')[1]);
+        const current = 630; // 10:30
+        return current >= start && current <= end;
+      });
 
       const result = await service.enrichSchedules(testSchedules, true);
 

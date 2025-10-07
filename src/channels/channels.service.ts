@@ -16,7 +16,9 @@ import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
 import { ConfigService } from '@/config/config.service';
 import { WeeklyOverridesService } from '@/schedules/weekly-overrides.service';
 import { YoutubeLiveService } from '@/youtube/youtube-live.service';
+import { OptimizedSchedulesService } from '@/youtube/optimized-schedules.service';
 import { getCurrentBlockTTL } from '@/utils/getBlockTTL.util';
+import { TimezoneUtil } from '../utils/timezone.util';
 import { Category } from '../categories/categories.entity';
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
@@ -88,6 +90,7 @@ export class ChannelsService {
     private readonly configService: ConfigService,
     private readonly weeklyOverridesService: WeeklyOverridesService,
     private readonly youtubeLiveService: YoutubeLiveService,
+    private readonly optimizedSchedulesService: OptimizedSchedulesService,
   ) {
     this.dayjs = dayjs;
     this.dayjs.extend(utc);
@@ -254,7 +257,7 @@ export class ChannelsService {
 
   async getChannelsWithSchedules(day?: string, deviceId?: string, liveStatus?: boolean, raw?: string): Promise<ChannelWithSchedules[]> {
     const overallStart = Date.now();
-    console.log('[getChannelsWithSchedules] START');
+    console.log(`[CHANNELS-SCHEDULES] Starting fetch - day: ${day || 'all'}, live: ${liveStatus}, raw: ${raw}`);
 
     // Pre-fetch user subscriptions if deviceId is provided
     let subscribedProgramIds: Set<number> = new Set();
@@ -272,16 +275,14 @@ export class ChannelsService {
       }
     }
 
-    // Use SchedulesService to get cached schedules with proper enrichment
+    // Use OptimizedSchedulesService for better performance
     const queryStart = Date.now();
-    const allSchedules = await this.schedulesService.findAll({
+    const allSchedules = await this.optimizedSchedulesService.getSchedulesWithOptimizedLiveStatus({
       dayOfWeek: day,
       applyOverrides: raw !== 'true',
       liveStatus: liveStatus || false,
     });
-    console.log('[getChannelsWithSchedules] SchedulesService query completed in', Date.now() - queryStart, 'ms');
-
-    console.log('[getChannelsWithSchedules] Retrieved', allSchedules.length, 'schedules');
+    console.log(`[CHANNELS-SCHEDULES] Optimized schedules query completed (${Date.now() - queryStart}ms) - ${allSchedules.length} schedules`);
 
     // Group schedules by channel
     const groupStart = Date.now();
@@ -292,7 +293,7 @@ export class ChannelsService {
       acc[channelId].push(schedule);
       return acc;
     }, {} as Record<number, any[]>);
-    console.log('[getChannelsWithSchedules] Grouped schedules in', Date.now() - groupStart, 'ms');
+    console.log(`[CHANNELS-SCHEDULES] Grouped schedules (${Date.now() - groupStart}ms)`);
 
     // Get all channels for the result structure
     const channelsQueryStart = Date.now();
@@ -301,7 +302,7 @@ export class ChannelsService {
       order: { order: 'ASC' },
       relations: ['categories'],
     });
-    console.log('[getChannelsWithSchedules] Channels query completed in', Date.now() - channelsQueryStart, 'ms');
+    console.log(`[CHANNELS-SCHEDULES] Channels query completed (${Date.now() - channelsQueryStart}ms) - ${channels.length} channels`);
 
     // Build final result
     const resultStart = Date.now();
@@ -342,9 +343,28 @@ export class ChannelsService {
       })),
       };
     });
-    console.log('[getChannelsWithSchedules] Built result in', Date.now() - resultStart, 'ms');
-    console.log('[getChannelsWithSchedules] TOTAL time:', Date.now() - overallStart, 'ms');
+    console.log(`[CHANNELS-SCHEDULES] Built result (${Date.now() - resultStart}ms) - ${result.length} channels`);
+    console.log(`[CHANNELS-SCHEDULES] TOTAL time: ${Date.now() - overallStart}ms`);
     return result;
+  }
+
+  /**
+   * Get today's schedules only - optimized for initial page load
+   */
+  async getTodaySchedules(deviceId?: string, liveStatus?: boolean, raw?: string): Promise<ChannelWithSchedules[]> {
+    const today = TimezoneUtil.currentDayOfWeek();
+    console.log(`[SCHEDULES-TODAY] Starting optimized today's schedules fetch for ${today}`);
+    
+    return this.getChannelsWithSchedules(today, deviceId, liveStatus, raw);
+  }
+
+  /**
+   * Get full week schedules - optimized for background loading
+   */
+  async getWeekSchedules(deviceId?: string, liveStatus?: boolean, raw?: string): Promise<ChannelWithSchedules[]> {
+    console.log('[SCHEDULES-WEEK] Starting optimized week schedules fetch');
+    
+    return this.getChannelsWithSchedules(undefined, deviceId, liveStatus, raw);
   }
 
   private convertTimeToNumber(time: string): number {
