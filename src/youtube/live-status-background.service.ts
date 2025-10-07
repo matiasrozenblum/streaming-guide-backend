@@ -235,12 +235,14 @@ export class LiveStatusBackgroundService {
       const blockEndTime = this.calculateBlockEndTime(liveSchedules, currentTime);
 
       // Fetch live streams from YouTube
+      console.log(`[LIVE-STATUS-BG] Fetching live streams for ${channel.handle} (${channelId})`);
       const liveStreams = await this.youtubeLiveService.getLiveStreams(
         channelId,
         channel.handle,
         ttl,
         'cron' // Background context
       );
+      console.log(`[LIVE-STATUS-BG] Live streams result for ${channel.handle}:`, liveStreams);
 
       const cacheData: LiveStatusCache = {
         channelId,
@@ -256,6 +258,8 @@ export class LiveStatusBackgroundService {
         validationCooldown: Date.now() + (15 * 60 * 1000), // Can validate again in 15 minutes
         lastValidation: Date.now(),
       };
+
+      console.log(`[LIVE-STATUS-BG] Cache data for ${channel.handle}:`, cacheData);
 
       await this.cacheLiveStatus(channelId, cacheData);
       return cacheData;
