@@ -192,7 +192,7 @@ export class SchedulesService {
       }
       
       if (liveChannelIds.length > 0) {
-        console.log('[enrichSchedules] Smart batch fetching live streams for', liveChannelIds.length, 'channels with live programs (out of', channelGroups.size, 'total channels)');
+        console.log('[enrichSchedules] Individual fetching live streams for', liveChannelIds.length, 'channels with live programs (out of', channelGroups.size, 'total channels)');
         console.log('[enrichSchedules] Live channel IDs:', liveChannelIds);
         
         // Calculate intelligent TTL for each channel based on their program schedules
@@ -215,10 +215,42 @@ export class SchedulesService {
           }
         }
         
-        batchStreamsResults = await this.youtubeLiveService.getBatchLiveStreams(liveChannelIds, 'onDemand', channelTTLs, channelHandles, undefined);
-        console.log('[enrichSchedules] Smart batch fetch completed with intelligent TTL');
+        // Use individual fetches instead of batch (batch is failing)
+        console.log('[enrichSchedules] Executing individual fetches for', liveChannelIds.length, 'channels');
+        
+        batchStreamsResults = new Map<string, any>();
+        
+        // Process each channel individually
+        for (const channelId of liveChannelIds) {
+          try {
+            const handle = channelHandles.get(channelId) || 'unknown';
+            const ttl = channelTTLs.get(channelId) || 900; // fallback TTL
+            
+            console.log(`[enrichSchedules] Fetching live streams for ${handle} (${channelId})`);
+            
+            // Fetch live streams for this channel using the modern method
+            const liveStreamsResult = await this.youtubeLiveService.getLiveStreams(channelId, handle, ttl, 'onDemand', false);
+            
+            if (liveStreamsResult && liveStreamsResult !== '__SKIPPED__' && liveStreamsResult.streamCount > 0) {
+              batchStreamsResults.set(channelId, liveStreamsResult);
+              console.log(`[enrichSchedules] Found ${liveStreamsResult.streamCount} live streams for ${handle}`);
+            } else if (liveStreamsResult === '__SKIPPED__') {
+              console.log(`[enrichSchedules] Skipped ${handle} (disabled)`);
+            } else {
+              console.log(`[enrichSchedules] No live streams for ${handle}`);
+            }
+            
+            // Small delay between requests to be respectful to YouTube API
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+          } catch (error) {
+            console.error(`[enrichSchedules] Error fetching live status for ${channelId}:`, error.message);
+          }
+        }
+        
+        console.log('[enrichSchedules] Individual fetch completed for', liveChannelIds.length, 'channels');
       } else {
-        console.log('[enrichSchedules] No channels have live programs right now, skipping batch fetch');
+        console.log('[enrichSchedules] No channels have live programs right now, skipping individual fetch');
       }
     }
 

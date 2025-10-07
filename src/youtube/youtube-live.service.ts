@@ -710,12 +710,12 @@ export class YoutubeLiveService {
             eventType: 'live',
             type: 'video',
             key: this.apiKey,
-            maxResults: 50, // Max per channel, but we'll get the first few
+            maxResults: 5, // YouTube API limitation: maxResults should be 1-5 for eventType=live
           },
         });
 
         console.log(`🔍 [Batch] YouTube API response for ${chunk.length} channels: ${data.items?.length || 0} live streams found`);
-        console.log(`🔍 [Batch] Request URL: ${this.apiUrl}/search?part=snippet&channelId=${channelIdsParam}&eventType=live&type=video&key=${this.apiKey}&maxResults=50`);
+        console.log(`🔍 [Batch] Request URL: ${this.apiUrl}/search?part=snippet&channelId=${channelIdsParam}&eventType=live&type=video&key=${this.apiKey}&maxResults=5`);
         if (data.items && data.items.length > 0) {
           console.log(`🔍 [Batch] Found live streams for channels: ${data.items.map(item => `${item.snippet.channelTitle} (${item.snippet.channelId})`).join(', ')}`);
           console.log(`🔍 [Batch] Video IDs found: ${data.items.map(item => item.id.videoId).join(', ')}`);
@@ -734,7 +734,7 @@ export class YoutubeLiveService {
                   eventType: 'live',
                   type: 'video',
                   key: this.apiKey,
-                  maxResults: 50,
+                  maxResults: 5, // YouTube API limitation: maxResults should be 1-5 for eventType=live
                 },
               });
               
@@ -914,7 +914,7 @@ export class YoutubeLiveService {
           eventType: 'live',
           type: 'video',
           key: this.apiKey,
-          maxResults: 10, // Get up to 10 live streams
+          maxResults: 5, // YouTube API limitation: maxResults should be 1-5 for eventType=live
         },
       });
       
