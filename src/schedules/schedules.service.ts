@@ -81,7 +81,8 @@ export class SchedulesService {
         .createQueryBuilder('schedule')
         .leftJoinAndSelect('schedule.program', 'program')
         .leftJoinAndSelect('program.channel', 'channel')
-        .leftJoinAndSelect('program.panelists', 'panelists')
+        .leftJoin('program.panelists', 'panelists')
+        .addSelect(['panelists.id', 'panelists.name']) // Only select id and name to prevent data explosion
         .orderBy('schedule.start_time', 'ASC')
         .addOrderBy('panelists.id', 'ASC');
       
@@ -92,6 +93,11 @@ export class SchedulesService {
       schedules = await queryBuilder.getMany();
       const dbQueryTime = Date.now() - dbStart;
       console.log(`[SCHEDULES-DB] Query completed (${dbQueryTime}ms) - ${schedules.length} schedules`);
+      
+      // Debug: Check panelists data size
+      const schedulesWithPanelists = schedules.filter(s => s.program?.panelists && s.program.panelists.length > 0);
+      const totalPanelists = schedules.reduce((sum, s) => sum + (s.program?.panelists?.length || 0), 0);
+      console.log(`[SCHEDULES-DB] Schedules with panelists: ${schedulesWithPanelists.length}/${schedules.length}, Total panelists: ${totalPanelists}`);
       console.log('[findAll] First few schedules:', schedules.slice(0, 3).map(s => ({
         id: s.id,
         day_of_week: s.day_of_week,
