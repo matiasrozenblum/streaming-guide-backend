@@ -1,12 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { SchedulesService } from '../schedules/schedules.service';
 import { LiveStatusBackgroundService } from './live-status-background.service';
+import { RedisService } from '../redis/redis.service';
 
 @Injectable()
 export class OptimizedSchedulesService {
   constructor(
     private readonly schedulesService: SchedulesService,
     private readonly liveStatusBackgroundService: LiveStatusBackgroundService,
+    private readonly redisService: RedisService,
   ) {}
 
   /**
@@ -76,20 +78,53 @@ export class OptimizedSchedulesService {
                                currentTime < endNum;
 
         if (isCurrentlyLive && liveStatus.isLive) {
-          // Program is live and has live stream
-          enrichedSchedule.program = {
-            ...schedule.program,
-            is_live: true,
-            stream_url: liveStatus.streamUrl,
-            live_streams: [{
-              videoId: liveStatus.videoId,
-              title: schedule.program.name,
-              publishedAt: new Date().toISOString(),
-              description: '',
-              channelTitle: schedule.program.channel.name
-            }],
-            stream_count: 1,
-          };
+          // Program is live and has live stream - get actual live stream data
+          const liveStreamsKey = `liveStreamsByChannel:${channelId}`;
+          const cachedLiveStreams = await this.redisService.get<string>(liveStreamsKey);
+          
+          if (cachedLiveStreams) {
+            try {
+              const liveStreams = JSON.parse(cachedLiveStreams);
+              enrichedSchedule.program = {
+                ...schedule.program,
+                is_live: true,
+                stream_url: liveStatus.streamUrl,
+                live_streams: liveStreams,
+                stream_count: liveStreams.length,
+              };
+            } catch (error) {
+              console.warn(`[OPTIMIZED-SCHEDULES] Failed to parse live streams for ${channelId}:`, error);
+              // Fallback to basic live status
+              enrichedSchedule.program = {
+                ...schedule.program,
+                is_live: true,
+                stream_url: liveStatus.streamUrl,
+                live_streams: [{
+                  videoId: liveStatus.videoId,
+                  title: schedule.program.name,
+                  publishedAt: new Date().toISOString(),
+                  description: '',
+                  channelTitle: schedule.program.channel.name
+                }],
+                stream_count: 1,
+              };
+            }
+          } else {
+            // Fallback to basic live status if no cached streams
+            enrichedSchedule.program = {
+              ...schedule.program,
+              is_live: true,
+              stream_url: liveStatus.streamUrl,
+              live_streams: [{
+                videoId: liveStatus.videoId,
+                title: schedule.program.name,
+                publishedAt: new Date().toISOString(),
+                description: '',
+                channelTitle: schedule.program.channel.name
+              }],
+              stream_count: 1,
+            };
+          }
         } else if (isCurrentlyLive) {
           // Program is live but no live stream found
           enrichedSchedule.program = {
