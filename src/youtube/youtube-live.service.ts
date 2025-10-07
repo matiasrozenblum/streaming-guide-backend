@@ -907,6 +907,10 @@ export class YoutubeLiveService {
       // Track API usage
       await this.trackApiUsage('search', channelId, handle);
       
+      const requestUrl = `${this.apiUrl}/search?part=snippet&channelId=${channelId}&eventType=live&type=video&key=${this.apiKey}&maxResults=5`;
+      console.log(`🔍 [getLiveStreams] Making request for ${handle}: ${requestUrl}`);
+      console.log(`🔍 [getLiveStreams] Using API key: ${this.apiKey ? this.apiKey.substring(0, 10) + '...' : 'NOT_SET'}`);
+      
       const { data } = await axios.get(`${this.apiUrl}/search`, {
         params: {
           part: 'snippet',
@@ -917,6 +921,8 @@ export class YoutubeLiveService {
           maxResults: 5, // YouTube API limitation: maxResults should be 1-5 for eventType=live
         },
       });
+      
+      console.log(`🔍 [getLiveStreams] Response for ${handle}:`, JSON.stringify(data, null, 2));
       
 
       const liveStreams: LiveStream[] = (data.items || []).map((item: any) => ({
