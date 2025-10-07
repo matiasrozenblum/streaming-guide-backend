@@ -46,10 +46,19 @@ export class CategoriesController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all categories' })
+  @ApiOperation({ summary: 'Get all visible categories' })
   @ApiResponse({ status: 200, description: 'Categories retrieved successfully', type: [Category] })
   findAll(): Promise<Category[]> {
     return this.categoriesService.findAll();
+  }
+
+  @Get('admin')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all categories for admin (including hidden)' })
+  @ApiResponse({ status: 200, description: 'All categories retrieved successfully', type: [Category] })
+  findAllForAdmin(): Promise<Category[]> {
+    return this.categoriesService.findAllForAdmin();
   }
 
   @Patch(':id')
