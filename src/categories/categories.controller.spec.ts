@@ -16,6 +16,7 @@ describe('CategoriesController', () => {
     description: 'Canales de deportes y fútbol',
     color: '#FF6B6B',
     order: 1,
+    is_visible: true,
     channels: [],
   };
 

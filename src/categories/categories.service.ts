@@ -20,6 +20,14 @@ export class CategoriesService {
 
   async findAll(): Promise<Category[]> {
     return await this.categoriesRepository.find({
+      where: { is_visible: true },
+      relations: ['channels'],
+      order: { order: 'ASC', name: 'ASC' },
+    });
+  }
+
+  async findAllForAdmin(): Promise<Category[]> {
+    return await this.categoriesRepository.find({
       relations: ['channels'],
       order: { order: 'ASC', name: 'ASC' },
     });

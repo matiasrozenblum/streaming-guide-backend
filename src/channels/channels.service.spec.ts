@@ -276,6 +276,7 @@ describe('ChannelsService', () => {
         description: 'Canales de deportes',
         color: '#FF6B6B',
         order: 1,
+        is_visible: true,
         channels: [],
       },
       {
@@ -284,6 +285,7 @@ describe('ChannelsService', () => {
         description: 'Canales de noticias',
         color: '#4ECDC4',
         order: 2,
+        is_visible: true,
         channels: [],
       },
     ];
@@ -422,6 +424,7 @@ describe('ChannelsService', () => {
           description: 'Canales de deportes',
           color: '#FF6B6B',
           order: 1,
+          is_visible: true,
           channels: [],
         },
       ];
@@ -528,6 +531,7 @@ describe('ChannelsService', () => {
           description: 'Canales de deportes',
           color: '#FF6B6B',
           order: 1,
+          is_visible: true,
           channels: [],
         },
       ];
