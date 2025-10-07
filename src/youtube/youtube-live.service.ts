@@ -1103,8 +1103,8 @@ export class YoutubeLiveService {
     // Log individual results
     const resultsSummary = Array.from(results.entries()).map(([cid, result]) => {
       const handle = map.get(cid);
-      if (result && result.length > 0) {
-        return `${handle}: LIVE (${result.length} streams)`;
+      if (result && result.streamCount > 0) {
+        return `${handle}: LIVE (${result.streamCount} streams)`;
       } else {
         return `${handle}: NO_LIVE`;
       }
