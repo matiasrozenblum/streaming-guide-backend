@@ -1086,10 +1086,16 @@ export class YoutubeLiveService {
         if (liveStreamsResult && liveStreamsResult !== '__SKIPPED__' && liveStreamsResult.streamCount > 0) {
           results.set(channelId, liveStreamsResult);
           console.log(`[${cronLabel}] Found ${liveStreamsResult.streamCount} live streams for ${handle}`);
+          
+          // Update background cache to reflect correct live status
+          await this.updateBackgroundCache(channelId, handle, liveStreamsResult, ttl);
         } else if (liveStreamsResult === '__SKIPPED__') {
           console.log(`[${cronLabel}] Skipped ${handle} (disabled)`);
         } else {
           console.log(`[${cronLabel}] No live streams for ${handle}`);
+          
+          // Update background cache to reflect no live streams
+          await this.updateBackgroundCache(channelId, handle, null, ttl);
         }
         
         // Small delay between requests to be respectful to YouTube API
@@ -1113,6 +1119,46 @@ export class YoutubeLiveService {
     console.log(`[${cronLabel}] Individual fetch results: ${resultsSummary}`);
     
     console.log(`${cronLabel} completed - processed ${map.size} channels`);
+  }
+
+  /**
+   * Update background cache to keep it in sync with live stream data
+   */
+  private async updateBackgroundCache(
+    channelId: string, 
+    handle: string, 
+    liveStreamsResult: any, 
+    ttl: number
+  ): Promise<void> {
+    try {
+      const currentTime = TimezoneUtil.currentTimeInMinutes();
+      const currentDay = TimezoneUtil.currentDayOfWeek();
+      
+      // Calculate block end time (simplified version)
+      const blockEndTime = currentTime + (ttl / 60); // Convert TTL seconds to minutes
+      
+      const cacheData = {
+        channelId,
+        handle,
+        isLive: liveStreamsResult !== null && liveStreamsResult !== '__SKIPPED__' && liveStreamsResult.streamCount > 0,
+        streamUrl: liveStreamsResult && liveStreamsResult !== '__SKIPPED__' && liveStreamsResult.streamCount > 0 
+          ? `https://www.youtube.com/embed/${liveStreamsResult.primaryVideoId}?autoplay=1`
+          : null,
+        videoId: liveStreamsResult && liveStreamsResult !== '__SKIPPED__' ? liveStreamsResult.primaryVideoId : null,
+        lastUpdated: Date.now(),
+        ttl,
+        blockEndTime,
+        validationCooldown: Date.now() + (15 * 60 * 1000), // Can validate again in 15 minutes
+        lastValidation: Date.now(),
+      };
+
+      const cacheKey = `liveStatus:background:${channelId}`;
+      await this.redisService.set(cacheKey, cacheData, ttl);
+      
+      console.log(`[BACKGROUND-CACHE] Updated background cache for ${handle}: isLive=${cacheData.isLive}`);
+    } catch (error) {
+      console.error(`[BACKGROUND-CACHE] Failed to update background cache for ${handle}:`, error.message);
+    }
   }
 
   /**
