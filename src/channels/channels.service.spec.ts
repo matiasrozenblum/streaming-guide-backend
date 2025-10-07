@@ -18,6 +18,7 @@ import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
 import { ConfigService } from '../config/config.service';
 import { WeeklyOverridesService } from '../schedules/weekly-overrides.service';
 import { YoutubeLiveService } from '../youtube/youtube-live.service';
+import { OptimizedSchedulesService } from '../youtube/optimized-schedules.service';
 import { Category } from '../categories/categories.entity';
 
 describe('ChannelsService', () => {
@@ -131,6 +132,10 @@ describe('ChannelsService', () => {
     getLiveStreams: jest.fn(),
   };
 
+  const mockOptimizedSchedulesService = {
+    getSchedulesWithOptimizedLiveStatus: jest.fn().mockResolvedValue([]),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -186,6 +191,10 @@ describe('ChannelsService', () => {
         {
           provide: YoutubeLiveService,
           useValue: mockYoutubeLiveService,
+        },
+        {
+          provide: OptimizedSchedulesService,
+          useValue: mockOptimizedSchedulesService,
         },
       ],
     }).compile();
