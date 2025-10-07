@@ -14,6 +14,7 @@ import { ConfigService } from '../config/config.service';
 import { SentryService } from '../sentry/sentry.service';
 import { Channel } from '../channels/channels.entity';
 import { getCurrentBlockTTL } from '@/utils/getBlockTTL.util';
+import { TimezoneUtil } from '../utils/timezone.util';
 import { LiveStream, LiveStreamsResult } from './interfaces/live-stream.interface';
 
 const HolidaysClass = (DateHolidays as any).default ?? DateHolidays;
@@ -532,6 +533,9 @@ export class YoutubeLiveService {
         streamCount: 1
       };
       await this.redisService.set(streamsKey, JSON.stringify(streamsData), blockTTL);
+      
+      // Clear the "not-found" flag since we found live streams
+      await this.redisService.del(notFoundKey);
       console.log(`📌 Cached ${handle} → ${videoId} (TTL ${blockTTL}s)`);
 
       // Notify clients about the new video ID
@@ -604,6 +608,7 @@ export class YoutubeLiveService {
     context: 'cron' | 'onDemand' | 'program-start',
     channelTTLs: Map<string, number>, // Required TTL map for each channel
     channelHandleMap?: Map<string, string>, // Optional channel handle mapping for tracking
+    cronType?: 'main' | 'back-to-back-fix' | 'manual', // Optional cron type to distinguish between main, back-to-back, and manual
   ): Promise<Map<string, LiveStreamsResult | null | '__SKIPPED__'>> {
     const results = new Map<string, LiveStreamsResult | null | '__SKIPPED__'>();
     
@@ -621,10 +626,18 @@ export class YoutubeLiveService {
       const liveKey = `liveStreamsByChannel:${channelId}`;
       const notFoundKey = `videoIdNotFound:${channelId}`;
 
-      // Skip if marked as not-found
-      if (await this.redisService.get<string>(notFoundKey)) {
+      // Skip if marked as not-found (except for back-to-back cron and manual execution which should check anyway)
+      const isNotMarkedAsNotFound = await this.redisService.get<string>(notFoundKey);
+      if (isNotMarkedAsNotFound && cronType !== 'back-to-back-fix' && cronType !== 'manual') {
         results.set(channelId, '__SKIPPED__');
         continue;
+      }
+      
+      // For back-to-back cron and manual execution, log when we're ignoring not-found flag
+      if (isNotMarkedAsNotFound && (cronType === 'back-to-back-fix' || cronType === 'manual')) {
+        const handle = channelHandleMap?.get(channelId) || 'unknown';
+        const executionType = cronType === 'back-to-back-fix' ? 'Back-to-back' : 'Manual';
+        console.log(`🔄 [${executionType}] Ignoring not-found flag for ${handle} (${channelId}) - checking anyway`);
       }
 
       // Check cache
@@ -663,6 +676,8 @@ export class YoutubeLiveService {
     }
 
     console.log(`[Batch] Fresh fetch needed for ${channelsToFetch.length} channels (${channelIds.length - channelsToFetch.length} served from cache)`);
+    console.log(`[Batch] Channels to fetch: ${channelsToFetch.map(id => channelHandleMap?.get(id) || id).join(', ')}`);
+    console.log(`[Batch] Channels served from cache: ${Array.from(results.keys()).map(id => channelHandleMap?.get(id) || id).join(', ')}`);
     
     try {
       // YouTube API supports up to 50 channel IDs in a single search request
@@ -699,6 +714,80 @@ export class YoutubeLiveService {
           },
         });
 
+        console.log(`🔍 [Batch] YouTube API response for ${chunk.length} channels: ${data.items?.length || 0} live streams found`);
+        console.log(`🔍 [Batch] Request URL: ${this.apiUrl}/search?part=snippet&channelId=${channelIdsParam}&eventType=live&type=video&key=${this.apiKey}&maxResults=50`);
+        if (data.items && data.items.length > 0) {
+          console.log(`🔍 [Batch] Found live streams for channels: ${data.items.map(item => `${item.snippet.channelTitle} (${item.snippet.channelId})`).join(', ')}`);
+          console.log(`🔍 [Batch] Video IDs found: ${data.items.map(item => item.id.videoId).join(', ')}`);
+        } else {
+          console.log(`🔍 [Batch] No live streams found in YouTube API response for channels: ${chunk.join(', ')}`);
+          console.log(`🔍 [Batch] Full API response:`, JSON.stringify(data, null, 2));
+          
+          // FALLBACK: Try individual requests for channels that failed in batch
+          console.log(`🔄 [Batch] Batch request failed, attempting individual requests for ${chunk.length} channels...`);
+          for (const channelId of chunk) {
+            try {
+              const individualResponse = await axios.get(`${this.apiUrl}/search`, {
+                params: {
+                  part: 'snippet',
+                  channelId: channelId,
+                  eventType: 'live',
+                  type: 'video',
+                  key: this.apiKey,
+                  maxResults: 50,
+                },
+              });
+              
+              const handle = channelHandleMap?.get(channelId) || 'unknown';
+              console.log(`🔄 [Individual] Channel ${handle} (${channelId}): ${individualResponse.data.items?.length || 0} live streams found`);
+              
+              if (individualResponse.data.items && individualResponse.data.items.length > 0) {
+                console.log(`✅ [Individual] Found live stream: ${individualResponse.data.items[0].id.videoId} for ${individualResponse.data.items[0].snippet.channelTitle}`);
+                
+                // Process the individual result as if it came from batch
+                const streams = individualResponse.data.items.map((item: any) => ({
+                  videoId: item.id.videoId,
+                  title: item.snippet.title,
+                  publishedAt: item.snippet.publishedAt,
+                  description: item.snippet.description,
+                  thumbnailUrl: item.snippet.thumbnails?.medium?.url,
+                  channelTitle: item.snippet.channelTitle,
+                }));
+                
+                const liveStreamsResult = {
+                  streams,
+                  primaryVideoId: streams[0].videoId,
+                  streamCount: streams.length
+                };
+                
+                results.set(channelId, liveStreamsResult);
+                
+                // Cache the result with intelligent TTL based on program schedule
+                const liveKey = `liveStreamsByChannel:${channelId}`;
+                const notFoundKey = `videoIdNotFound:${channelId}`;
+                const blockTTL = channelTTLs.get(channelId)!;
+                await this.redisService.set(liveKey, JSON.stringify(streams), blockTTL);
+                
+                // Clear the "not-found" flag since we found live streams
+                await this.redisService.del(notFoundKey);
+                console.log(`✅ [Individual] Cached ${streams.length} streams for ${handle} (${channelId}) (TTL: ${blockTTL}s)`);
+              } else {
+                console.log(`❌ [Individual] No live streams found for ${handle} (${channelId})`);
+                results.set(channelId, null);
+                
+                // Cache the "not found" result to avoid repeated API calls
+                const notFoundKey = `videoIdNotFound:${channelId}`;
+                const notFoundTTL = 900; // 15 minutes - fixed short duration for not-found cache
+                await this.redisService.set(notFoundKey, '1', notFoundTTL);
+                console.log(`❌ [Individual] Cached not-found for ${handle} (${channelId}) - YouTube API returned no live streams (TTL: ${notFoundTTL}s)`);
+              }
+            } catch (error) {
+              console.error(`❌ [Individual] Error testing channel ${channelId}:`, error.message);
+              results.set(channelId, null);
+            }
+          }
+        }
+
         // Group results by channel ID
         const streamsByChannel = new Map<string, LiveStream[]>();
         
@@ -721,6 +810,8 @@ export class YoutubeLiveService {
         // Process results for each channel and cache them
         for (const channelId of chunk) {
           const streams = streamsByChannel.get(channelId);
+          const handle = channelHandleMap?.get(channelId) || 'unknown';
+          
           if (streams && streams.length > 0) {
             const liveStreamsResult = {
               streams,
@@ -732,17 +823,21 @@ export class YoutubeLiveService {
             
             // Cache the result with intelligent TTL based on program schedule
             const liveKey = `liveStreamsByChannel:${channelId}`;
+            const notFoundKey = `videoIdNotFound:${channelId}`;
             const blockTTL = channelTTLs.get(channelId)!;
             await this.redisService.set(liveKey, JSON.stringify(streams), blockTTL);
-            console.log(`💾 [Batch] Cached ${streams.length} streams for channel ${channelId} (TTL: ${blockTTL}s)`);
+            
+            // Clear the "not-found" flag since we found live streams
+            await this.redisService.del(notFoundKey);
+            console.log(`💾 [Batch] Cached ${streams.length} streams for ${handle} (${channelId}) (TTL: ${blockTTL}s)`);
           } else {
             results.set(channelId, null);
             
             // Cache the "not found" result to avoid repeated API calls
             const notFoundKey = `videoIdNotFound:${channelId}`;
-            const blockTTL = channelTTLs.get(channelId)!;
-            await this.redisService.set(notFoundKey, '1', blockTTL);
-            console.log(`🚫 [Batch] Cached not-found for channel ${channelId} (TTL: ${blockTTL}s)`);
+            const notFoundTTL = 900; // 15 minutes - fixed short duration for not-found cache
+            await this.redisService.set(notFoundKey, '1', notFoundTTL);
+            console.log(`🚫 [Batch] Cached not-found for ${handle} (${channelId}) - YouTube API returned no live streams (TTL: ${notFoundTTL}s)`);
           }
         }
       }
@@ -846,6 +941,9 @@ export class YoutubeLiveService {
 
       // Cache the streams
       await this.redisService.set(liveKey, JSON.stringify(liveStreams), blockTTL);
+      
+      // Clear the "not-found" flag since we found live streams
+      await this.redisService.del(notFoundKey);
       console.log(`📌 Cached ${handle} → ${liveStreams.length} streams (TTL ${blockTTL}s)`);
 
       // Notify clients about the new streams
@@ -910,7 +1008,7 @@ export class YoutubeLiveService {
     }
   }
 
-  private async isVideoLive(videoId: string): Promise<boolean> {
+  public async isVideoLive(videoId: string): Promise<boolean> {
     try {
       // Track API usage
       await this.trackApiUsage('video');
@@ -927,15 +1025,13 @@ export class YoutubeLiveService {
   /**
    * Itera canales con programación hoy y llama a getLiveVideoId
    */
-  async fetchLiveVideoIds(cronType: 'main' | 'back-to-back-fix' = 'main') {
-    const cronLabel = cronType === 'main' ? '🕐 MAIN CRON' : '🔄 BACK-TO-BACK FIX CRON';
-    const currentTime = dayjs().tz('America/Argentina/Buenos_Aires').format('HH:mm:ss');
+  async fetchLiveVideoIds(cronType: 'main' | 'back-to-back-fix' | 'manual' = 'main') {
+    const cronLabel = cronType === 'main' ? '🕐 MAIN CRON' : cronType === 'back-to-back-fix' ? '🔄 BACK-TO-BACK FIX CRON' : '🔧 MANUAL EXECUTION';
+    const currentTime = TimezoneUtil.currentTimeString();
     
     console.log(`${cronLabel} started at ${currentTime}`);
     
-    const today = dayjs().tz('America/Argentina/Buenos_Aires')
-                        .format('dddd')
-                        .toLowerCase();
+    const today = TimezoneUtil.currentDayOfWeek();
   
     // 1) Primero traés y enriquecés los schedules
     const rawSchedules = await this.schedulesService.findByDay(today);
@@ -985,7 +1081,7 @@ export class YoutubeLiveService {
     
     // Execute batch fetch for all live channels
     console.log(`[${cronLabel}] Executing batch fetch for ${channelIds.length} channels`);
-    const batchResults = await this.getBatchLiveStreams(channelIds, 'cron', channelTTLs, map);
+    const batchResults = await this.getBatchLiveStreams(channelIds, 'cron', channelTTLs, map, cronType);
     
     let updatedCount = 0;
     // Track changes for back-to-back fix
@@ -994,19 +1090,19 @@ export class YoutubeLiveService {
         const beforeCache = beforeCacheStates.get(cid);
         if (beforeCache) {
           const streamsKey = `liveStreamsByChannel:${cid}`;
-          const afterCache = await this.redisService.get<string>(streamsKey);
+        const afterCache = await this.redisService.get<string>(streamsKey);
           if (afterCache) {
-            try {
-              const beforeStreams = JSON.parse(beforeCache);
-              const afterStreams = JSON.parse(afterCache);
-              if (beforeStreams.primaryVideoId !== afterStreams.primaryVideoId) {
-                updatedCount++;
-                console.log(`🔧 ${cronLabel} - FIXED back-to-back issue for ${handle}: ${beforeStreams.primaryVideoId} → ${afterStreams.primaryVideoId}`);
-              }
-            } catch (error) {
-              // If parsing fails, assume it was updated
+          try {
+            const beforeStreams = JSON.parse(beforeCache);
+            const afterStreams = JSON.parse(afterCache);
+            if (beforeStreams.primaryVideoId !== afterStreams.primaryVideoId) {
               updatedCount++;
-              console.log(`🔧 ${cronLabel} - FIXED back-to-back issue for ${handle} (cache format changed)`);
+              console.log(`🔧 ${cronLabel} - FIXED back-to-back issue for ${handle}: ${beforeStreams.primaryVideoId} → ${afterStreams.primaryVideoId}`);
+            }
+          } catch (error) {
+            // If parsing fails, assume it was updated
+            updatedCount++;
+            console.log(`🔧 ${cronLabel} - FIXED back-to-back issue for ${handle} (cache format changed)`);
             }
           }
         }
@@ -1036,9 +1132,9 @@ export class YoutubeLiveService {
    */
   async checkProgramStarts() {
     try {
-      const now = dayjs().tz('America/Argentina/Buenos_Aires');
+      const now = TimezoneUtil.now();
       const currentMinute = now.format('HH:mm');
-      const currentDay = now.format('dddd').toLowerCase();
+      const currentDay = TimezoneUtil.currentDayOfWeek();
       
       // Find programs starting right now
       const startingPrograms = await this.schedulesService.findByStartTime(currentDay, currentMinute);

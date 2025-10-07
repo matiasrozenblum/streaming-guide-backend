@@ -24,10 +24,35 @@ export class ChannelsController {
   async getChannelsWithSchedules(
     @Query('day') day?: string,
     @Query('deviceId') deviceId?: string,
-    @Query('live_status') liveStatus?: boolean,
+    @Query('live_status') liveStatus?: string,
     @Query('raw') raw?: string
   ) {
-    return this.channelsService.getChannelsWithSchedules(day, deviceId, liveStatus, raw);
+    const liveStatusBool = liveStatus === 'true' ? true : liveStatus === 'false' ? false : undefined;
+    return this.channelsService.getChannelsWithSchedules(day, deviceId, liveStatusBool, raw);
+  }
+
+  @Get('with-schedules/today')
+  @ApiOperation({ summary: 'Get today\'s schedules only (optimized for initial load)' })
+  @ApiResponse({ status: 200, description: 'Today\'s schedules for all channels' })
+  async getTodaySchedules(
+    @Query('deviceId') deviceId?: string,
+    @Query('live_status') liveStatus?: string,
+    @Query('raw') raw?: string
+  ) {
+    const liveStatusBool = liveStatus === 'true' ? true : liveStatus === 'false' ? false : undefined;
+    return this.channelsService.getTodaySchedules(deviceId, liveStatusBool, raw);
+  }
+
+  @Get('with-schedules/week')
+  @ApiOperation({ summary: 'Get full week schedules (optimized for background loading)' })
+  @ApiResponse({ status: 200, description: 'Full week schedules for all channels' })
+  async getWeekSchedules(
+    @Query('deviceId') deviceId?: string,
+    @Query('live_status') liveStatus?: string,
+    @Query('raw') raw?: string
+  ) {
+    const liveStatusBool = liveStatus === 'true' ? true : liveStatus === 'false' ? false : undefined;
+    return this.channelsService.getWeekSchedules(deviceId, liveStatusBool, raw);
   }
 
   @Get(':id')

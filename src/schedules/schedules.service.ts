@@ -16,6 +16,7 @@ import { getCurrentBlockTTL } from '@/utils/getBlockTTL.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ConfigService } from '../config/config.service';
 import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
+import { TimezoneUtil } from '../utils/timezone.util';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
 const REVALIDATE_SECRET = process.env.REVALIDATE_SECRET || 'changeme';
@@ -65,15 +66,15 @@ export class SchedulesService {
     const cacheKey = `schedules:all:${dayOfWeek || 'all'}`;
     let schedules: Schedule[] | null = null;
     if (!skipCache) {
-      console.log('[findAll] Checking Redis cache for', cacheKey);
+      console.log(`[SCHEDULES-CACHE] Checking cache for ${cacheKey}`);
       schedules = await this.redisService.get<Schedule[]>(cacheKey);
       if (schedules) {
-        console.log('[findAll] Cache HIT for', cacheKey, 'in', Date.now() - startTime, 'ms');
+        console.log(`[SCHEDULES-CACHE] HIT for ${cacheKey} (${Date.now() - startTime}ms)`);
       }
     }
 
     if (!schedules) {
-      console.log('[findAll] Cache MISS for', cacheKey);
+      console.log(`[SCHEDULES-CACHE] MISS for ${cacheKey}`);
       const dbStart = Date.now();
       // Reverted to original query structure
       const queryBuilder = this.schedulesRepository
@@ -90,8 +91,7 @@ export class SchedulesService {
       
       schedules = await queryBuilder.getMany();
       const dbQueryTime = Date.now() - dbStart;
-      console.log('[findAll] DB query completed in', dbQueryTime, 'ms');
-      console.log('[findAll] Raw schedules count:', schedules.length);
+      console.log(`[SCHEDULES-DB] Query completed (${dbQueryTime}ms) - ${schedules.length} schedules`);
       console.log('[findAll] First few schedules:', schedules.slice(0, 3).map(s => ({
         id: s.id,
         day_of_week: s.day_of_week,
@@ -128,33 +128,31 @@ export class SchedulesService {
         return a.start_time.localeCompare(b.start_time);
       });
       await this.redisService.set(cacheKey, schedules, 1800);
-      console.log('[findAll] Database query and cache SET. Total time:', Date.now() - startTime, 'ms');
+      console.log(`[SCHEDULES-CACHE] Stored ${schedules.length} schedules in cache`);
     }
 
     // Apply weekly overrides for current week (unless raw=true)
     if (applyOverrides) {
       const currentWeekStart = this.weeklyOverridesService.getWeekStartDate('current');
       const overridesStart = Date.now();
-      console.log('[findAll] Applying weekly overrides...');
+      console.log('[SCHEDULES-OVERRIDES] Applying weekly overrides...');
       schedules = await this.weeklyOverridesService.applyWeeklyOverrides(schedules!, currentWeekStart);
-      console.log('[findAll] Weekly overrides applied in', Date.now() - overridesStart, 'ms');
+      console.log(`[SCHEDULES-OVERRIDES] Applied overrides (${Date.now() - overridesStart}ms)`);
     }
 
     const enrichStart = Date.now();
-    console.log('[findAll] Enriching schedules...', schedules!.length, 'schedules');
+    console.log(`[SCHEDULES-ENRICH] Enriching ${schedules!.length} schedules...`);
     const enriched = await this.enrichSchedules(schedules!, liveStatus);
-    console.log('[findAll] Enriched schedules in', Date.now() - enrichStart, 'ms');
-    console.log('[findAll] Enriched result length:', enriched.length);
-
-    console.log('[findAll] TOTAL time:', Date.now() - startTime, 'ms');
+    console.log(`[SCHEDULES-ENRICH] Enriched ${schedules!.length} schedules (${Date.now() - enrichStart}ms)`);
+    console.log(`[SCHEDULES-TOTAL] Completed in ${Date.now() - startTime}ms`);
     return enriched;
   }
 
   async enrichSchedules(schedules: Schedule[], liveStatus: boolean = false): Promise<any[]> {
     console.log('[enrichSchedules] Starting enrichment of', schedules.length, 'schedules');
-    const now = this.dayjs().tz('America/Argentina/Buenos_Aires');
-    const currentNum = now.hour() * 100 + now.minute();
-    const currentDay = now.format('dddd').toLowerCase();
+    const now = TimezoneUtil.now();
+    const currentNum = TimezoneUtil.currentTimeInMinutes();
+    const currentDay = TimezoneUtil.currentDayOfWeek();
 
     // Group schedules by channel for stream distribution
     const channelGroups = new Map<string, Schedule[]>();
@@ -219,7 +217,7 @@ export class SchedulesService {
           }
         }
         
-        batchStreamsResults = await this.youtubeLiveService.getBatchLiveStreams(liveChannelIds, 'onDemand', channelTTLs, channelHandles);
+        batchStreamsResults = await this.youtubeLiveService.getBatchLiveStreams(liveChannelIds, 'onDemand', channelTTLs, channelHandles, undefined);
         console.log('[enrichSchedules] Smart batch fetch completed with intelligent TTL');
       } else {
         console.log('[enrichSchedules] No channels have live programs right now, skipping batch fetch');
@@ -531,7 +529,7 @@ export class SchedulesService {
 
   private convertTimeToNumber(time: string): number {
     const [h, m] = time.split(':').map(Number);
-    return h * 100 + m;
+    return h * 60 + m; // Convert to minutes for consistency
   }
 
   private convertTimeToMinutes(time: string): number {
