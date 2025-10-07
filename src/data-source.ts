@@ -35,6 +35,16 @@ export const AppDataSource = new DataSource({
   logging: false,
   extra: {
     max: 10, // Increased from 5 to handle panelists join load
-    statement_timeout: 20000, // 20 seconds query timeout
+    min: 2, // Minimum connections
+    acquireTimeoutMillis: 15000, // 15 seconds to acquire connection
+    createTimeoutMillis: 15000, // 15 seconds to create connection
+    destroyTimeoutMillis: 5000, // 5 seconds to destroy connection
+    idleTimeoutMillis: 15000, // 15 seconds idle timeout
+    reapIntervalMillis: 1000, // Check for idle connections every second
+    createRetryIntervalMillis: 200, // Retry connection creation every 200ms
+    statement_timeout: 15000, // Reduced to 15 seconds for faster failure detection
+    connectionTimeoutMillis: 15000, // 15 seconds connection timeout
+    retryDelayMillis: 1000, // Add connection retry logic
+    retryAttempts: 3,
   },
 });
