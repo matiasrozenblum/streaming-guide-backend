@@ -76,14 +76,12 @@ export class SchedulesService {
     if (!schedules) {
       console.log(`[SCHEDULES-CACHE] MISS for ${cacheKey}`);
       const dbStart = Date.now();
-      // Reverted to original query structure
+      // Optimized query structure - removed panelists join to prevent data explosion
       const queryBuilder = this.schedulesRepository
         .createQueryBuilder('schedule')
         .leftJoinAndSelect('schedule.program', 'program')
         .leftJoinAndSelect('program.channel', 'channel')
-        .leftJoinAndSelect('program.panelists', 'panelists')
-        .orderBy('schedule.start_time', 'ASC')
-        .addOrderBy('panelists.id', 'ASC');
+        .orderBy('schedule.start_time', 'ASC');
       
       if (dayOfWeek) {
         queryBuilder.where('schedule.day_of_week = :dayOfWeek', { dayOfWeek });

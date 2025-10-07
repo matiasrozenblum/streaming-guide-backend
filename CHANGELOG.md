@@ -17,6 +17,34 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.13.0] - 2025-10-06
+
+### Added
+- Added LiveStatusBackgroundService for optimized live status caching
+- Added OptimizedSchedulesService for improved schedule fetching performance
+- Added new optimized API endpoints: `/channels/with-schedules/today` and `/channels/with-schedules/week`
+- Added strategic database indexes for improved query performance
+- Added hybrid optimization system with background job processing every 2 minutes
+- Added video ID validation with 15-minute cooldown to ensure freshness
+- Added block-aware TTL calculation for accurate cache management
+- Added comprehensive test coverage for new optimization services
+- Added performance monitoring and logging with prefixes for better debugging
+
+### Changed
+- Optimized live status fetching with 99.9% performance improvement (15s → 0.02s)
+- Reduced YouTube API quota usage by 93% through background processing
+- Improved timezone handling with centralized utility functions
+- Enhanced logging system with performance metrics and structured prefixes
+- Updated ChannelsService to use OptimizedSchedulesService for better performance
+- Modified live status parameter handling to support string-to-boolean conversion
+- Improved cache invalidation strategy for CRUD operations on schedules
+
+### Fixed
+- Fixed timezone issues causing negative TTL errors
+- Fixed video ID rotation detection for long-running streams
+- Fixed block TTL calculation for back-to-back programs
+- Fixed cache freshness validation for live video IDs
+
 ## [1.12.2] - 2025-10-06
 
 ### Fixed

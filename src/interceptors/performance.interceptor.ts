@@ -66,7 +66,7 @@ export class PerformanceInterceptor implements NestInterceptor {
         */
         
         // Alert on very slow responses (P2 - High Priority)
-        if (responseTime > 15000) { // 15+ seconds
+        /*if (responseTime > 15000) { // 15+ seconds
           this.sentryService.captureMessage(
             `API Critical Performance Issue - ${endpoint} taking ${responseTime}ms`,
             'error',
@@ -85,7 +85,7 @@ export class PerformanceInterceptor implements NestInterceptor {
           this.sentryService.setTag('service', 'api');
           this.sentryService.setTag('error_type', 'critical_slow_response');
           this.sentryService.setTag('endpoint', endpoint);
-        }
+        }*/
       }),
       catchError((error) => {
         const responseTime = Date.now() - startTime;

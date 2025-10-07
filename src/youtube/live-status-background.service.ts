@@ -174,11 +174,16 @@ export class LiveStatusBackgroundService {
    */
   private async updateChannelLiveStatus(channelId: string): Promise<LiveStatusCache | null> {
     try {
-      // Get channel info
-      const channel = await this.channelsRepository.findOne({
-        where: { youtube_channel_id: channelId },
-        relations: ['programs', 'programs.schedules'],
-      });
+      // Get channel info with optimized query - only load current day schedules
+      const channel = await this.channelsRepository
+        .createQueryBuilder('channel')
+        .leftJoinAndSelect('channel.programs', 'program')
+        .leftJoinAndSelect('program.schedules', 'schedule')
+        .where('channel.youtube_channel_id = :channelId', { channelId })
+        .andWhere('schedule.day_of_week = :currentDay', { currentDay: TimezoneUtil.currentDayOfWeek() })
+        .andWhere('schedule.start_time <= :currentTime', { currentTime: TimezoneUtil.currentTimeString() })
+        .andWhere('schedule.end_time > :currentTime', { currentTime: TimezoneUtil.currentTimeString() })
+        .getOne();
 
       if (!channel || !channel.handle) {
         return null;
