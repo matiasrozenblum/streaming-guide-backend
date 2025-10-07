@@ -199,7 +199,6 @@ describe('SchedulesService', () => {
           useValue: {
             getLiveVideoId: jest.fn(),
             getLiveStreams: jest.fn(),
-            getBatchLiveStreams: jest.fn().mockResolvedValue(new Map()),
           },
         },
         {

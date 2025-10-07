@@ -76,12 +76,17 @@ export class SchedulesService {
     if (!schedules) {
       console.log(`[SCHEDULES-CACHE] MISS for ${cacheKey}`);
       const dbStart = Date.now();
-      // Optimized query structure - removed panelists join to prevent data explosion
+      console.log(`[SCHEDULES-DB] Starting query for ${dayOfWeek || 'all days'} at ${new Date().toISOString()}`);
+      
+      // Optimized query structure - selective panelists join to prevent data explosion
       const queryBuilder = this.schedulesRepository
         .createQueryBuilder('schedule')
         .leftJoinAndSelect('schedule.program', 'program')
         .leftJoinAndSelect('program.channel', 'channel')
-        .orderBy('schedule.start_time', 'ASC');
+        .leftJoin('program.panelists', 'panelists')
+        .addSelect(['panelists.id', 'panelists.name']) // Only select id and name to prevent data explosion
+        .orderBy('schedule.start_time', 'ASC')
+        .addOrderBy('panelists.id', 'ASC');
       
       if (dayOfWeek) {
         queryBuilder.where('schedule.day_of_week = :dayOfWeek', { dayOfWeek });
@@ -90,6 +95,11 @@ export class SchedulesService {
       schedules = await queryBuilder.getMany();
       const dbQueryTime = Date.now() - dbStart;
       console.log(`[SCHEDULES-DB] Query completed (${dbQueryTime}ms) - ${schedules.length} schedules`);
+      
+      // Debug: Check panelists data size
+      const schedulesWithPanelists = schedules.filter(s => s.program?.panelists && s.program.panelists.length > 0);
+      const totalPanelists = schedules.reduce((sum, s) => sum + (s.program?.panelists?.length || 0), 0);
+      console.log(`[SCHEDULES-DB] Schedules with panelists: ${schedulesWithPanelists.length}/${schedules.length}, Total panelists: ${totalPanelists}`);
       console.log('[findAll] First few schedules:', schedules.slice(0, 3).map(s => ({
         id: s.id,
         day_of_week: s.day_of_week,
@@ -192,7 +202,7 @@ export class SchedulesService {
       }
       
       if (liveChannelIds.length > 0) {
-        console.log('[enrichSchedules] Smart batch fetching live streams for', liveChannelIds.length, 'channels with live programs (out of', channelGroups.size, 'total channels)');
+        console.log('[enrichSchedules] Individual fetching live streams for', liveChannelIds.length, 'channels with live programs (out of', channelGroups.size, 'total channels)');
         console.log('[enrichSchedules] Live channel IDs:', liveChannelIds);
         
         // Calculate intelligent TTL for each channel based on their program schedules
@@ -215,10 +225,42 @@ export class SchedulesService {
           }
         }
         
-        batchStreamsResults = await this.youtubeLiveService.getBatchLiveStreams(liveChannelIds, 'onDemand', channelTTLs, channelHandles, undefined);
-        console.log('[enrichSchedules] Smart batch fetch completed with intelligent TTL');
+        // Use individual fetches instead of batch (batch is failing)
+        console.log('[enrichSchedules] Executing individual fetches for', liveChannelIds.length, 'channels');
+        
+        batchStreamsResults = new Map<string, any>();
+        
+        // Process each channel individually
+        for (const channelId of liveChannelIds) {
+          try {
+            const handle = channelHandles.get(channelId) || 'unknown';
+            const ttl = channelTTLs.get(channelId) || 900; // fallback TTL
+            
+            console.log(`[enrichSchedules] Fetching live streams for ${handle} (${channelId})`);
+            
+            // Fetch live streams for this channel using the modern method
+            const liveStreamsResult = await this.youtubeLiveService.getLiveStreams(channelId, handle, ttl, 'onDemand', false);
+            
+            if (liveStreamsResult && liveStreamsResult !== '__SKIPPED__' && liveStreamsResult.streamCount > 0) {
+              batchStreamsResults.set(channelId, liveStreamsResult);
+              console.log(`[enrichSchedules] Found ${liveStreamsResult.streamCount} live streams for ${handle}`);
+            } else if (liveStreamsResult === '__SKIPPED__') {
+              console.log(`[enrichSchedules] Skipped ${handle} (disabled)`);
+            } else {
+              console.log(`[enrichSchedules] No live streams for ${handle}`);
+            }
+            
+            // Small delay between requests to be respectful to YouTube API
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+          } catch (error) {
+            console.error(`[enrichSchedules] Error fetching live status for ${channelId}:`, error.message);
+          }
+        }
+        
+        console.log('[enrichSchedules] Individual fetch completed for', liveChannelIds.length, 'channels');
       } else {
-        console.log('[enrichSchedules] No channels have live programs right now, skipping batch fetch');
+        console.log('[enrichSchedules] No channels have live programs right now, skipping individual fetch');
       }
     }
 
@@ -259,8 +301,9 @@ export class SchedulesService {
           ...program,
           is_live: isLive,
           stream_url: streamUrl,
-        live_streams: null,
-        stream_count: 0,
+          live_streams: null,
+          stream_count: 0,
+          panelists: program.panelists || [], // Preserve panelists data
         },
       });
     }
@@ -492,6 +535,7 @@ export class SchedulesService {
         stream_url: streamUrl,
         live_streams: assignedStream ? [assignedStream] : null,
         stream_count: assignedStream ? 1 : 0,
+        panelists: program.panelists || [], // Preserve panelists data
       },
     };
     

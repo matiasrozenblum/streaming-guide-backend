@@ -34,15 +34,17 @@ export const AppDataSource = new DataSource({
   synchronize: false,
   logging: false,
   extra: {
-    max: 20, // Increased pool size for production load
+    max: 23, // Increased to use available Supabase pooler capacity (15 pool size - 1 buffer)
     min: 2, // Minimum connections
-    acquireTimeoutMillis: 30000, // 30 seconds to acquire connection
-    createTimeoutMillis: 30000, // 30 seconds to create connection
+    acquireTimeoutMillis: 15000, // 15 seconds to acquire connection
+    createTimeoutMillis: 15000, // 15 seconds to create connection
     destroyTimeoutMillis: 5000, // 5 seconds to destroy connection
-    idleTimeoutMillis: 30000, // 30 seconds idle timeout
+    idleTimeoutMillis: 15000, // 15 seconds idle timeout
     reapIntervalMillis: 1000, // Check for idle connections every second
     createRetryIntervalMillis: 200, // Retry connection creation every 200ms
-    statement_timeout: 30000, // 30 seconds query timeout
-    connectionTimeoutMillis: 30000, // 30 seconds connection timeout
+    statement_timeout: 15000, // Reduced to 15 seconds for faster failure detection
+    connectionTimeoutMillis: 15000, // 15 seconds connection timeout
+    retryDelayMillis: 1000, // Add connection retry logic
+    retryAttempts: 3,
   },
 });

@@ -122,42 +122,49 @@ describe('YoutubeLiveService', () => {
       expect(spy).not.toHaveBeenCalled();
     });
 
-    it('calls getBatchLiveStreams for channels with schedule', async () => {
+    it('calls getLiveStreams for channels with schedule', async () => {
       const schedules = [
-        { program: { channel: { youtube_channel_id: 'cid1', handle: 'h1' }, is_live: true } },
-        { program: { channel: { youtube_channel_id: 'cid2', handle: 'h2' }, is_live: true } },
+        { program: { channel: { youtube_channel_id: 'cid1', handle: 'h1', is_visible: true }, is_live: true } },
+        { program: { channel: { youtube_channel_id: 'cid2', handle: 'h2', is_visible: true }, is_live: true } },
       ];
       schedulesService.findByDay.mockResolvedValue(schedules as any);
       schedulesService.enrichSchedules.mockResolvedValue(schedules as any);
       
-      const batchResults = new Map([
-        ['cid1', {
+      const individualResults = [
+        {
           streams: [{ videoId: 'vid1', title: 'Test Stream 1', publishedAt: '2023-01-01', description: 'Test' }],
           primaryVideoId: 'vid1',
           streamCount: 1
-        }],
-        ['cid2', {
+        },
+        {
           streams: [{ videoId: 'vid2', title: 'Test Stream 2', publishedAt: '2023-01-01', description: 'Test' }],
           primaryVideoId: 'vid2',
           streamCount: 1
-        }]
-      ]);
+        }
+      ];
       
-      jest.spyOn(service, 'getBatchLiveStreams').mockResolvedValue(batchResults);
+      jest.spyOn(service, 'getLiveStreams').mockResolvedValueOnce(individualResults[0]);
+      jest.spyOn(service, 'getLiveStreams').mockResolvedValueOnce(individualResults[1]);
       jest.spyOn(require('@/utils/getBlockTTL.util'), 'getCurrentBlockTTL').mockResolvedValue(100);
       
       await service.fetchLiveVideoIds();
       
-      expect(service.getBatchLiveStreams).toHaveBeenCalledTimes(1);
-      expect(service.getBatchLiveStreams).toHaveBeenCalledWith(['cid1', 'cid2'], 'cron', expect.any(Map), expect.any(Map), 'main');
+      expect(service.getLiveStreams).toHaveBeenCalledTimes(2);
+      expect(service.getLiveStreams).toHaveBeenCalledWith('cid1', 'h1', 100, 'cron', false);
+      expect(service.getLiveStreams).toHaveBeenCalledWith('cid2', 'h2', 100, 'cron', false);
     });
 
     it('passes SentryService to getCurrentBlockTTL', async () => {
       const schedules = [
-        { program: { channel: { youtube_channel_id: 'cid1', handle: 'h1' }, is_live: true } },
+        { program: { channel: { youtube_channel_id: 'cid1', handle: 'h1', is_visible: true }, is_live: true } },
       ];
       schedulesService.findByDay.mockResolvedValue(schedules as any);
-      jest.spyOn(service, 'getLiveVideoId').mockResolvedValue('vid');
+      schedulesService.enrichSchedules.mockResolvedValue(schedules as any);
+      jest.spyOn(service, 'getLiveStreams').mockResolvedValue({
+        streams: [{ videoId: 'vid1', title: 'Test Stream', publishedAt: '2023-01-01', description: 'Test', thumbnailUrl: '', channelTitle: 'Test Channel' }],
+        primaryVideoId: 'vid1',
+        streamCount: 1
+      });
       
       const getCurrentBlockTTLSpy = jest.spyOn(require('@/utils/getBlockTTL.util'), 'getCurrentBlockTTL').mockResolvedValue(100);
       
