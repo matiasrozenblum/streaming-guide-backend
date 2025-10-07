@@ -257,7 +257,8 @@ export class ChannelsService {
 
   async getChannelsWithSchedules(day?: string, deviceId?: string, liveStatus?: boolean, raw?: string): Promise<ChannelWithSchedules[]> {
     const overallStart = Date.now();
-    console.log(`[CHANNELS-SCHEDULES] Starting fetch - day: ${day || 'all'}, live: ${liveStatus}, raw: ${raw}`);
+    const requestId = Math.random().toString(36).substr(2, 9);
+    console.log(`[CHANNELS-SCHEDULES-${requestId}] Starting fetch - day: ${day || 'all'}, live: ${liveStatus}, raw: ${raw} at ${new Date().toISOString()}`);
 
     // Pre-fetch user subscriptions if deviceId is provided (optimized query)
     let subscribedProgramIds: Set<number> = new Set();
@@ -286,6 +287,7 @@ export class ChannelsService {
 
     // Use OptimizedSchedulesService for better performance with timeout protection
     const queryStart = Date.now();
+    console.log(`[CHANNELS-SCHEDULES-${requestId}] About to call OptimizedSchedulesService at ${new Date().toISOString()}`);
     let allSchedules;
     try {
       allSchedules = await this.optimizedSchedulesService.getSchedulesWithOptimizedLiveStatus({
@@ -293,9 +295,10 @@ export class ChannelsService {
         applyOverrides: raw !== 'true',
         liveStatus: liveStatus || false,
       });
-      console.log(`[CHANNELS-SCHEDULES] Optimized schedules query completed (${Date.now() - queryStart}ms) - ${allSchedules.length} schedules`);
+      console.log(`[CHANNELS-SCHEDULES-${requestId}] Optimized schedules query completed (${Date.now() - queryStart}ms) - ${allSchedules.length} schedules`);
     } catch (error) {
-      console.warn(`[CHANNELS-SCHEDULES] OptimizedSchedulesService failed, using fallback:`, error.message);
+      console.error(`[CHANNELS-SCHEDULES-${requestId}] OptimizedSchedulesService FAILED after ${Date.now() - queryStart}ms:`, error.message);
+      console.error(`[CHANNELS-SCHEDULES-${requestId}] Full error:`, error);
       // Emergency fallback: return empty array to prevent complete failure
       allSchedules = [];
     }

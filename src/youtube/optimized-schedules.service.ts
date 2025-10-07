@@ -16,21 +16,27 @@ export class OptimizedSchedulesService {
    */
   async getSchedulesWithOptimizedLiveStatus(options: any = {}): Promise<any[]> {
     const startTime = Date.now();
+    const requestId = Math.random().toString(36).substr(2, 9);
+    console.log(`[OPTIMIZED-SCHEDULES-${requestId}] Starting at ${new Date().toISOString()}, options:`, options);
     
     // Get schedules without live status enrichment (fast)
+    console.log(`[OPTIMIZED-SCHEDULES-${requestId}] Calling schedulesService.findAll...`);
+    const schedulesStart = Date.now();
     const schedules = await this.schedulesService.findAll({
       ...options,
       liveStatus: false, // Skip expensive live status enrichment
     });
+    console.log(`[OPTIMIZED-SCHEDULES-${requestId}] schedulesService.findAll completed in ${Date.now() - schedulesStart}ms, got ${schedules.length} schedules`);
 
     console.log(`[OPTIMIZED-SCHEDULES] Got ${schedules.length} schedules in ${Date.now() - startTime}ms`);
 
     // If live status is requested, enrich using background cache (fast)
     if (options.liveStatus) {
+      console.log(`[OPTIMIZED-SCHEDULES-${requestId}] Enriching ${schedules.length} schedules with live status...`);
       const enrichStart = Date.now();
       const enrichedSchedules = await this.enrichWithCachedLiveStatus(schedules);
-      console.log(`[OPTIMIZED-SCHEDULES] Enriched ${schedules.length} schedules in ${Date.now() - enrichStart}ms`);
-      console.log(`[OPTIMIZED-SCHEDULES] Total time: ${Date.now() - startTime}ms`);
+      console.log(`[OPTIMIZED-SCHEDULES-${requestId}] Enrichment completed in ${Date.now() - enrichStart}ms`);
+      console.log(`[OPTIMIZED-SCHEDULES-${requestId}] Total time: ${Date.now() - startTime}ms`);
       return enrichedSchedules;
     }
 

@@ -76,6 +76,8 @@ export class SchedulesService {
     if (!schedules) {
       console.log(`[SCHEDULES-CACHE] MISS for ${cacheKey}`);
       const dbStart = Date.now();
+      console.log(`[SCHEDULES-DB] Starting query for ${dayOfWeek || 'all days'} at ${new Date().toISOString()}`);
+      
       // Optimized query structure - selective panelists join to prevent data explosion
       const queryBuilder = this.schedulesRepository
         .createQueryBuilder('schedule')
