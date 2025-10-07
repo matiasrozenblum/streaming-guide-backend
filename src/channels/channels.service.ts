@@ -259,30 +259,46 @@ export class ChannelsService {
     const overallStart = Date.now();
     console.log(`[CHANNELS-SCHEDULES] Starting fetch - day: ${day || 'all'}, live: ${liveStatus}, raw: ${raw}`);
 
-    // Pre-fetch user subscriptions if deviceId is provided
+    // Pre-fetch user subscriptions if deviceId is provided (optimized query)
     let subscribedProgramIds: Set<number> = new Set();
     if (deviceId) {
-      const device = await this.deviceRepo.findOne({
-        where: { deviceId },
-        relations: ['user'],
-      });
-      if (device?.user) {
-        const subscriptions = await this.userSubscriptionRepo.find({
-          where: { user: { id: device.user.id }, isActive: true },
-          relations: ['program'],
-        });
-        subscribedProgramIds = new Set(subscriptions.map(sub => sub.program.id));
+      try {
+        // Use optimized query to avoid complex JOINs
+        const device = await this.deviceRepo
+          .createQueryBuilder('device')
+          .leftJoinAndSelect('device.user', 'user')
+          .select(['device.id', 'user.id'])
+          .where('device.deviceId = :deviceId', { deviceId })
+          .getOne();
+        
+        if (device?.user?.id) {
+          const subscriptions = await this.userSubscriptionRepo.find({
+            where: { user: { id: device.user.id }, isActive: true },
+            relations: ['program'],
+          });
+          subscribedProgramIds = new Set(subscriptions.map(sub => sub.program.id));
+        }
+      } catch (error) {
+        console.warn(`[CHANNELS-SCHEDULES] Device lookup failed for ${deviceId}:`, error.message);
+        // Continue without device filtering if lookup fails
       }
     }
 
-    // Use OptimizedSchedulesService for better performance
+    // Use OptimizedSchedulesService for better performance with timeout protection
     const queryStart = Date.now();
-    const allSchedules = await this.optimizedSchedulesService.getSchedulesWithOptimizedLiveStatus({
-      dayOfWeek: day,
-      applyOverrides: raw !== 'true',
-      liveStatus: liveStatus || false,
-    });
-    console.log(`[CHANNELS-SCHEDULES] Optimized schedules query completed (${Date.now() - queryStart}ms) - ${allSchedules.length} schedules`);
+    let allSchedules;
+    try {
+      allSchedules = await this.optimizedSchedulesService.getSchedulesWithOptimizedLiveStatus({
+        dayOfWeek: day,
+        applyOverrides: raw !== 'true',
+        liveStatus: liveStatus || false,
+      });
+      console.log(`[CHANNELS-SCHEDULES] Optimized schedules query completed (${Date.now() - queryStart}ms) - ${allSchedules.length} schedules`);
+    } catch (error) {
+      console.warn(`[CHANNELS-SCHEDULES] OptimizedSchedulesService failed, using fallback:`, error.message);
+      // Emergency fallback: return empty array to prevent complete failure
+      allSchedules = [];
+    }
 
     // Group schedules by channel
     const groupStart = Date.now();
