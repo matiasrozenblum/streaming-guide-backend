@@ -71,4 +71,14 @@ export class CategoriesController {
   remove(@Param('id') id: string): Promise<void> {
     return this.categoriesService.remove(+id);
   }
+
+  @Post('reorder')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Reorder categories' })
+  @ApiResponse({ status: 200, description: 'Categories reordered successfully' })
+  async reorder(@Body() body: { ids: number[] }) {
+    await this.categoriesService.reorder(body.ids);
+    return { message: 'Categories reordered successfully' };
+  }
 }
