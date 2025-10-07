@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { Category } from './categories.entity';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
@@ -10,6 +10,7 @@ export class CategoriesService {
   constructor(
     @InjectRepository(Category)
     private categoriesRepository: Repository<Category>,
+    private dataSource: DataSource,
   ) {}
 
   async create(createCategoryDto: CreateCategoryDto): Promise<Category> {
@@ -58,5 +59,13 @@ export class CategoriesService {
       .where('category.name ILIKE :searchTerm', { searchTerm: `%${searchTerm}%` })
       .orderBy('category.name', 'ASC')
       .getMany();
+  }
+
+  async reorder(categoryIds: number[]): Promise<void> {
+    await this.dataSource.transaction(async (manager) => {
+      for (let i = 0; i < categoryIds.length; i++) {
+        await manager.update(Category, categoryIds[i], { order: i + 1 });
+      }
+    });
   }
 }

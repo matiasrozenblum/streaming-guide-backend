@@ -18,6 +18,9 @@ export class Category {
   @Column({ type: 'int', default: 0 })
   order: number;
 
+  @Column({ type: 'boolean', default: true })
+  is_visible: boolean;
+
   @ManyToMany(() => Channel, (channel) => channel.categories)
   channels: Channel[];
 }

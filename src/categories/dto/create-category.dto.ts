@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsHexColor } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsHexColor, IsBoolean } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateCategoryDto {
@@ -17,4 +17,9 @@ export class CreateCategoryDto {
   @IsOptional()
   @IsHexColor()
   color?: string;
+
+  @ApiProperty({ description: 'Si la categoría es visible', required: false, default: true })
+  @IsBoolean()
+  @IsOptional()
+  is_visible?: boolean;
 }
