@@ -18,6 +18,7 @@ describe('CategoriesService', () => {
       description: 'Canales de deportes y fútbol',
       color: '#FF6B6B',
       order: 1,
+      is_visible: true,
       channels: [],
     },
     {
@@ -26,6 +27,7 @@ describe('CategoriesService', () => {
       description: 'Canales de noticias y periodismo',
       color: '#4ECDC4',
       order: 2,
+      is_visible: true,
       channels: [],
     },
   ];
