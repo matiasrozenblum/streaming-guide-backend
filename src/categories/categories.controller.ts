@@ -37,12 +37,13 @@ export class CategoriesController {
     return this.categoriesService.searchByName(searchTerm);
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Get a category by ID' })
-  @ApiResponse({ status: 200, description: 'Category found', type: Category })
-  @ApiResponse({ status: 404, description: 'Category not found' })
-  findOne(@Param('id') id: string): Promise<Category> {
-    return this.categoriesService.findOne(+id);
+  @Get('admin')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all categories for admin (including hidden)' })
+  @ApiResponse({ status: 200, description: 'All categories retrieved successfully', type: [Category] })
+  findAllForAdmin(): Promise<Category[]> {
+    return this.categoriesService.findAllForAdmin();
   }
 
   @Get()
@@ -52,13 +53,12 @@ export class CategoriesController {
     return this.categoriesService.findAll();
   }
 
-  @Get('admin')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get all categories for admin (including hidden)' })
-  @ApiResponse({ status: 200, description: 'All categories retrieved successfully', type: [Category] })
-  findAllForAdmin(): Promise<Category[]> {
-    return this.categoriesService.findAllForAdmin();
+  @Get(':id')
+  @ApiOperation({ summary: 'Get a category by ID' })
+  @ApiResponse({ status: 200, description: 'Category found', type: Category })
+  @ApiResponse({ status: 404, description: 'Category not found' })
+  findOne(@Param('id') id: string): Promise<Category> {
+    return this.categoriesService.findOne(+id);
   }
 
   @Patch(':id')
