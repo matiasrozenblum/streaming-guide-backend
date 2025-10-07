@@ -34,7 +34,7 @@ export const AppDataSource = new DataSource({
   synchronize: false,
   logging: false,
   extra: {
-    max: 10, // Increased from 5 to handle panelists join load
+    max: 14, // Increased to use available Supabase pooler capacity (15 pool size - 1 buffer)
     min: 2, // Minimum connections
     acquireTimeoutMillis: 15000, // 15 seconds to acquire connection
     createTimeoutMillis: 15000, // 15 seconds to create connection
