@@ -76,12 +76,14 @@ export class SchedulesService {
     if (!schedules) {
       console.log(`[SCHEDULES-CACHE] MISS for ${cacheKey}`);
       const dbStart = Date.now();
-      // Optimized query structure - removed panelists join to prevent data explosion
+      // Optimized query structure - selective panelists join to prevent data explosion
       const queryBuilder = this.schedulesRepository
         .createQueryBuilder('schedule')
         .leftJoinAndSelect('schedule.program', 'program')
         .leftJoinAndSelect('program.channel', 'channel')
-        .orderBy('schedule.start_time', 'ASC');
+        .leftJoinAndSelect('program.panelists', 'panelists')
+        .orderBy('schedule.start_time', 'ASC')
+        .addOrderBy('panelists.id', 'ASC');
       
       if (dayOfWeek) {
         queryBuilder.where('schedule.day_of_week = :dayOfWeek', { dayOfWeek });
@@ -291,8 +293,9 @@ export class SchedulesService {
           ...program,
           is_live: isLive,
           stream_url: streamUrl,
-        live_streams: null,
-        stream_count: 0,
+          live_streams: null,
+          stream_count: 0,
+          panelists: program.panelists || [], // Preserve panelists data
         },
       });
     }
@@ -524,6 +527,7 @@ export class SchedulesService {
         stream_url: streamUrl,
         live_streams: assignedStream ? [assignedStream] : null,
         stream_count: assignedStream ? 1 : 0,
+        panelists: program.panelists || [], // Preserve panelists data
       },
     };
     
