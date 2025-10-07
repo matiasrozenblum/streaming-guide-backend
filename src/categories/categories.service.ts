@@ -1,21 +1,45 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
 import { Category } from './categories.entity';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { RedisService } from '../redis/redis.service';
+import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
 
 @Injectable()
 export class CategoriesService {
+  private notifyUtil: NotifyAndRevalidateUtil;
+
   constructor(
     @InjectRepository(Category)
     private categoriesRepository: Repository<Category>,
     private dataSource: DataSource,
-  ) {}
+    private configService: ConfigService,
+    private redisService: RedisService,
+  ) {
+    this.notifyUtil = new NotifyAndRevalidateUtil(
+      this.redisService,
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001',
+      this.configService.get<string>('REVALIDATE_SECRET') || '',
+    );
+  }
 
   async create(createCategoryDto: CreateCategoryDto): Promise<Category> {
     const category = this.categoriesRepository.create(createCategoryDto);
-    return await this.categoriesRepository.save(category);
+    const saved = await this.categoriesRepository.save(category);
+
+    // Notify and revalidate
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: 'category_created',
+      entity: 'category',
+      entityId: saved.id,
+      payload: { category: saved },
+      revalidatePaths: ['/'],
+    });
+
+    return saved;
   }
 
   async findAll(): Promise<Category[]> {
@@ -53,12 +77,32 @@ export class CategoriesService {
   async update(id: number, updateCategoryDto: UpdateCategoryDto): Promise<Category> {
     const category = await this.findOne(id);
     Object.assign(category, updateCategoryDto);
-    return await this.categoriesRepository.save(category);
+    const updated = await this.categoriesRepository.save(category);
+
+    // Notify and revalidate
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: 'category_updated',
+      entity: 'category',
+      entityId: id,
+      payload: { category: updated },
+      revalidatePaths: ['/'],
+    });
+
+    return updated;
   }
 
   async remove(id: number): Promise<void> {
     const category = await this.findOne(id);
     await this.categoriesRepository.remove(category);
+
+    // Notify and revalidate
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: 'category_deleted',
+      entity: 'category',
+      entityId: id,
+      payload: {},
+      revalidatePaths: ['/'],
+    });
   }
 
   async searchByName(searchTerm: string): Promise<Category[]> {
@@ -74,6 +118,15 @@ export class CategoriesService {
       for (let i = 0; i < categoryIds.length; i++) {
         await manager.update(Category, categoryIds[i], { order: i + 1 });
       }
+    });
+
+    // Notify and revalidate
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: 'categories_reordered',
+      entity: 'category',
+      entityId: 'all',
+      payload: { categoryIds },
+      revalidatePaths: ['/'],
     });
   }
 }
