@@ -34,7 +34,7 @@ export const AppDataSource = new DataSource({
   synchronize: false,
   logging: false,
   extra: {
-    max: 10, // Lower pool size to avoid saturating Supabase pooler
+    max: 10, // Increased from 5 to handle panelists join load
     statement_timeout: 20000, // 20 seconds query timeout
   },
 });
