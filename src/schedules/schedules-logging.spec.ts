@@ -66,7 +66,7 @@ describe('SchedulesService Logging Improvements', () => {
   };
 
   const mockYoutubeLiveService = {
-    getBatchLiveStreams: jest.fn().mockResolvedValue(new Map()),
+    getLiveStreams: jest.fn().mockResolvedValue(null),
   };
 
   const mockNotificationsService = {};
