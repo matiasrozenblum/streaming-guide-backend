@@ -56,7 +56,10 @@ export class OptimizedSchedulesService {
 
     // Get cached live status for all channels
     const channelIds = Array.from(channelGroups.keys());
+    console.log(`[OPTIMIZED-SCHEDULES] Getting live status for channels:`, channelIds);
     const liveStatusMap = await this.liveStatusBackgroundService.getLiveStatusForChannels(channelIds);
+    console.log(`[OPTIMIZED-SCHEDULES] Live status map size:`, liveStatusMap.size);
+    console.log(`[OPTIMIZED-SCHEDULES] Live status map entries:`, Array.from(liveStatusMap.entries()));
 
     // Enrich schedules with cached live status
     const enriched: any[] = [];
@@ -80,7 +83,9 @@ export class OptimizedSchedulesService {
         if (isCurrentlyLive && liveStatus.isLive) {
           // Program is live and has live stream - get actual live stream data
           const liveStreamsKey = `liveStreamsByChannel:${channelId}`;
+          console.log(`[OPTIMIZED-SCHEDULES] Checking live streams cache for ${channelId}: ${liveStreamsKey}`);
           const cachedLiveStreams = await this.redisService.get<string>(liveStreamsKey);
+          console.log(`[OPTIMIZED-SCHEDULES] Cached live streams for ${channelId}:`, cachedLiveStreams);
           
           if (cachedLiveStreams) {
             try {
