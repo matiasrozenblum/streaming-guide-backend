@@ -861,6 +861,7 @@ export class YoutubeLiveService {
     handle: string,
     blockTTL: number,
     context: 'cron' | 'onDemand' | 'program-start',
+    ignoreNotFoundCache: boolean = false,
   ): Promise<LiveStreamsResult | null | '__SKIPPED__'> {
     // gating centralizado
     if (!(await this.configService.canFetchLive(handle))) {
@@ -871,8 +872,8 @@ export class YoutubeLiveService {
     const liveKey = `liveStreamsByChannel:${channelId}`;
     const notFoundKey = `videoIdNotFound:${channelId}`;
 
-    // skip rápido si ya está marcado como no-found
-    if (await this.redisService.get<string>(notFoundKey)) {
+    // skip rápido si ya está marcado como no-found (unless explicitly ignored)
+    if (!ignoreNotFoundCache && await this.redisService.get<string>(notFoundKey)) {
       console.log(`🚫 Skipping ${handle}, marked as not-found`);
       return '__SKIPPED__';
     }
@@ -1033,12 +1034,15 @@ export class YoutubeLiveService {
     
     const today = TimezoneUtil.currentDayOfWeek();
   
-    // 1) Primero traés y enriquecés los schedules
+    // 1) Get schedules for today, filtered by visible channels only
     const rawSchedules = await this.schedulesService.findByDay(today);
     const schedules    = await this.schedulesService.enrichSchedules(rawSchedules);
+    
+    // Filter out schedules from non-visible channels
+    const visibleSchedules = schedules.filter(s => s.program.channel?.is_visible === true);
   
-    // 2) Filtrás sólo los "on-air" right now
-    const liveNow = schedules.filter(s => s.program.is_live);
+    // 2) Filter only schedules that are "on-air" right now (time-based, not YouTube live status)
+    const liveNow = visibleSchedules.filter(s => s.program.is_live);
   
     // 3) Deduplicás canales de esos schedules
     const map = new Map<string,string>();
@@ -1056,74 +1060,53 @@ export class YoutubeLiveService {
       return;
     }
     
-    // OPTIMIZATION: Use batch fetch instead of individual channel fetching
-    const channelIds = Array.from(map.keys());
-    const channelTTLs = new Map<string, number>();
+    // Use individual fetches instead of batch (batch is failing)
+    console.log(`[${cronLabel}] Executing individual fetches for ${map.size} channels`);
     
-    // Calculate TTLs for all channels
-    for (const [cid, handle] of map.entries()) {
-      const ttl = await getCurrentBlockTTL(cid, rawSchedules, this.sentryService);
-      channelTTLs.set(cid, ttl);
-      console.log(`[${cronLabel}] TTL for ${handle}: ${ttl}s`);
-    }
+    const results = new Map<string, any>();
     
-    // Store before state for back-to-back fix tracking
-    const beforeCacheStates = new Map<string, string>();
-    if (cronType === 'back-to-back-fix') {
-      for (const [cid, handle] of map.entries()) {
-        const streamsKey = `liveStreamsByChannel:${cid}`;
-        const beforeCache = await this.redisService.get<string>(streamsKey);
-        if (beforeCache) {
-          beforeCacheStates.set(cid, beforeCache);
+    // Process each channel individually
+    for (const [channelId, handle] of map.entries()) {
+      try {
+        console.log(`[${cronLabel}] Fetching live status for ${handle} (${channelId})`);
+        
+        // Calculate TTL for this channel
+        const ttl = await getCurrentBlockTTL(channelId, rawSchedules, this.sentryService);
+        console.log(`[${cronLabel}] TTL for ${handle}: ${ttl}s`);
+        
+        // Fetch live streams for this channel using the modern method
+        const liveStreamsResult = await this.getLiveStreams(channelId, handle, ttl, 'cron', cronType === 'back-to-back-fix');
+        
+        if (liveStreamsResult && liveStreamsResult !== '__SKIPPED__' && liveStreamsResult.streamCount > 0) {
+          results.set(channelId, liveStreamsResult);
+          console.log(`[${cronLabel}] Found ${liveStreamsResult.streamCount} live streams for ${handle}`);
+        } else if (liveStreamsResult === '__SKIPPED__') {
+          console.log(`[${cronLabel}] Skipped ${handle} (disabled)`);
+        } else {
+          console.log(`[${cronLabel}] No live streams for ${handle}`);
         }
+        
+        // Small delay between requests to be respectful to YouTube API
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+      } catch (error) {
+        console.error(`[${cronLabel}] Error fetching live status for ${handle}:`, error.message);
       }
     }
     
-    // Execute batch fetch for all live channels
-    console.log(`[${cronLabel}] Executing batch fetch for ${channelIds.length} channels`);
-    const batchResults = await this.getBatchLiveStreams(channelIds, 'cron', channelTTLs, map, cronType);
-    
-    let updatedCount = 0;
-    // Track changes for back-to-back fix
-    if (cronType === 'back-to-back-fix') {
-      for (const [cid, handle] of map.entries()) {
-        const beforeCache = beforeCacheStates.get(cid);
-        if (beforeCache) {
-          const streamsKey = `liveStreamsByChannel:${cid}`;
-        const afterCache = await this.redisService.get<string>(streamsKey);
-          if (afterCache) {
-          try {
-            const beforeStreams = JSON.parse(beforeCache);
-            const afterStreams = JSON.parse(afterCache);
-            if (beforeStreams.primaryVideoId !== afterStreams.primaryVideoId) {
-              updatedCount++;
-              console.log(`🔧 ${cronLabel} - FIXED back-to-back issue for ${handle}: ${beforeStreams.primaryVideoId} → ${afterStreams.primaryVideoId}`);
-            }
-          } catch (error) {
-            // If parsing fails, assume it was updated
-            updatedCount++;
-            console.log(`🔧 ${cronLabel} - FIXED back-to-back issue for ${handle} (cache format changed)`);
-            }
-          }
-        }
-      }
-    }
-    
-    // Log batch results
-    const resultsSummary = Array.from(batchResults.entries()).map(([cid, result]) => {
+    // Log individual results
+    const resultsSummary = Array.from(results.entries()).map(([cid, result]) => {
       const handle = map.get(cid);
-      if (result === '__SKIPPED__') return `${handle}: SKIPPED`;
-      if (result === null) return `${handle}: NO_LIVE`;
-      return `${handle}: LIVE (${result.streamCount} streams)`;
+      if (result && result.length > 0) {
+        return `${handle}: LIVE (${result.length} streams)`;
+      } else {
+        return `${handle}: NO_LIVE`;
+      }
     }).join(', ');
     
-    console.log(`[${cronLabel}] Batch results: ${resultsSummary}`);
+    console.log(`[${cronLabel}] Individual fetch results: ${resultsSummary}`);
     
-    if (cronType === 'back-to-back-fix') {
-      console.log(`${cronLabel} completed - ${updatedCount} channels updated (back-to-back fixes detected)`);
-    } else {
-      console.log(`${cronLabel} completed`);
-    }
+    console.log(`${cronLabel} completed - processed ${map.size} channels`);
   }
 
   /**
@@ -1234,8 +1217,8 @@ export class YoutubeLiveService {
       const schedules = await this.schedulesService.findByDay(dayjs().tz('America/Argentina/Buenos_Aires').format('dddd').toLowerCase());
       const ttl = await getCurrentBlockTTL(channelId, schedules, this.sentryService);
       
-      // Use the new getLiveStreams method to refresh
-      const streamsResult = await this.getLiveStreams(channelId, handle, ttl, 'program-start');
+      // Use the new getLiveStreams method to refresh (ignore not-found cache for back-to-back fix)
+      const streamsResult = await this.getLiveStreams(channelId, handle, ttl, 'program-start', true);
       
       if (streamsResult && streamsResult !== '__SKIPPED__') {
         console.log(`🆕 Refreshed streams for ${handle}: ${streamsResult.streamCount} streams, primary: ${streamsResult.primaryVideoId}`);
