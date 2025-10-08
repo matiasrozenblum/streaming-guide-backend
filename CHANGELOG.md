@@ -17,6 +17,14 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.13.1] - 2025-10-08
+
+### Added
+- Now categires can be hidden and reordered individually
+
+### Fixed
+- Fixed SSE
+
 ## [1.13.0] - 2025-10-06
 
 ### Added
