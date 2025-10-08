@@ -9,6 +9,7 @@ import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
 const REVALIDATE_SECRET = process.env.REVALIDATE_SECRET || 'changeme';
+const VERCEL_BYPASS_SECRET = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 
 @Injectable()
 export class CategoriesService {
@@ -23,11 +24,13 @@ export class CategoriesService {
     console.log('[CategoriesService] Initializing NotifyAndRevalidateUtil...');
     console.log('[CategoriesService] FRONTEND_URL:', FRONTEND_URL);
     console.log('[CategoriesService] REVALIDATE_SECRET:', REVALIDATE_SECRET ? REVALIDATE_SECRET.substring(0, 8) + '...' : 'undefined');
+    console.log('[CategoriesService] VERCEL_BYPASS_SECRET:', VERCEL_BYPASS_SECRET ? VERCEL_BYPASS_SECRET.substring(0, 8) + '...' : 'undefined');
     
     this.notifyUtil = new NotifyAndRevalidateUtil(
       this.redisService,
       FRONTEND_URL,
       REVALIDATE_SECRET,
+      VERCEL_BYPASS_SECRET,
     );
     console.log('[CategoriesService] NotifyAndRevalidateUtil initialized successfully');
   }
