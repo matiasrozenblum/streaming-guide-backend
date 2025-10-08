@@ -47,7 +47,10 @@ export class NotifyAndRevalidateUtil {
           
           const response = await globalThis.fetch(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'x-vercel-protection-bypass': bypassToken,
+            },
             body: JSON.stringify({ path, secret: this.revalidateSecret }),
           });
           
