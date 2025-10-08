@@ -1,12 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
-import { ConfigService } from '@nestjs/config';
 import { Category } from './categories.entity';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { RedisService } from '../redis/redis.service';
 import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
+
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
+const REVALIDATE_SECRET = process.env.REVALIDATE_SECRET || 'changeme';
 
 @Injectable()
 export class CategoriesService {
@@ -16,13 +18,12 @@ export class CategoriesService {
     @InjectRepository(Category)
     private categoriesRepository: Repository<Category>,
     private dataSource: DataSource,
-    private configService: ConfigService,
-    private redisService: RedisService,
+    private readonly redisService: RedisService,
   ) {
     this.notifyUtil = new NotifyAndRevalidateUtil(
       this.redisService,
-      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001',
-      this.configService.get<string>('REVALIDATE_SECRET') || '',
+      FRONTEND_URL,
+      REVALIDATE_SECRET,
     );
   }
 
