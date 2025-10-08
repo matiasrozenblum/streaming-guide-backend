@@ -20,11 +20,16 @@ export class CategoriesService {
     private dataSource: DataSource,
     private readonly redisService: RedisService,
   ) {
+    console.log('[CategoriesService] Initializing NotifyAndRevalidateUtil...');
+    console.log('[CategoriesService] FRONTEND_URL:', FRONTEND_URL);
+    console.log('[CategoriesService] REVALIDATE_SECRET:', REVALIDATE_SECRET ? REVALIDATE_SECRET.substring(0, 8) + '...' : 'undefined');
+    
     this.notifyUtil = new NotifyAndRevalidateUtil(
       this.redisService,
       FRONTEND_URL,
       REVALIDATE_SECRET,
     );
+    console.log('[CategoriesService] NotifyAndRevalidateUtil initialized successfully');
   }
 
   async create(createCategoryDto: CreateCategoryDto): Promise<Category> {
@@ -81,13 +86,26 @@ export class CategoriesService {
     const updated = await this.categoriesRepository.save(category);
 
     // Notify and revalidate
-    await this.notifyUtil.notifyAndRevalidate({
-      eventType: 'category_updated',
-      entity: 'category',
-      entityId: id,
-      payload: { category: updated },
-      revalidatePaths: ['/'],
-    });
+    console.log('[CategoriesService] Triggering revalidation for category update...');
+    console.log('[CategoriesService] notifyUtil available:', !!this.notifyUtil);
+    
+    if (!this.notifyUtil) {
+      console.error('[CategoriesService] ❌ notifyUtil is not available!');
+      return updated;
+    }
+    
+    try {
+      await this.notifyUtil.notifyAndRevalidate({
+        eventType: 'category_updated',
+        entity: 'category',
+        entityId: id,
+        payload: { category: updated },
+        revalidatePaths: ['/'],
+      });
+      console.log('[CategoriesService] Revalidation triggered successfully');
+    } catch (error) {
+      console.error('[CategoriesService] ❌ Error during revalidation:', error);
+    }
 
     return updated;
   }
@@ -122,6 +140,7 @@ export class CategoriesService {
     });
 
     // Notify and revalidate
+    console.log('[CategoriesService] Triggering revalidation for categories reorder...');
     await this.notifyUtil.notifyAndRevalidate({
       eventType: 'categories_reordered',
       entity: 'category',
@@ -129,5 +148,6 @@ export class CategoriesService {
       payload: { categoryIds },
       revalidatePaths: ['/'],
     });
+    console.log('[CategoriesService] Revalidation triggered successfully');
   }
 }
