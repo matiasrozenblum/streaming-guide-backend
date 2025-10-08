@@ -59,12 +59,15 @@ export class YoutubeController {
                   
                   // Only send if we haven't sent this notification before
                   if (!this.sentNotifications.has(notificationId)) {
+                    console.log('📡 Notification not sent before, proceeding to send...');
                     this.sentNotifications.add(notificationId);
                     
+                    console.log('📡 Sending SSE event to frontend:', notification);
                     subscriber.next({
                       data: JSON.stringify(notification),
                       type: 'message',
                     } as MessageEvent);
+                    console.log('📡 SSE event sent successfully');
                     
                     // Clean up the notification from Redis after sending
                     await this.redisService.del(key);
@@ -73,6 +76,8 @@ export class YoutubeController {
                     setTimeout(() => {
                       this.sentNotifications.delete(notificationId);
                     }, 60000);
+                  } else {
+                    console.log('📡 Notification already sent, skipping:', notificationId);
                   }
                 } catch (error) {
                   console.error('Error parsing notification:', error);
