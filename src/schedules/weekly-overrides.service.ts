@@ -425,18 +425,15 @@ export class WeeklyOverridesService {
     const channelsMap = new Map<number, any>();
     if (allChannelIds.size > 0) {
       const channelIdsArray = Array.from(allChannelIds);
-      console.log('[applyWeeklyOverrides] Fetching channels for IDs:', channelIdsArray);
       const placeholders = channelIdsArray.map((_, index) => `$${index + 1}`).join(',');
       const channels = await this.dataSource.query(`
         SELECT id, name, handle, youtube_channel_id, logo_url, description, "order"
         FROM channel 
         WHERE id IN (${placeholders})
       `, channelIdsArray);
-      console.log('[applyWeeklyOverrides] Found channels:', channels);
       channels.forEach(channel => {
         channelsMap.set(channel.id, channel);
       });
-      console.log('[applyWeeklyOverrides] Channels map:', Array.from(channelsMap.entries()));
     }
 
     const modifiedSchedules: Schedule[] = [];
@@ -562,11 +559,6 @@ export class WeeklyOverridesService {
     for (const override of createOverrides) {
       if (override.specialProgram && override.newStartTime && override.newEndTime && override.newDayOfWeek) {
         const channel = channelsMap.get(override.specialProgram.channelId);
-        console.log(`[applyWeeklyOverrides] Creating virtual schedule for channel ID ${override.specialProgram.channelId}:`, {
-          channelFound: !!channel,
-          channelData: channel,
-          overrideId: override.id
-        });
         const virtualSchedule: any = {
           id: `virtual_${override.id}`,
           day_of_week: override.newDayOfWeek,
