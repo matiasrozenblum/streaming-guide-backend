@@ -1046,6 +1046,25 @@ export class YoutubeLiveService {
     
     // Filter out schedules from non-visible channels
     const visibleSchedules = schedules.filter(s => s.program.channel?.is_visible === true);
+    
+    // Debug: Check AZZ schedules specifically
+    const azzSchedules = schedules.filter(s => s.program.channel?.handle === 'somosazz');
+    console.log(`[${cronLabel}] AZZ schedules found:`, azzSchedules.length);
+    if (azzSchedules.length > 0) {
+      azzSchedules.forEach((schedule, index) => {
+        console.log(`[${cronLabel}] AZZ schedule ${index}:`, {
+          id: schedule.id,
+          is_visible: schedule.program.channel?.is_visible,
+          is_live: schedule.program.is_live,
+          youtube_channel_id: schedule.program.channel?.youtube_channel_id,
+          handle: schedule.program.channel?.handle,
+          start_time: schedule.start_time,
+          end_time: schedule.end_time,
+          day_of_week: schedule.day_of_week,
+          isWeeklyOverride: schedule.isWeeklyOverride
+        });
+      });
+    }
   
     // 2) Filter only schedules that are "on-air" right now (time-based, not YouTube live status)
     const liveNow = visibleSchedules.filter(s => s.program.is_live);
