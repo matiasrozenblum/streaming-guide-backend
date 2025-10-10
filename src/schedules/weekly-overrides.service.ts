@@ -47,15 +47,8 @@ export interface WeeklyOverride {
   panelists?: Array<{ // Complete panelist objects for fast access
     id: number;
     name: string;
-    description?: string;
-    image_url?: string;
-    twitter_handle?: string;
-    instagram_handle?: string;
-    tiktok_handle?: string;
-    youtube_handle?: string;
-    website?: string;
-    created_at: Date;
-    updated_at: Date;
+    photo_url?: string | null;
+    bio?: string | null;
   }>;
   // Fields for special programs
   specialProgram?: {
@@ -403,7 +396,82 @@ export class WeeklyOverridesService {
    * Get a specific weekly override
    */
   async getWeeklyOverride(overrideId: string): Promise<WeeklyOverride | null> {
-    return this.redisService.get<WeeklyOverride>(`weekly_override:${overrideId}`);
+    const override = await this.redisService.get<WeeklyOverride>(`weekly_override:${overrideId}`);
+    if (override) {
+      // Migrate override to new structure if needed
+      return await this.migrateOverrideToNewStructure(override);
+    }
+    return null;
+  }
+
+  /**
+   * Migrate an override from old structure to new structure
+   */
+  private async migrateOverrideToNewStructure(override: WeeklyOverride): Promise<WeeklyOverride> {
+    let needsMigration = false;
+    const migratedOverride = { ...override };
+
+    // Migrate panelists if we have panelistIds but no panelists
+    if (override.panelistIds && override.panelistIds.length > 0 && !override.panelists) {
+      console.log(`[OVERRIDE-MIGRATION] Migrating panelists for override ${override.id}`);
+      try {
+        const panelists = await this.panelistsRepository.find({
+          where: { id: In(override.panelistIds) },
+        });
+        migratedOverride.panelists = panelists;
+        needsMigration = true;
+        console.log(`[OVERRIDE-MIGRATION] Migrated ${panelists.length} panelists for override ${override.id}`);
+      } catch (error) {
+        console.error(`[OVERRIDE-MIGRATION] Failed to migrate panelists for override ${override.id}:`, error.message);
+        // Keep original structure if migration fails
+      }
+    }
+
+    // Migrate channel if we have channelId but no channel object
+    if (override.specialProgram?.channelId && !override.specialProgram?.channel) {
+      console.log(`[OVERRIDE-MIGRATION] Migrating channel for override ${override.id}`);
+      try {
+        const channelIdsArray = [override.specialProgram.channelId];
+        const placeholders = channelIdsArray.map((_, index) => `$${index + 1}`).join(',');
+        const channels = await this.dataSource.query(`
+          SELECT id, name, handle, youtube_channel_id, logo_url, description, "order", is_visible
+          FROM channel 
+          WHERE id IN (${placeholders})
+        `, channelIdsArray);
+        
+        if (channels.length > 0) {
+          migratedOverride.specialProgram = {
+            ...migratedOverride.specialProgram!,
+            channel: channels[0],
+          };
+          needsMigration = true;
+          console.log(`[OVERRIDE-MIGRATION] Migrated channel for override ${override.id}`);
+        }
+      } catch (error) {
+        console.error(`[OVERRIDE-MIGRATION] Failed to migrate channel for override ${override.id}:`, error.message);
+        // Keep original structure if migration fails
+      }
+    }
+
+    // Save migrated override back to cache if migration occurred
+    if (needsMigration) {
+      try {
+        const key = `weekly_override:${override.id}`;
+        // Calculate TTL based on expiration date
+        const expirationDate = this.dayjs(override.expiresAt).tz('America/Argentina/Buenos_Aires');
+        const now = this.dayjs().tz('America/Argentina/Buenos_Aires');
+        const secondsUntilExpiry = Math.max(0, expirationDate.diff(now, 'seconds'));
+        
+        if (secondsUntilExpiry > 0) {
+          await this.redisService.set(key, migratedOverride, secondsUntilExpiry);
+          console.log(`[OVERRIDE-MIGRATION] Saved migrated override ${override.id} to cache`);
+        }
+      } catch (error) {
+        console.error(`[OVERRIDE-MIGRATION] Failed to save migrated override ${override.id}:`, error.message);
+      }
+    }
+
+    return migratedOverride;
   }
 
   /**
@@ -429,17 +497,20 @@ export class WeeklyOverridesService {
       keys.forEach(key => pipeline.get(key));
       const results = await pipeline.exec();
       
-      // Process pipeline results
-      results.forEach((result, index) => {
+      // Process pipeline results and migrate if needed
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i];
         if (result[0] === null && result[1]) { // No error and has data
           try {
             const override = JSON.parse(result[1]);
-            overrides.push(override);
+            // Migrate override to new structure if needed
+            const migratedOverride = await this.migrateOverrideToNewStructure(override);
+            overrides.push(migratedOverride);
           } catch (error) {
-            console.warn(`[WEEKLY-OVERRIDES] Failed to parse override ${keys[index]}:`, error);
+            console.warn(`[WEEKLY-OVERRIDES] Failed to parse override ${keys[i]}:`, error);
           }
         }
-      });
+      }
     }
 
     return overrides;
