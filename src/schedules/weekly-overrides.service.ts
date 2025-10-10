@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, DataSource } from 'typeorm';
 import { Schedule } from './schedules.entity';
@@ -65,6 +65,12 @@ export class WeeklyOverridesService {
     private panelistsRepository: Repository<Panelist>,
     private readonly redisService: RedisService,
     private readonly dataSource: DataSource,
+    @Inject(forwardRef(() => {
+      // Lazy import to avoid circular dependency at module load time
+      const { SchedulesService } = require('./schedules.service');
+      return SchedulesService;
+    }))
+    private readonly schedulesService: any,
   ) {
     this.dayjs = dayjs;
     this.dayjs.extend(utc);
@@ -206,6 +212,9 @@ export class WeeklyOverridesService {
 
     // Clear schedule caches
     await this.redisService.delByPattern('schedules:all:*');
+    
+    // Warm cache asynchronously (non-blocking)
+    setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
 
     return override;
   }
@@ -289,6 +298,9 @@ export class WeeklyOverridesService {
 
     // Clear cache
     await this.redisService.delByPattern('schedules:all:*');
+    
+    // Warm cache asynchronously (non-blocking)
+    setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
 
     return updatedOverride;
   }
@@ -358,6 +370,10 @@ export class WeeklyOverridesService {
 
     await this.redisService.del(`weekly_override:${overrideId}`);
     await this.redisService.delByPattern('schedules:all:*');
+    
+    // Warm cache asynchronously (non-blocking)
+    setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
+    
     return true;
   }
 
@@ -638,6 +654,9 @@ export class WeeklyOverridesService {
 
     if (cleaned > 0) {
       await this.redisService.delByPattern('schedules:all:*');
+      
+      // Warm cache asynchronously (non-blocking)
+      setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
     }
 
     return cleaned;
@@ -667,6 +686,9 @@ export class WeeklyOverridesService {
     }
     if (deleted > 0) {
       await this.redisService.delByPattern('schedules:all:*');
+      
+      // Warm cache asynchronously (non-blocking)
+      setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
     }
     return deleted;
   }
