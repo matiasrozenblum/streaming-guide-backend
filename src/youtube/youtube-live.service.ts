@@ -1041,8 +1041,13 @@ export class YoutubeLiveService {
     const today = TimezoneUtil.currentDayOfWeek();
   
     // 1) Get schedules for today, filtered by visible channels only
-    const rawSchedules = await this.schedulesService.findByDay(today);
-    const schedules    = await this.schedulesService.enrichSchedules(rawSchedules);
+    // Use findAll with applyOverrides=true to include weekly overrides (same as API endpoints)
+    const rawSchedules = await this.schedulesService.findAll({ 
+      dayOfWeek: today, 
+      applyOverrides: true,
+      liveStatus: false // Don't enrich with live status yet, we'll do that after filtering
+    });
+    const schedules = rawSchedules; // findAll already includes enrichment
     
     // Filter out schedules from non-visible channels
     const visibleSchedules = schedules.filter(s => s.program.channel?.is_visible === true);

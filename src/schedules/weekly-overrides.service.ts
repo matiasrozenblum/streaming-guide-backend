@@ -424,11 +424,13 @@ export class WeeklyOverridesService {
     // Fetch all channels at once
     const channelsMap = new Map<number, any>();
     if (allChannelIds.size > 0) {
+      const channelIdsArray = Array.from(allChannelIds);
+      const placeholders = channelIdsArray.map((_, index) => `$${index + 1}`).join(',');
       const channels = await this.dataSource.query(`
         SELECT id, name, handle, youtube_channel_id, logo_url, description, "order"
         FROM channel 
-        WHERE id IN (${Array.from(allChannelIds).join(',')})
-      `);
+        WHERE id IN (${placeholders})
+      `, channelIdsArray);
       channels.forEach(channel => {
         channelsMap.set(channel.id, channel);
       });
