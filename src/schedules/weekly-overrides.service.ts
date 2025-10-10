@@ -429,14 +429,40 @@ export class WeeklyOverridesService {
       }
     });
 
-    // Fetch all panelists at once
+    // OPTIMIZATION: Cache panelists to avoid DB queries on every request
     const panelistsMap = new Map<number, any>();
     if (allPanelistIds.size > 0) {
-      const panelists = await this.panelistsRepository.find({
-        where: { id: In(Array.from(allPanelistIds)) },
-      });
-      panelists.forEach(panelist => {
-        panelistsMap.set(panelist.id, panelist);
+      const uncachedPanelistIds: number[] = [];
+      const cachedPanelists = new Map<number, any>();
+      
+      // Check cache for each panelist
+      for (const panelistId of allPanelistIds) {
+        const cacheKey = `panelist:${panelistId}`;
+        const cached = await this.redisService.get(cacheKey);
+        if (cached) {
+          cachedPanelists.set(panelistId, cached);
+        } else {
+          uncachedPanelistIds.push(panelistId);
+        }
+      }
+      
+      // Fetch uncached panelists from database
+      if (uncachedPanelistIds.length > 0) {
+        const panelists = await this.panelistsRepository.find({
+          where: { id: In(uncachedPanelistIds) },
+        });
+        
+        // Cache the fetched panelists
+        for (const panelist of panelists) {
+          const cacheKey = `panelist:${panelist.id}`;
+          await this.redisService.set(cacheKey, panelist, 3600); // Cache for 1 hour
+          cachedPanelists.set(panelist.id, panelist);
+        }
+      }
+      
+      // Merge cached and fetched panelists
+      cachedPanelists.forEach((panelist, id) => {
+        panelistsMap.set(id, panelist);
       });
     }
 
@@ -448,18 +474,44 @@ export class WeeklyOverridesService {
       }
     });
 
-    // Fetch all channels at once
+    // OPTIMIZATION: Cache channels to avoid DB queries on every request
     const channelsMap = new Map<number, any>();
     if (allChannelIds.size > 0) {
-      const channelIdsArray = Array.from(allChannelIds);
-      const placeholders = channelIdsArray.map((_, index) => `$${index + 1}`).join(',');
-      const channels = await this.dataSource.query(`
-        SELECT id, name, handle, youtube_channel_id, logo_url, description, "order"
-        FROM channel 
-        WHERE id IN (${placeholders})
-      `, channelIdsArray);
-      channels.forEach(channel => {
-        channelsMap.set(channel.id, channel);
+      const uncachedChannelIds: number[] = [];
+      const cachedChannels = new Map<number, any>();
+      
+      // Check cache for each channel
+      for (const channelId of allChannelIds) {
+        const cacheKey = `channel:${channelId}`;
+        const cached = await this.redisService.get(cacheKey);
+        if (cached) {
+          cachedChannels.set(channelId, cached);
+        } else {
+          uncachedChannelIds.push(channelId);
+        }
+      }
+      
+      // Fetch uncached channels from database
+      if (uncachedChannelIds.length > 0) {
+        const channelIdsArray = uncachedChannelIds;
+        const placeholders = channelIdsArray.map((_, index) => `$${index + 1}`).join(',');
+        const channels = await this.dataSource.query(`
+          SELECT id, name, handle, youtube_channel_id, logo_url, description, "order"
+          FROM channel 
+          WHERE id IN (${placeholders})
+        `, channelIdsArray);
+        
+        // Cache the fetched channels
+        for (const channel of channels) {
+          const cacheKey = `channel:${channel.id}`;
+          await this.redisService.set(cacheKey, channel, 3600); // Cache for 1 hour
+          cachedChannels.set(channel.id, channel);
+        }
+      }
+      
+      // Merge cached and fetched channels
+      cachedChannels.forEach((channel, id) => {
+        channelsMap.set(id, channel);
       });
     }
 
