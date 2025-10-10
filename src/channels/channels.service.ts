@@ -144,7 +144,12 @@ export class ChannelsService {
       channel.categories = categories;
     }
   
+    // Clear cache
     await this.redisService.delByPattern('schedules:all:*');
+    
+    // Warm cache asynchronously (non-blocking)
+    setImmediate(() => this.schedulesService.warmSchedulesCache());
+    
     const saved = await this.channelsRepository.save(channel);
 
     const info = await this.youtubeDiscovery.getChannelIdFromHandle(createChannelDto.handle);
@@ -189,7 +194,12 @@ export class ChannelsService {
       }
     }
 
+    // Clear cache
     await this.redisService.delByPattern('schedules:all:*');
+    
+    // Warm cache asynchronously (non-blocking)
+    setImmediate(() => this.schedulesService.warmSchedulesCache());
+    
     const updated = await this.channelsRepository.save(channel);
 
     // Update YouTube channel ID if handle changed
@@ -225,7 +235,12 @@ export class ChannelsService {
     if (result.affected === 0) {
       throw new NotFoundException(`Channel with ID ${id} not found`);
     }
+    
+    // Clear cache
     await this.redisService.delByPattern('schedules:all:*');
+    
+    // Warm cache asynchronously (non-blocking)
+    setImmediate(() => this.schedulesService.warmSchedulesCache());
 
     // Notify and revalidate
     await this.notifyUtil.notifyAndRevalidate({
@@ -243,7 +258,12 @@ export class ChannelsService {
         await manager.update(Channel, channelIds[i], { order: i + 1 });
       }
     });
+    
+    // Clear cache
     await this.redisService.delByPattern('schedules:all:*');
+    
+    // Warm cache asynchronously (non-blocking)
+    setImmediate(() => this.schedulesService.warmSchedulesCache());
 
     // Notify and revalidate
     await this.notifyUtil.notifyAndRevalidate({

@@ -58,11 +58,17 @@ import { PerformanceInterceptor } from './interceptors/performance.interceptor';
           synchronize: false, // Temporarily disabled to prevent schema conflicts
           logging: false,
           extra: {
-            max: 20,
-            connectionTimeoutMillis: 2000,
+            max: 50, // Increased from 20 to handle more concurrent requests
+            min: 5, // Keep minimum connections ready
+            connectionTimeoutMillis: 30000, // Increased from 2000ms to 30s for better resilience
             idleTimeoutMillis: 30000,
-            statement_timeout: 10000,
-            query_timeout: 10000,
+            acquireTimeoutMillis: 30000, // How long to wait to acquire a connection
+            statement_timeout: 15000, // Increased from 10s to 15s
+            query_timeout: 15000,
+            createTimeoutMillis: 15000,
+            destroyTimeoutMillis: 5000,
+            reapIntervalMillis: 1000, // Check for idle connections
+            createRetryIntervalMillis: 200,
           },
           cache: { duration: 30000 },
           // Enhanced error handling for database connection

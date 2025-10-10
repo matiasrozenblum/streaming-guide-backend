@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { OptimizedSchedulesService } from './optimized-schedules.service';
 import { SchedulesService } from '../schedules/schedules.service';
 import { LiveStatusBackgroundService } from './live-status-background.service';
+import { RedisService } from '../redis/redis.service';
 
 // Mock TimezoneUtil
 jest.mock('../utils/timezone.util', () => ({
@@ -53,11 +54,19 @@ describe('OptimizedSchedulesService', () => {
       ),
     };
 
+    const mockRedisService = {
+      get: jest.fn(),
+      set: jest.fn(),
+      del: jest.fn(),
+      delByPattern: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OptimizedSchedulesService,
         { provide: SchedulesService, useValue: mockSchedulesService },
         { provide: LiveStatusBackgroundService, useValue: mockLiveStatusBackgroundService },
+        { provide: RedisService, useValue: mockRedisService },
       ],
     }).compile();
 

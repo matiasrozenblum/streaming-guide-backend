@@ -53,6 +53,8 @@ describe('SchedulesService Logging Improvements', () => {
   const mockSchedulesRepository = {
     createQueryBuilder: jest.fn().mockReturnValue({
       leftJoinAndSelect: jest.fn().mockReturnThis(),
+      leftJoin: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
       addOrderBy: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),

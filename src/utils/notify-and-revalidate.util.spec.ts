@@ -46,18 +46,24 @@ describe('NotifyAndRevalidateUtil', () => {
     });
     expect(global.fetch).toHaveBeenCalledTimes(2);
     expect(global.fetch).toHaveBeenCalledWith(
-      'https://frontend.test/api/revalidate',
+      'https://frontend.test/api/revalidate?x-vercel-set-bypass-cookie=true&x-vercel-protection-bypass=testsecret',
       expect.objectContaining({
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-vercel-protection-bypass': revalidateSecret,
+        },
         body: JSON.stringify({ path: '/foo', secret: revalidateSecret }),
       })
     );
     expect(global.fetch).toHaveBeenCalledWith(
-      'https://frontend.test/api/revalidate',
+      'https://frontend.test/api/revalidate?x-vercel-set-bypass-cookie=true&x-vercel-protection-bypass=testsecret',
       expect.objectContaining({
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-vercel-protection-bypass': revalidateSecret,
+        },
         body: JSON.stringify({ path: '/bar', secret: revalidateSecret }),
       })
     );
