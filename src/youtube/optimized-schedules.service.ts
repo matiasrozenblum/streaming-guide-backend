@@ -123,55 +123,14 @@ export class OptimizedSchedulesService {
           }
         } else if (isCurrentlyLive) {
           // Program is live by time but background cache says no live stream
-          // Try on-demand fetch (important for special programs not in background cache)
-          console.log(`[OPTIMIZED-SCHEDULES] Program "${schedule.program.name}" is live by time but cache says no stream. Attempting on-demand fetch for channel ${channelId}`);
+          // Mark as live but don't block on YouTube API calls
+          console.log(`[OPTIMIZED-SCHEDULES] Program "${schedule.program.name}" is live by time but cache says no stream. Marking as live without blocking API call.`);
           
           const liveStreamsKey = `liveStreamsByChannel:${channelId}`;
           let cachedLiveStreams = await this.redisService.get<string>(liveStreamsKey);
           
-          // If no cached streams, try a fresh fetch (for special programs)
-          if (!cachedLiveStreams && schedule.program.channel?.handle) {
-            try {
-              console.log(`[OPTIMIZED-SCHEDULES] No cached streams for ${schedule.program.channel.handle}, fetching on-demand...`);
-              
-              const liveStreamsResult = await this.youtubeLiveService.getLiveStreams(
-                channelId,
-                schedule.program.channel.handle,
-                300, // 5 min TTL for on-demand fetches
-                'onDemand' // Special programs use on-demand fetching
-              );
-              
-              if (liveStreamsResult && liveStreamsResult !== '__SKIPPED__' && liveStreamsResult.streams?.length > 0) {
-                console.log(`[OPTIMIZED-SCHEDULES] Found ${liveStreamsResult.streams.length} live streams on-demand for ${schedule.program.channel.handle}`);
-                enrichedSchedule.program = {
-                  ...schedule.program,
-                  is_live: true,
-                  stream_url: `https://www.youtube.com/embed/${liveStreamsResult.streams[0].videoId}?autoplay=1`,
-                  live_streams: liveStreamsResult.streams,
-                  stream_count: liveStreamsResult.streams.length,
-                };
-              } else {
-                console.log(`[OPTIMIZED-SCHEDULES] No live streams found on-demand for ${schedule.program.channel.handle}`);
-                enrichedSchedule.program = {
-                  ...schedule.program,
-                  is_live: true,
-                  stream_url: schedule.program.stream_url || schedule.program.youtube_url,
-                  live_streams: [],
-                  stream_count: 0,
-                };
-              }
-            } catch (error) {
-              console.error(`[OPTIMIZED-SCHEDULES] Error fetching on-demand for ${channelId}:`, error.message);
-              enrichedSchedule.program = {
-                ...schedule.program,
-                is_live: true,
-                stream_url: schedule.program.stream_url || schedule.program.youtube_url,
-                live_streams: [],
-                stream_count: 0,
-              };
-            }
-          } else if (cachedLiveStreams) {
-            // Use cached streams
+          if (cachedLiveStreams) {
+            // Use cached streams if available
             try {
               const liveStreams = JSON.parse(cachedLiveStreams);
               enrichedSchedule.program = {
@@ -191,14 +150,32 @@ export class OptimizedSchedulesService {
               };
             }
           } else {
-            // No cache, no handle - fallback
-          enrichedSchedule.program = {
-            ...schedule.program,
-            is_live: true,
-            stream_url: schedule.program.stream_url || schedule.program.youtube_url,
-            live_streams: [],
-            stream_count: 0,
-          };
+            // No cached streams - mark as live but trigger async background fetch
+            enrichedSchedule.program = {
+              ...schedule.program,
+              is_live: true,
+              stream_url: schedule.program.stream_url || schedule.program.youtube_url,
+              live_streams: [],
+              stream_count: 0,
+            };
+            
+            // Trigger async background fetch (non-blocking)
+            if (schedule.program.channel?.handle) {
+              setImmediate(async () => {
+                try {
+                  console.log(`[OPTIMIZED-SCHEDULES] Triggering async fetch for ${schedule.program.channel.handle}...`);
+                  await this.youtubeLiveService.getLiveStreams(
+                    channelId,
+                    schedule.program.channel.handle,
+                    300, // 5 min TTL for on-demand fetches
+                    'onDemand' // Special programs use on-demand fetching
+                  );
+                  console.log(`[OPTIMIZED-SCHEDULES] Async fetch completed for ${schedule.program.channel.handle}`);
+                } catch (error) {
+                  console.error(`[OPTIMIZED-SCHEDULES] Async fetch failed for ${channelId}:`, error.message);
+                }
+              });
+            }
           }
         } else {
           // Program is not currently live
