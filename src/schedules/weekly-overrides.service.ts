@@ -43,12 +43,28 @@ export interface WeeklyOverride {
   createdBy?: string;
   expiresAt: string; // Format: YYYY-MM-DD HH:mm:ss (Buenos Aires time)
   createdAt: Date;
-  panelistIds?: number[]; // Array of panelist IDs assigned to this override
+  panelistIds?: number[]; // Array of panelist IDs assigned to this override (legacy, kept for backward compatibility)
+  panelists?: Array<{ // Complete panelist objects for fast access
+    id: number;
+    name: string;
+    photo_url?: string | null;
+    bio?: string | null;
+  }>;
   // Fields for special programs
   specialProgram?: {
     name: string;
     description?: string;
-    channelId: number;
+    channelId: number; // Legacy, kept for backward compatibility
+    channel?: { // Complete channel object for fast access
+      id: number;
+      name: string;
+      handle: string;
+      youtube_channel_id: string;
+      logo_url?: string;
+      description?: string;
+      order: number;
+      is_visible: boolean;
+    };
     imageUrl?: string;
     stream_url?: string;
   };
@@ -158,7 +174,8 @@ export class WeeklyOverridesService {
       throw new BadRequestException('New day of week is required for reschedules');
     }
 
-    // Validate panelist IDs if provided
+    // Validate and fetch complete panelist objects if provided
+    let completePanelists: any[] = [];
     if (dto.panelistIds && dto.panelistIds.length > 0) {
       const panelists = await this.panelistsRepository.find({
         where: { id: In(dto.panelistIds) },
@@ -168,6 +185,25 @@ export class WeeklyOverridesService {
         const missingIds = dto.panelistIds.filter(id => !foundIds.includes(id));
         throw new NotFoundException(`Panelists with IDs ${missingIds.join(', ')} not found`);
       }
+      // Store complete panelist objects for fast access
+      completePanelists = panelists;
+    }
+
+    // Fetch complete channel object for create overrides
+    let completeChannel: any = null;
+    if (dto.overrideType === 'create' && dto.specialProgram?.channelId) {
+      const channelIdsArray = [dto.specialProgram.channelId];
+      const placeholders = channelIdsArray.map((_, index) => `$${index + 1}`).join(',');
+      const channels = await this.dataSource.query(`
+        SELECT id, name, handle, youtube_channel_id, logo_url, description, "order", is_visible
+        FROM channel 
+        WHERE id IN (${placeholders})
+      `, channelIdsArray);
+      
+      if (channels.length === 0) {
+        throw new NotFoundException(`Channel with ID ${dto.specialProgram.channelId} not found`);
+      }
+      completeChannel = channels[0];
     }
 
     // Create override ID
@@ -201,8 +237,12 @@ export class WeeklyOverridesService {
       createdBy: dto.createdBy,
       expiresAt,
       createdAt: new Date(),
-      specialProgram: dto.specialProgram,
-      panelistIds: dto.panelistIds,
+      panelistIds: dto.panelistIds, // Keep legacy field for backward compatibility
+      panelists: completePanelists.length > 0 ? completePanelists : undefined, // Store complete objects
+      specialProgram: dto.specialProgram ? {
+        ...dto.specialProgram,
+        channel: completeChannel, // Store complete channel object
+      } : undefined,
     };
 
     // Store in Redis with expiration
@@ -281,6 +321,44 @@ export class WeeklyOverridesService {
       throw new BadRequestException('New day of week is required for reschedules');
     }
 
+    // Validate and fetch complete panelist objects if provided
+    let completePanelists: any[] = [];
+    if (dto.panelistIds && dto.panelistIds.length > 0) {
+      const panelists = await this.panelistsRepository.find({
+        where: { id: In(dto.panelistIds) },
+      });
+      if (panelists.length !== dto.panelistIds.length) {
+        const foundIds = panelists.map(p => p.id);
+        const missingIds = dto.panelistIds.filter(id => !foundIds.includes(id));
+        throw new NotFoundException(`Panelists with IDs ${missingIds.join(', ')} not found`);
+      }
+      // Store complete panelist objects for fast access
+      completePanelists = panelists;
+    } else if (existingOverride.panelists) {
+      // Keep existing panelists if not updating
+      completePanelists = existingOverride.panelists;
+    }
+
+    // Fetch complete channel object for create overrides
+    let completeChannel: any = null;
+    if (dto.overrideType === 'create' && dto.specialProgram?.channelId) {
+      const channelIdsArray = [dto.specialProgram.channelId];
+      const placeholders = channelIdsArray.map((_, index) => `$${index + 1}`).join(',');
+      const channels = await this.dataSource.query(`
+        SELECT id, name, handle, youtube_channel_id, logo_url, description, "order", is_visible
+        FROM channel 
+        WHERE id IN (${placeholders})
+      `, channelIdsArray);
+      
+      if (channels.length === 0) {
+        throw new NotFoundException(`Channel with ID ${dto.specialProgram.channelId} not found`);
+      }
+      completeChannel = channels[0];
+    } else if (existingOverride.specialProgram?.channel) {
+      // Keep existing channel if not updating
+      completeChannel = existingOverride.specialProgram.channel;
+    }
+
     // Create updated override object
     const updatedOverride: WeeklyOverride = {
       ...existingOverride,
@@ -290,6 +368,15 @@ export class WeeklyOverridesService {
       createdAt: existingOverride.createdAt,
       weekStartDate: existingOverride.weekStartDate,
       expiresAt: existingOverride.expiresAt,
+      // Update complete objects
+      panelists: completePanelists.length > 0 ? completePanelists : undefined,
+      specialProgram: dto.specialProgram ? {
+        ...dto.specialProgram,
+        channel: completeChannel,
+      } : existingOverride.specialProgram ? {
+        ...existingOverride.specialProgram,
+        channel: completeChannel,
+      } : undefined,
     };
 
     // Save to Redis
@@ -309,7 +396,82 @@ export class WeeklyOverridesService {
    * Get a specific weekly override
    */
   async getWeeklyOverride(overrideId: string): Promise<WeeklyOverride | null> {
-    return this.redisService.get<WeeklyOverride>(`weekly_override:${overrideId}`);
+    const override = await this.redisService.get<WeeklyOverride>(`weekly_override:${overrideId}`);
+    if (override) {
+      // Migrate override to new structure if needed
+      return await this.migrateOverrideToNewStructure(override);
+    }
+    return null;
+  }
+
+  /**
+   * Migrate an override from old structure to new structure
+   */
+  private async migrateOverrideToNewStructure(override: WeeklyOverride): Promise<WeeklyOverride> {
+    let needsMigration = false;
+    const migratedOverride = { ...override };
+
+    // Migrate panelists if we have panelistIds but no panelists
+    if (override.panelistIds && override.panelistIds.length > 0 && !override.panelists) {
+      console.log(`[OVERRIDE-MIGRATION] Migrating panelists for override ${override.id}`);
+      try {
+        const panelists = await this.panelistsRepository.find({
+          where: { id: In(override.panelistIds) },
+        });
+        migratedOverride.panelists = panelists;
+        needsMigration = true;
+        console.log(`[OVERRIDE-MIGRATION] Migrated ${panelists.length} panelists for override ${override.id}`);
+      } catch (error) {
+        console.error(`[OVERRIDE-MIGRATION] Failed to migrate panelists for override ${override.id}:`, error.message);
+        // Keep original structure if migration fails
+      }
+    }
+
+    // Migrate channel if we have channelId but no channel object
+    if (override.specialProgram?.channelId && !override.specialProgram?.channel) {
+      console.log(`[OVERRIDE-MIGRATION] Migrating channel for override ${override.id}`);
+      try {
+        const channelIdsArray = [override.specialProgram.channelId];
+        const placeholders = channelIdsArray.map((_, index) => `$${index + 1}`).join(',');
+        const channels = await this.dataSource.query(`
+          SELECT id, name, handle, youtube_channel_id, logo_url, description, "order", is_visible
+          FROM channel 
+          WHERE id IN (${placeholders})
+        `, channelIdsArray);
+        
+        if (channels.length > 0) {
+          migratedOverride.specialProgram = {
+            ...migratedOverride.specialProgram!,
+            channel: channels[0],
+          };
+          needsMigration = true;
+          console.log(`[OVERRIDE-MIGRATION] Migrated channel for override ${override.id}`);
+        }
+      } catch (error) {
+        console.error(`[OVERRIDE-MIGRATION] Failed to migrate channel for override ${override.id}:`, error.message);
+        // Keep original structure if migration fails
+      }
+    }
+
+    // Save migrated override back to cache if migration occurred
+    if (needsMigration) {
+      try {
+        const key = `weekly_override:${override.id}`;
+        // Calculate TTL based on expiration date
+        const expirationDate = this.dayjs(override.expiresAt).tz('America/Argentina/Buenos_Aires');
+        const now = this.dayjs().tz('America/Argentina/Buenos_Aires');
+        const secondsUntilExpiry = Math.max(0, expirationDate.diff(now, 'seconds'));
+        
+        if (secondsUntilExpiry > 0) {
+          await this.redisService.set(key, migratedOverride, secondsUntilExpiry);
+          console.log(`[OVERRIDE-MIGRATION] Saved migrated override ${override.id} to cache`);
+        }
+      } catch (error) {
+        console.error(`[OVERRIDE-MIGRATION] Failed to save migrated override ${override.id}:`, error.message);
+      }
+    }
+
+    return migratedOverride;
   }
 
   /**
@@ -335,17 +497,20 @@ export class WeeklyOverridesService {
       keys.forEach(key => pipeline.get(key));
       const results = await pipeline.exec();
       
-      // Process pipeline results
-      results.forEach((result, index) => {
+      // Process pipeline results and migrate if needed
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i];
         if (result[0] === null && result[1]) { // No error and has data
           try {
             const override = JSON.parse(result[1]);
-            overrides.push(override);
+            // Migrate override to new structure if needed
+            const migratedOverride = await this.migrateOverrideToNewStructure(override);
+            overrides.push(migratedOverride);
           } catch (error) {
-            console.warn(`[WEEKLY-OVERRIDES] Failed to parse override ${keys[index]}:`, error);
+            console.warn(`[WEEKLY-OVERRIDES] Failed to parse override ${keys[i]}:`, error);
           }
         }
-      });
+      }
     }
 
     return overrides;
@@ -421,98 +586,22 @@ export class WeeklyOverridesService {
       }
     });
 
-    // Get all panelist IDs from overrides to fetch them once
-    const allPanelistIds = new Set<number>();
-    overrides.forEach(override => {
-      if (override.panelistIds) {
-        override.panelistIds.forEach(id => allPanelistIds.add(id));
-      }
-    });
-
-    // OPTIMIZATION: Cache panelists to avoid DB queries on every request
+    // OPTIMIZATION: Use complete panelist objects from cache (no DB queries needed)
     const panelistsMap = new Map<number, any>();
-    if (allPanelistIds.size > 0) {
-      const uncachedPanelistIds: number[] = [];
-      const cachedPanelists = new Map<number, any>();
-      
-      // Check cache for each panelist
-      for (const panelistId of allPanelistIds) {
-        const cacheKey = `panelist:${panelistId}`;
-        const cached = await this.redisService.get(cacheKey);
-        if (cached) {
-          cachedPanelists.set(panelistId, cached);
-        } else {
-          uncachedPanelistIds.push(panelistId);
+    for (const override of overrides) {
+      if (override.panelists && override.panelists.length > 0) {
+        for (const panelist of override.panelists) {
+          panelistsMap.set(panelist.id, panelist);
         }
       }
-      
-      // Fetch uncached panelists from database
-      if (uncachedPanelistIds.length > 0) {
-        const panelists = await this.panelistsRepository.find({
-          where: { id: In(uncachedPanelistIds) },
-        });
-        
-        // Cache the fetched panelists
-        for (const panelist of panelists) {
-          const cacheKey = `panelist:${panelist.id}`;
-          await this.redisService.set(cacheKey, panelist, 3600); // Cache for 1 hour
-          cachedPanelists.set(panelist.id, panelist);
-        }
-      }
-      
-      // Merge cached and fetched panelists
-      cachedPanelists.forEach((panelist, id) => {
-        panelistsMap.set(id, panelist);
-      });
     }
 
-    // Get all channel IDs from create overrides to fetch them once
-    const allChannelIds = new Set<number>();
-    createOverrides.forEach(override => {
-      if (override.specialProgram?.channelId) {
-        allChannelIds.add(override.specialProgram.channelId);
-      }
-    });
-
-    // OPTIMIZATION: Cache channels to avoid DB queries on every request
+    // OPTIMIZATION: Use complete channel objects from cache (no DB queries needed)
     const channelsMap = new Map<number, any>();
-    if (allChannelIds.size > 0) {
-      const uncachedChannelIds: number[] = [];
-      const cachedChannels = new Map<number, any>();
-      
-      // Check cache for each channel
-      for (const channelId of allChannelIds) {
-        const cacheKey = `channel:${channelId}`;
-        const cached = await this.redisService.get(cacheKey);
-        if (cached) {
-          cachedChannels.set(channelId, cached);
-        } else {
-          uncachedChannelIds.push(channelId);
-        }
+    for (const override of overrides) {
+      if (override.specialProgram?.channel) {
+        channelsMap.set(override.specialProgram.channel.id, override.specialProgram.channel);
       }
-      
-      // Fetch uncached channels from database
-      if (uncachedChannelIds.length > 0) {
-        const channelIdsArray = uncachedChannelIds;
-        const placeholders = channelIdsArray.map((_, index) => `$${index + 1}`).join(',');
-        const channels = await this.dataSource.query(`
-          SELECT id, name, handle, youtube_channel_id, logo_url, description, "order"
-          FROM channel 
-          WHERE id IN (${placeholders})
-        `, channelIdsArray);
-        
-        // Cache the fetched channels
-        for (const channel of channels) {
-          const cacheKey = `channel:${channel.id}`;
-          await this.redisService.set(cacheKey, channel, 3600); // Cache for 1 hour
-          cachedChannels.set(channel.id, channel);
-        }
-      }
-      
-      // Merge cached and fetched channels
-      cachedChannels.forEach((channel, id) => {
-        channelsMap.set(id, channel);
-      });
     }
 
     const modifiedSchedules: Schedule[] = [];
@@ -539,10 +628,10 @@ export class WeeklyOverridesService {
             } as any;
             
             // Add panelists if specified in the override
-            if (programOverride.panelistIds && programOverride.panelistIds.length > 0) {
+            if (programOverride.panelists && programOverride.panelists.length > 0) {
               modifiedSchedule1.program = {
                 ...modifiedSchedule1.program,
-                panelists: programOverride.panelistIds.map(id => panelistsMap.get(id)).filter(Boolean),
+                panelists: programOverride.panelists,
               };
             }
             
@@ -560,10 +649,10 @@ export class WeeklyOverridesService {
             } as any;
             
             // Add panelists if specified in the override
-            if (programOverride.panelistIds && programOverride.panelistIds.length > 0) {
+            if (programOverride.panelists && programOverride.panelists.length > 0) {
               modifiedSchedule2.program = {
                 ...modifiedSchedule2.program,
-                panelists: programOverride.panelistIds.map(id => panelistsMap.get(id)).filter(Boolean),
+                panelists: programOverride.panelists,
               };
             }
             
@@ -598,10 +687,10 @@ export class WeeklyOverridesService {
           } as any;
           
           // Add panelists if specified in the override
-          if (scheduleOverride.panelistIds && scheduleOverride.panelistIds.length > 0) {
+          if (scheduleOverride.panelists && scheduleOverride.panelists.length > 0) {
             modifiedSchedule3.program = {
               ...modifiedSchedule3.program,
-              panelists: scheduleOverride.panelistIds.map(id => panelistsMap.get(id)).filter(Boolean),
+              panelists: scheduleOverride.panelists,
             };
           }
           
@@ -619,10 +708,10 @@ export class WeeklyOverridesService {
           } as any;
           
           // Add panelists if specified in the override
-          if (scheduleOverride.panelistIds && scheduleOverride.panelistIds.length > 0) {
+          if (scheduleOverride.panelists && scheduleOverride.panelists.length > 0) {
             modifiedSchedule4.program = {
               ...modifiedSchedule4.program,
-              panelists: scheduleOverride.panelistIds.map(id => panelistsMap.get(id)).filter(Boolean),
+              panelists: scheduleOverride.panelists,
             };
           }
           
@@ -637,7 +726,7 @@ export class WeeklyOverridesService {
     // Add virtual schedules for create overrides
     for (const override of createOverrides) {
       if (override.specialProgram && override.newStartTime && override.newEndTime && override.newDayOfWeek) {
-        const channel = channelsMap.get(override.specialProgram.channelId);
+        const channel = override.specialProgram.channel || channelsMap.get(override.specialProgram.channelId);
         const virtualSchedule: any = {
           id: `virtual_${override.id}`,
           day_of_week: override.newDayOfWeek,
@@ -664,7 +753,7 @@ export class WeeklyOverridesService {
               name: 'Special Program', // Fallback if channel not found
             },
             // Add panelists if specified in the override
-            panelists: override.panelistIds ? override.panelistIds.map(id => panelistsMap.get(id)).filter(Boolean) : [],
+            panelists: override.panelists || [],
           },
         };
         modifiedSchedules.push(virtualSchedule);

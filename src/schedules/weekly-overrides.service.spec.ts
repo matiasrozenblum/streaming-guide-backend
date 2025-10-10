@@ -126,7 +126,10 @@ describe('WeeklyOverridesService', () => {
 
       jest.spyOn(redisService, 'get').mockResolvedValue(null); // No existing override
       jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
-      jest.spyOn(redisService, 'delByPattern').mockResolvedValue(undefined);
+      jest.spyOn(redisService, 'del').mockResolvedValue(undefined);
+      jest.spyOn(dataSource, 'query').mockResolvedValue([
+        { id: 1, name: 'Test Channel', handle: 'test', youtube_channel_id: 'test123', logo_url: null, description: null, order: 1, is_visible: true }
+      ]);
 
       const result = await service.createWeeklyOverride(dto);
 
@@ -135,6 +138,9 @@ describe('WeeklyOverridesService', () => {
       expect(result.specialProgram).toBeDefined();
       expect(result.specialProgram!.name).toBe('Un día rosarino');
       expect(result.specialProgram!.channelId).toBe(1);
+      expect(result.specialProgram!.channel).toBeDefined();
+      expect(result.specialProgram!.channel!.id).toBe(1);
+      expect(result.specialProgram!.channel!.name).toBe('Test Channel');
       expect(redisService.set).toHaveBeenCalled();
       expect(redisService.del).toHaveBeenCalledWith('schedules:week:complete');
     });
@@ -285,16 +291,22 @@ describe('WeeklyOverridesService', () => {
 
       jest.spyOn(schedulesRepo, 'findOne').mockResolvedValue(mockSchedule as any);
       jest.spyOn(panelistsRepo, 'find').mockResolvedValue([
-        { id: 1, name: 'Panelist 1' },
-        { id: 2, name: 'Panelist 2' },
+        { id: 1, name: 'Panelist 1', photo_url: null, bio: 'Panelist 1 bio' },
+        { id: 2, name: 'Panelist 2', photo_url: null, bio: 'Panelist 2 bio' },
       ] as any);
       jest.spyOn(redisService, 'get').mockResolvedValue(null);
       jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
-      jest.spyOn(redisService, 'delByPattern').mockResolvedValue(undefined);
+      jest.spyOn(redisService, 'del').mockResolvedValue(undefined);
 
       const result = await service.createWeeklyOverride(dto);
 
-      expect(result.panelistIds).toEqual([1, 2]);
+      expect(result.panelistIds).toEqual([1, 2]); // Keep legacy field for backward compatibility
+      expect(result.panelists).toBeDefined();
+      expect(result.panelists!.length).toBe(2);
+      expect(result.panelists![0].id).toBe(1);
+      expect(result.panelists![0].name).toBe('Panelist 1');
+      expect(result.panelists![1].id).toBe(2);
+      expect(result.panelists![1].name).toBe('Panelist 2');
       expect(panelistsRepo.find).toHaveBeenCalledWith({
         where: { id: expect.any(Object) },
       });
@@ -468,6 +480,16 @@ describe('WeeklyOverridesService', () => {
           name: 'Un día rosarino',
           description: 'Special program for Flag Day',
           channelId: 1,
+          channel: {
+            id: 1,
+            name: 'Test Channel',
+            handle: 'test',
+            youtube_channel_id: 'test123',
+            logo_url: null,
+            description: null,
+            order: 1,
+            is_visible: true,
+          },
           imageUrl: 'https://example.com/image.jpg',
         },
       };
