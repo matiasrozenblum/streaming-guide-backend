@@ -65,6 +65,8 @@ describe('SchedulesService Logging Improvements', () => {
   const mockRedisService = {
     get: jest.fn().mockResolvedValue(null),
     set: jest.fn().mockResolvedValue(undefined),
+    setNX: jest.fn().mockResolvedValue(true),
+    del: jest.fn().mockResolvedValue(undefined),
   };
 
   const mockYoutubeLiveService = {
@@ -140,11 +142,11 @@ describe('SchedulesService Logging Improvements', () => {
       await service.findAll({ dayOfWeek: 'monday' });
       
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[SCHEDULES-CACHE] Checking cache for schedules:all:monday')
+        expect.stringContaining('[SCHEDULES-CACHE] Checking unified cache for schedules:week:complete')
       );
       
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[SCHEDULES-CACHE] MISS for schedules:all:monday')
+        expect.stringContaining('[SCHEDULES-CACHE] MISS for unified cache schedules:week:complete')
       );
       
       consoleSpy.mockRestore();
@@ -190,7 +192,7 @@ describe('SchedulesService Logging Improvements', () => {
       await service.findAll({ dayOfWeek: 'monday' });
       
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[SCHEDULES-CACHE] HIT for schedules:all:monday')
+        expect.stringContaining('[SCHEDULES-CACHE] HIT for schedules:week:complete')
       );
       
       consoleSpy.mockRestore();

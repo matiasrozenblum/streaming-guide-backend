@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Inject } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FindOneOptions, Repository } from 'typeorm';
 import { Panelist } from './panelists.entity';
@@ -6,6 +6,7 @@ import { CreatePanelistDto } from './dto/create-panelist.dto';
 import { UpdatePanelistDto } from './dto/update-panelist.dto';
 import { Program } from '../programs/programs.entity';
 import { RedisService } from '../redis/redis.service';
+import { SchedulesService } from '../schedules/schedules.service';
 import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
@@ -21,6 +22,8 @@ export class PanelistsService {
     @InjectRepository(Program)
     private programsRepository: Repository<Program>,
     private readonly redisService: RedisService,
+    @Inject(forwardRef(() => SchedulesService))
+    private readonly schedulesService: SchedulesService,
   ) {
     this.notifyUtil = new NotifyAndRevalidateUtil(
       this.redisService,
@@ -110,8 +113,11 @@ export class PanelistsService {
     await Promise.all([
       this.redisService.del('panelists:all'),
       this.redisService.del(`panelists:${id}`),
-      this.redisService.delByPattern('schedules:all:*'), // Clear schedule cache since panelist info appears in schedules
+      this.redisService.del('schedules:week:complete'), // Clear unified schedule cache since panelist info appears in schedules
     ]);
+    
+    // Warm cache asynchronously (non-blocking)
+    setImmediate(() => this.schedulesService.warmSchedulesCache());
 
     // Notify and revalidate
     await this.notifyUtil.notifyAndRevalidate({
@@ -164,7 +170,11 @@ export class PanelistsService {
       await this.panelistsRepository.save(panelist);
       console.log(`[Cache] Invalidating cache for panelist ${panelistId} after adding to program ${programId}`);
       await this.redisService.del(`panelists:${panelistId}`);
-      await this.redisService.delByPattern('schedules:all:*');
+      await this.redisService.del('schedules:week:complete');
+      
+      // Warm cache asynchronously (non-blocking)
+      setImmediate(() => this.schedulesService.warmSchedulesCache());
+      
       // Notify and revalidate
       await this.notifyUtil.notifyAndRevalidate({
         eventType: 'panelist_added_to_program',
@@ -184,7 +194,11 @@ export class PanelistsService {
       await this.panelistsRepository.save(panelist);
       console.log(`[Cache] Invalidating cache for panelist ${panelistId} after removing from program ${programId}`);
       await this.redisService.del(`panelists:${panelistId}`);
-      await this.redisService.delByPattern('schedules:all:*');
+      await this.redisService.del('schedules:week:complete');
+      
+      // Warm cache asynchronously (non-blocking)
+      setImmediate(() => this.schedulesService.warmSchedulesCache());
+      
       // Notify and revalidate
       await this.notifyUtil.notifyAndRevalidate({
         eventType: 'panelist_removed_from_program',

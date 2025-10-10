@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FindOneOptions, Repository } from 'typeorm';
 import { Program } from './programs.entity';
@@ -8,6 +8,7 @@ import { Panelist } from '../panelists/panelists.entity';
 import { Channel } from '../channels/channels.entity';
 import { RedisService } from '../redis/redis.service';
 import { WeeklyOverridesService } from '../schedules/weekly-overrides.service';
+import { SchedulesService } from '../schedules/schedules.service';
 import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
@@ -26,6 +27,8 @@ export class ProgramsService {
     private channelsRepository: Repository<Channel>,
     private redisService: RedisService,
     private weeklyOverridesService: WeeklyOverridesService,
+    @Inject(forwardRef(() => SchedulesService))
+    private schedulesService: SchedulesService,
   ) {
     this.notifyUtil = new NotifyAndRevalidateUtil(
       this.redisService,
@@ -45,7 +48,12 @@ export class ProgramsService {
     const program = this.programsRepository.create(createProgramDto);
     program.channel = channel;
     const savedProgram = await this.programsRepository.save(program);
-    await this.redisService.delByPattern('schedules:all:*');
+    
+    // Clear unified cache
+    await this.redisService.del('schedules:week:complete');
+    
+    // Warm cache asynchronously (non-blocking)
+    setImmediate(() => this.schedulesService.warmSchedulesCache());
 
     // Notify and revalidate
     await this.notifyUtil.notifyAndRevalidate({
@@ -124,7 +132,12 @@ export class ProgramsService {
     
     Object.assign(program, updateProgramDto);
     const updatedProgram = await this.programsRepository.save(program);
-    await this.redisService.delByPattern('schedules:all:*');
+    
+    // Clear unified cache
+    await this.redisService.del('schedules:week:complete');
+    
+    // Warm cache asynchronously (non-blocking)
+    setImmediate(() => this.schedulesService.warmSchedulesCache());
 
     // Notify and revalidate
     await this.notifyUtil.notifyAndRevalidate({
@@ -164,7 +177,12 @@ export class ProgramsService {
     if (result.affected === 0) {
       throw new NotFoundException(`Program with ID ${id} not found`);
     }
-    await this.redisService.delByPattern('schedules:all:*');
+    
+    // Clear unified cache
+    await this.redisService.del('schedules:week:complete');
+    
+    // Warm cache asynchronously (non-blocking)
+    setImmediate(() => this.schedulesService.warmSchedulesCache());
 
     // Notify and revalidate
     await this.notifyUtil.notifyAndRevalidate({
@@ -208,7 +226,12 @@ export class ProgramsService {
       program.panelists.push(panelist);
       await this.programsRepository.save(program);
     }
-    await this.redisService.delByPattern('schedules:all:*');
+    
+    // Clear unified cache
+    await this.redisService.del('schedules:week:complete');
+    
+    // Warm cache asynchronously (non-blocking)
+    setImmediate(() => this.schedulesService.warmSchedulesCache());
 
     // Notify and revalidate
     await this.notifyUtil.notifyAndRevalidate({
@@ -227,7 +250,12 @@ export class ProgramsService {
       program.panelists = program.panelists.filter(p => p.id !== panelistId);
       await this.programsRepository.save(program);
     }
-    await this.redisService.delByPattern('schedules:all:*');
+    
+    // Clear unified cache
+    await this.redisService.del('schedules:week:complete');
+    
+    // Warm cache asynchronously (non-blocking)
+    setImmediate(() => this.schedulesService.warmSchedulesCache());
 
     // Notify and revalidate
     await this.notifyUtil.notifyAndRevalidate({
