@@ -1,11 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { CategoriesService } from './categories.service';
 import { Category } from './categories.entity';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { NotFoundException } from '@nestjs/common';
+import { RedisService } from '../redis/redis.service';
 
 describe('CategoriesService', () => {
   let service: CategoriesService;
@@ -47,6 +48,17 @@ describe('CategoriesService', () => {
     getMany: jest.fn(),
   };
 
+  const mockDataSource = {
+    transaction: jest.fn(),
+  };
+
+  const mockRedisService = {
+    set: jest.fn(),
+    get: jest.fn(),
+    del: jest.fn(),
+    delByPattern: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -54,6 +66,14 @@ describe('CategoriesService', () => {
         {
           provide: getRepositoryToken(Category),
           useValue: mockRepository,
+        },
+        {
+          provide: DataSource,
+          useValue: mockDataSource,
+        },
+        {
+          provide: RedisService,
+          useValue: mockRedisService,
         },
       ],
     }).compile();
@@ -113,12 +133,13 @@ describe('CategoriesService', () => {
   });
 
   describe('findAll', () => {
-    it('should return all categories ordered by order and name', async () => {
+    it('should return all visible categories ordered by order and name', async () => {
       mockRepository.find.mockResolvedValue(mockCategories);
 
       const result = await service.findAll();
 
       expect(mockRepository.find).toHaveBeenCalledWith({
+        where: { is_visible: true },
         relations: ['channels'],
         order: { order: 'ASC', name: 'ASC' },
       });
