@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, DataSource } from 'typeorm';
 import { Schedule } from './schedules.entity';
@@ -65,6 +65,12 @@ export class WeeklyOverridesService {
     private panelistsRepository: Repository<Panelist>,
     private readonly redisService: RedisService,
     private readonly dataSource: DataSource,
+    @Inject(forwardRef(() => {
+      // Lazy import to avoid circular dependency at module load time
+      const { SchedulesService } = require('./schedules.service');
+      return SchedulesService;
+    }))
+    private readonly schedulesService: any,
   ) {
     this.dayjs = dayjs;
     this.dayjs.extend(utc);
@@ -204,8 +210,11 @@ export class WeeklyOverridesService {
     const secondsUntilExpiry = expirationDate.diff(now, 'seconds');
     await this.redisService.set(`weekly_override:${overrideId}`, override, secondsUntilExpiry);
 
-    // Clear schedule caches
-    await this.redisService.delByPattern('schedules:all:*');
+    // Clear unified schedule cache
+    await this.redisService.del('schedules:week:complete');
+    
+    // Warm cache asynchronously (non-blocking)
+    setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
 
     return override;
   }
@@ -287,8 +296,11 @@ export class WeeklyOverridesService {
     const key = `weekly_override:${overrideId}`;
     await this.redisService.set(key, updatedOverride, 60 * 60 * 24 * 7); // 7 days
 
-    // Clear cache
-    await this.redisService.delByPattern('schedules:all:*');
+    // Clear unified cache
+    await this.redisService.del('schedules:week:complete');
+    
+    // Warm cache asynchronously (non-blocking)
+    setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
 
     return updatedOverride;
   }
@@ -357,7 +369,11 @@ export class WeeklyOverridesService {
     }
 
     await this.redisService.del(`weekly_override:${overrideId}`);
-    await this.redisService.delByPattern('schedules:all:*');
+    await this.redisService.del('schedules:week:complete');
+    
+    // Warm cache asynchronously (non-blocking)
+    setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
+    
     return true;
   }
 
@@ -424,11 +440,13 @@ export class WeeklyOverridesService {
     // Fetch all channels at once
     const channelsMap = new Map<number, any>();
     if (allChannelIds.size > 0) {
+      const channelIdsArray = Array.from(allChannelIds);
+      const placeholders = channelIdsArray.map((_, index) => `$${index + 1}`).join(',');
       const channels = await this.dataSource.query(`
         SELECT id, name, handle, youtube_channel_id, logo_url, description, "order"
         FROM channel 
-        WHERE id IN (${Array.from(allChannelIds).join(',')})
-      `);
+        WHERE id IN (${placeholders})
+      `, channelIdsArray);
       channels.forEach(channel => {
         channelsMap.set(channel.id, channel);
       });
@@ -635,7 +653,10 @@ export class WeeklyOverridesService {
     }
 
     if (cleaned > 0) {
-      await this.redisService.delByPattern('schedules:all:*');
+      await this.redisService.del('schedules:week:complete');
+      
+      // Warm cache asynchronously (non-blocking)
+      setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
     }
 
     return cleaned;
@@ -664,7 +685,10 @@ export class WeeklyOverridesService {
       }
     }
     if (deleted > 0) {
-      await this.redisService.delByPattern('schedules:all:*');
+      await this.redisService.del('schedules:week:complete');
+      
+      // Warm cache asynchronously (non-blocking)
+      setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
     }
     return deleted;
   }

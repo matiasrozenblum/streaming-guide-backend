@@ -52,39 +52,45 @@ export class LiveStatusBackgroundService {
       const currentDay = TimezoneUtil.currentDayOfWeek();
       const currentTime = TimezoneUtil.currentTimeInMinutes();
 
-      // Get all visible channels
-      const channels = await this.channelsRepository.find({
-        where: { is_visible: true },
-        relations: ['programs', 'programs.schedules'],
+      // Get schedules with weekly overrides applied (includes virtual/special programs)
+      // This is crucial for detecting special programs from weekly overrides
+      const allSchedules = await this.schedulesService.findAll({
+        dayOfWeek: currentDay,
+        liveStatus: false, // Don't need live status, just schedule data
+        applyOverrides: true, // ✅ CRITICAL: Apply weekly overrides to include special programs
       });
 
       const channelsToUpdate: string[] = [];
+      const liveChannels = new Map<string, { channelId: string; handle: string }>();
 
-      // Filter channels that have programs running right now
-      for (const channel of channels) {
-        if (!channel.youtube_channel_id || !channel.handle) continue;
+      // Find channels with programs running right now (including special programs)
+      for (const schedule of allSchedules) {
+        const channelId = schedule.program?.channel?.youtube_channel_id;
+        const handle = schedule.program?.channel?.handle;
+        
+        if (!channelId || !handle) continue;
 
-        // Check if channel has programs running now
-        const hasLiveProgram = channel.programs.some(program =>
-          program.schedules.some(schedule =>
-            schedule.day_of_week === currentDay &&
-            currentTime >= this.convertTimeToNumber(schedule.start_time) &&
-            currentTime < this.convertTimeToNumber(schedule.end_time)
-          )
-        );
+        // Check if this schedule is currently live
+        const startNum = this.convertTimeToNumber(schedule.start_time);
+        const endNum = this.convertTimeToNumber(schedule.end_time);
+        const isLive = currentTime >= startNum && currentTime < endNum;
 
-        if (hasLiveProgram) {
-          // Check if we need to update this channel's live status
-          const cacheKey = `${this.CACHE_PREFIX}${channel.youtube_channel_id}`;
-          const cached = await this.redisService.get<LiveStatusCache>(cacheKey);
-          
-          if (!cached || await this.shouldUpdateCache(cached)) {
-            channelsToUpdate.push(channel.youtube_channel_id);
-          }
+        if (isLive) {
+          liveChannels.set(channelId, { channelId, handle });
         }
       }
 
-      this.logger.log(`📊 Found ${channelsToUpdate.length} channels needing live status update`);
+      // Check which channels need cache updates
+      for (const [channelId, channelInfo] of liveChannels) {
+        const cacheKey = `${this.CACHE_PREFIX}${channelId}`;
+        const cached = await this.redisService.get<LiveStatusCache>(cacheKey);
+        
+        if (!cached || await this.shouldUpdateCache(cached)) {
+          channelsToUpdate.push(channelId);
+        }
+      }
+
+      this.logger.log(`📊 Found ${liveChannels.size} channels with live programs, ${channelsToUpdate.length} needing update`);
 
       if (channelsToUpdate.length === 0) {
         this.logger.log('✅ All channels up to date, skipping update');
@@ -174,46 +180,51 @@ export class LiveStatusBackgroundService {
    */
   private async updateChannelLiveStatus(channelId: string): Promise<LiveStatusCache | null> {
     try {
-      // Get channel info with optimized query - only load current day schedules
-      const dayOfWeek = TimezoneUtil.currentDayOfWeek();
-      const timeString = TimezoneUtil.currentTimeString();
+      // Get current day and time
+      const currentDay = TimezoneUtil.currentDayOfWeek();
+      const currentTime = TimezoneUtil.currentTimeInMinutes();
       
-      const channel = await this.channelsRepository
-        .createQueryBuilder('channel')
-        .leftJoinAndSelect('channel.programs', 'program')
-        .leftJoinAndSelect('program.schedules', 'schedule')
-        .where('channel.youtube_channel_id = :channelId', { channelId })
-        .andWhere('schedule.day_of_week = :dayOfWeek', { dayOfWeek })
-        .andWhere('schedule.start_time <= :timeString', { timeString })
-        .andWhere('schedule.end_time > :timeString', { timeString })
-        .getOne();
+      // Get schedules with weekly overrides applied (includes virtual/special programs)
+      const allSchedules = await this.schedulesService.findAll({
+        dayOfWeek: currentDay,
+        liveStatus: false,
+        applyOverrides: true, // ✅ Include special programs from weekly overrides
+      });
 
-      if (!channel || !channel.handle) {
+      // Find ALL schedules for this channel today (not just live ones)
+      const channelSchedules = allSchedules.filter(schedule => {
+        const scheduleChannelId = schedule.program?.channel?.youtube_channel_id;
+        return scheduleChannelId === channelId;
+      });
+
+      if (channelSchedules.length === 0) {
+        // Channel has no schedules today (unusual - caller should have checked this)
+        return null;
+      }
+
+      // Get channel handle from the first schedule
+      const handle = channelSchedules[0].program.channel.handle;
+      if (!handle) {
         return null;
       }
 
       // Check if channel is enabled for live fetching
-      if (!(await this.configService.canFetchLive(channel.handle))) {
+      if (!(await this.configService.canFetchLive(handle))) {
         return null;
       }
 
-      // Get current program TTL
-      const currentDay = TimezoneUtil.currentDayOfWeek();
-      const currentTime = TimezoneUtil.currentTimeInMinutes();
-      
-      const liveSchedules = channel.programs.flatMap(program =>
-        program.schedules.filter(schedule =>
-          schedule.day_of_week === currentDay &&
-          currentTime >= this.convertTimeToNumber(schedule.start_time) &&
-          currentTime < this.convertTimeToNumber(schedule.end_time)
-        )
-      );
+      // Now filter for currently live schedules
+      const liveSchedules = channelSchedules.filter(schedule => {
+        const startNum = this.convertTimeToNumber(schedule.start_time);
+        const endNum = this.convertTimeToNumber(schedule.end_time);
+        return currentTime >= startNum && currentTime < endNum;
+      });
 
+      // If no live schedules, cache as not live (program ended)
       if (liveSchedules.length === 0) {
-        // No live programs, cache as not live
         const cacheData: LiveStatusCache = {
           channelId,
-          handle: channel.handle,
+          handle,
           isLive: false,
           streamUrl: null,
           videoId: null,
@@ -235,18 +246,18 @@ export class LiveStatusBackgroundService {
       const blockEndTime = this.calculateBlockEndTime(liveSchedules, currentTime);
 
       // Fetch live streams from YouTube
-      console.log(`[LIVE-STATUS-BG] Fetching live streams for ${channel.handle} (${channelId})`);
+      console.log(`[LIVE-STATUS-BG] Fetching live streams for ${handle} (${channelId})`);
       const liveStreams = await this.youtubeLiveService.getLiveStreams(
         channelId,
-        channel.handle,
+        handle,
         ttl,
         'cron' // Background context
       );
-      console.log(`[LIVE-STATUS-BG] Live streams result for ${channel.handle}:`, liveStreams);
+      console.log(`[LIVE-STATUS-BG] Live streams result for ${handle}:`, liveStreams);
 
       const cacheData: LiveStatusCache = {
         channelId,
-        handle: channel.handle,
+        handle,
         isLive: liveStreams !== null && liveStreams !== '__SKIPPED__' && liveStreams.streams.length > 0,
         streamUrl: liveStreams && liveStreams !== '__SKIPPED__' && liveStreams.streams.length > 0 
           ? `https://www.youtube.com/embed/${liveStreams.primaryVideoId}?autoplay=1`
@@ -259,7 +270,7 @@ export class LiveStatusBackgroundService {
         lastValidation: Date.now(),
       };
 
-      console.log(`[LIVE-STATUS-BG] Cache data for ${channel.handle}:`, cacheData);
+      console.log(`[LIVE-STATUS-BG] Cache data for ${handle}:`, cacheData);
 
       await this.cacheLiveStatus(channelId, cacheData);
       return cacheData;

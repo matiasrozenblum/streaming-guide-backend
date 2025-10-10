@@ -123,8 +123,5 @@ export class YoutubeController {
     }
   }
 
-  @Get('api-usage')
-  async getApiUsage() {
-    return this.youtubeLiveService.getApiUsageStats();
-  }
+  // YouTube API usage endpoint removed - no longer needed
 } 

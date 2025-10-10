@@ -6,6 +6,7 @@ import { WeeklyOverridesService, WeeklyOverrideDto } from './weekly-overrides.se
 import { Schedule } from './schedules.entity';
 import { Panelist } from '../panelists/panelists.entity';
 import { RedisService } from '../redis/redis.service';
+import { SchedulesService } from './schedules.service';
 import * as dayjs from 'dayjs';
 
 describe('WeeklyOverridesService', () => {
@@ -65,6 +66,12 @@ describe('WeeklyOverridesService', () => {
             query: jest.fn(),
           },
         },
+        {
+          provide: SchedulesService,
+          useValue: {
+            warmSchedulesCache: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -96,7 +103,7 @@ describe('WeeklyOverridesService', () => {
       expect(result.scheduleId).toBe(1);
       expect(result.overrideType).toBe('cancel');
       expect(redisService.set).toHaveBeenCalled();
-      expect(redisService.delByPattern).toHaveBeenCalledWith('schedules:all:*');
+      expect(redisService.del).toHaveBeenCalledWith('schedules:week:complete');
     });
 
     it('should create a special program override successfully', async () => {
@@ -128,7 +135,7 @@ describe('WeeklyOverridesService', () => {
       expect(result.specialProgram!.name).toBe('Un día rosarino');
       expect(result.specialProgram!.channelId).toBe(1);
       expect(redisService.set).toHaveBeenCalled();
-      expect(redisService.delByPattern).toHaveBeenCalledWith('schedules:all:*');
+      expect(redisService.del).toHaveBeenCalledWith('schedules:week:complete');
     });
 
     it('should throw BadRequestException when create override missing special program data', async () => {
@@ -348,7 +355,7 @@ describe('WeeklyOverridesService', () => {
 
       expect(result).toBe(true);
       expect(redisService.del).toHaveBeenCalledWith(`weekly_override:${overrideId}`);
-      expect(redisService.delByPattern).toHaveBeenCalledWith('schedules:all:*');
+      expect(redisService.del).toHaveBeenCalledWith('schedules:week:complete');
     });
 
     it('should return false when override does not exist', async () => {
@@ -662,7 +669,7 @@ describe('WeeklyOverridesService', () => {
 
       expect(result).toBe(1);
       expect(redisService.del).toHaveBeenCalledWith('weekly_override:1_2024-01-01');
-      expect(redisService.delByPattern).toHaveBeenCalledWith('schedules:all:*');
+      expect(redisService.del).toHaveBeenCalledWith('schedules:week:complete');
     });
 
     it('should not clean up non-expired overrides', async () => {

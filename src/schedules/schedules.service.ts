@@ -63,97 +63,205 @@ export class SchedulesService {
     const startTime = Date.now();
     const { dayOfWeek, relations = ['program', 'program.channel', 'program.panelists'], select, skipCache = false, applyOverrides = true, liveStatus = false } = options;
 
-    const cacheKey = `schedules:all:${dayOfWeek || 'all'}`;
+    // UNIFIED CACHE KEY: Always cache complete week data
+    const cacheKey = 'schedules:week:complete';
     let schedules: Schedule[] | null = null;
+    
+    // Try cache first (unless skipCache is true)
     if (!skipCache) {
-      console.log(`[SCHEDULES-CACHE] Checking cache for ${cacheKey}`);
+      console.log(`[SCHEDULES-CACHE] Checking unified cache for ${cacheKey}`);
       schedules = await this.redisService.get<Schedule[]>(cacheKey);
       if (schedules) {
-        console.log(`[SCHEDULES-CACHE] HIT for ${cacheKey} (${Date.now() - startTime}ms)`);
-      }
-    }
-
-    if (!schedules) {
-      console.log(`[SCHEDULES-CACHE] MISS for ${cacheKey}`);
-      const dbStart = Date.now();
-      console.log(`[SCHEDULES-DB] Starting query for ${dayOfWeek || 'all days'} at ${new Date().toISOString()}`);
-      
-      // Optimized query structure - selective panelists join to prevent data explosion
-      const queryBuilder = this.schedulesRepository
-        .createQueryBuilder('schedule')
-        .leftJoinAndSelect('schedule.program', 'program')
-        .leftJoinAndSelect('program.channel', 'channel')
-        .leftJoin('program.panelists', 'panelists')
-        .addSelect(['panelists.id', 'panelists.name']) // Only select id and name to prevent data explosion
-        .orderBy('schedule.start_time', 'ASC')
-        .addOrderBy('panelists.id', 'ASC');
-      
-      if (dayOfWeek) {
-        queryBuilder.where('schedule.day_of_week = :dayOfWeek', { dayOfWeek });
-      }
-      
-      schedules = await queryBuilder.getMany();
-      const dbQueryTime = Date.now() - dbStart;
-      console.log(`[SCHEDULES-DB] Query completed (${dbQueryTime}ms) - ${schedules.length} schedules`);
-      
-      // Debug: Check panelists data size
-      const schedulesWithPanelists = schedules.filter(s => s.program?.panelists && s.program.panelists.length > 0);
-      const totalPanelists = schedules.reduce((sum, s) => sum + (s.program?.panelists?.length || 0), 0);
-      console.log(`[SCHEDULES-DB] Schedules with panelists: ${schedulesWithPanelists.length}/${schedules.length}, Total panelists: ${totalPanelists}`);
-      console.log('[findAll] First few schedules:', schedules.slice(0, 3).map(s => ({
-        id: s.id,
-        day_of_week: s.day_of_week,
-        start_time: s.start_time,
-        program_id: s.program_id,
-        program: s.program ? { id: s.program.id, name: s.program.name } : null,
-        channel: s.program?.channel ? { id: s.program.channel.id, name: s.program.channel.name } : null
-      })));
-      
-      // Alert on slow database queries
-      if (dbQueryTime > 3000) { // 3 seconds
-        this.sentryService.captureMessage(
-          `Slow database query in schedules service - ${dbQueryTime}ms`,
-          'warning',
-          {
-            service: 'schedules',
-            error_type: 'slow_database_query',
-            query_time: dbQueryTime,
-            day_of_week: dayOfWeek,
-            cache_key: cacheKey,
-            timestamp: new Date().toISOString(),
-          }
-        );
+        console.log(`[SCHEDULES-CACHE] HIT for ${cacheKey} (${Date.now() - startTime}ms) - ${schedules.length} total schedules`);
         
-        this.sentryService.setTag('service', 'schedules');
-        this.sentryService.setTag('error_type', 'slow_database_query');
+        // Filter by day if requested (after cache hit)
+        if (dayOfWeek) {
+          const originalCount = schedules.length;
+          schedules = schedules.filter(s => s.day_of_week === dayOfWeek);
+          console.log(`[SCHEDULES-CACHE] Filtered to ${dayOfWeek}: ${schedules.length}/${originalCount} schedules`);
+        }
+        
+        // Cache hit - proceed to process schedules (overrides + enrichment)
+        return this.processSchedules(schedules, options, startTime);
       }
-      
-      // Original sorting logic
-      schedules.sort((a, b) => {
-        const aOrder = a.program?.channel?.order ?? 999;
-        const bOrder = b.program?.channel?.order ?? 999;
-        if (aOrder !== bOrder) return aOrder - bOrder;
-        return a.start_time.localeCompare(b.start_time);
-      });
-      await this.redisService.set(cacheKey, schedules, 1800);
-      console.log(`[SCHEDULES-CACHE] Stored ${schedules.length} schedules in cache`);
     }
 
+    // Cache miss - implement distributed lock to prevent thundering herd
+    console.log(`[SCHEDULES-CACHE] MISS for unified cache ${cacheKey}`);
+    const lockKey = `lock:${cacheKey}`;
+    let lockAcquired = false;
+    
+    if (!skipCache) {
+      // Try to acquire lock (10 second TTL)
+      lockAcquired = await this.redisService.setNX(lockKey, '1', 10);
+      
+      if (!lockAcquired) {
+        // Another request is fetching - wait and retry from cache
+        console.log(`[SCHEDULES-CACHE] Lock held by another request, waiting for unified cache to populate...`);
+        
+        // Wait up to 8 seconds for the other request to populate cache
+        for (let i = 0; i < 80; i++) {
+          await new Promise(r => setTimeout(r, 100));
+          schedules = await this.redisService.get<Schedule[]>(cacheKey);
+          if (schedules) {
+            console.log(`[SCHEDULES-CACHE] Unified cache populated by another request after ${(i + 1) * 100}ms`);
+            
+            // Filter by day if requested (after cache hit)
+            if (dayOfWeek) {
+              const originalCount = schedules.length;
+              schedules = schedules.filter(s => s.day_of_week === dayOfWeek);
+              console.log(`[SCHEDULES-CACHE] Filtered to ${dayOfWeek}: ${schedules.length}/${originalCount} schedules`);
+            }
+            
+            return this.processSchedules(schedules, options, startTime);
+          }
+        }
+        
+        // Timeout waiting for cache - log warning and proceed to fetch
+        console.warn(`[SCHEDULES-CACHE] Lock timeout after 8s, proceeding to fetch anyway`);
+      } else {
+        console.log(`[SCHEDULES-CACHE] Lock acquired for unified cache ${cacheKey}`);
+      }
+    }
+
+    // Fetch from database (either skipCache=true, lock acquired, or lock timeout)
+    try {
+      // Always fetch complete week data (ignore dayOfWeek filter for DB query)
+      schedules = await this.fetchSchedulesFromDatabase(undefined, relations); // No day filter
+      
+      // Store complete week in unified cache
+      await this.redisService.set(cacheKey, schedules, 1800);
+      console.log(`[SCHEDULES-CACHE] Stored ${schedules.length} complete week schedules in unified cache`);
+      
+      // Filter by day if requested (after storing complete data)
+      if (dayOfWeek) {
+        const originalCount = schedules.length;
+        schedules = schedules.filter(s => s.day_of_week === dayOfWeek);
+        console.log(`[SCHEDULES-CACHE] Filtered to ${dayOfWeek}: ${schedules.length}/${originalCount} schedules`);
+      }
+      
+      // Process and return
+      return this.processSchedules(schedules, options, startTime);
+    } finally {
+      // Always release lock if we acquired it
+      if (lockAcquired) {
+        await this.redisService.del(lockKey);
+        console.log(`[SCHEDULES-CACHE] Released lock for unified cache ${cacheKey}`);
+      }
+    }
+  }
+
+  /**
+   * Fetch schedules from database with all relations
+   * Separated method to ensure data consistency
+   */
+  private async fetchSchedulesFromDatabase(dayOfWeek?: string, relations?: string[]): Promise<Schedule[]> {
+    const dbStart = Date.now();
+    console.log(`[SCHEDULES-DB] Starting query for ${dayOfWeek || 'all days'} at ${new Date().toISOString()}`);
+    
+    // Optimized query structure - selective panelists join to prevent data explosion
+    // CRITICAL: This preserves ALL data - channel, program, panelists, categories
+    const queryBuilder = this.schedulesRepository
+      .createQueryBuilder('schedule')
+      .leftJoinAndSelect('schedule.program', 'program')
+      .leftJoinAndSelect('program.channel', 'channel')
+      .leftJoinAndSelect('channel.categories', 'categories') // Preserve categories
+      .leftJoin('program.panelists', 'panelists')
+      .addSelect(['panelists.id', 'panelists.name']) // Only select id and name to prevent data explosion
+      .orderBy('schedule.start_time', 'ASC')
+      .addOrderBy('panelists.id', 'ASC');
+    
+    if (dayOfWeek) {
+      queryBuilder.where('schedule.day_of_week = :dayOfWeek', { dayOfWeek });
+    }
+    
+    const schedules = await queryBuilder.getMany();
+    const dbQueryTime = Date.now() - dbStart;
+    console.log(`[SCHEDULES-DB] Query completed (${dbQueryTime}ms) - ${schedules.length} schedules`);
+    
+    // Debug: Check data completeness
+    const schedulesWithPanelists = schedules.filter(s => s.program?.panelists && s.program.panelists.length > 0);
+    const totalPanelists = schedules.reduce((sum, s) => sum + (s.program?.panelists?.length || 0), 0);
+    const schedulesWithCategories = schedules.filter(s => s.program?.channel?.categories && s.program.channel.categories.length > 0);
+    console.log(`[SCHEDULES-DB] Data completeness - Schedules: ${schedules.length}, With panelists: ${schedulesWithPanelists.length}, Total panelists: ${totalPanelists}, With categories: ${schedulesWithCategories.length}`);
+    
+    // Alert on slow database queries
+    if (dbQueryTime > 3000) { // 3 seconds
+      this.sentryService.captureMessage(
+        `Slow database query in schedules service - ${dbQueryTime}ms`,
+        'warning',
+        {
+          service: 'schedules',
+          error_type: 'slow_database_query',
+          query_time: dbQueryTime,
+          day_of_week: dayOfWeek,
+          timestamp: new Date().toISOString(),
+        }
+      );
+      
+      this.sentryService.setTag('service', 'schedules');
+      this.sentryService.setTag('error_type', 'slow_database_query');
+    }
+    
+    // Original sorting logic
+    schedules.sort((a, b) => {
+      const aOrder = a.program?.channel?.order ?? 999;
+      const bOrder = b.program?.channel?.order ?? 999;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      return a.start_time.localeCompare(b.start_time);
+    });
+    
+    return schedules;
+  }
+
+  /**
+   * Process schedules: apply overrides and enrich with live status
+   * Ensures consistent data processing regardless of cache hit/miss
+   */
+  private async processSchedules(schedules: Schedule[], options: FindAllOptions, startTime: number): Promise<any[]> {
     // Apply weekly overrides for current week (unless raw=true)
-    if (applyOverrides) {
+    if (options.applyOverrides) {
       const currentWeekStart = this.weeklyOverridesService.getWeekStartDate('current');
       const overridesStart = Date.now();
       console.log('[SCHEDULES-OVERRIDES] Applying weekly overrides...');
-      schedules = await this.weeklyOverridesService.applyWeeklyOverrides(schedules!, currentWeekStart);
+      schedules = await this.weeklyOverridesService.applyWeeklyOverrides(schedules, currentWeekStart);
       console.log(`[SCHEDULES-OVERRIDES] Applied overrides (${Date.now() - overridesStart}ms)`);
     }
 
+    // Enrich with live status if requested
     const enrichStart = Date.now();
-    console.log(`[SCHEDULES-ENRICH] Enriching ${schedules!.length} schedules...`);
-    const enriched = await this.enrichSchedules(schedules!, liveStatus);
-    console.log(`[SCHEDULES-ENRICH] Enriched ${schedules!.length} schedules (${Date.now() - enrichStart}ms)`);
+    console.log(`[SCHEDULES-ENRICH] Enriching ${schedules.length} schedules...`);
+    const enriched = await this.enrichSchedules(schedules, options.liveStatus || false);
+    console.log(`[SCHEDULES-ENRICH] Enriched ${schedules.length} schedules (${Date.now() - enrichStart}ms)`);
     console.log(`[SCHEDULES-TOTAL] Completed in ${Date.now() - startTime}ms`);
     return enriched;
+  }
+
+  /**
+   * Warm unified cache after invalidation to prevent thundering herd
+   * This runs asynchronously and doesn't block the CRUD operation
+   * PUBLIC: Can be called by other services (Programs, Channels, etc.) after cache invalidation
+   */
+  async warmSchedulesCache(): Promise<void> {
+    console.log('[CACHE-WARM] Starting unified cache warming...');
+    const warmStart = Date.now();
+    
+    try {
+      // Warm unified cache (complete week data)
+      // This single call populates the cache for ALL services (users, background jobs, YouTube service)
+      await this.findAll({ 
+        skipCache: true, 
+        liveStatus: false, 
+        applyOverrides: true 
+      });
+      console.log(`[CACHE-WARM] Warmed unified cache (complete week data)`);
+      
+      console.log(`[CACHE-WARM] Unified cache warming completed in ${Date.now() - warmStart}ms`);
+    } catch (error) {
+      console.error('[CACHE-WARM] Failed to warm unified cache:', error);
+      // Log to Sentry but don't throw - cache warming failure shouldn't break operations
+      this.sentryService.captureException(error);
+    }
   }
 
   async enrichSchedules(schedules: Schedule[], liveStatus: boolean = false): Promise<any[]> {
@@ -622,7 +730,12 @@ export class SchedulesService {
       program,
     });
     const saved = await this.schedulesRepository.save(schedule);
-    await this.redisService.delByPattern('schedules:all:*');
+    
+    // Clear unified cache
+    await this.redisService.del('schedules:week:complete');
+    
+    // Warm cache asynchronously (non-blocking)
+    setImmediate(() => this.warmSchedulesCache());
 
     // Notify and revalidate
     await this.notifyUtil.notifyAndRevalidate({
@@ -642,7 +755,12 @@ export class SchedulesService {
     if (dto.startTime) schedule.start_time = dto.startTime;
     if (dto.endTime) schedule.end_time = dto.endTime;
     const updated = await this.schedulesRepository.save(schedule);
-    await this.redisService.delByPattern('schedules:all:*');
+    
+    // Clear unified cache
+    await this.redisService.del('schedules:week:complete');
+    
+    // Warm cache asynchronously (non-blocking)
+    setImmediate(() => this.warmSchedulesCache());
 
     // Notify and revalidate
     console.log('📅 Sending schedule update notification for schedule ID:', id);
@@ -660,7 +778,12 @@ export class SchedulesService {
   async remove(id: string): Promise<boolean> {
     const result = await this.schedulesRepository.delete(id);
     if ((result?.affected ?? 0) > 0) {
+      // Clear cache
       await this.redisService.delByPattern('schedules:all:*');
+      
+      // Warm cache asynchronously (non-blocking)
+      setImmediate(() => this.warmSchedulesCache());
+      
       // Notify and revalidate
       await this.notifyUtil.notifyAndRevalidate({
         eventType: 'schedule_deleted',
@@ -688,7 +811,12 @@ export class SchedulesService {
     }));
 
     const savedSchedules = await this.schedulesRepository.save(schedules);
-    await this.redisService.delByPattern('schedules:all:*');
+    
+    // Clear unified cache
+    await this.redisService.del('schedules:week:complete');
+    
+    // Warm cache asynchronously (non-blocking)
+    setImmediate(() => this.warmSchedulesCache());
 
     // Notify and revalidate
     await this.notifyUtil.notifyAndRevalidate({

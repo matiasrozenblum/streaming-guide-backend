@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { SchedulesService } from '../schedules/schedules.service';
 import { LiveStatusBackgroundService } from './live-status-background.service';
+import { YoutubeLiveService } from './youtube-live.service';
 import { RedisService } from '../redis/redis.service';
 
 @Injectable()
@@ -8,6 +9,7 @@ export class OptimizedSchedulesService {
   constructor(
     private readonly schedulesService: SchedulesService,
     private readonly liveStatusBackgroundService: LiveStatusBackgroundService,
+    private readonly youtubeLiveService: YoutubeLiveService,
     private readonly redisService: RedisService,
   ) {}
 
@@ -17,30 +19,18 @@ export class OptimizedSchedulesService {
   async getSchedulesWithOptimizedLiveStatus(options: any = {}): Promise<any[]> {
     const startTime = Date.now();
     const requestId = Math.random().toString(36).substr(2, 9);
-    console.log(`[OPTIMIZED-SCHEDULES-${requestId}] Starting at ${new Date().toISOString()}, options:`, options);
-    
-    // Get schedules without live status enrichment (fast)
-    console.log(`[OPTIMIZED-SCHEDULES-${requestId}] Calling schedulesService.findAll...`);
-    const schedulesStart = Date.now();
+
     const schedules = await this.schedulesService.findAll({
       ...options,
       liveStatus: false, // Skip expensive live status enrichment
     });
-    console.log(`[OPTIMIZED-SCHEDULES-${requestId}] schedulesService.findAll completed in ${Date.now() - schedulesStart}ms, got ${schedules.length} schedules`);
-
-    console.log(`[OPTIMIZED-SCHEDULES] Got ${schedules.length} schedules in ${Date.now() - startTime}ms`);
 
     // If live status is requested, enrich using background cache (fast)
     if (options.liveStatus) {
-      console.log(`[OPTIMIZED-SCHEDULES-${requestId}] Enriching ${schedules.length} schedules with live status...`);
-      const enrichStart = Date.now();
       const enrichedSchedules = await this.enrichWithCachedLiveStatus(schedules);
-      console.log(`[OPTIMIZED-SCHEDULES-${requestId}] Enrichment completed in ${Date.now() - enrichStart}ms`);
-      console.log(`[OPTIMIZED-SCHEDULES-${requestId}] Total time: ${Date.now() - startTime}ms`);
       return enrichedSchedules;
     }
 
-    console.log(`[OPTIMIZED-SCHEDULES] Total time: ${Date.now() - startTime}ms`);
     return schedules;
   }
 
@@ -62,10 +52,7 @@ export class OptimizedSchedulesService {
 
     // Get cached live status for all channels
     const channelIds = Array.from(channelGroups.keys());
-    console.log(`[OPTIMIZED-SCHEDULES] Getting live status for channels:`, channelIds);
     const liveStatusMap = await this.liveStatusBackgroundService.getLiveStatusForChannels(channelIds);
-    console.log(`[OPTIMIZED-SCHEDULES] Live status map size:`, liveStatusMap.size);
-    console.log(`[OPTIMIZED-SCHEDULES] Live status map entries:`, Array.from(liveStatusMap.entries()));
 
     // Enrich schedules with cached live status
     const enriched: any[] = [];
@@ -89,9 +76,7 @@ export class OptimizedSchedulesService {
         if (isCurrentlyLive && liveStatus.isLive) {
           // Program is live and has live stream - get actual live stream data
           const liveStreamsKey = `liveStreamsByChannel:${channelId}`;
-          console.log(`[OPTIMIZED-SCHEDULES] Checking live streams cache for ${channelId}: ${liveStreamsKey}`);
           const cachedLiveStreams = await this.redisService.get<string>(liveStreamsKey);
-          console.log(`[OPTIMIZED-SCHEDULES] Cached live streams for ${channelId}:`, cachedLiveStreams);
           
           if (cachedLiveStreams) {
             try {
@@ -137,7 +122,76 @@ export class OptimizedSchedulesService {
             };
           }
         } else if (isCurrentlyLive) {
-          // Program is live but no live stream found
+          // Program is live by time but background cache says no live stream
+          // Try on-demand fetch (important for special programs not in background cache)
+          console.log(`[OPTIMIZED-SCHEDULES] Program "${schedule.program.name}" is live by time but cache says no stream. Attempting on-demand fetch for channel ${channelId}`);
+          
+          const liveStreamsKey = `liveStreamsByChannel:${channelId}`;
+          let cachedLiveStreams = await this.redisService.get<string>(liveStreamsKey);
+          
+          // If no cached streams, try a fresh fetch (for special programs)
+          if (!cachedLiveStreams && schedule.program.channel?.handle) {
+            try {
+              console.log(`[OPTIMIZED-SCHEDULES] No cached streams for ${schedule.program.channel.handle}, fetching on-demand...`);
+              
+              const liveStreamsResult = await this.youtubeLiveService.getLiveStreams(
+                channelId,
+                schedule.program.channel.handle,
+                300, // 5 min TTL for on-demand fetches
+                'onDemand' // Special programs use on-demand fetching
+              );
+              
+              if (liveStreamsResult && liveStreamsResult !== '__SKIPPED__' && liveStreamsResult.streams?.length > 0) {
+                console.log(`[OPTIMIZED-SCHEDULES] Found ${liveStreamsResult.streams.length} live streams on-demand for ${schedule.program.channel.handle}`);
+                enrichedSchedule.program = {
+                  ...schedule.program,
+                  is_live: true,
+                  stream_url: `https://www.youtube.com/embed/${liveStreamsResult.streams[0].videoId}?autoplay=1`,
+                  live_streams: liveStreamsResult.streams,
+                  stream_count: liveStreamsResult.streams.length,
+                };
+              } else {
+                console.log(`[OPTIMIZED-SCHEDULES] No live streams found on-demand for ${schedule.program.channel.handle}`);
+                enrichedSchedule.program = {
+                  ...schedule.program,
+                  is_live: true,
+                  stream_url: schedule.program.stream_url || schedule.program.youtube_url,
+                  live_streams: [],
+                  stream_count: 0,
+                };
+              }
+            } catch (error) {
+              console.error(`[OPTIMIZED-SCHEDULES] Error fetching on-demand for ${channelId}:`, error.message);
+              enrichedSchedule.program = {
+                ...schedule.program,
+                is_live: true,
+                stream_url: schedule.program.stream_url || schedule.program.youtube_url,
+                live_streams: [],
+                stream_count: 0,
+              };
+            }
+          } else if (cachedLiveStreams) {
+            // Use cached streams
+            try {
+              const liveStreams = JSON.parse(cachedLiveStreams);
+              enrichedSchedule.program = {
+                ...schedule.program,
+                is_live: true,
+                stream_url: liveStreams[0] ? `https://www.youtube.com/embed/${liveStreams[0].videoId}?autoplay=1` : schedule.program.stream_url,
+                live_streams: liveStreams,
+                stream_count: liveStreams.length,
+              };
+            } catch {
+              enrichedSchedule.program = {
+                ...schedule.program,
+                is_live: true,
+                stream_url: schedule.program.stream_url || schedule.program.youtube_url,
+                live_streams: [],
+                stream_count: 0,
+              };
+            }
+          } else {
+            // No cache, no handle - fallback
           enrichedSchedule.program = {
             ...schedule.program,
             is_live: true,
@@ -145,6 +199,7 @@ export class OptimizedSchedulesService {
             live_streams: [],
             stream_count: 0,
           };
+          }
         } else {
           // Program is not currently live
           enrichedSchedule.program = {
