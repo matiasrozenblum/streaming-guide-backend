@@ -31,6 +31,7 @@ import { SentryModule } from './sentry/sentry.module';
 import { CategoriesModule } from './categories/categories.module';
 import { RedisModule } from './redis/redis.module';
 import { ResourceMonitorService } from './services/resource-monitor.service';
+import { ConnectionPoolMonitorService } from './services/connection-pool-monitor.service';
 import { PerformanceInterceptor } from './interceptors/performance.interceptor';
 
 @Module({
@@ -108,6 +109,7 @@ import { PerformanceInterceptor } from './interceptors/performance.interceptor';
     YoutubeDiscoveryService,
     RedisService, // 🔥 Agregado
     ResourceMonitorService,
+    ConnectionPoolMonitorService, // 📊 Connection pool monitoring
     {
       provide: 'APP_INTERCEPTOR',
       useClass: PerformanceInterceptor,

@@ -15,6 +15,7 @@ import { Response } from 'express';
 import { AppService } from './app.service';
 import { SentryService } from './sentry/sentry.service';
 import { ResourceMonitorService } from './services/resource-monitor.service';
+import { ConnectionPoolMonitorService } from './services/connection-pool-monitor.service';
 
 const HolidaysClass = (DateHolidays as any).default ?? DateHolidays;
 
@@ -37,6 +38,7 @@ export class AppController {
     private readonly appService: AppService,
     private readonly sentryService: SentryService,
     private readonly resourceMonitorService: ResourceMonitorService,
+    private readonly connectionPoolMonitorService: ConnectionPoolMonitorService,
   ) {
     console.log('🚀 AppController initialized');
   }
@@ -49,6 +51,29 @@ export class AppController {
   @Get('health')
   health() {
     return { status: 'ok', timestamp: new Date().toISOString() };
+  }
+
+  @Get('db-pool-status')
+  async getDbPoolStatus() {
+    const poolStatus = await this.connectionPoolMonitorService.getPoolStatus();
+    
+    if (!poolStatus) {
+      return {
+        status: 'unavailable',
+        message: 'Could not retrieve connection pool information',
+      };
+    }
+
+    return {
+      status: 'ok',
+      pool: poolStatus,
+      health: {
+        isHealthy: poolStatus.waiting === 0 && parseInt(poolStatus.utilizationPercent) < 80,
+        utilizationPercent: poolStatus.utilizationPercent,
+        hasWaitingRequests: poolStatus.waiting > 0,
+      },
+      timestamp: new Date().toISOString(),
+    };
   }
 
   @Post('test-error')
