@@ -71,8 +71,6 @@ export interface WeeklyOverride {
       description?: string;
       order: number;
       is_visible: boolean;
-      created_at: Date;
-      updated_at: Date;
     };
     imageUrl?: string;
     stream_url?: string;
@@ -204,7 +202,7 @@ export class WeeklyOverridesService {
       const channelIdsArray = [dto.specialProgram.channelId];
       const placeholders = channelIdsArray.map((_, index) => `$${index + 1}`).join(',');
       const channels = await this.dataSource.query(`
-        SELECT id, name, handle, youtube_channel_id, logo_url, description, "order", is_visible, created_at, updated_at
+        SELECT id, name, handle, youtube_channel_id, logo_url, description, "order", is_visible
         FROM channel 
         WHERE id IN (${placeholders})
       `, channelIdsArray);
@@ -354,7 +352,7 @@ export class WeeklyOverridesService {
       const channelIdsArray = [dto.specialProgram.channelId];
       const placeholders = channelIdsArray.map((_, index) => `$${index + 1}`).join(',');
       const channels = await this.dataSource.query(`
-        SELECT id, name, handle, youtube_channel_id, logo_url, description, "order", is_visible, created_at, updated_at
+        SELECT id, name, handle, youtube_channel_id, logo_url, description, "order", is_visible
         FROM channel 
         WHERE id IN (${placeholders})
       `, channelIdsArray);
