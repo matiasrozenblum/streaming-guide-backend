@@ -174,11 +174,19 @@ export class LiveStatusBackgroundService {
    */
   private async updateChannelLiveStatus(channelId: string): Promise<LiveStatusCache | null> {
     try {
-      // Get channel info
-      const channel = await this.channelsRepository.findOne({
-        where: { youtube_channel_id: channelId },
-        relations: ['programs', 'programs.schedules'],
-      });
+      // Get channel info with optimized query - only load current day schedules
+      const dayOfWeek = TimezoneUtil.currentDayOfWeek();
+      const timeString = TimezoneUtil.currentTimeString();
+      
+      const channel = await this.channelsRepository
+        .createQueryBuilder('channel')
+        .leftJoinAndSelect('channel.programs', 'program')
+        .leftJoinAndSelect('program.schedules', 'schedule')
+        .where('channel.youtube_channel_id = :channelId', { channelId })
+        .andWhere('schedule.day_of_week = :dayOfWeek', { dayOfWeek })
+        .andWhere('schedule.start_time <= :timeString', { timeString })
+        .andWhere('schedule.end_time > :timeString', { timeString })
+        .getOne();
 
       if (!channel || !channel.handle) {
         return null;
@@ -227,12 +235,14 @@ export class LiveStatusBackgroundService {
       const blockEndTime = this.calculateBlockEndTime(liveSchedules, currentTime);
 
       // Fetch live streams from YouTube
+      console.log(`[LIVE-STATUS-BG] Fetching live streams for ${channel.handle} (${channelId})`);
       const liveStreams = await this.youtubeLiveService.getLiveStreams(
         channelId,
         channel.handle,
         ttl,
         'cron' // Background context
       );
+      console.log(`[LIVE-STATUS-BG] Live streams result for ${channel.handle}:`, liveStreams);
 
       const cacheData: LiveStatusCache = {
         channelId,
@@ -248,6 +258,8 @@ export class LiveStatusBackgroundService {
         validationCooldown: Date.now() + (15 * 60 * 1000), // Can validate again in 15 minutes
         lastValidation: Date.now(),
       };
+
+      console.log(`[LIVE-STATUS-BG] Cache data for ${channel.handle}:`, cacheData);
 
       await this.cacheLiveStatus(channelId, cacheData);
       return cacheData;

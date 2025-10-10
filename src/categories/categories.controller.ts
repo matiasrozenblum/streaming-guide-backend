@@ -37,19 +37,28 @@ export class CategoriesController {
     return this.categoriesService.searchByName(searchTerm);
   }
 
+  @Get('admin')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all categories for admin (including hidden)' })
+  @ApiResponse({ status: 200, description: 'All categories retrieved successfully', type: [Category] })
+  findAllForAdmin(): Promise<Category[]> {
+    return this.categoriesService.findAllForAdmin();
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'Get all visible categories' })
+  @ApiResponse({ status: 200, description: 'Categories retrieved successfully', type: [Category] })
+  findAll(): Promise<Category[]> {
+    return this.categoriesService.findAll();
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get a category by ID' })
   @ApiResponse({ status: 200, description: 'Category found', type: Category })
   @ApiResponse({ status: 404, description: 'Category not found' })
   findOne(@Param('id') id: string): Promise<Category> {
     return this.categoriesService.findOne(+id);
-  }
-
-  @Get()
-  @ApiOperation({ summary: 'Get all categories' })
-  @ApiResponse({ status: 200, description: 'Categories retrieved successfully', type: [Category] })
-  findAll(): Promise<Category[]> {
-    return this.categoriesService.findAll();
   }
 
   @Patch(':id')
@@ -70,5 +79,15 @@ export class CategoriesController {
   @ApiResponse({ status: 404, description: 'Category not found' })
   remove(@Param('id') id: string): Promise<void> {
     return this.categoriesService.remove(+id);
+  }
+
+  @Post('reorder')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Reorder categories' })
+  @ApiResponse({ status: 200, description: 'Categories reordered successfully' })
+  async reorder(@Body() body: { ids: number[] }) {
+    await this.categoriesService.reorder(body.ids);
+    return { message: 'Categories reordered successfully' };
   }
 }

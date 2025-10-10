@@ -53,6 +53,8 @@ describe('SchedulesService Logging Improvements', () => {
   const mockSchedulesRepository = {
     createQueryBuilder: jest.fn().mockReturnValue({
       leftJoinAndSelect: jest.fn().mockReturnThis(),
+      leftJoin: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
       addOrderBy: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
@@ -66,7 +68,7 @@ describe('SchedulesService Logging Improvements', () => {
   };
 
   const mockYoutubeLiveService = {
-    getBatchLiveStreams: jest.fn().mockResolvedValue(new Map()),
+    getLiveStreams: jest.fn().mockResolvedValue(null),
   };
 
   const mockNotificationsService = {};
