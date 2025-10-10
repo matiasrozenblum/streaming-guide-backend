@@ -291,8 +291,8 @@ describe('WeeklyOverridesService', () => {
 
       jest.spyOn(schedulesRepo, 'findOne').mockResolvedValue(mockSchedule as any);
       jest.spyOn(panelistsRepo, 'find').mockResolvedValue([
-        { id: 1, name: 'Panelist 1', description: 'Panelist 1 description', image_url: null, twitter_handle: null, instagram_handle: null, tiktok_handle: null, youtube_handle: null, website: null, created_at: new Date(), updated_at: new Date() },
-        { id: 2, name: 'Panelist 2', description: 'Panelist 2 description', image_url: null, twitter_handle: null, instagram_handle: null, tiktok_handle: null, youtube_handle: null, website: null, created_at: new Date(), updated_at: new Date() },
+        { id: 1, name: 'Panelist 1', photo_url: null, bio: 'Panelist 1 bio' },
+        { id: 2, name: 'Panelist 2', photo_url: null, bio: 'Panelist 2 bio' },
       ] as any);
       jest.spyOn(redisService, 'get').mockResolvedValue(null);
       jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
