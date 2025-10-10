@@ -26,21 +26,7 @@ export class YoutubeLiveService {
   private readonly validationCooldowns = new Map<string, number>(); // Track last validation time per channel
   private readonly COOLDOWN_PERIOD = 5 * 60 * 1000; // 5 minutes cooldown
   
-  // YouTube API usage tracking
-  private readonly apiUsageTracker = {
-    dailySearchCalls: 0,
-    dailyVideoCalls: 0,
-    dailySearchCost: 0, // 100 units per search call
-    dailyVideoCost: 0,  // 1 unit per video call
-    channelFetchFrequency: new Map<string, { count: number; lastFetch: Date }>(),
-    resetDaily: () => {
-      this.apiUsageTracker.dailySearchCalls = 0;
-      this.apiUsageTracker.dailyVideoCalls = 0;
-      this.apiUsageTracker.dailySearchCost = 0;
-      this.apiUsageTracker.dailyVideoCost = 0;
-      this.apiUsageTracker.channelFetchFrequency.clear();
-    }
-  };
+  // YouTube API usage tracking removed - no longer needed
 
   constructor(
     private readonly configService: ConfigService,
@@ -63,45 +49,7 @@ export class YoutubeLiveService {
     console.log(`🌍 Argentina timezone: ${now.format('Z')} (${now.format('YYYY-MM-DD HH:mm:ss')})`);
     console.log(`⏰ Daily reset cron scheduled for midnight Argentina time (00:00:00)`);
     
-    // Daily reset for API usage tracking at midnight Argentina time
-    cron.schedule('0 0 * * *', async () => {
-      const now = dayjs().tz('America/Argentina/Buenos_Aires');
-      const serverTime = dayjs();
-      console.log(`📊 Daily YouTube API usage reset triggered!`);
-      console.log(`📊 Server time: ${serverTime.format('YYYY-MM-DD HH:mm:ss')} (UTC${serverTime.format('Z')})`);
-      console.log(`📊 Argentina time: ${now.format('YYYY-MM-DD HH:mm:ss')} (UTC${now.format('Z')})`);
-      await this.logDailyUsageStats(); // Send daily summary to PostHog
-      
-      // Clear Redis data for the previous day
-      const yesterday = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
-      const today = dayjs().format('YYYY-MM-DD');
-      
-      // Clear yesterday's Redis keys
-      await this.redisService.client.del(`youtube_api:usage:${yesterday}:search`);
-      await this.redisService.client.del(`youtube_api:usage:${yesterday}:video`);
-      await this.redisService.client.del(`youtube_api:channel_frequency:${yesterday}:*`);
-      
-      // Clear today's Redis keys (in case service was restarted)
-      await this.redisService.client.del(`youtube_api:usage:${today}:search`);
-      await this.redisService.client.del(`youtube_api:usage:${today}:video`);
-      
-      // Reset in-memory counters
-      this.apiUsageTracker.resetDaily();
-      
-      console.log(`📊 Daily reset completed - Redis and memory cleared for new day`);
-    }, {
-      timezone: 'America/Argentina/Buenos_Aires',
-    });
-    
-    // Load existing data from Redis on startup
-    this.loadUsageFromRedis();
-    
-    // Hourly usage stats logging
-    cron.schedule('0 * * * *', () => {
-      this.logHourlyUsageStats();
-    }, {
-      timezone: 'America/Argentina/Buenos_Aires',
-    });
+    // YouTube API usage tracking removed - no longer needed
     
     // Main cron: runs every hour at :00
     cron.schedule('0 * * * *', () => this.fetchLiveVideoIds('main'), {
@@ -119,320 +67,11 @@ export class YoutubeLiveService {
     });
   }
 
-  /**
-   * Track YouTube API usage for monitoring and optimization
-   */
-  private async trackApiUsage(type: 'search' | 'video', channelId?: string, channelHandle?: string) {
-    const today = dayjs().format('YYYY-MM-DD');
-    
-    if (type === 'search') {
-      this.apiUsageTracker.dailySearchCalls++;
-      this.apiUsageTracker.dailySearchCost += 100; // 100 units per search call
-      
-      // Persist to Redis for reliability
-      await this.persistUsageToRedis(today, 'search', channelId, channelHandle);
-      
-      if (channelId && channelHandle) {
-        const existing = this.apiUsageTracker.channelFetchFrequency.get(channelId);
-        const newCount = (existing?.count || 0) + 1;
-        this.apiUsageTracker.channelFetchFrequency.set(channelId, {
-          count: newCount,
-          lastFetch: new Date()
-        });
-        
-        // Persist channel frequency to Redis
-        await this.redisService.set(
-          `youtube_api:channel_frequency:${today}:${channelId}`,
-          JSON.stringify({ count: newCount, lastFetch: new Date(), handle: channelHandle }),
-          7 * 24 * 60 * 60 // 7 days TTL
-        );
-        
-        // Send real-time PostHog event for each channel fetch
-        await this.sendChannelFetchEvent(channelId, channelHandle, newCount);
-        
-        // Log frequent fetchers
-        if (newCount > 10) {
-          console.log(`⚠️ High fetch frequency detected for ${channelHandle} (${channelId}): ${newCount} fetches today`);
-        }
-      }
-    } else if (type === 'video') {
-      this.apiUsageTracker.dailyVideoCalls++;
-      this.apiUsageTracker.dailyVideoCost += 1; // 1 unit per video call
-      
-      // Persist to Redis for reliability
-      await this.persistUsageToRedis(today, 'video', channelId, channelHandle);
-      
-      // Send real-time PostHog event for video API calls
-      await this.sendVideoApiEvent(channelId, channelHandle);
-    }
-  }
+  // YouTube API usage tracking method removed - no longer needed
 
-  /**
-   * Send real-time PostHog event for channel fetch
-   */
-  private async sendChannelFetchEvent(channelId: string, channelHandle: string, fetchCount: number) {
-    try {
-      if (process.env.POSTHOG_API_KEY) {
-        const { PostHog } = require('posthog-node');
-        const client = new PostHog(process.env.POSTHOG_API_KEY);
-        
-        await client.capture({
-          distinctId: `youtube-api-${channelId}`,
-          event: 'youtube_channel_fetch',
-          properties: {
-            channelId,
-            channelHandle,
-            fetchCount,
-            timestamp: new Date().toISOString(),
-            environment: process.env.NODE_ENV || 'development',
-            apiCost: 100 // 100 units per search call
-          }
-        });
-        
-        console.log(`📈 Channel fetch event sent to PostHog: ${channelHandle} (${fetchCount} fetches today)`);
-      }
-    } catch (error) {
-      console.error('Failed to send channel fetch event to PostHog:', error);
-    }
-  }
+  // YouTube API usage tracking methods removed - no longer needed
 
-  /**
-   * Send real-time PostHog event for video API call
-   */
-  private async sendVideoApiEvent(channelId?: string, channelHandle?: string) {
-    try {
-      if (process.env.POSTHOG_API_KEY) {
-        const { PostHog } = require('posthog-node');
-        const client = new PostHog(process.env.POSTHOG_API_KEY);
-        
-        await client.capture({
-          distinctId: 'youtube-api-service',
-          event: 'youtube_video_api_call',
-          properties: {
-            channelId: channelId || 'unknown',
-            channelHandle: channelHandle || 'unknown',
-            timestamp: new Date().toISOString(),
-            environment: process.env.NODE_ENV || 'development',
-            apiCost: 1 // 1 unit per video call
-          }
-        });
-      }
-    } catch (error) {
-      console.error('Failed to send video API event to PostHog:', error);
-    }
-  }
-
-  /**
-   * Persist usage data to Redis for reliability
-   */
-  private async persistUsageToRedis(date: string, type: 'search' | 'video', channelId?: string, channelHandle?: string) {
-    const key = `youtube_api:usage:${date}:${type}`;
-    const cost = type === 'search' ? 100 : 1;
-    
-    try {
-      // Increment counters in Redis
-      await this.redisService.client.hincrby(key, 'count', 1);
-      await this.redisService.client.hincrby(key, 'cost', cost);
-      
-      // Set expiration to 30 days
-      await this.redisService.client.expire(key, 30 * 24 * 60 * 60);
-      
-      // Track per-channel usage if provided
-      if (channelId && channelHandle) {
-        const channelKey = `youtube_api:usage:${date}:${type}:channels:${channelId}`;
-        await this.redisService.client.hincrby(channelKey, 'count', 1);
-        await this.redisService.client.hincrby(channelKey, 'cost', cost);
-        await this.redisService.client.hset(channelKey, 'handle', channelHandle);
-        await this.redisService.client.expire(channelKey, 30 * 24 * 60 * 60);
-      }
-    } catch (error) {
-      console.error('Failed to persist usage to Redis:', error);
-    }
-  }
-
-  /**
-   * Log hourly usage statistics
-   */
-  private logHourlyUsageStats() {
-    const totalCost = this.apiUsageTracker.dailySearchCost + this.apiUsageTracker.dailyVideoCost;
-    const totalCalls = this.apiUsageTracker.dailySearchCalls + this.apiUsageTracker.dailyVideoCalls;
-    
-    console.log(`📊 YouTube API Usage (Hourly): Search calls: ${this.apiUsageTracker.dailySearchCalls} (${this.apiUsageTracker.dailySearchCost} units), Video calls: ${this.apiUsageTracker.dailyVideoCalls} (${this.apiUsageTracker.dailyVideoCost} units), Total: ${totalCalls} calls, ${totalCost} units`);
-    
-    // Log top channels by fetch frequency
-    const sortedChannels = Array.from(this.apiUsageTracker.channelFetchFrequency.entries())
-      .sort(([,a], [,b]) => b.count - a.count)
-      .slice(0, 5);
-    
-    if (sortedChannels.length > 0) {
-      console.log('🔝 Top channels by fetch frequency:', sortedChannels.map(([channelId, data]) => 
-        `${channelId}: ${data.count} fetches`
-      ).join(', '));
-    }
-  }
-
-  /**
-   * Log daily usage statistics and send to PostHog
-   */
-  private async logDailyUsageStats() {
-    const totalCost = this.apiUsageTracker.dailySearchCost + this.apiUsageTracker.dailyVideoCost;
-    const totalCalls = this.apiUsageTracker.dailySearchCalls + this.apiUsageTracker.dailyVideoCalls;
-    
-    console.log(`📊 YouTube API Daily Summary: ${totalCalls} total calls, ${totalCost} total units consumed`);
-    console.log(`   - Search calls: ${this.apiUsageTracker.dailySearchCalls} (${this.apiUsageTracker.dailySearchCost} units)`);
-    console.log(`   - Video calls: ${this.apiUsageTracker.dailyVideoCalls} (${this.apiUsageTracker.dailyVideoCost} units)`);
-    
-    // Get channel frequency data
-    const channelFrequencies = Array.from(this.apiUsageTracker.channelFetchFrequency.entries())
-      .sort(([,a], [,b]) => b.count - a.count)
-      .slice(0, 10);
-    
-    // Send to PostHog for analytics (if available)
-    try {
-      // PostHog event for daily usage
-      if (process.env.POSTHOG_API_KEY) {
-        const { PostHog } = require('posthog-node');
-        const client = new PostHog(process.env.POSTHOG_API_KEY);
-        
-        await client.capture({
-          distinctId: 'youtube-api-service',
-          event: 'youtube_api_daily_usage',
-          properties: {
-            dailySearchCalls: this.apiUsageTracker.dailySearchCalls,
-            dailyVideoCalls: this.apiUsageTracker.dailyVideoCalls,
-            dailySearchCost: this.apiUsageTracker.dailySearchCost,
-            dailyVideoCost: this.apiUsageTracker.dailyVideoCost,
-            totalCost,
-            totalCalls,
-            topChannels: channelFrequencies.map(([channelId, data]) => ({
-              channelId,
-              count: data.count,
-              lastFetch: data.lastFetch
-            })),
-            date: dayjs().format('YYYY-MM-DD'),
-            environment: process.env.NODE_ENV || 'development'
-          }
-        });
-        
-        console.log('📈 Daily usage data sent to PostHog');
-      }
-    } catch (error) {
-      console.error('Failed to send data to PostHog:', error);
-    }
-    
-    // Send to Sentry only for critical alerts (quota > 80%)
-    if (totalCost > 8000) { // 80% of 10k quota
-      this.sentryService.captureMessage('YouTube API High Usage Alert', 'warning', {
-        dailySearchCalls: this.apiUsageTracker.dailySearchCalls,
-        dailyVideoCalls: this.apiUsageTracker.dailyVideoCalls,
-        dailySearchCost: this.apiUsageTracker.dailySearchCost,
-        dailyVideoCost: this.apiUsageTracker.dailyVideoCost,
-        totalCost,
-        totalCalls,
-        quotaPercentage: (totalCost / 10000) * 100,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  }
-
-  /**
-   * Load usage data from Redis on startup
-   */
-  private async loadUsageFromRedis() {
-    try {
-      const today = dayjs().format('YYYY-MM-DD');
-      
-      // Load daily search usage
-      const searchKey = `youtube_api:usage:${today}:search`;
-      const searchData = await this.redisService.client.hgetall(searchKey);
-      if (searchData.count) {
-        this.apiUsageTracker.dailySearchCalls = parseInt(searchData.count);
-        this.apiUsageTracker.dailySearchCost = parseInt(searchData.cost);
-      }
-      
-      // Load daily video usage
-      const videoKey = `youtube_api:usage:${today}:video`;
-      const videoData = await this.redisService.client.hgetall(videoKey);
-      if (videoData.count) {
-        this.apiUsageTracker.dailyVideoCalls = parseInt(videoData.count);
-        this.apiUsageTracker.dailyVideoCost = parseInt(videoData.cost);
-      }
-      
-      // Load channel frequencies
-      const channelKeys = await this.redisService.client.keys(`youtube_api:channel_frequency:${today}:*`);
-      for (const key of channelKeys) {
-        const channelId = key.split(':')[3];
-        const channelData = await this.redisService.get<string>(key);
-        if (channelData) {
-          const parsed = JSON.parse(channelData);
-          this.apiUsageTracker.channelFetchFrequency.set(channelId, {
-            count: parsed.count,
-            lastFetch: new Date(parsed.lastFetch)
-          });
-        }
-      }
-      
-      console.log(`📊 Loaded usage data from Redis: ${this.apiUsageTracker.dailySearchCalls} search calls, ${this.apiUsageTracker.dailyVideoCalls} video calls`);
-    } catch (error) {
-      console.error('Failed to load usage data from Redis:', error);
-    }
-  }
-
-  /**
-   * Get current API usage statistics with channel names
-   */
-  async getApiUsageStats() {
-    // Get channel names for fetch frequency data
-    const channelFetchFrequencyWithNames: Record<string, { name: string; handle: string; count: number; lastFetch: string }> = {};
-    
-    if (this.apiUsageTracker.channelFetchFrequency.size > 0) {
-      try {
-        // Get all unique channel IDs from fetch frequency
-        const channelIds = Array.from(this.apiUsageTracker.channelFetchFrequency.keys());
-        
-        // Fetch channel information from database
-        const channels = await this.channelsRepository.find({
-          where: { youtube_channel_id: In(channelIds) },
-          select: ['youtube_channel_id', 'name', 'handle']
-        });
-        
-        // Create a map for quick lookup
-        const channelMap = new Map(channels.map(ch => [ch.youtube_channel_id, ch]));
-        
-        // Build the response with channel names
-        for (const [channelId, frequencyData] of this.apiUsageTracker.channelFetchFrequency.entries()) {
-          const channel = channelMap.get(channelId);
-          channelFetchFrequencyWithNames[channelId] = {
-            name: channel?.name || 'Unknown Channel',
-            handle: channel?.handle || 'unknown',
-            count: frequencyData.count,
-            lastFetch: frequencyData.lastFetch.toISOString()
-          };
-        }
-      } catch (error) {
-        console.error('Failed to fetch channel names for API usage stats:', error);
-        // Fallback to channel IDs if database lookup fails
-        for (const [channelId, frequencyData] of this.apiUsageTracker.channelFetchFrequency.entries()) {
-          channelFetchFrequencyWithNames[channelId] = {
-            name: `Channel ${channelId}`,
-            handle: 'unknown',
-            count: frequencyData.count,
-            lastFetch: frequencyData.lastFetch.toISOString()
-          };
-        }
-      }
-    }
-    
-    return {
-      dailySearchCalls: this.apiUsageTracker.dailySearchCalls,
-      dailyVideoCalls: this.apiUsageTracker.dailyVideoCalls,
-      dailySearchCost: this.apiUsageTracker.dailySearchCost,
-      dailyVideoCost: this.apiUsageTracker.dailyVideoCost,
-      totalCost: this.apiUsageTracker.dailySearchCost + this.apiUsageTracker.dailyVideoCost,
-      totalCalls: this.apiUsageTracker.dailySearchCalls + this.apiUsageTracker.dailyVideoCalls,
-      channelFetchFrequency: channelFetchFrequencyWithNames
-    };
-  }
+  // YouTube API usage stats method removed - no longer needed
 
   /**
    * Notify connected clients about live status changes
@@ -507,7 +146,7 @@ export class YoutubeLiveService {
     // fetch a YouTube
     try {
       // Track API usage
-      await this.trackApiUsage('search', channelId, handle);
+      // YouTube API usage tracking removed
       
       const { data } = await axios.get(`${this.apiUrl}/search`, {
         params: {
@@ -700,7 +339,7 @@ export class YoutubeLiveService {
           const handle = channelHandleMap?.get(channelId) || 'unknown';
           
           // Track API usage for this specific channel
-          await this.trackApiUsage('search', channelId, handle);
+          // YouTube API usage tracking removed
         }
         
         const { data } = await axios.get(`${this.apiUrl}/search`, {
@@ -905,7 +544,7 @@ export class YoutubeLiveService {
     // fetch from YouTube
     try {
       // Track API usage
-      await this.trackApiUsage('search', channelId, handle);
+      // YouTube API usage tracking removed
       
       const requestUrl = `${this.apiUrl}/search?part=snippet&channelId=${channelId}&eventType=live&type=video&key=${this.apiKey}&maxResults=5`;
       console.log(`🔍 [getLiveStreams] Making request for ${handle}: ${requestUrl}`);
@@ -1018,7 +657,7 @@ export class YoutubeLiveService {
   public async isVideoLive(videoId: string): Promise<boolean> {
     try {
       // Track API usage
-      await this.trackApiUsage('video');
+      // YouTube API usage tracking removed
       
       const resp = await axios.get(`${this.apiUrl}/videos`, {
         params: { part: 'snippet', id: videoId, key: this.apiKey },
