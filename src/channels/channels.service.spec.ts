@@ -106,6 +106,7 @@ describe('ChannelsService', () => {
 
   const mockSchedulesService = {
     findAll: jest.fn(),
+    warmSchedulesCache: jest.fn(),
   };
 
   const mockRedisService = {

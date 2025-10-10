@@ -8,6 +8,7 @@ import { UpdatePanelistDto } from './dto/update-panelist.dto';
 import { RedisService } from '../redis/redis.service';
 import { NotFoundException } from '@nestjs/common';
 import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
+import { SchedulesService } from '../schedules/schedules.service';
 
 describe('PanelistsService', () => {
   let service: PanelistsService;
@@ -68,6 +69,12 @@ describe('PanelistsService', () => {
         {
           provide: RedisService,
           useValue: redisService,
+        },
+        {
+          provide: SchedulesService,
+          useValue: {
+            warmSchedulesCache: jest.fn(),
+          },
         },
       ],
     }).compile();

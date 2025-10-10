@@ -8,6 +8,7 @@ import { NotFoundException } from '@nestjs/common';
 import { CreateProgramDto } from './dto/create-program.dto';
 import { Channel } from '../channels/channels.entity';
 import { RedisService } from '../redis/redis.service';
+import { SchedulesService } from '../schedules/schedules.service';
 import { WeeklyOverridesService } from '../schedules/weekly-overrides.service';
 import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
 
@@ -151,6 +152,12 @@ describe('ProgramsService', () => {
         {
           provide: WeeklyOverridesService,
           useValue: weeklyOverridesService,
+        },
+        {
+          provide: SchedulesService,
+          useValue: {
+            warmSchedulesCache: jest.fn(),
+          },
         },
       ],
     }).compile();

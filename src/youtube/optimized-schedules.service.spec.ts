@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { OptimizedSchedulesService } from './optimized-schedules.service';
 import { SchedulesService } from '../schedules/schedules.service';
 import { LiveStatusBackgroundService } from './live-status-background.service';
+import { YoutubeLiveService } from './youtube-live.service';
 import { RedisService } from '../redis/redis.service';
 
 // Mock TimezoneUtil
@@ -66,6 +67,7 @@ describe('OptimizedSchedulesService', () => {
         OptimizedSchedulesService,
         { provide: SchedulesService, useValue: mockSchedulesService },
         { provide: LiveStatusBackgroundService, useValue: mockLiveStatusBackgroundService },
+        { provide: YoutubeLiveService, useValue: { getLiveStreams: jest.fn() } },
         { provide: RedisService, useValue: mockRedisService },
       ],
     }).compile();

@@ -17,6 +17,14 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.14.0] - 2025-10-10
+
+### Changed
+- Massive optimization changes to cache usage and database protection via locking and cache
+
+### Removed
+- Removed youtube api usage cache entries
+
 ## [1.13.1] - 2025-10-08
 
 ### Added

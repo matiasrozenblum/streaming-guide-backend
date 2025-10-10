@@ -369,7 +369,7 @@ export class WeeklyOverridesService {
     }
 
     await this.redisService.del(`weekly_override:${overrideId}`);
-    await this.redisService.delByPattern('schedules:all:*');
+    await this.redisService.del('schedules:week:complete');
     
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
