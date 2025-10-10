@@ -16,6 +16,7 @@ describe('WeeklyScheduleManagerService', () => {
 
   const mockRedisService = {
     delByPattern: jest.fn(),
+    del: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -50,7 +51,7 @@ describe('WeeklyScheduleManagerService', () => {
       await service.performWeeklyReset();
 
       expect(weeklyOverridesService.cleanupExpiredOverrides).toHaveBeenCalled();
-      expect(redisService.delByPattern).toHaveBeenCalledWith('schedules:all:*');
+      expect(redisService.del).toHaveBeenCalledWith('schedules:week:complete');
     });
 
     it('should handle errors during weekly reset', async () => {

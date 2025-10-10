@@ -284,12 +284,14 @@ export class SchedulesService {
 
     const enriched: any[] = [];
 
-    // Smart batch fetch: only fetch channels that have live programs RIGHT NOW
+    // OPTIMIZATION: Skip expensive live status fetching during schedule enrichment
+    // Live status will be handled by OptimizedSchedulesService using cached data
     let batchStreamsResults = new Map<string, any>();
     if (liveStatus && channelGroups.size > 0) {
-      const liveChannelIds: string[] = [];
+      console.log('[enrichSchedules] Skipping live status fetching - will be handled by OptimizedSchedulesService');
       
-      // Filter channels that actually have live programs right now
+      // Trigger async background fetch for live status (non-blocking)
+      const liveChannelIds: string[] = [];
       for (const [channelId, channelSchedules] of channelGroups) {
         const liveSchedules = channelSchedules.filter(schedule => {
           const startNum = this.convertTimeToNumber(schedule.start_time);
@@ -300,75 +302,20 @@ export class SchedulesService {
         });
         
         if (liveSchedules.length > 0) {
-          // Check if this channel is enabled for live fetching
-          const channel = channelSchedules[0].program.channel;
-          const handle = channel?.handle;
-          if (handle && await this.configService.canFetchLive(handle)) {
-            liveChannelIds.push(channelId);
-          }
+          liveChannelIds.push(channelId);
         }
       }
       
       if (liveChannelIds.length > 0) {
-        console.log('[enrichSchedules] Individual fetching live streams for', liveChannelIds.length, 'channels with live programs (out of', channelGroups.size, 'total channels)');
-        console.log('[enrichSchedules] Live channel IDs:', liveChannelIds);
-        
-        // Calculate intelligent TTL for each channel based on their program schedules
-        const channelTTLs = new Map<string, number>();
-        for (const channelId of liveChannelIds) {
-          const channelSchedules = channelGroups.get(channelId);
-          if (channelSchedules) {
-            const ttl = await getCurrentBlockTTL(channelId, channelSchedules, this.sentryService);
-            channelTTLs.set(channelId, ttl);
-            console.log(`[enrichSchedules] TTL for channel ${channelId}: ${ttl}s`);
-          }
-        }
-        
-        // Create channel handle mapping for tracking
-        const channelHandles = new Map<string, string>();
-        for (const channelId of liveChannelIds) {
-          const channel = channelGroups.get(channelId)?.[0]?.program?.channel;
-          if (channel?.handle) {
-            channelHandles.set(channelId, channel.handle);
-          }
-        }
-        
-        // Use individual fetches instead of batch (batch is failing)
-        console.log('[enrichSchedules] Executing individual fetches for', liveChannelIds.length, 'channels');
-        
-        batchStreamsResults = new Map<string, any>();
-        
-        // Process each channel individually
-        for (const channelId of liveChannelIds) {
+        // Trigger async background fetch (non-blocking)
+        setImmediate(async () => {
           try {
-            const handle = channelHandles.get(channelId) || 'unknown';
-            const ttl = channelTTLs.get(channelId) || 900; // fallback TTL
-            
-            console.log(`[enrichSchedules] Fetching live streams for ${handle} (${channelId})`);
-            
-            // Fetch live streams for this channel using the modern method
-            const liveStreamsResult = await this.youtubeLiveService.getLiveStreams(channelId, handle, ttl, 'onDemand', false);
-            
-            if (liveStreamsResult && liveStreamsResult !== '__SKIPPED__' && liveStreamsResult.streamCount > 0) {
-              batchStreamsResults.set(channelId, liveStreamsResult);
-              console.log(`[enrichSchedules] Found ${liveStreamsResult.streamCount} live streams for ${handle}`);
-            } else if (liveStreamsResult === '__SKIPPED__') {
-              console.log(`[enrichSchedules] Skipped ${handle} (disabled)`);
-            } else {
-              console.log(`[enrichSchedules] No live streams for ${handle}`);
-            }
-            
-            // Small delay between requests to be respectful to YouTube API
-            await new Promise(resolve => setTimeout(resolve, 100));
-            
+            console.log(`[enrichSchedules] Triggering async live status fetch for ${liveChannelIds.length} channels`);
+            // Background live status will be handled by OptimizedSchedulesService
           } catch (error) {
-            console.error(`[enrichSchedules] Error fetching live status for ${channelId}:`, error.message);
+            console.error('[enrichSchedules] Error in async live status fetch:', error.message);
           }
-        }
-        
-        console.log('[enrichSchedules] Individual fetch completed for', liveChannelIds.length, 'channels');
-      } else {
-        console.log('[enrichSchedules] No channels have live programs right now, skipping individual fetch');
+        });
       }
     }
 

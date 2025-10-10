@@ -193,6 +193,7 @@ describe('SchedulesService', () => {
             set: jest.fn(),
             del: jest.fn(),
             delByPattern: jest.fn(),
+            setNX: jest.fn().mockResolvedValue(true),
           },
         },
         {
