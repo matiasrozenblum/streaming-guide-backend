@@ -113,7 +113,7 @@ export class PanelistsService {
     await Promise.all([
       this.redisService.del('panelists:all'),
       this.redisService.del(`panelists:${id}`),
-      this.redisService.delByPattern('schedules:all:*'), // Clear schedule cache since panelist info appears in schedules
+      this.redisService.del('schedules:week:complete'), // Clear unified schedule cache since panelist info appears in schedules
     ]);
     
     // Warm cache asynchronously (non-blocking)
@@ -170,7 +170,7 @@ export class PanelistsService {
       await this.panelistsRepository.save(panelist);
       console.log(`[Cache] Invalidating cache for panelist ${panelistId} after adding to program ${programId}`);
       await this.redisService.del(`panelists:${panelistId}`);
-      await this.redisService.delByPattern('schedules:all:*');
+      await this.redisService.del('schedules:week:complete');
       
       // Warm cache asynchronously (non-blocking)
       setImmediate(() => this.schedulesService.warmSchedulesCache());
@@ -194,7 +194,7 @@ export class PanelistsService {
       await this.panelistsRepository.save(panelist);
       console.log(`[Cache] Invalidating cache for panelist ${panelistId} after removing from program ${programId}`);
       await this.redisService.del(`panelists:${panelistId}`);
-      await this.redisService.delByPattern('schedules:all:*');
+      await this.redisService.del('schedules:week:complete');
       
       // Warm cache asynchronously (non-blocking)
       setImmediate(() => this.schedulesService.warmSchedulesCache());

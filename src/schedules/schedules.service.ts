@@ -63,22 +63,31 @@ export class SchedulesService {
     const startTime = Date.now();
     const { dayOfWeek, relations = ['program', 'program.channel', 'program.panelists'], select, skipCache = false, applyOverrides = true, liveStatus = false } = options;
 
-    const cacheKey = `schedules:all:${dayOfWeek || 'all'}`;
+    // UNIFIED CACHE KEY: Always cache complete week data
+    const cacheKey = 'schedules:week:complete';
     let schedules: Schedule[] | null = null;
     
     // Try cache first (unless skipCache is true)
     if (!skipCache) {
-      console.log(`[SCHEDULES-CACHE] Checking cache for ${cacheKey}`);
+      console.log(`[SCHEDULES-CACHE] Checking unified cache for ${cacheKey}`);
       schedules = await this.redisService.get<Schedule[]>(cacheKey);
       if (schedules) {
-        console.log(`[SCHEDULES-CACHE] HIT for ${cacheKey} (${Date.now() - startTime}ms)`);
+        console.log(`[SCHEDULES-CACHE] HIT for ${cacheKey} (${Date.now() - startTime}ms) - ${schedules.length} total schedules`);
+        
+        // Filter by day if requested (after cache hit)
+        if (dayOfWeek) {
+          const originalCount = schedules.length;
+          schedules = schedules.filter(s => s.day_of_week === dayOfWeek);
+          console.log(`[SCHEDULES-CACHE] Filtered to ${dayOfWeek}: ${schedules.length}/${originalCount} schedules`);
+        }
+        
         // Cache hit - proceed to process schedules (overrides + enrichment)
         return this.processSchedules(schedules, options, startTime);
       }
     }
 
     // Cache miss - implement distributed lock to prevent thundering herd
-    console.log(`[SCHEDULES-CACHE] MISS for ${cacheKey}`);
+    console.log(`[SCHEDULES-CACHE] MISS for unified cache ${cacheKey}`);
     const lockKey = `lock:${cacheKey}`;
     let lockAcquired = false;
     
@@ -88,14 +97,22 @@ export class SchedulesService {
       
       if (!lockAcquired) {
         // Another request is fetching - wait and retry from cache
-        console.log(`[SCHEDULES-CACHE] Lock held by another request, waiting for cache to populate...`);
+        console.log(`[SCHEDULES-CACHE] Lock held by another request, waiting for unified cache to populate...`);
         
         // Wait up to 8 seconds for the other request to populate cache
         for (let i = 0; i < 80; i++) {
           await new Promise(r => setTimeout(r, 100));
           schedules = await this.redisService.get<Schedule[]>(cacheKey);
           if (schedules) {
-            console.log(`[SCHEDULES-CACHE] Cache populated by another request after ${(i + 1) * 100}ms`);
+            console.log(`[SCHEDULES-CACHE] Unified cache populated by another request after ${(i + 1) * 100}ms`);
+            
+            // Filter by day if requested (after cache hit)
+            if (dayOfWeek) {
+              const originalCount = schedules.length;
+              schedules = schedules.filter(s => s.day_of_week === dayOfWeek);
+              console.log(`[SCHEDULES-CACHE] Filtered to ${dayOfWeek}: ${schedules.length}/${originalCount} schedules`);
+            }
+            
             return this.processSchedules(schedules, options, startTime);
           }
         }
@@ -103,17 +120,25 @@ export class SchedulesService {
         // Timeout waiting for cache - log warning and proceed to fetch
         console.warn(`[SCHEDULES-CACHE] Lock timeout after 8s, proceeding to fetch anyway`);
       } else {
-        console.log(`[SCHEDULES-CACHE] Lock acquired for ${cacheKey}`);
+        console.log(`[SCHEDULES-CACHE] Lock acquired for unified cache ${cacheKey}`);
       }
     }
 
     // Fetch from database (either skipCache=true, lock acquired, or lock timeout)
     try {
-      schedules = await this.fetchSchedulesFromDatabase(dayOfWeek, relations);
+      // Always fetch complete week data (ignore dayOfWeek filter for DB query)
+      schedules = await this.fetchSchedulesFromDatabase(undefined, relations); // No day filter
       
-      // Store in cache
+      // Store complete week in unified cache
       await this.redisService.set(cacheKey, schedules, 1800);
-      console.log(`[SCHEDULES-CACHE] Stored ${schedules.length} schedules in cache`);
+      console.log(`[SCHEDULES-CACHE] Stored ${schedules.length} complete week schedules in unified cache`);
+      
+      // Filter by day if requested (after storing complete data)
+      if (dayOfWeek) {
+        const originalCount = schedules.length;
+        schedules = schedules.filter(s => s.day_of_week === dayOfWeek);
+        console.log(`[SCHEDULES-CACHE] Filtered to ${dayOfWeek}: ${schedules.length}/${originalCount} schedules`);
+      }
       
       // Process and return
       return this.processSchedules(schedules, options, startTime);
@@ -121,7 +146,7 @@ export class SchedulesService {
       // Always release lock if we acquired it
       if (lockAcquired) {
         await this.redisService.del(lockKey);
-        console.log(`[SCHEDULES-CACHE] Released lock for ${cacheKey}`);
+        console.log(`[SCHEDULES-CACHE] Released lock for unified cache ${cacheKey}`);
       }
     }
   }
@@ -213,36 +238,27 @@ export class SchedulesService {
   }
 
   /**
-   * Warm cache after invalidation to prevent thundering herd
+   * Warm unified cache after invalidation to prevent thundering herd
    * This runs asynchronously and doesn't block the CRUD operation
    * PUBLIC: Can be called by other services (Programs, Channels, etc.) after cache invalidation
    */
   async warmSchedulesCache(): Promise<void> {
-    console.log('[CACHE-WARM] Starting cache warming...');
+    console.log('[CACHE-WARM] Starting unified cache warming...');
     const warmStart = Date.now();
     
     try {
-      // Warm "all schedules" cache (full week)
+      // Warm unified cache (complete week data)
+      // This single call populates the cache for ALL services (users, background jobs, YouTube service)
       await this.findAll({ 
         skipCache: true, 
         liveStatus: false, 
         applyOverrides: true 
       });
-      console.log(`[CACHE-WARM] Warmed full week cache`);
+      console.log(`[CACHE-WARM] Warmed unified cache (complete week data)`);
       
-      // Warm today's cache (most frequently accessed)
-      const today = TimezoneUtil.currentDayOfWeek();
-      await this.findAll({ 
-        dayOfWeek: today, 
-        skipCache: true, 
-        liveStatus: false,
-        applyOverrides: true 
-      });
-      console.log(`[CACHE-WARM] Warmed today's (${today}) cache`);
-      
-      console.log(`[CACHE-WARM] Cache warming completed in ${Date.now() - warmStart}ms`);
+      console.log(`[CACHE-WARM] Unified cache warming completed in ${Date.now() - warmStart}ms`);
     } catch (error) {
-      console.error('[CACHE-WARM] Failed to warm cache:', error);
+      console.error('[CACHE-WARM] Failed to warm unified cache:', error);
       // Log to Sentry but don't throw - cache warming failure shouldn't break operations
       this.sentryService.captureException(error);
     }
@@ -715,8 +731,8 @@ export class SchedulesService {
     });
     const saved = await this.schedulesRepository.save(schedule);
     
-    // Clear cache
-    await this.redisService.delByPattern('schedules:all:*');
+    // Clear unified cache
+    await this.redisService.del('schedules:week:complete');
     
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.warmSchedulesCache());
@@ -740,8 +756,8 @@ export class SchedulesService {
     if (dto.endTime) schedule.end_time = dto.endTime;
     const updated = await this.schedulesRepository.save(schedule);
     
-    // Clear cache
-    await this.redisService.delByPattern('schedules:all:*');
+    // Clear unified cache
+    await this.redisService.del('schedules:week:complete');
     
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.warmSchedulesCache());
@@ -796,8 +812,8 @@ export class SchedulesService {
 
     const savedSchedules = await this.schedulesRepository.save(schedules);
     
-    // Clear cache
-    await this.redisService.delByPattern('schedules:all:*');
+    // Clear unified cache
+    await this.redisService.del('schedules:week:complete');
     
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.warmSchedulesCache());

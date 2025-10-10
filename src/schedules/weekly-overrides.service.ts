@@ -210,8 +210,8 @@ export class WeeklyOverridesService {
     const secondsUntilExpiry = expirationDate.diff(now, 'seconds');
     await this.redisService.set(`weekly_override:${overrideId}`, override, secondsUntilExpiry);
 
-    // Clear schedule caches
-    await this.redisService.delByPattern('schedules:all:*');
+    // Clear unified schedule cache
+    await this.redisService.del('schedules:week:complete');
     
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
@@ -296,8 +296,8 @@ export class WeeklyOverridesService {
     const key = `weekly_override:${overrideId}`;
     await this.redisService.set(key, updatedOverride, 60 * 60 * 24 * 7); // 7 days
 
-    // Clear cache
-    await this.redisService.delByPattern('schedules:all:*');
+    // Clear unified cache
+    await this.redisService.del('schedules:week:complete');
     
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
@@ -653,7 +653,7 @@ export class WeeklyOverridesService {
     }
 
     if (cleaned > 0) {
-      await this.redisService.delByPattern('schedules:all:*');
+      await this.redisService.del('schedules:week:complete');
       
       // Warm cache asynchronously (non-blocking)
       setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
@@ -685,7 +685,7 @@ export class WeeklyOverridesService {
       }
     }
     if (deleted > 0) {
-      await this.redisService.delByPattern('schedules:all:*');
+      await this.redisService.del('schedules:week:complete');
       
       // Warm cache asynchronously (non-blocking)
       setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
