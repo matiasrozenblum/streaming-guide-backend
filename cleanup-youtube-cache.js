@@ -8,7 +8,7 @@
 const Redis = require('ioredis');
 
 async function cleanupYouTubeCache() {
-  const redisUrl = 'redis://default:fhikjstRnpuEjTNMljcYJJAGwtaYthTA@metro.proxy.rlwy.net:35946';
+  const redisUrl = process.env.REDIS_URL;
   if (!redisUrl) {
     console.error('❌ REDIS_URL environment variable is not set');
     process.exit(1);
