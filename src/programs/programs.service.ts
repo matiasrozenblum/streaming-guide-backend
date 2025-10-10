@@ -49,8 +49,8 @@ export class ProgramsService {
     program.channel = channel;
     const savedProgram = await this.programsRepository.save(program);
     
-    // Clear cache
-    await this.redisService.delByPattern('schedules:all:*');
+    // Clear unified cache
+    await this.redisService.del('schedules:week:complete');
     
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService.warmSchedulesCache());
@@ -133,8 +133,8 @@ export class ProgramsService {
     Object.assign(program, updateProgramDto);
     const updatedProgram = await this.programsRepository.save(program);
     
-    // Clear cache
-    await this.redisService.delByPattern('schedules:all:*');
+    // Clear unified cache
+    await this.redisService.del('schedules:week:complete');
     
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService.warmSchedulesCache());
@@ -178,8 +178,8 @@ export class ProgramsService {
       throw new NotFoundException(`Program with ID ${id} not found`);
     }
     
-    // Clear cache
-    await this.redisService.delByPattern('schedules:all:*');
+    // Clear unified cache
+    await this.redisService.del('schedules:week:complete');
     
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService.warmSchedulesCache());
@@ -227,8 +227,8 @@ export class ProgramsService {
       await this.programsRepository.save(program);
     }
     
-    // Clear cache
-    await this.redisService.delByPattern('schedules:all:*');
+    // Clear unified cache
+    await this.redisService.del('schedules:week:complete');
     
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService.warmSchedulesCache());
@@ -251,8 +251,8 @@ export class ProgramsService {
       await this.programsRepository.save(program);
     }
     
-    // Clear cache
-    await this.redisService.delByPattern('schedules:all:*');
+    // Clear unified cache
+    await this.redisService.del('schedules:week:complete');
     
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService.warmSchedulesCache());

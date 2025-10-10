@@ -144,8 +144,8 @@ export class ChannelsService {
       channel.categories = categories;
     }
   
-    // Clear cache
-    await this.redisService.delByPattern('schedules:all:*');
+    // Clear unified cache
+    await this.redisService.del('schedules:week:complete');
     
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService.warmSchedulesCache());
@@ -194,8 +194,8 @@ export class ChannelsService {
       }
     }
 
-    // Clear cache
-    await this.redisService.delByPattern('schedules:all:*');
+    // Clear unified cache
+    await this.redisService.del('schedules:week:complete');
     
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService.warmSchedulesCache());
@@ -236,8 +236,8 @@ export class ChannelsService {
       throw new NotFoundException(`Channel with ID ${id} not found`);
     }
     
-    // Clear cache
-    await this.redisService.delByPattern('schedules:all:*');
+    // Clear unified cache
+    await this.redisService.del('schedules:week:complete');
     
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService.warmSchedulesCache());
@@ -259,8 +259,8 @@ export class ChannelsService {
       }
     });
     
-    // Clear cache
-    await this.redisService.delByPattern('schedules:all:*');
+    // Clear unified cache
+    await this.redisService.del('schedules:week:complete');
     
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService.warmSchedulesCache());

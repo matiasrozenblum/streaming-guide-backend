@@ -29,9 +29,9 @@ export class WeeklyScheduleManagerService {
       const expiredCount = await this.weeklyOverridesService.cleanupExpiredOverrides();
       this.logger.log(`Cleaned up ${expiredCount} expired schedule overrides`);
 
-      // 2. Clear all schedule caches to force fresh data
-      await this.redisService.delByPattern('schedules:all:*');
-      this.logger.log('Cleared all schedule caches');
+      // 2. Clear unified schedule cache to force fresh data
+      await this.redisService.del('schedules:week:complete');
+      this.logger.log('Cleared unified schedule cache');
 
       this.logger.log('Weekly schedule reset completed successfully');
     } catch (error) {
