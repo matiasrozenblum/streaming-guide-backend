@@ -128,7 +128,7 @@ describe('WeeklyOverridesService', () => {
       jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
       jest.spyOn(redisService, 'del').mockResolvedValue(undefined);
       jest.spyOn(dataSource, 'query').mockResolvedValue([
-        { id: 1, name: 'Test Channel', handle: 'test', youtube_channel_id: 'test123', logo_url: null, description: null, order: 1, is_visible: true, created_at: new Date(), updated_at: new Date() }
+        { id: 1, name: 'Test Channel', handle: 'test', youtube_channel_id: 'test123', logo_url: null, description: null, order: 1, is_visible: true }
       ]);
 
       const result = await service.createWeeklyOverride(dto);
@@ -489,8 +489,6 @@ describe('WeeklyOverridesService', () => {
             description: null,
             order: 1,
             is_visible: true,
-            created_at: new Date(),
-            updated_at: new Date(),
           },
           imageUrl: 'https://example.com/image.jpg',
         },
