@@ -28,7 +28,7 @@ describe('YoutubeDiscoveryService', () => {
       expect(result).toEqual({ channelId: 'cid123', title: 'Test Channel' });
     });
 
-    it('removes @ prefix for better search results', async () => {
+    it('ensures @ prefix for better search results', async () => {
       jest.spyOn(axios, 'get').mockResolvedValue({
         data: {
           items: [
@@ -36,10 +36,10 @@ describe('YoutubeDiscoveryService', () => {
           ],
         },
       });
-      const result = await service.getChannelIdFromHandle('@plainhandle');
+      const result = await service.getChannelIdFromHandle('plainhandle');
       expect(result).toEqual({ channelId: 'cid456', title: 'Another Channel' });
-      // Check that axios was called with the correct query param (without @)
-      expect((axios.get as jest.Mock).mock.calls[0][1].params.q).toBe('plainhandle');
+      // Check that axios was called with the correct query param (with @)
+      expect((axios.get as jest.Mock).mock.calls[0][1].params.q).toBe('@plainhandle');
     });
   });
 

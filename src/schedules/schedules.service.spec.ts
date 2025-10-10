@@ -150,6 +150,7 @@ describe('SchedulesService', () => {
     const mockQueryBuilder = {
       leftJoinAndSelect: jest.fn().mockReturnThis(),
       leftJoin: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
@@ -283,13 +284,15 @@ describe('SchedulesService', () => {
             programs: [],
           },
           panelists: [],
-          schedules: [],
-        },
-      } as unknown as Schedule;
+        schedules: [],
+      },
+    } as unknown as Schedule;
 
       // Mock the query builder to return our test schedule
       const mockQueryBuilder = {
         leftJoinAndSelect: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         orderBy: jest.fn().mockReturnThis(),
         addOrderBy: jest.fn().mockReturnThis(),
@@ -356,6 +359,8 @@ describe('SchedulesService', () => {
       // Mock the query builder to return our test schedule
       const mockQueryBuilder = {
         leftJoinAndSelect: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         orderBy: jest.fn().mockReturnThis(),
         addOrderBy: jest.fn().mockReturnThis(),
