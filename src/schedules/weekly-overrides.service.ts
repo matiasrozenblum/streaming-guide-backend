@@ -329,12 +329,23 @@ export class WeeklyOverridesService {
       keys.push(...keyChunk);
     }
 
-    // Fetch all matching overrides
-    for (const key of keys) {
-      const override = await this.redisService.get<WeeklyOverride>(key);
-      if (override) {
-        overrides.push(override);
-      }
+    // OPTIMIZATION: Use Redis pipeline to fetch all overrides in one round trip
+    if (keys.length > 0) {
+      const pipeline = (this.redisService as any).client.pipeline();
+      keys.forEach(key => pipeline.get(key));
+      const results = await pipeline.exec();
+      
+      // Process pipeline results
+      results.forEach((result, index) => {
+        if (result[0] === null && result[1]) { // No error and has data
+          try {
+            const override = JSON.parse(result[1]);
+            overrides.push(override);
+          } catch (error) {
+            console.warn(`[WEEKLY-OVERRIDES] Failed to parse override ${keys[index]}:`, error);
+          }
+        }
+      });
     }
 
     return overrides;
@@ -643,10 +654,30 @@ export class WeeklyOverridesService {
     const now = this.dayjs().tz('America/Argentina/Buenos_Aires');
     let cleaned = 0;
 
-    // Check each override for expiration
-    for (const key of keys) {
-      const override = await this.redisService.get<WeeklyOverride>(key);
-      if (override && this.dayjs(override.expiresAt).tz('America/Argentina/Buenos_Aires').isBefore(now)) {
+    // OPTIMIZATION: Use Redis pipeline to fetch all overrides in one round trip
+    if (keys.length > 0) {
+      const pipeline = (this.redisService as any).client.pipeline();
+      keys.forEach(key => pipeline.get(key));
+      const results = await pipeline.exec();
+      
+      const expiredKeys: string[] = [];
+      
+      // Process pipeline results
+      results.forEach((result, index) => {
+        if (result[0] === null && result[1]) { // No error and has data
+          try {
+            const override = JSON.parse(result[1]);
+            if (override && this.dayjs(override.expiresAt).tz('America/Argentina/Buenos_Aires').isBefore(now)) {
+              expiredKeys.push(keys[index]);
+            }
+          } catch (error) {
+            console.warn(`[WEEKLY-OVERRIDES] Failed to parse override ${keys[index]} for cleanup:`, error);
+          }
+        }
+      });
+      
+      // Delete expired overrides
+      for (const key of expiredKeys) {
         await this.redisService.del(key);
         cleaned++;
       }
