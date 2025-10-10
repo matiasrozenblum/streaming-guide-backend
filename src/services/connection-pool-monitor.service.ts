@@ -58,11 +58,9 @@ export class ConnectionPoolMonitorService implements OnModuleInit {
 
         return poolStats;
       } else {
-        console.warn('[DB-POOL] Could not access connection pool information');
         return null;
       }
     } catch (error) {
-      console.error('[DB-POOL] Error getting pool status:', error.message);
       return null;
     }
   }

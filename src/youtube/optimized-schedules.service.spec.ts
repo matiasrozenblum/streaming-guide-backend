@@ -12,7 +12,7 @@ jest.mock('../utils/timezone.util', () => ({
     currentTimeInMinutes: jest.fn().mockReturnValue(630), // 10:30 AM
   },
 }));
-
+ 
 describe('OptimizedSchedulesService', () => {
   let service: OptimizedSchedulesService;
   let mockSchedulesService: any;
@@ -62,12 +62,19 @@ describe('OptimizedSchedulesService', () => {
       delByPattern: jest.fn(),
     };
 
+    const mockYoutubeLiveService = {
+      getLiveStreams: jest.fn().mockResolvedValue({
+        streams: [],
+        __SKIPPED__: true,
+      }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OptimizedSchedulesService,
         { provide: SchedulesService, useValue: mockSchedulesService },
         { provide: LiveStatusBackgroundService, useValue: mockLiveStatusBackgroundService },
-        { provide: YoutubeLiveService, useValue: { getLiveStreams: jest.fn() } },
+        { provide: YoutubeLiveService, useValue: mockYoutubeLiveService },
         { provide: RedisService, useValue: mockRedisService },
       ],
     }).compile();
