@@ -58,6 +58,9 @@ export class OptimizedSchedulesService {
     const enriched: any[] = [];
     const currentDay = require('../utils/timezone.util').TimezoneUtil.currentDayOfWeek();
     const currentTime = require('../utils/timezone.util').TimezoneUtil.currentTimeInMinutes();
+    
+    // Track which channels we've already triggered async fetches for (prevent duplicate setImmediate calls)
+    const asyncFetchTriggered = new Set<string>();
 
     for (const schedule of schedules) {
       const enrichedSchedule = { ...schedule };
@@ -159,8 +162,9 @@ export class OptimizedSchedulesService {
               stream_count: 0,
             };
             
-            // Trigger async background fetch (non-blocking)
-            if (schedule.program.channel?.handle) {
+            // Trigger async background fetch (non-blocking) - but only once per channel
+            if (schedule.program.channel?.handle && !asyncFetchTriggered.has(channelId)) {
+              asyncFetchTriggered.add(channelId); // Mark as triggered BEFORE setImmediate
               setImmediate(async () => {
                 try {
                   console.log(`[OPTIMIZED-SCHEDULES] Triggering async fetch for ${schedule.program.channel.handle}...`);
