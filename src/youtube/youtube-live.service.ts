@@ -25,6 +25,7 @@ export class YoutubeLiveService {
   private readonly apiUrl = 'https://www.googleapis.com/youtube/v3';
   private readonly validationCooldowns = new Map<string, number>(); // Track last validation time per channel
   private readonly COOLDOWN_PERIOD = 5 * 60 * 1000; // 5 minutes cooldown
+  private readonly inFlightFetches = new Set<string>(); // Track in-flight YouTube API requests to prevent duplicates
   
   // YouTube API usage tracking removed - no longer needed
 
@@ -236,6 +237,9 @@ export class YoutubeLiveService {
       }
       
       return null;
+    } finally {
+      // Always remove from in-flight set, even if there was an error
+      this.inFlightFetches.delete(channelId);
     }
   }
 
@@ -508,6 +512,12 @@ export class YoutubeLiveService {
       return '__SKIPPED__';
     }
 
+    // Deduplication: Check if a fetch is already in progress for this channel
+    if (this.inFlightFetches.has(channelId)) {
+      console.log(`⏳ [getLiveStreams] Fetch already in progress for ${handle} (${channelId}), skipping duplicate`);
+      return '__SKIPPED__';
+    }
+
     const liveKey = `liveStreamsByChannel:${channelId}`;
     const notFoundKey = `videoIdNotFound:${channelId}`;
 
@@ -541,6 +551,9 @@ export class YoutubeLiveService {
       console.log(`🗑️ Deleted cached streams for ${handle} (no longer live)`);
     }
 
+    // Mark channel as in-flight before making YouTube API call
+    this.inFlightFetches.add(channelId);
+    
     // fetch from YouTube
     try {
       // Track API usage
