@@ -664,6 +664,9 @@ export class YoutubeLiveService {
       }
       
       return null;
+    } finally {
+      // Always remove from in-flight set, even if there was an error
+      this.inFlightFetches.delete(channelId);
     }
   }
 
