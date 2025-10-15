@@ -534,21 +534,29 @@ export class YoutubeLiveService {
         const parsedStreams: LiveStream[] = JSON.parse(cachedStreams);
         // Skip validation during bulk operations to improve performance
         // Validate that at least the primary stream is still live (skip for onDemand context)
-        if (parsedStreams.length > 0 && (context === 'cron' || context === 'program-start' ? (await this.isVideoLive(parsedStreams[0].videoId)) : true)) {
-          console.log(`🔁 Reusing cached streams for ${handle} (${parsedStreams.length} streams)`);
-          return {
-            streams: parsedStreams,
-            primaryVideoId: parsedStreams[0].videoId,
-            streamCount: parsedStreams.length
-          };
+        if (parsedStreams.length > 0) {
+          const shouldValidate = context === 'cron' || context === 'program-start';
+          const isValid = shouldValidate ? (await this.isVideoLive(parsedStreams[0].videoId)) : true;
+          
+          if (isValid) {
+            console.log(`🔁 Reusing cached streams for ${handle} (${parsedStreams.length} streams)`);
+            return {
+              streams: parsedStreams,
+              primaryVideoId: parsedStreams[0].videoId,
+              streamCount: parsedStreams.length
+            };
+          } else {
+            console.log(`🔄 Cached video ${parsedStreams[0].videoId} no longer live for ${handle}, forcing refresh`);
+            // Delete cache and continue to make fresh API call
+            await this.redisService.del(liveKey);
+          }
         }
       } catch (error) {
         console.warn(`Failed to parse cached streams for ${handle}:`, error);
+        // If parsing fails, delete the corrupted cache
+        await this.redisService.del(liveKey);
+        console.log(`🗑️ Deleted corrupted cached streams for ${handle}`);
       }
-      
-      // If cached streams are invalid, delete them
-      await this.redisService.del(liveKey);
-      console.log(`🗑️ Deleted cached streams for ${handle} (no longer live)`);
     }
 
     // Mark channel as in-flight before making YouTube API call
