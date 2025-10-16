@@ -305,19 +305,15 @@ export class ChannelsService {
       }
     }
 
-    // Use OptimizedSchedulesService for better performance with timeout protection
+    // Use unified enriched cache for better performance (Phase 1 implementation)
     const queryStart = Date.now();
-    console.log(`[CHANNELS-SCHEDULES-${requestId}] About to call OptimizedSchedulesService at ${new Date().toISOString()}`);
+    console.log(`[CHANNELS-SCHEDULES-${requestId}] Reading from unified enriched cache at ${new Date().toISOString()}`);
     let allSchedules;
     try {
-      allSchedules = await this.optimizedSchedulesService.getSchedulesWithOptimizedLiveStatus({
-        dayOfWeek: day,
-        applyOverrides: raw !== 'true',
-        liveStatus: liveStatus || false,
-      });
-      console.log(`[CHANNELS-SCHEDULES-${requestId}] Optimized schedules query completed (${Date.now() - queryStart}ms) - ${allSchedules.length} schedules`);
+      allSchedules = await this.getSchedulesFromUnifiedCache(day, liveStatus || false);
+      console.log(`[CHANNELS-SCHEDULES-${requestId}] Unified cache query completed (${Date.now() - queryStart}ms) - ${allSchedules.length} schedules`);
     } catch (error) {
-      console.error(`[CHANNELS-SCHEDULES-${requestId}] OptimizedSchedulesService FAILED after ${Date.now() - queryStart}ms:`, error.message);
+      console.error(`[CHANNELS-SCHEDULES-${requestId}] Unified cache FAILED after ${Date.now() - queryStart}ms:`, error.message);
       console.error(`[CHANNELS-SCHEDULES-${requestId}] Full error:`, error);
       // Emergency fallback: return empty array to prevent complete failure
       allSchedules = [];
@@ -409,5 +405,30 @@ export class ChannelsService {
   private convertTimeToNumber(time: string): number {
     const [h, m] = time.split(':').map(Number);
     return h * 100 + m;
+  }
+
+  /**
+   * Get schedules from unified enriched cache (Phase 1 implementation)
+   */
+  private async getSchedulesFromUnifiedCache(day?: string, liveStatus?: boolean): Promise<any[]> {
+    const cacheKey = 'schedules:week:enriched';
+    const cached = await this.redisService.get<any>(cacheKey);
+    
+    if (!cached) {
+      console.log('[UNIFIED-CACHE] Cache miss - no enriched cache available');
+      return [];
+    }
+    
+    console.log(`[UNIFIED-CACHE] Cache hit - ${cached.schedules.length} schedules, updated ${new Date(cached.lastUpdated).toISOString()}`);
+    
+    let schedules = cached.schedules;
+    
+    // Filter by day if requested
+    if (day) {
+      schedules = schedules.filter(s => s.day_of_week === day);
+      console.log(`[UNIFIED-CACHE] Filtered to ${day}: ${schedules.length}/${cached.schedules.length} schedules`);
+    }
+    
+    return schedules;
   }
 }

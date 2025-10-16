@@ -100,6 +100,9 @@ export class LiveStatusBackgroundService {
       // Update live status for channels in batches
       await this.updateChannelsInBatches(channelsToUpdate);
 
+      // Update unified enriched cache with fresh live status
+      await this.updateUnifiedEnrichedCache();
+
       const duration = Date.now() - startTime;
       this.logger.log(`✅ Background live status update completed in ${duration}ms`);
 
@@ -364,5 +367,97 @@ export class LiveStatusBackgroundService {
   private convertTimeToNumber(time: string): number {
     const [h, m] = time.split(':').map(Number);
     return h * 60 + m;
+  }
+
+  /**
+   * Update unified enriched cache with fresh live status
+   */
+  private async updateUnifiedEnrichedCache(): Promise<void> {
+    try {
+      const cacheKey = 'schedules:week:enriched';
+      const cached = await this.redisService.get<any>(cacheKey);
+      
+      if (!cached) {
+        this.logger.log('[UNIFIED-CACHE] No existing cache to update');
+        return;
+      }
+      
+      this.logger.log(`[UNIFIED-CACHE] Updating unified cache with fresh live status for ${cached.schedules.length} schedules`);
+      
+      // Get fresh live status for all channels
+      const channelIds = new Set<string>();
+      for (const schedule of cached.schedules) {
+        const channelId = schedule.program?.channel?.youtube_channel_id;
+        if (channelId) {
+          channelIds.add(channelId);
+        }
+      }
+      
+      const liveStatusMap = await this.getLiveStatusForChannels(Array.from(channelIds));
+      
+      // Update schedules with fresh live status
+      const updatedSchedules = cached.schedules.map(schedule => {
+        const channelId = schedule.program?.channel?.youtube_channel_id;
+        if (channelId && liveStatusMap.has(channelId)) {
+          const liveStatus = liveStatusMap.get(channelId)!;
+          
+          // Check if this schedule is currently live based on time
+          const currentDay = require('../utils/timezone.util').TimezoneUtil.currentDayOfWeek();
+          const currentTime = require('../utils/timezone.util').TimezoneUtil.currentTimeInMinutes();
+          const startNum = this.convertTimeToNumber(schedule.start_time);
+          const endNum = this.convertTimeToNumber(schedule.end_time);
+          const isCurrentlyLive = schedule.day_of_week === currentDay &&
+                                 currentTime >= startNum &&
+                                 currentTime < endNum;
+
+          if (isCurrentlyLive && liveStatus.isLive) {
+            // Program is live and has live stream
+            schedule.program = {
+              ...schedule.program,
+              is_live: true,
+              stream_url: liveStatus.streamUrl,
+              live_streams: [],
+              stream_count: 0,
+              live_status_source: 'cache'
+            };
+          } else if (isCurrentlyLive) {
+            // Program is live by time but no live stream in cache
+            schedule.program = {
+              ...schedule.program,
+              is_live: true,
+              stream_url: schedule.program.stream_url || schedule.program.youtube_url,
+              live_streams: [],
+              stream_count: 0,
+              live_status_source: 'time_based'
+            };
+          } else {
+            // Program is not currently live
+            schedule.program = {
+              ...schedule.program,
+              is_live: false,
+              stream_url: schedule.program.stream_url || schedule.program.youtube_url,
+              live_streams: [],
+              stream_count: 0,
+              live_status_source: 'cache'
+            };
+          }
+        }
+        
+        return schedule;
+      });
+      
+      // Update cache with fresh data
+      const updatedCacheData = {
+        ...cached,
+        schedules: updatedSchedules,
+        lastUpdated: Date.now()
+      };
+      
+      await this.redisService.set(cacheKey, updatedCacheData, 3600); // 1 hour TTL
+      this.logger.log(`[UNIFIED-CACHE] Updated unified cache with fresh live status`);
+      
+    } catch (error) {
+      this.logger.error('[UNIFIED-CACHE] Error updating unified enriched cache:', error);
+    }
   }
 }
