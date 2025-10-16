@@ -311,12 +311,62 @@ export class ChannelsService {
     let allSchedules;
     try {
       allSchedules = await this.getSchedulesFromUnifiedCache(day, liveStatus || false);
-      console.log(`[CHANNELS-SCHEDULES-${requestId}] Unified cache query completed (${Date.now() - queryStart}ms) - ${allSchedules.length} schedules`);
+      
+      // FALLBACK: If unified cache is empty, populate it on-demand
+      if (allSchedules.length === 0) {
+        console.log(`[CHANNELS-SCHEDULES-${requestId}] Unified cache is empty, populating on-demand...`);
+        
+        // Get data from OptimizedSchedulesService
+        allSchedules = await this.optimizedSchedulesService.getSchedulesWithOptimizedLiveStatus({
+          dayOfWeek: day,
+          applyOverrides: raw !== 'true',
+          liveStatus: liveStatus || false,
+        });
+        
+        // Populate unified cache asynchronously for next requests
+        setImmediate(async () => {
+          try {
+            console.log(`[CHANNELS-SCHEDULES-${requestId}] Populating unified cache on-demand...`);
+            await this.schedulesService.createUnifiedEnrichedCache();
+            console.log(`[CHANNELS-SCHEDULES-${requestId}] Unified cache populated on-demand`);
+          } catch (error) {
+            console.error(`[CHANNELS-SCHEDULES-${requestId}] Failed to populate unified cache on-demand:`, error);
+          }
+        });
+        
+        console.log(`[CHANNELS-SCHEDULES-${requestId}] Fallback query completed - ${allSchedules.length} schedules, cache will be populated for next requests`);
+      } else {
+        console.log(`[CHANNELS-SCHEDULES-${requestId}] Unified cache query completed (${Date.now() - queryStart}ms) - ${allSchedules.length} schedules`);
+      }
     } catch (error) {
       console.error(`[CHANNELS-SCHEDULES-${requestId}] Unified cache FAILED after ${Date.now() - queryStart}ms:`, error.message);
       console.error(`[CHANNELS-SCHEDULES-${requestId}] Full error:`, error);
-      // Emergency fallback: return empty array to prevent complete failure
-      allSchedules = [];
+      
+      // Emergency fallback: use OptimizedSchedulesService and populate cache
+      console.log(`[CHANNELS-SCHEDULES-${requestId}] Using OptimizedSchedulesService as emergency fallback`);
+      try {
+        allSchedules = await this.optimizedSchedulesService.getSchedulesWithOptimizedLiveStatus({
+          dayOfWeek: day,
+          applyOverrides: raw !== 'true',
+          liveStatus: liveStatus || false,
+        });
+        
+        // Populate unified cache asynchronously for next requests
+        setImmediate(async () => {
+          try {
+            console.log(`[CHANNELS-SCHEDULES-${requestId}] Populating unified cache after emergency fallback...`);
+            await this.schedulesService.createUnifiedEnrichedCache();
+            console.log(`[CHANNELS-SCHEDULES-${requestId}] Unified cache populated after emergency fallback`);
+          } catch (error) {
+            console.error(`[CHANNELS-SCHEDULES-${requestId}] Failed to populate unified cache after emergency fallback:`, error);
+          }
+        });
+        
+        console.log(`[CHANNELS-SCHEDULES-${requestId}] Emergency fallback completed - ${allSchedules.length} schedules, cache will be populated for next requests`);
+      } catch (fallbackError) {
+        console.error(`[CHANNELS-SCHEDULES-${requestId}] Emergency fallback also failed:`, fallbackError.message);
+        allSchedules = [];
+      }
     }
 
     // Group schedules by channel
