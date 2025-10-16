@@ -231,7 +231,7 @@ export class LiveStatusBackgroundService {
           lastUpdated: Date.now(),
           ttl: 5 * 60, // 5 minutes
           blockEndTime: 24 * 60, // End of day
-          validationCooldown: Date.now() + (15 * 60 * 1000),
+          validationCooldown: Date.now() + (30 * 60 * 1000),
           lastValidation: Date.now(),
         };
         await this.cacheLiveStatus(channelId, cacheData);
@@ -266,7 +266,7 @@ export class LiveStatusBackgroundService {
         lastUpdated: Date.now(),
         ttl,
         blockEndTime,
-        validationCooldown: Date.now() + (15 * 60 * 1000), // Can validate again in 15 minutes
+        validationCooldown: Date.now() + (30 * 60 * 1000), // Can validate again in 30 minutes
         lastValidation: Date.now(),
       };
 
@@ -311,8 +311,8 @@ export class LiveStatusBackgroundService {
         return true;
       }
       
-      // Update validation cooldown (validate again in 15 minutes)
-      cached.validationCooldown = now + (15 * 60 * 1000);
+      // Update validation cooldown (validate again in 30 minutes)
+      cached.validationCooldown = now + (30 * 60 * 1000);
       cached.lastValidation = now;
       await this.cacheLiveStatus(cached.channelId, cached);
     }
