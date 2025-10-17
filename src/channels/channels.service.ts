@@ -145,7 +145,11 @@ export class ChannelsService {
     }
   
     // Clear unified cache
-    await this.redisService.del('schedules:week:complete');
+    try {
+      await this.redisService.del('schedules:week:complete');
+    } catch (error) {
+      console.error('❌ Error clearing schedules cache:', error.message);
+    }
     
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService.warmSchedulesCache());
@@ -195,7 +199,11 @@ export class ChannelsService {
     }
 
     // Clear unified cache
-    await this.redisService.del('schedules:week:complete');
+    try {
+      await this.redisService.del('schedules:week:complete');
+    } catch (error) {
+      console.error('❌ Error clearing schedules cache:', error.message);
+    }
     
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService.warmSchedulesCache());
@@ -204,17 +212,37 @@ export class ChannelsService {
 
     // Update YouTube channel ID if handle changed
     if (handleChanged && updateChannelDto.handle) {
+      const oldYoutubeChannelId = channel.youtube_channel_id;
+      
       try {
         const info = await this.youtubeDiscovery.getChannelIdFromHandle(updateChannelDto.handle);
         if (info) {
+          const newYoutubeChannelId = info.channelId;
+          
           updated.youtube_channel_id = info.channelId;
           await this.channelsRepository.save(updated);
           console.log(`🔄 Updated YouTube channel ID for ${updated.name}: ${info.channelId}`);
+          
+          // Invalidate old live status caches when YouTube channel ID changes
+          if (oldYoutubeChannelId && oldYoutubeChannelId !== newYoutubeChannelId) {
+            await this.invalidateLiveStatusCaches(oldYoutubeChannelId);
+            console.log(`🗑️ Invalidated live status caches for old YouTube channel ID: ${oldYoutubeChannelId}`);
+          }
         } else {
           console.log(`⚠️ Could not resolve YouTube channel ID for handle: ${updateChannelDto.handle}`);
+          // Still invalidate old cache even if new channel ID resolution fails
+          if (oldYoutubeChannelId) {
+            await this.invalidateLiveStatusCaches(oldYoutubeChannelId);
+            console.log(`🗑️ Invalidated live status caches for old YouTube channel ID: ${oldYoutubeChannelId}`);
+          }
         }
       } catch (error) {
         console.error(`❌ Error updating YouTube channel ID for ${updated.name}:`, error.message);
+        // Still invalidate old cache even if there's an error
+        if (oldYoutubeChannelId) {
+          await this.invalidateLiveStatusCaches(oldYoutubeChannelId);
+          console.log(`🗑️ Invalidated live status caches for old YouTube channel ID: ${oldYoutubeChannelId}`);
+        }
       }
     }
 
@@ -237,7 +265,11 @@ export class ChannelsService {
     }
     
     // Clear unified cache
-    await this.redisService.del('schedules:week:complete');
+    try {
+      await this.redisService.del('schedules:week:complete');
+    } catch (error) {
+      console.error('❌ Error clearing schedules cache:', error.message);
+    }
     
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService.warmSchedulesCache());
@@ -260,7 +292,11 @@ export class ChannelsService {
     });
     
     // Clear unified cache
-    await this.redisService.del('schedules:week:complete');
+    try {
+      await this.redisService.del('schedules:week:complete');
+    } catch (error) {
+      console.error('❌ Error clearing schedules cache:', error.message);
+    }
     
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService.warmSchedulesCache());
@@ -305,64 +341,32 @@ export class ChannelsService {
       }
     }
 
-    // Use unified enriched cache for better performance (Phase 1 implementation)
+    // Use Approach B: cache combination for better performance
     const queryStart = Date.now();
-    console.log(`[CHANNELS-SCHEDULES-${requestId}] Reading from unified enriched cache at ${new Date().toISOString()}`);
+    console.log(`[CHANNELS-SCHEDULES-${requestId}] Using cache combination approach at ${new Date().toISOString()}`);
     let allSchedules;
     try {
-      allSchedules = await this.getSchedulesFromUnifiedCache(day, liveStatus || false);
+      // Get data from OptimizedSchedulesService (combines schedules + liveStatus + overrides)
+      allSchedules = await this.optimizedSchedulesService.getSchedulesWithOptimizedLiveStatus({
+        dayOfWeek: day,
+        applyOverrides: raw !== 'true',
+        liveStatus: liveStatus || false,
+      });
       
-      // FALLBACK: If unified cache is empty, populate it on-demand
-      if (allSchedules.length === 0) {
-        console.log(`[CHANNELS-SCHEDULES-${requestId}] Unified cache is empty, populating on-demand...`);
-        
-        // Get data from OptimizedSchedulesService
-        allSchedules = await this.optimizedSchedulesService.getSchedulesWithOptimizedLiveStatus({
-          dayOfWeek: day,
-          applyOverrides: raw !== 'true',
-          liveStatus: liveStatus || false,
-        });
-        
-        // Populate unified cache asynchronously for next requests
-        setImmediate(async () => {
-          try {
-            console.log(`[CHANNELS-SCHEDULES-${requestId}] Populating unified cache on-demand...`);
-            await this.schedulesService.createUnifiedEnrichedCache();
-            console.log(`[CHANNELS-SCHEDULES-${requestId}] Unified cache populated on-demand`);
-          } catch (error) {
-            console.error(`[CHANNELS-SCHEDULES-${requestId}] Failed to populate unified cache on-demand:`, error);
-          }
-        });
-        
-        console.log(`[CHANNELS-SCHEDULES-${requestId}] Fallback query completed - ${allSchedules.length} schedules, cache will be populated for next requests`);
-      } else {
-        console.log(`[CHANNELS-SCHEDULES-${requestId}] Unified cache query completed (${Date.now() - queryStart}ms) - ${allSchedules.length} schedules`);
-      }
+      console.log(`[CHANNELS-SCHEDULES-${requestId}] Cache combination query completed (${Date.now() - queryStart}ms) - ${allSchedules.length} schedules`);
     } catch (error) {
-      console.error(`[CHANNELS-SCHEDULES-${requestId}] Unified cache FAILED after ${Date.now() - queryStart}ms:`, error.message);
-      console.error(`[CHANNELS-SCHEDULES-${requestId}] Full error:`, error);
+      console.error(`[CHANNELS-SCHEDULES-${requestId}] Error in cache combination approach:`, error.message);
       
-      // Emergency fallback: use OptimizedSchedulesService and populate cache
-      console.log(`[CHANNELS-SCHEDULES-${requestId}] Using OptimizedSchedulesService as emergency fallback`);
+      // EMERGENCY FALLBACK: Use basic schedules without live status
+      console.log(`[CHANNELS-SCHEDULES-${requestId}] Using emergency fallback...`);
       try {
-        allSchedules = await this.optimizedSchedulesService.getSchedulesWithOptimizedLiveStatus({
+        allSchedules = await this.schedulesService.findAll({
           dayOfWeek: day,
           applyOverrides: raw !== 'true',
-          liveStatus: liveStatus || false,
+          liveStatus: false, // Skip live status in emergency
         });
         
-        // Populate unified cache asynchronously for next requests
-        setImmediate(async () => {
-          try {
-            console.log(`[CHANNELS-SCHEDULES-${requestId}] Populating unified cache after emergency fallback...`);
-            await this.schedulesService.createUnifiedEnrichedCache();
-            console.log(`[CHANNELS-SCHEDULES-${requestId}] Unified cache populated after emergency fallback`);
-          } catch (error) {
-            console.error(`[CHANNELS-SCHEDULES-${requestId}] Failed to populate unified cache after emergency fallback:`, error);
-          }
-        });
-        
-        console.log(`[CHANNELS-SCHEDULES-${requestId}] Emergency fallback completed - ${allSchedules.length} schedules, cache will be populated for next requests`);
+        console.log(`[CHANNELS-SCHEDULES-${requestId}] Emergency fallback completed - ${allSchedules.length} schedules`);
       } catch (fallbackError) {
         console.error(`[CHANNELS-SCHEDULES-${requestId}] Emergency fallback also failed:`, fallbackError.message);
         allSchedules = [];
@@ -458,27 +462,17 @@ export class ChannelsService {
   }
 
   /**
-   * Get schedules from unified enriched cache (Phase 1 implementation)
+   * Invalidate live status caches for a specific YouTube channel ID
+   * Used when channel handle changes and YouTube channel ID changes
    */
-  private async getSchedulesFromUnifiedCache(day?: string, liveStatus?: boolean): Promise<any[]> {
-    const cacheKey = 'schedules:week:enriched';
-    const cached = await this.redisService.get<any>(cacheKey);
-    
-    if (!cached) {
-      console.log('[UNIFIED-CACHE] Cache miss - no enriched cache available');
-      return [];
+  private async invalidateLiveStatusCaches(youtubeChannelId: string): Promise<void> {
+    try {
+      // Invalidate unified live status cache (replaces both liveStreamsByChannel and liveStatus:background)
+      await this.redisService.del(`liveStatus:${youtubeChannelId}`);
+      console.log(`🗑️ Invalidated live status cache for YouTube channel ID: ${youtubeChannelId}`);
+    } catch (error) {
+      console.error(`❌ Error invalidating live status cache for ${youtubeChannelId}:`, error.message);
     }
-    
-    console.log(`[UNIFIED-CACHE] Cache hit - ${cached.schedules.length} schedules, updated ${new Date(cached.lastUpdated).toISOString()}`);
-    
-    let schedules = cached.schedules;
-    
-    // Filter by day if requested
-    if (day) {
-      schedules = schedules.filter(s => s.day_of_week === day);
-      console.log(`[UNIFIED-CACHE] Filtered to ${day}: ${schedules.length}/${cached.schedules.length} schedules`);
-    }
-    
-    return schedules;
   }
+
 }

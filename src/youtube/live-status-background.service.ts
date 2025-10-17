@@ -10,6 +10,14 @@ import { TimezoneUtil } from '../utils/timezone.util';
 import { Channel } from '../channels/channels.entity';
 import { getCurrentBlockTTL } from '../utils/getBlockTTL.util';
 
+interface LiveStream {
+  videoId: string;
+  title: string;
+  description?: string;
+  thumbnailUrl?: string;
+  publishedAt?: string;
+}
+
 interface LiveStatusCache {
   channelId: string;
   handle: string;
@@ -22,12 +30,15 @@ interface LiveStatusCache {
   blockEndTime: number; // When the current block ends (in minutes)
   validationCooldown: number; // When we can validate again (timestamp)
   lastValidation: number; // Last time we validated the video ID
+  // Stream details (unified with liveStreamsByChannel)
+  streams: LiveStream[];
+  streamCount: number;
 }
 
 @Injectable()
 export class LiveStatusBackgroundService {
   private readonly logger = new Logger(LiveStatusBackgroundService.name);
-  private readonly CACHE_PREFIX = 'liveStatus:background:';
+  private readonly CACHE_PREFIX = 'liveStatus:';
   private readonly CACHE_TTL = 5 * 60; // 5 minutes default TTL
 
   constructor(
@@ -101,7 +112,7 @@ export class LiveStatusBackgroundService {
       await this.updateChannelsInBatches(channelsToUpdate);
 
       // Update unified enriched cache with fresh live status
-      await this.updateUnifiedEnrichedCache();
+      await this.updateLiveStatusForAllChannels();
 
       const duration = Date.now() - startTime;
       this.logger.log(`✅ Background live status update completed in ${duration}ms`);
@@ -236,6 +247,9 @@ export class LiveStatusBackgroundService {
           blockEndTime: 24 * 60, // End of day
           validationCooldown: Date.now() + (30 * 60 * 1000),
           lastValidation: Date.now(),
+          // Unified stream data
+          streams: [],
+          streamCount: 0,
         };
         await this.cacheLiveStatus(channelId, cacheData);
         return cacheData;
@@ -271,6 +285,9 @@ export class LiveStatusBackgroundService {
         blockEndTime,
         validationCooldown: Date.now() + (30 * 60 * 1000), // Can validate again in 30 minutes
         lastValidation: Date.now(),
+        // Unified stream data
+        streams: liveStreams && liveStreams !== '__SKIPPED__' ? liveStreams.streams : [],
+        streamCount: liveStreams && liveStreams !== '__SKIPPED__' ? liveStreams.streamCount : 0,
       };
 
       console.log(`[LIVE-STATUS-BG] Cache data for ${handle}:`, cacheData);
@@ -370,94 +387,36 @@ export class LiveStatusBackgroundService {
   }
 
   /**
-   * Update unified enriched cache with fresh live status
+   * Update live status for all channels (Approach B: separate cache management)
    */
-  private async updateUnifiedEnrichedCache(): Promise<void> {
+  private async updateLiveStatusForAllChannels(): Promise<void> {
     try {
-      const cacheKey = 'schedules:week:enriched';
-      const cached = await this.redisService.get<any>(cacheKey);
+      this.logger.log('[LIVE-STATUS-UPDATE] Updating live status for all channels');
       
-      if (!cached) {
-        this.logger.log('[UNIFIED-CACHE] No existing cache to update');
+      // Get all channels that have live schedules
+      const channels = await this.channelsRepository.find({
+        where: { is_visible: true },
+        select: ['id', 'name', 'handle', 'youtube_channel_id']
+      });
+
+      const channelIds = channels
+        .filter(channel => channel.youtube_channel_id)
+        .map(channel => channel.youtube_channel_id);
+
+      if (channelIds.length === 0) {
+        this.logger.log('[LIVE-STATUS-UPDATE] No channels with YouTube IDs found');
         return;
       }
-      
-      this.logger.log(`[UNIFIED-CACHE] Updating unified cache with fresh live status for ${cached.schedules.length} schedules`);
-      
-      // Get fresh live status for all channels
-      const channelIds = new Set<string>();
-      for (const schedule of cached.schedules) {
-        const channelId = schedule.program?.channel?.youtube_channel_id;
-        if (channelId) {
-          channelIds.add(channelId);
-        }
-      }
-      
-      const liveStatusMap = await this.getLiveStatusForChannels(Array.from(channelIds));
-      
-      // Update schedules with fresh live status
-      const updatedSchedules = cached.schedules.map(schedule => {
-        const channelId = schedule.program?.channel?.youtube_channel_id;
-        if (channelId && liveStatusMap.has(channelId)) {
-          const liveStatus = liveStatusMap.get(channelId)!;
-          
-          // Check if this schedule is currently live based on time
-          const currentDay = require('../utils/timezone.util').TimezoneUtil.currentDayOfWeek();
-          const currentTime = require('../utils/timezone.util').TimezoneUtil.currentTimeInMinutes();
-          const startNum = this.convertTimeToNumber(schedule.start_time);
-          const endNum = this.convertTimeToNumber(schedule.end_time);
-          const isCurrentlyLive = schedule.day_of_week === currentDay &&
-                                 currentTime >= startNum &&
-                                 currentTime < endNum;
 
-          if (isCurrentlyLive && liveStatus.isLive) {
-            // Program is live and has live stream
-            schedule.program = {
-              ...schedule.program,
-              is_live: true,
-              stream_url: liveStatus.streamUrl,
-              live_streams: [],
-              stream_count: 0,
-              live_status_source: 'cache'
-            };
-          } else if (isCurrentlyLive) {
-            // Program is live by time but no live stream in cache
-            schedule.program = {
-              ...schedule.program,
-              is_live: true,
-              stream_url: schedule.program.stream_url || schedule.program.youtube_url,
-              live_streams: [],
-              stream_count: 0,
-              live_status_source: 'time_based'
-            };
-          } else {
-            // Program is not currently live
-            schedule.program = {
-              ...schedule.program,
-              is_live: false,
-              stream_url: schedule.program.stream_url || schedule.program.youtube_url,
-              live_streams: [],
-              stream_count: 0,
-              live_status_source: 'cache'
-            };
-          }
-        }
-        
-        return schedule;
-      });
+      this.logger.log(`[LIVE-STATUS-UPDATE] Updating live status for ${channelIds.length} channels`);
       
-      // Update cache with fresh data
-      const updatedCacheData = {
-        ...cached,
-        schedules: updatedSchedules,
-        lastUpdated: Date.now()
-      };
+      // Update live status for all channels
+      await this.updateChannelsInBatches(channelIds);
       
-      await this.redisService.set(cacheKey, updatedCacheData, 3600); // 1 hour TTL
-      this.logger.log(`[UNIFIED-CACHE] Updated unified cache with fresh live status`);
-      
+      this.logger.log('[LIVE-STATUS-UPDATE] Completed live status update for all channels');
+
     } catch (error) {
-      this.logger.error('[UNIFIED-CACHE] Error updating unified enriched cache:', error);
+      this.logger.error('[LIVE-STATUS-UPDATE] Error updating live status for all channels:', error);
     }
   }
 }

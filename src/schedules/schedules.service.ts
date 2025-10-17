@@ -237,159 +237,8 @@ export class SchedulesService {
     return enriched;
   }
 
-  /**
-   * Create unified enriched cache with live status
-   * This is the new Phase 1 implementation
-   */
-  async createUnifiedEnrichedCache(): Promise<void> {
-    console.log('[UNIFIED-CACHE] Creating unified enriched cache...');
-    const startTime = Date.now();
-    
-    try {
-      // Get all schedules for the week
-      const schedules = await this.fetchSchedulesFromDatabase();
-      console.log(`[UNIFIED-CACHE] Fetched ${schedules.length} schedules from database`);
-      
-      // Apply weekly overrides
-      const currentWeekStart = this.weeklyOverridesService.getWeekStartDate('current');
-      const overridesStart = Date.now();
-      console.log('[UNIFIED-CACHE] Applying weekly overrides...');
-      const schedulesWithOverrides = await this.weeklyOverridesService.applyWeeklyOverrides(schedules, currentWeekStart);
-      console.log(`[UNIFIED-CACHE] Applied overrides (${Date.now() - overridesStart}ms)`);
-      
-      // Enrich with live status from cache (no YouTube API calls)
-      const enrichStart = Date.now();
-      console.log('[UNIFIED-CACHE] Enriching with cached live status...');
-      const enrichedSchedules = await this.enrichWithCachedLiveStatus(schedulesWithOverrides);
-      console.log(`[UNIFIED-CACHE] Enriched schedules (${Date.now() - enrichStart}ms)`);
-      
-      // Store in unified cache
-      const cacheKey = 'schedules:week:enriched';
-      const cacheData = {
-        schedules: enrichedSchedules,
-        lastUpdated: Date.now(),
-        weekStartDate: currentWeekStart,
-        totalSchedules: enrichedSchedules.length
-      };
-      
-      await this.redisService.set(cacheKey, cacheData, 3600); // 1 hour TTL
-      console.log(`[UNIFIED-CACHE] Stored unified cache with ${enrichedSchedules.length} schedules (${Date.now() - startTime}ms total)`);
-      
-    } catch (error) {
-      console.error('[UNIFIED-CACHE] Error creating unified cache:', error);
-    }
-  }
 
-  /**
-   * Enrich schedules with cached live status (no YouTube API calls)
-   */
-  private async enrichWithCachedLiveStatus(schedules: any[]): Promise<any[]> {
-    // Group schedules by channel
-    const channelGroups = new Map<string, any[]>();
-    for (const schedule of schedules) {
-      const channelId = schedule.program.channel?.youtube_channel_id;
-      if (channelId) {
-        if (!channelGroups.has(channelId)) {
-          channelGroups.set(channelId, []);
-        }
-        channelGroups.get(channelId)!.push(schedule);
-      }
-    }
 
-    // Get cached live status for all channels
-    const channelIds = Array.from(channelGroups.keys());
-    const liveStatusMap = await this.getCachedLiveStatusForChannels(channelIds);
-
-    // Enrich schedules with cached live status
-    const enriched: any[] = [];
-    const currentDay = require('../utils/timezone.util').TimezoneUtil.currentDayOfWeek();
-    const currentTime = require('../utils/timezone.util').TimezoneUtil.currentTimeInMinutes();
-    
-    for (const schedule of schedules) {
-      const enrichedSchedule = { ...schedule };
-      const channelId = schedule.program.channel?.youtube_channel_id;
-      
-      if (channelId && liveStatusMap.has(channelId)) {
-        const liveStatus = liveStatusMap.get(channelId)!;
-        
-        // Check if this schedule is currently live based on time
-        const startNum = this.convertTimeToNumber(schedule.start_time);
-        const endNum = this.convertTimeToNumber(schedule.end_time);
-        const isCurrentlyLive = schedule.day_of_week === currentDay &&
-                               currentTime >= startNum &&
-                               currentTime < endNum;
-
-        if (isCurrentlyLive && liveStatus.isLive) {
-          // Program is live and has live stream
-          enrichedSchedule.program = {
-            ...schedule.program,
-            is_live: true,
-            stream_url: liveStatus.streamUrl,
-            live_streams: [],
-            stream_count: 0,
-            live_status_source: 'cache'
-          };
-        } else if (isCurrentlyLive) {
-          // Program is live by time but no live stream in cache
-          enrichedSchedule.program = {
-            ...schedule.program,
-            is_live: true,
-            stream_url: schedule.program.stream_url || schedule.program.youtube_url,
-            live_streams: [],
-            stream_count: 0,
-            live_status_source: 'time_based'
-          };
-        } else {
-          // Program is not currently live
-          enrichedSchedule.program = {
-            ...schedule.program,
-            is_live: false,
-            stream_url: schedule.program.stream_url || schedule.program.youtube_url,
-            live_streams: [],
-            stream_count: 0,
-            live_status_source: 'cache'
-          };
-        }
-      } else {
-        // No live status data available, use time-based logic
-        const startNum = this.convertTimeToNumber(schedule.start_time);
-        const endNum = this.convertTimeToNumber(schedule.end_time);
-        const isCurrentlyLive = schedule.day_of_week === currentDay &&
-                               currentTime >= startNum &&
-                               currentTime < endNum;
-
-        enrichedSchedule.program = {
-          ...schedule.program,
-          is_live: isCurrentlyLive,
-          stream_url: schedule.program.stream_url || schedule.program.youtube_url,
-          live_streams: [],
-          stream_count: 0,
-          live_status_source: 'time_based'
-        };
-      }
-
-      enriched.push(enrichedSchedule);
-    }
-
-    return enriched;
-  }
-
-  /**
-   * Get cached live status for multiple channels
-   */
-  private async getCachedLiveStatusForChannels(channelIds: string[]): Promise<Map<string, any>> {
-    const results = new Map<string, any>();
-    
-    for (const channelId of channelIds) {
-      const cacheKey = `liveStatus:${channelId}`;
-      const cached = await this.redisService.get<any>(cacheKey);
-      if (cached) {
-        results.set(channelId, cached);
-      }
-    }
-    
-    return results;
-  }
 
   /**
    * Warm unified cache after invalidation to prevent thundering herd
@@ -410,11 +259,8 @@ export class SchedulesService {
       });
       console.log(`[CACHE-WARM] Warmed unified cache (complete week data)`);
       
-      // Also create the unified enriched cache with live status
-      await this.createUnifiedEnrichedCache();
-      console.log(`[CACHE-WARM] Created unified enriched cache`);
       
-      console.log(`[CACHE-WARM] Unified cache warming completed in ${Date.now() - warmStart}ms`);
+      console.log(`[CACHE-WARM] Cache warming completed in ${Date.now() - warmStart}ms`);
     } catch (error) {
       console.error('[CACHE-WARM] Failed to warm unified cache:', error);
       // Log to Sentry but don't throw - cache warming failure shouldn't break operations

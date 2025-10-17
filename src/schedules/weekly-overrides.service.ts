@@ -253,6 +253,10 @@ export class WeeklyOverridesService {
     // Clear unified schedule cache
     await this.redisService.del('schedules:week:complete');
     
+    // Clear weekly overrides cache for the target week
+    const cacheKey = `weekly_overrides:${weekStartDate}`;
+    await this.redisService.del(cacheKey);
+    
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
 
@@ -475,9 +479,34 @@ export class WeeklyOverridesService {
   }
 
   /**
-   * Get all overrides for a specific week
+   * Get all overrides for a specific week (with caching)
    */
   async getOverridesForWeek(weekStartDate: string): Promise<WeeklyOverride[]> {
+    const cacheKey = `weekly_overrides:${weekStartDate}`;
+    
+    // Try cache first
+    const cached = await this.redisService.get<WeeklyOverride[]>(cacheKey);
+    if (cached) {
+      console.log(`[OVERRIDES-CACHE] Cache hit for week ${weekStartDate}: ${cached.length} overrides`);
+      return cached;
+    }
+
+    console.log(`[OVERRIDES-CACHE] Cache miss for week ${weekStartDate}, fetching from individual caches`);
+    
+    // Fetch from individual caches (existing logic)
+    const overrides = await this.fetchOverridesFromIndividualCaches(weekStartDate);
+
+    // Cache the combined result
+    await this.redisService.set(cacheKey, overrides, 3600); // 1 hour TTL
+    console.log(`[OVERRIDES-CACHE] Cached ${overrides.length} overrides for week ${weekStartDate}`);
+    
+    return overrides;
+  }
+
+  /**
+   * Fetch overrides from individual caches (original logic)
+   */
+  private async fetchOverridesFromIndividualCaches(weekStartDate: string): Promise<WeeklyOverride[]> {
     // Use a more specific Redis key pattern for the target week
     // This pattern will match: schedule_123_2024-01-01, program_456_2024-01-01, special_program_name_2024-01-01
     const weekPattern = `weekly_override:*_${weekStartDate}`;
@@ -546,6 +575,11 @@ export class WeeklyOverridesService {
 
     await this.redisService.del(`weekly_override:${overrideId}`);
     await this.redisService.del('schedules:week:complete');
+    
+    // Clear weekly overrides cache for the affected week
+    const weekStartDate = exists.weekStartDate;
+    const cacheKey = `weekly_overrides:${weekStartDate}`;
+    await this.redisService.del(cacheKey);
     
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
