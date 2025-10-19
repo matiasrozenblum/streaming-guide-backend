@@ -307,6 +307,7 @@ export class LiveStatusBackgroundService {
   private async cacheLiveStatus(channelId: string, data: LiveStatusCache): Promise<void> {
     const cacheKey = `${this.CACHE_PREFIX}${channelId}`;
     await this.redisService.set(cacheKey, data, data.ttl);
+    this.logger.log(`✅ Live status cache updated for channel ${data.handle} (${channelId}): isLive=${data.isLive}, streams=${data.streamCount}`);
   }
 
   /**

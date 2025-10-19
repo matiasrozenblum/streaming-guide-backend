@@ -52,6 +52,7 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
           provide: SchedulesService,
           useValue: {
             findAll: jest.fn(),
+            findByDay: jest.fn(),
           },
         },
         {
@@ -122,6 +123,7 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
       const mockCached = { ...mockLiveStatusCache, lastUpdated: Date.now() - 1000 }; // 1 second ago
       jest.spyOn(service, 'getCachedLiveStatus').mockResolvedValue(mockCached);
       jest.spyOn(service as any, 'shouldUpdateCache').mockResolvedValue(false);
+      jest.spyOn(service as any, 'updateChannelsInBatches').mockResolvedValue(new Map());
 
       // Act
       const result = await service.getLiveStatusForChannels(channelIds);
@@ -186,6 +188,7 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
     it('should handle no channels gracefully', async () => {
       // Arrange
       jest.spyOn(service['channelsRepository'], 'find').mockResolvedValue([]);
+      jest.spyOn(service as any, 'updateChannelsInBatches').mockResolvedValue(new Map());
 
       // Act
       await (service as any).updateLiveStatusForAllChannels();
@@ -220,6 +223,40 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
         primaryVideoId: 'VIDEO_123',
         streamCount: 1,
       };
+      
+      // Create a schedule that is currently live (current time is between start and end)
+      const now = new Date();
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+      const currentTimeNum = currentHour * 60 + currentMinute;
+      
+      // Schedule starts 30 minutes ago and ends 30 minutes from now
+      const startTimeNum = currentTimeNum - 30;
+      const endTimeNum = currentTimeNum + 30;
+      
+      const startTime = `${Math.floor(startTimeNum / 60).toString().padStart(2, '0')}:${(startTimeNum % 60).toString().padStart(2, '0')}:00`;
+      const endTime = `${Math.floor(endTimeNum / 60).toString().padStart(2, '0')}:${(endTimeNum % 60).toString().padStart(2, '0')}:00`;
+      
+      const mockSchedules = [
+        {
+          id: 1,
+          day_of_week: now.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase(), // Current day
+          start_time: startTime,
+          end_time: endTime,
+          program: {
+            id: 1,
+            name: 'Test Program',
+            channel: {
+              id: 1,
+              youtube_channel_id: channelId,
+              handle: 'testchannel',
+            }
+          }
+        }
+      ];
+
+      jest.spyOn(schedulesService, 'findAll').mockResolvedValue(mockSchedules);
+      jest.spyOn(schedulesService, 'findByDay').mockResolvedValue(mockSchedules);
       jest.spyOn(youtubeLiveService, 'getLiveStreams').mockResolvedValue(mockLiveStreamsResult);
       jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
 
