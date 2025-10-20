@@ -231,8 +231,85 @@ describe('ProgramsService', () => {
       style_override: undefined,
     });
     expect(programRepository.createQueryBuilder).toHaveBeenCalledWith('program');
-    expect(programRepository.save).toHaveBeenCalledWith(expect.objectContaining({ id: 1, ...updateDto }));
+    expect(programRepository.save).toHaveBeenCalledWith(expect.objectContaining({ 
+      id: 1, 
+      name: 'Updated Program',
+      description: 'Updated Description',
+      youtube_url: 'https://youtube.com/updated',
+      channel: mockChannel
+    }));
     expect(spy).toHaveBeenCalled();
+  });
+
+  it('should update program channel_id correctly', async () => {
+    const newChannel = {
+      id: 2,
+      name: 'New Channel',
+      description: 'New channel description',
+      logo_url: 'https://logo.com/new.png',
+      handle: 'newchannel',
+      programs: [],
+      youtube_channel_id: 'new-channel-id',
+      is_visible: true,
+    };
+
+    (channelRepository.findOne as jest.Mock).mockResolvedValueOnce(newChannel);
+
+    const updateDto = {
+      name: 'Updated Program',
+      channel_id: 2,
+    };
+
+    // Mock the save method to return the updated program
+    const updatedProgram = {
+      id: 1,
+      name: 'Updated Program',
+      description: 'Test Description',
+      channel: newChannel,
+      panelists: [],
+      logo_url: null,
+      youtube_url: 'https://youtube.com/test',
+      is_live: false,
+      stream_url: null,
+    };
+    (programRepository.save as jest.Mock).mockResolvedValueOnce(updatedProgram);
+
+    const spy = jest.spyOn(service['notifyUtil'], 'notifyAndRevalidate').mockResolvedValue(undefined as any);
+    const result = await service.update(1, updateDto);
+    
+    expect(result).toEqual({
+      id: 1,
+      name: 'Updated Program',
+      description: 'Test Description',
+      panelists: [],
+      logo_url: null,
+      youtube_url: 'https://youtube.com/test',
+      is_live: false,
+      stream_url: null,
+      channel_id: 2,
+      channel_name: 'New Channel',
+      style_override: undefined,
+    });
+    
+    expect(channelRepository.findOne).toHaveBeenCalledWith({ where: { id: 2 } });
+    expect(programRepository.save).toHaveBeenCalledWith(expect.objectContaining({ 
+      id: 1, 
+      name: 'Updated Program',
+      channel: newChannel
+    }));
+    expect(spy).toHaveBeenCalled();
+  });
+
+  it('should throw NotFoundException when updating to non-existent channel', async () => {
+    (channelRepository.findOne as jest.Mock).mockResolvedValueOnce(null);
+
+    const updateDto = {
+      name: 'Updated Program',
+      channel_id: 999,
+    };
+
+    await expect(service.update(1, updateDto)).rejects.toThrow(NotFoundException);
+    expect(channelRepository.findOne).toHaveBeenCalledWith({ where: { id: 999 } });
   });
 
   it('should remove a program and delete its weekly overrides', async () => {
