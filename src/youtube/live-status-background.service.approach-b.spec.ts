@@ -255,10 +255,17 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
         }
       ];
 
-      jest.spyOn(schedulesService, 'findAll').mockResolvedValue(mockSchedules);
+      jest.spyOn(schedulesService, 'findAll').mockImplementation((options) => {
+        // Mock the findAll method to return schedules when called with the expected parameters
+        if (options?.dayOfWeek && options?.liveStatus === false && options?.applyOverrides === true) {
+          return Promise.resolve(mockSchedules);
+        }
+        return Promise.resolve([]);
+      });
       jest.spyOn(schedulesService, 'findByDay').mockResolvedValue(mockSchedules);
       jest.spyOn(youtubeLiveService, 'getLiveStreams').mockResolvedValue(mockLiveStreamsResult);
       jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
+      jest.spyOn(configService, 'canFetchLive').mockResolvedValue(true);
 
       // Act
       const result = await (service as any).updateChannelLiveStatus(channelId);
