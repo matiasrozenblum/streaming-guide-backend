@@ -145,7 +145,11 @@ export class ChannelsService {
     }
   
     // Clear unified cache
-    await this.redisService.del('schedules:week:complete');
+    try {
+      await this.redisService.del('schedules:week:complete');
+    } catch (error) {
+      console.error('❌ Error clearing schedules cache:', error.message);
+    }
     
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService.warmSchedulesCache());
@@ -195,7 +199,11 @@ export class ChannelsService {
     }
 
     // Clear unified cache
-    await this.redisService.del('schedules:week:complete');
+    try {
+      await this.redisService.del('schedules:week:complete');
+    } catch (error) {
+      console.error('❌ Error clearing schedules cache:', error.message);
+    }
     
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService.warmSchedulesCache());
@@ -204,17 +212,37 @@ export class ChannelsService {
 
     // Update YouTube channel ID if handle changed
     if (handleChanged && updateChannelDto.handle) {
+      const oldYoutubeChannelId = channel.youtube_channel_id;
+      
       try {
         const info = await this.youtubeDiscovery.getChannelIdFromHandle(updateChannelDto.handle);
         if (info) {
+          const newYoutubeChannelId = info.channelId;
+          
           updated.youtube_channel_id = info.channelId;
           await this.channelsRepository.save(updated);
           console.log(`🔄 Updated YouTube channel ID for ${updated.name}: ${info.channelId}`);
+          
+          // Invalidate old live status caches when YouTube channel ID changes
+          if (oldYoutubeChannelId && oldYoutubeChannelId !== newYoutubeChannelId) {
+            await this.invalidateLiveStatusCaches(oldYoutubeChannelId);
+            console.log(`🗑️ Invalidated live status caches for old YouTube channel ID: ${oldYoutubeChannelId}`);
+          }
         } else {
           console.log(`⚠️ Could not resolve YouTube channel ID for handle: ${updateChannelDto.handle}`);
+          // Still invalidate old cache even if new channel ID resolution fails
+          if (oldYoutubeChannelId) {
+            await this.invalidateLiveStatusCaches(oldYoutubeChannelId);
+            console.log(`🗑️ Invalidated live status caches for old YouTube channel ID: ${oldYoutubeChannelId}`);
+          }
         }
       } catch (error) {
         console.error(`❌ Error updating YouTube channel ID for ${updated.name}:`, error.message);
+        // Still invalidate old cache even if there's an error
+        if (oldYoutubeChannelId) {
+          await this.invalidateLiveStatusCaches(oldYoutubeChannelId);
+          console.log(`🗑️ Invalidated live status caches for old YouTube channel ID: ${oldYoutubeChannelId}`);
+        }
       }
     }
 
@@ -237,7 +265,11 @@ export class ChannelsService {
     }
     
     // Clear unified cache
-    await this.redisService.del('schedules:week:complete');
+    try {
+      await this.redisService.del('schedules:week:complete');
+    } catch (error) {
+      console.error('❌ Error clearing schedules cache:', error.message);
+    }
     
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService.warmSchedulesCache());
@@ -260,7 +292,11 @@ export class ChannelsService {
     });
     
     // Clear unified cache
-    await this.redisService.del('schedules:week:complete');
+    try {
+      await this.redisService.del('schedules:week:complete');
+    } catch (error) {
+      console.error('❌ Error clearing schedules cache:', error.message);
+    }
     
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService.warmSchedulesCache());
@@ -305,22 +341,36 @@ export class ChannelsService {
       }
     }
 
-    // Use OptimizedSchedulesService for better performance with timeout protection
+    // Use Approach B: cache combination for better performance
     const queryStart = Date.now();
-    console.log(`[CHANNELS-SCHEDULES-${requestId}] About to call OptimizedSchedulesService at ${new Date().toISOString()}`);
+    console.log(`[CHANNELS-SCHEDULES-${requestId}] Using cache combination approach at ${new Date().toISOString()}`);
     let allSchedules;
     try {
+      // Get data from OptimizedSchedulesService (combines schedules + liveStatus + overrides)
       allSchedules = await this.optimizedSchedulesService.getSchedulesWithOptimizedLiveStatus({
         dayOfWeek: day,
         applyOverrides: raw !== 'true',
         liveStatus: liveStatus || false,
       });
-      console.log(`[CHANNELS-SCHEDULES-${requestId}] Optimized schedules query completed (${Date.now() - queryStart}ms) - ${allSchedules.length} schedules`);
+      
+      console.log(`[CHANNELS-SCHEDULES-${requestId}] Cache combination query completed (${Date.now() - queryStart}ms) - ${allSchedules.length} schedules`);
     } catch (error) {
-      console.error(`[CHANNELS-SCHEDULES-${requestId}] OptimizedSchedulesService FAILED after ${Date.now() - queryStart}ms:`, error.message);
-      console.error(`[CHANNELS-SCHEDULES-${requestId}] Full error:`, error);
-      // Emergency fallback: return empty array to prevent complete failure
-      allSchedules = [];
+      console.error(`[CHANNELS-SCHEDULES-${requestId}] Error in cache combination approach:`, error.message);
+      
+      // EMERGENCY FALLBACK: Use basic schedules without live status
+      console.log(`[CHANNELS-SCHEDULES-${requestId}] Using emergency fallback...`);
+      try {
+        allSchedules = await this.schedulesService.findAll({
+          dayOfWeek: day,
+          applyOverrides: raw !== 'true',
+          liveStatus: false, // Skip live status in emergency
+        });
+        
+        console.log(`[CHANNELS-SCHEDULES-${requestId}] Emergency fallback completed - ${allSchedules.length} schedules`);
+      } catch (fallbackError) {
+        console.error(`[CHANNELS-SCHEDULES-${requestId}] Emergency fallback also failed:`, fallbackError.message);
+        allSchedules = [];
+      }
     }
 
     // Group schedules by channel
@@ -410,4 +460,19 @@ export class ChannelsService {
     const [h, m] = time.split(':').map(Number);
     return h * 100 + m;
   }
+
+  /**
+   * Invalidate live status caches for a specific YouTube channel ID
+   * Used when channel handle changes and YouTube channel ID changes
+   */
+  private async invalidateLiveStatusCaches(youtubeChannelId: string): Promise<void> {
+    try {
+      // Invalidate unified live status cache (replaces both liveStreamsByChannel and liveStatus:background)
+      await this.redisService.del(`liveStatus:${youtubeChannelId}`);
+      console.log(`🗑️ Invalidated live status cache for YouTube channel ID: ${youtubeChannelId}`);
+    } catch (error) {
+      console.error(`❌ Error invalidating live status cache for ${youtubeChannelId}:`, error.message);
+    }
+  }
+
 }

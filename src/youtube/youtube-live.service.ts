@@ -25,6 +25,7 @@ export class YoutubeLiveService {
   private readonly apiUrl = 'https://www.googleapis.com/youtube/v3';
   private readonly validationCooldowns = new Map<string, number>(); // Track last validation time per channel
   private readonly COOLDOWN_PERIOD = 5 * 60 * 1000; // 5 minutes cooldown
+  private readonly inFlightFetches = new Set<string>(); // Track in-flight YouTube API requests to prevent duplicates
   
   // YouTube API usage tracking removed - no longer needed
 
@@ -236,6 +237,9 @@ export class YoutubeLiveService {
       }
       
       return null;
+    } finally {
+      // Always remove from in-flight set, even if there was an error
+      this.inFlightFetches.delete(channelId);
     }
   }
 
@@ -508,6 +512,12 @@ export class YoutubeLiveService {
       return '__SKIPPED__';
     }
 
+    // Deduplication: Check if a fetch is already in progress for this channel
+    if (this.inFlightFetches.has(channelId)) {
+      console.log(`⏳ [getLiveStreams] Fetch already in progress for ${handle} (${channelId}), skipping duplicate`);
+      return '__SKIPPED__';
+    }
+
     const liveKey = `liveStreamsByChannel:${channelId}`;
     const notFoundKey = `videoIdNotFound:${channelId}`;
 
@@ -524,23 +534,34 @@ export class YoutubeLiveService {
         const parsedStreams: LiveStream[] = JSON.parse(cachedStreams);
         // Skip validation during bulk operations to improve performance
         // Validate that at least the primary stream is still live (skip for onDemand context)
-        if (parsedStreams.length > 0 && (context === 'cron' || context === 'program-start' ? (await this.isVideoLive(parsedStreams[0].videoId)) : true)) {
-          console.log(`🔁 Reusing cached streams for ${handle} (${parsedStreams.length} streams)`);
-          return {
-            streams: parsedStreams,
-            primaryVideoId: parsedStreams[0].videoId,
-            streamCount: parsedStreams.length
-          };
+        if (parsedStreams.length > 0) {
+          const shouldValidate = context === 'cron' || context === 'program-start';
+          const isValid = shouldValidate ? (await this.isVideoLive(parsedStreams[0].videoId)) : true;
+          
+          if (isValid) {
+            console.log(`🔁 Reusing cached streams for ${handle} (${parsedStreams.length} streams)`);
+            return {
+              streams: parsedStreams,
+              primaryVideoId: parsedStreams[0].videoId,
+              streamCount: parsedStreams.length
+            };
+          } else {
+            console.log(`🔄 Cached video ${parsedStreams[0].videoId} no longer live for ${handle}, forcing refresh`);
+            // Delete cache and continue to make fresh API call
+            await this.redisService.del(liveKey);
+          }
         }
       } catch (error) {
         console.warn(`Failed to parse cached streams for ${handle}:`, error);
+        // If parsing fails, delete the corrupted cache
+        await this.redisService.del(liveKey);
+        console.log(`🗑️ Deleted corrupted cached streams for ${handle}`);
       }
-      
-      // If cached streams are invalid, delete them
-      await this.redisService.del(liveKey);
-      console.log(`🗑️ Deleted cached streams for ${handle} (no longer live)`);
     }
 
+    // Mark channel as in-flight before making YouTube API call
+    this.inFlightFetches.add(channelId);
+    
     // fetch from YouTube
     try {
       // Track API usage
@@ -651,6 +672,9 @@ export class YoutubeLiveService {
       }
       
       return null;
+    } finally {
+      // Always remove from in-flight set, even if there was an error
+      this.inFlightFetches.delete(channelId);
     }
   }
 
@@ -730,16 +754,10 @@ export class YoutubeLiveService {
         if (liveStreamsResult && liveStreamsResult !== '__SKIPPED__' && liveStreamsResult.streamCount > 0) {
           results.set(channelId, liveStreamsResult);
           console.log(`[${cronLabel}] Found ${liveStreamsResult.streamCount} live streams for ${handle}`);
-          
-          // Update background cache to reflect correct live status
-          await this.updateBackgroundCache(channelId, handle, liveStreamsResult, ttl);
         } else if (liveStreamsResult === '__SKIPPED__') {
           console.log(`[${cronLabel}] Skipped ${handle} (disabled)`);
         } else {
           console.log(`[${cronLabel}] No live streams for ${handle}`);
-          
-          // Update background cache to reflect no live streams
-          await this.updateBackgroundCache(channelId, handle, null, ttl);
         }
         
         // Small delay between requests to be respectful to YouTube API
@@ -765,45 +783,6 @@ export class YoutubeLiveService {
     console.log(`${cronLabel} completed - processed ${map.size} channels`);
   }
 
-  /**
-   * Update background cache to keep it in sync with live stream data
-   */
-  private async updateBackgroundCache(
-    channelId: string, 
-    handle: string, 
-    liveStreamsResult: any, 
-    ttl: number
-  ): Promise<void> {
-    try {
-      const currentTime = TimezoneUtil.currentTimeInMinutes();
-      const currentDay = TimezoneUtil.currentDayOfWeek();
-      
-      // Calculate block end time (simplified version)
-      const blockEndTime = currentTime + (ttl / 60); // Convert TTL seconds to minutes
-      
-      const cacheData = {
-        channelId,
-        handle,
-        isLive: liveStreamsResult !== null && liveStreamsResult !== '__SKIPPED__' && liveStreamsResult.streamCount > 0,
-        streamUrl: liveStreamsResult && liveStreamsResult !== '__SKIPPED__' && liveStreamsResult.streamCount > 0 
-          ? `https://www.youtube.com/embed/${liveStreamsResult.primaryVideoId}?autoplay=1`
-          : null,
-        videoId: liveStreamsResult && liveStreamsResult !== '__SKIPPED__' ? liveStreamsResult.primaryVideoId : null,
-        lastUpdated: Date.now(),
-        ttl,
-        blockEndTime,
-        validationCooldown: Date.now() + (15 * 60 * 1000), // Can validate again in 15 minutes
-        lastValidation: Date.now(),
-      };
-
-      const cacheKey = `liveStatus:background:${channelId}`;
-      await this.redisService.set(cacheKey, cacheData, ttl);
-      
-      console.log(`[BACKGROUND-CACHE] Updated background cache for ${handle}: isLive=${cacheData.isLive}`);
-    } catch (error) {
-      console.error(`[BACKGROUND-CACHE] Failed to update background cache for ${handle}:`, error.message);
-    }
-  }
 
   /**
    * Check for programs starting right now and validate cached video IDs

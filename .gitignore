@@ -64,5 +64,9 @@ scripts/*.tmp
 scripts/*.log
 scripts/*.sh~
 
+# YouTube API analysis (local debugging/analysis only)
+youtube-api-analysis/
+logs.*.json
+
 # Otros
 coverage/
