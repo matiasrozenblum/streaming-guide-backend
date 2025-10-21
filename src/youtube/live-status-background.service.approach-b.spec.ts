@@ -7,6 +7,23 @@ import { ConfigService } from '../config/config.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Channel } from '../channels/channels.entity';
 
+// Mock TimezoneUtil
+jest.mock('../utils/timezone.util', () => ({
+  TimezoneUtil: {
+    currentDayOfWeek: jest.fn().mockReturnValue('monday'),
+    currentTimeInMinutes: jest.fn().mockReturnValue(630), // 10:30 AM
+    now: jest.fn().mockReturnValue({
+      diff: jest.fn().mockReturnValue(1800), // 30 minutes in seconds
+      format: jest.fn().mockReturnValue('10:30:00'),
+    }),
+    todayAtTime: jest.fn().mockReturnValue({
+      diff: jest.fn().mockReturnValue(1800), // 30 minutes in seconds
+      format: jest.fn().mockReturnValue('11:00:00'),
+    }),
+    formatForLogging: jest.fn().mockReturnValue('10:30:00'),
+  },
+}));
+
 describe('LiveStatusBackgroundService (Approach B)', () => {
   let service: LiveStatusBackgroundService;
   let youtubeLiveService: YoutubeLiveService;
@@ -224,25 +241,13 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
         streamCount: 1,
       };
       
-      // Create a schedule that is currently live (current time is between start and end)
-      const now = new Date();
-      const currentHour = now.getHours();
-      const currentMinute = now.getMinutes();
-      const currentTimeNum = currentHour * 60 + currentMinute;
-      
-      // Schedule starts 30 minutes ago and ends 30 minutes from now
-      const startTimeNum = currentTimeNum - 30;
-      const endTimeNum = currentTimeNum + 30;
-      
-      const startTime = `${Math.floor(startTimeNum / 60).toString().padStart(2, '0')}:${(startTimeNum % 60).toString().padStart(2, '0')}:00`;
-      const endTime = `${Math.floor(endTimeNum / 60).toString().padStart(2, '0')}:${(endTimeNum % 60).toString().padStart(2, '0')}:00`;
-      
+      // Create a schedule that is currently live (current time is 10:30 AM, so 10:00-11:00 works)
       const mockSchedules = [
         {
           id: 1,
-          day_of_week: now.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase(), // Current day
-          start_time: startTime,
-          end_time: endTime,
+          day_of_week: 'monday', // Matches the mocked currentDayOfWeek
+          start_time: '10:00:00', // Starts at 10:00 AM
+          end_time: '11:00:00',   // Ends at 11:00 AM (current time 10:30 AM is between these)
           program: {
             id: 1,
             name: 'Test Program',
