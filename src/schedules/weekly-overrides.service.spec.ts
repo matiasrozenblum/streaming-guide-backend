@@ -34,7 +34,11 @@ describe('WeeklyOverridesService', () => {
       del: jest.fn(),
       delByPattern: jest.fn(),
       client: {
-        scanStream: jest.fn(),
+        scanStream: jest.fn().mockReturnValue({
+          [Symbol.asyncIterator]: jest.fn().mockReturnValue({
+            next: jest.fn().mockResolvedValue({ done: true, value: undefined })
+          })
+        }),
         pipeline: jest.fn(),
       },
     };

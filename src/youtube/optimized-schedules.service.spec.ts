@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { OptimizedSchedulesService } from './optimized-schedules.service';
 import { SchedulesService } from '../schedules/schedules.service';
+import { WeeklyOverridesService } from '../schedules/weekly-overrides.service';
 import { LiveStatusBackgroundService } from './live-status-background.service';
 import { YoutubeLiveService } from './youtube-live.service';
 import { RedisService } from '../redis/redis.service';
@@ -73,6 +74,10 @@ describe('OptimizedSchedulesService', () => {
       providers: [
         OptimizedSchedulesService,
         { provide: SchedulesService, useValue: mockSchedulesService },
+        { provide: WeeklyOverridesService, useValue: { 
+          applyWeeklyOverrides: jest.fn().mockImplementation((schedules) => Promise.resolve(schedules)),
+          getWeekStartDate: jest.fn().mockReturnValue('2024-01-01')
+        } },
         { provide: LiveStatusBackgroundService, useValue: mockLiveStatusBackgroundService },
         { provide: YoutubeLiveService, useValue: mockYoutubeLiveService },
         { provide: RedisService, useValue: mockRedisService },
