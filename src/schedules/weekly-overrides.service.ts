@@ -253,6 +253,9 @@ export class WeeklyOverridesService {
     // Clear unified schedule cache
     await this.redisService.del('schedules:week:complete');
     
+    // Smart weekly cache update: update instead of invalidate
+    await this.updateWeeklyCacheForWeek(weekStartDate);
+    
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
 
@@ -386,6 +389,9 @@ export class WeeklyOverridesService {
     // Clear unified cache
     await this.redisService.del('schedules:week:complete');
     
+    // Smart weekly cache update: update instead of invalidate
+    await this.updateWeeklyCacheForWeek(existingOverride.weekStartDate);
+    
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
 
@@ -475,9 +481,92 @@ export class WeeklyOverridesService {
   }
 
   /**
-   * Get all overrides for a specific week
+   * Get all overrides for a specific week (with caching)
    */
   async getOverridesForWeek(weekStartDate: string): Promise<WeeklyOverride[]> {
+    const cacheKey = `weekly_overrides:${weekStartDate}`;
+    
+    // Try cache first
+    const cached = await this.redisService.get<WeeklyOverride[]>(cacheKey);
+    if (cached) {
+      console.log(`[OVERRIDES-CACHE] Cache hit for week ${weekStartDate}: ${cached.length} overrides`);
+      return cached;
+    }
+
+    console.log(`[OVERRIDES-CACHE] Cache miss for week ${weekStartDate}, fetching from individual caches`);
+    
+    // Fetch from individual caches (existing logic)
+    const overrides = await this.fetchOverridesFromIndividualCaches(weekStartDate);
+
+    // Calculate smart TTL based on whether this is current week or next week
+    const now = this.dayjs().tz('America/Argentina/Buenos_Aires');
+    const currentWeekStart = now.startOf('week').format('YYYY-MM-DD');
+    const nextWeekStart = now.add(1, 'week').startOf('week').format('YYYY-MM-DD');
+    
+    let ttlSeconds: number;
+    if (weekStartDate === currentWeekStart) {
+      // Current week overrides expire at end of current week
+      const weekEnd = now.endOf('week');
+      ttlSeconds = Math.max(0, weekEnd.diff(now, 'seconds'));
+    } else if (weekStartDate === nextWeekStart) {
+      // Next week overrides expire at end of next week
+      const nextWeekEnd = now.add(1, 'week').endOf('week');
+      ttlSeconds = Math.max(0, nextWeekEnd.diff(now, 'seconds'));
+    } else {
+      // Fallback: assume it's a future week, give it 1 week TTL
+      ttlSeconds = 7 * 24 * 60 * 60;
+    }
+
+    // Cache the combined result with smart TTL
+    await this.redisService.set(cacheKey, overrides, ttlSeconds);
+    console.log(`[OVERRIDES-CACHE] Cached ${overrides.length} overrides for week ${weekStartDate} with TTL ${ttlSeconds}s`);
+    
+    return overrides;
+  }
+
+  /**
+   * Smart weekly cache update: updates the weekly cache instead of invalidating it
+   */
+  private async updateWeeklyCacheForWeek(weekStartDate: string): Promise<void> {
+    const cacheKey = `weekly_overrides:${weekStartDate}`;
+    
+    // Check if weekly cache exists
+    const existingCache = await this.redisService.get<WeeklyOverride[]>(cacheKey);
+    if (existingCache) {
+      // Cache exists - update it by refetching from individual caches
+      console.log(`[OVERRIDES-CACHE] Updating existing cache for week ${weekStartDate}`);
+      const updatedOverrides = await this.fetchOverridesFromIndividualCaches(weekStartDate);
+      
+      // Calculate smart TTL
+      const now = this.dayjs().tz('America/Argentina/Buenos_Aires');
+      const currentWeekStart = now.startOf('week').format('YYYY-MM-DD');
+      const nextWeekStart = now.add(1, 'week').startOf('week').format('YYYY-MM-DD');
+      
+      let ttlSeconds: number;
+      if (weekStartDate === currentWeekStart) {
+        const weekEnd = now.endOf('week');
+        ttlSeconds = Math.max(0, weekEnd.diff(now, 'seconds'));
+      } else if (weekStartDate === nextWeekStart) {
+        const nextWeekEnd = now.add(1, 'week').endOf('week');
+        ttlSeconds = Math.max(0, nextWeekEnd.diff(now, 'seconds'));
+      } else {
+        ttlSeconds = 7 * 24 * 60 * 60;
+      }
+      
+      // Update the cache
+      await this.redisService.set(cacheKey, updatedOverrides, ttlSeconds);
+      console.log(`[OVERRIDES-CACHE] Updated cache for week ${weekStartDate} with ${updatedOverrides.length} overrides, TTL ${ttlSeconds}s`);
+    } else {
+      // Cache doesn't exist - just delete the key to be safe
+      await this.redisService.del(cacheKey);
+      console.log(`[OVERRIDES-CACHE] No existing cache for week ${weekStartDate}, cleared key`);
+    }
+  }
+
+  /**
+   * Fetch overrides from individual caches (original logic)
+   */
+  private async fetchOverridesFromIndividualCaches(weekStartDate: string): Promise<WeeklyOverride[]> {
     // Use a more specific Redis key pattern for the target week
     // This pattern will match: schedule_123_2024-01-01, program_456_2024-01-01, special_program_name_2024-01-01
     const weekPattern = `weekly_override:*_${weekStartDate}`;
@@ -546,6 +635,9 @@ export class WeeklyOverridesService {
 
     await this.redisService.del(`weekly_override:${overrideId}`);
     await this.redisService.del('schedules:week:complete');
+    
+    // Smart weekly cache update: update instead of invalidate
+    await this.updateWeeklyCacheForWeek(exists.weekStartDate);
     
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService?.warmSchedulesCache?.());

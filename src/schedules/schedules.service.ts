@@ -237,6 +237,9 @@ export class SchedulesService {
     return enriched;
   }
 
+
+
+
   /**
    * Warm unified cache after invalidation to prevent thundering herd
    * This runs asynchronously and doesn't block the CRUD operation
@@ -256,7 +259,8 @@ export class SchedulesService {
       });
       console.log(`[CACHE-WARM] Warmed unified cache (complete week data)`);
       
-      console.log(`[CACHE-WARM] Unified cache warming completed in ${Date.now() - warmStart}ms`);
+      
+      console.log(`[CACHE-WARM] Cache warming completed in ${Date.now() - warmStart}ms`);
     } catch (error) {
       console.error('[CACHE-WARM] Failed to warm unified cache:', error);
       // Log to Sentry but don't throw - cache warming failure shouldn't break operations

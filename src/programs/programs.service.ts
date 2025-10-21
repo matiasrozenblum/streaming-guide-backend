@@ -130,7 +130,23 @@ export class ProgramsService {
   async update(id: number, updateProgramDto: UpdateProgramDto): Promise<any> {
     const program = await this.findProgramEntity(id);
     
-    Object.assign(program, updateProgramDto);
+    // Handle channel_id update separately
+    if (updateProgramDto.channel_id !== undefined) {
+      const newChannel = await this.channelsRepository.findOne({
+        where: { id: updateProgramDto.channel_id }
+      });
+      if (!newChannel) {
+        throw new NotFoundException(`Channel with ID ${updateProgramDto.channel_id} not found`);
+      }
+      program.channel = newChannel;
+      // Remove channel_id from DTO to avoid conflicts with Object.assign
+      const { channel_id, ...updateData } = updateProgramDto;
+      Object.assign(program, updateData);
+    } else {
+      // Update other fields normally if no channel_id change
+      Object.assign(program, updateProgramDto);
+    }
+    
     const updatedProgram = await this.programsRepository.save(program);
     
     // Clear unified cache

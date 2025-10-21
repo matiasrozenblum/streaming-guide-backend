@@ -10,6 +10,14 @@ import { TimezoneUtil } from '../utils/timezone.util';
 import { Channel } from '../channels/channels.entity';
 import { getCurrentBlockTTL } from '../utils/getBlockTTL.util';
 
+interface LiveStream {
+  videoId: string;
+  title: string;
+  description?: string;
+  thumbnailUrl?: string;
+  publishedAt?: string;
+}
+
 interface LiveStatusCache {
   channelId: string;
   handle: string;
@@ -22,12 +30,15 @@ interface LiveStatusCache {
   blockEndTime: number; // When the current block ends (in minutes)
   validationCooldown: number; // When we can validate again (timestamp)
   lastValidation: number; // Last time we validated the video ID
+  // Stream details (unified with liveStreamsByChannel)
+  streams: LiveStream[];
+  streamCount: number;
 }
 
 @Injectable()
 export class LiveStatusBackgroundService {
   private readonly logger = new Logger(LiveStatusBackgroundService.name);
-  private readonly CACHE_PREFIX = 'liveStatus:background:';
+  private readonly CACHE_PREFIX = 'liveStatus:';
   private readonly CACHE_TTL = 5 * 60; // 5 minutes default TTL
 
   constructor(
@@ -99,6 +110,9 @@ export class LiveStatusBackgroundService {
 
       // Update live status for channels in batches
       await this.updateChannelsInBatches(channelsToUpdate);
+
+      // Update unified enriched cache with fresh live status
+      await this.updateLiveStatusForAllChannels();
 
       const duration = Date.now() - startTime;
       this.logger.log(`✅ Background live status update completed in ${duration}ms`);
@@ -233,6 +247,9 @@ export class LiveStatusBackgroundService {
           blockEndTime: 24 * 60, // End of day
           validationCooldown: Date.now() + (30 * 60 * 1000),
           lastValidation: Date.now(),
+          // Unified stream data
+          streams: [],
+          streamCount: 0,
         };
         await this.cacheLiveStatus(channelId, cacheData);
         return cacheData;
@@ -268,6 +285,9 @@ export class LiveStatusBackgroundService {
         blockEndTime,
         validationCooldown: Date.now() + (30 * 60 * 1000), // Can validate again in 30 minutes
         lastValidation: Date.now(),
+        // Unified stream data
+        streams: liveStreams && liveStreams !== '__SKIPPED__' ? liveStreams.streams : [],
+        streamCount: liveStreams && liveStreams !== '__SKIPPED__' ? liveStreams.streamCount : 0,
       };
 
       console.log(`[LIVE-STATUS-BG] Cache data for ${handle}:`, cacheData);
@@ -287,6 +307,7 @@ export class LiveStatusBackgroundService {
   private async cacheLiveStatus(channelId: string, data: LiveStatusCache): Promise<void> {
     const cacheKey = `${this.CACHE_PREFIX}${channelId}`;
     await this.redisService.set(cacheKey, data, data.ttl);
+    this.logger.log(`✅ Live status cache updated for channel ${data.handle} (${channelId}): isLive=${data.isLive}, streams=${data.streamCount}`);
   }
 
   /**
@@ -364,5 +385,39 @@ export class LiveStatusBackgroundService {
   private convertTimeToNumber(time: string): number {
     const [h, m] = time.split(':').map(Number);
     return h * 60 + m;
+  }
+
+  /**
+   * Update live status for all channels (Approach B: separate cache management)
+   */
+  private async updateLiveStatusForAllChannels(): Promise<void> {
+    try {
+      this.logger.log('[LIVE-STATUS-UPDATE] Updating live status for all channels');
+      
+      // Get all channels that have live schedules
+      const channels = await this.channelsRepository.find({
+        where: { is_visible: true },
+        select: ['id', 'name', 'handle', 'youtube_channel_id']
+      });
+
+      const channelIds = channels
+        .filter(channel => channel.youtube_channel_id)
+        .map(channel => channel.youtube_channel_id);
+
+      if (channelIds.length === 0) {
+        this.logger.log('[LIVE-STATUS-UPDATE] No channels with YouTube IDs found');
+        return;
+      }
+
+      this.logger.log(`[LIVE-STATUS-UPDATE] Updating live status for ${channelIds.length} channels`);
+      
+      // Update live status for all channels
+      await this.updateChannelsInBatches(channelIds);
+      
+      this.logger.log('[LIVE-STATUS-UPDATE] Completed live status update for all channels');
+
+    } catch (error) {
+      this.logger.error('[LIVE-STATUS-UPDATE] Error updating live status for all channels:', error);
+    }
   }
 }
