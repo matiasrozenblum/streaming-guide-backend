@@ -326,4 +326,59 @@ export class EmailService {
       return this.sendReportWithAttachment(toOrParams);
     }
   }
+
+  /**
+   * Generic method to send emails
+   */
+  async sendEmail(params: { to: string; subject: string; html: string; text?: string }) {
+    const { to, subject, html, text } = params;
+    
+    // Try SendGrid first if configured, fallback to SMTP
+    const sendGridApiKey = this.configService.get('SENDGRID_API_KEY');
+    
+    if (sendGridApiKey) {
+      try {
+        await this.sendViaSendGrid(to, subject, html, 'general');
+        console.log(`Email enviado a ${to} via SendGrid`);
+        return;
+      } catch (error) {
+        console.error('❌ SendGrid failed, falling back to SMTP:', error);
+        // Fall through to SMTP
+      }
+    }
+    
+    // Fallback to SMTP
+    try {
+      await this.mailerService.sendMail({
+        to,
+        subject,
+        html,
+        text: text || this.stripHtml(html),
+      });
+      console.log(`Email enviado a ${to} via SMTP`);
+    } catch (error) {
+      console.error('❌ Error sending email:', error);
+      
+      this.sentryService.captureMessage('Email service failure - generic email failed to send', 'error', {
+        service: 'email',
+        error_type: 'send_failure',
+        error_message: error.message,
+        email_type: 'general',
+        recipient: to,
+        timestamp: new Date().toISOString(),
+      });
+      
+      this.sentryService.setTag('service', 'email');
+      this.sentryService.setTag('error_type', 'send_failure');
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Strip HTML tags to create plain text version
+   */
+  private stripHtml(html: string): string {
+    return html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+  }
 }
