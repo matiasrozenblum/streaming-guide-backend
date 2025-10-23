@@ -23,6 +23,7 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 - Now not-found mark has attempt tracking and escalation
 - When escalation happens, program is marked not-found as a whole and email is sent.
 - Back-to-back cron now increments attempt counter for not-found programs (escalation after exactly 3 attempts instead of 4).
+- Fixed missing notFoundAttempts cache entries - now all cron types consistently call handleNotFoundEscalation.
 
 ## [1.16.0] - 2025-10-22
 
