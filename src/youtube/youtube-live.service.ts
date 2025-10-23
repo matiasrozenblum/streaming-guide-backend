@@ -1166,7 +1166,7 @@ export class YoutubeLiveService {
       `;
 
       await this.emailService.sendEmail({
-        to: 'laguiadelstreaming@gmail.com',
+        to: 'admin@laguiadelstreaming.com',
         subject,
         html: htmlContent,
       });
