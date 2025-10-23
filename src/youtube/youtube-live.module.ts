@@ -8,6 +8,7 @@ import { ConfigModule } from '../config/config.module';
 import { SchedulesModule } from '../schedules/schedules.module';
 import { RedisModule } from '../redis/redis.module';
 import { SentryModule } from '../sentry/sentry.module';
+import { EmailModule } from '../email/email.module';
 import { Channel } from '../channels/channels.entity';
 
 @Module({
@@ -16,6 +17,7 @@ import { Channel } from '../channels/channels.entity';
     forwardRef(() => SchedulesModule),
     RedisModule,
     SentryModule,
+    EmailModule,
     TypeOrmModule.forFeature([Channel]),
   ],
   controllers: [YoutubeController],

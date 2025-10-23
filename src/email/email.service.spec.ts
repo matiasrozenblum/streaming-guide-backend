@@ -195,6 +195,155 @@ describe('EmailService', () => {
     });
   });
 
+  describe('sendEmail', () => {
+    it('sends email successfully via SMTP when no SendGrid API key', async () => {
+      mockMailerService.sendMail.mockResolvedValue(undefined);
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      
+      await service.sendEmail({
+        to: 'test@example.com',
+        subject: 'Test Subject',
+        html: '<h1>Test Content</h1>',
+        text: 'Test Content'
+      });
+      
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith({
+        to: 'test@example.com',
+        subject: 'Test Subject',
+        html: '<h1>Test Content</h1>',
+        text: 'Test Content'
+      });
+      expect(consoleSpy).toHaveBeenCalledWith('Email enviado a test@example.com via SMTP');
+    });
+
+    it('generates text from HTML when text not provided', async () => {
+      mockMailerService.sendMail.mockResolvedValue(undefined);
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      
+      await service.sendEmail({
+        to: 'test@example.com',
+        subject: 'Test Subject',
+        html: '<h1>Test Content</h1><p>This is a paragraph.</p>'
+      });
+      
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith({
+        to: 'test@example.com',
+        subject: 'Test Subject',
+        html: '<h1>Test Content</h1><p>This is a paragraph.</p>',
+        text: 'Test ContentThis is a paragraph.'
+      });
+      expect(consoleSpy).toHaveBeenCalledWith('Email enviado a test@example.com via SMTP');
+    });
+
+    it('tries SendGrid first when API key is available', async () => {
+      const mockConfigService = {
+        get: jest.fn().mockImplementation((key: string) => {
+          if (key === 'SENDGRID_API_KEY') {
+            return 'test-sendgrid-key';
+          }
+          return 'test-value';
+        }),
+      } as any;
+
+      service = new EmailService(mockMailerService, mockSentryService, mockConfigService);
+      
+      // Mock the private sendViaSendGrid method
+      const sendViaSendGridSpy = jest.spyOn(service as any, 'sendViaSendGrid').mockResolvedValue(undefined);
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      
+      await service.sendEmail({
+        to: 'test@example.com',
+        subject: 'Test Subject',
+        html: '<h1>Test Content</h1>'
+      });
+      
+      expect(sendViaSendGridSpy).toHaveBeenCalledWith('test@example.com', 'Test Subject', '<h1>Test Content</h1>', 'general');
+      expect(consoleSpy).toHaveBeenCalledWith('Email enviado a test@example.com via SendGrid');
+      expect(mockMailerService.sendMail).not.toHaveBeenCalled();
+    });
+
+    it('falls back to SMTP when SendGrid fails', async () => {
+      const mockConfigService = {
+        get: jest.fn().mockImplementation((key: string) => {
+          if (key === 'SENDGRID_API_KEY') {
+            return 'test-sendgrid-key';
+          }
+          return 'test-value';
+        }),
+      } as any;
+
+      service = new EmailService(mockMailerService, mockSentryService, mockConfigService);
+      
+      // Mock SendGrid to fail
+      const sendViaSendGridSpy = jest.spyOn(service as any, 'sendViaSendGrid').mockRejectedValue(new Error('SendGrid API error'));
+      mockMailerService.sendMail.mockResolvedValue(undefined);
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+      
+      await service.sendEmail({
+        to: 'test@example.com',
+        subject: 'Test Subject',
+        html: '<h1>Test Content</h1>'
+      });
+      
+      expect(sendViaSendGridSpy).toHaveBeenCalledWith('test@example.com', 'Test Subject', '<h1>Test Content</h1>', 'general');
+      expect(consoleErrorSpy).toHaveBeenCalledWith('❌ SendGrid failed, falling back to SMTP:', expect.any(Error));
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith({
+        to: 'test@example.com',
+        subject: 'Test Subject',
+        html: '<h1>Test Content</h1>',
+        text: 'Test Content'
+      });
+      expect(consoleSpy).toHaveBeenCalledWith('Email enviado a test@example.com via SMTP');
+    });
+
+    it('reports error to Sentry when SMTP fails', async () => {
+      const error = new Error('SMTP connection failed');
+      mockMailerService.sendMail.mockRejectedValue(error);
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+      
+      await expect(service.sendEmail({
+        to: 'test@example.com',
+        subject: 'Test Subject',
+        html: '<h1>Test Content</h1>'
+      })).rejects.toThrow('SMTP connection failed');
+      
+      expect(consoleSpy).toHaveBeenCalledWith('❌ Error sending email:', error);
+      expect(mockSentryService.captureMessage).toHaveBeenCalledWith(
+        'Email service failure - generic email failed to send',
+        'error',
+        expect.objectContaining({
+          service: 'email',
+          error_type: 'send_failure',
+          error_message: 'SMTP connection failed',
+          email_type: 'general',
+          recipient: 'test@example.com',
+        })
+      );
+      expect(mockSentryService.setTag).toHaveBeenCalledWith('service', 'email');
+      expect(mockSentryService.setTag).toHaveBeenCalledWith('error_type', 'send_failure');
+    });
+  });
+
+  describe('stripHtml', () => {
+    it('removes HTML tags and normalizes whitespace', () => {
+      const html = '<h1>Test Title</h1><p>This is a   paragraph with   extra spaces.</p>';
+      const result = service['stripHtml'](html);
+      
+      expect(result).toBe('Test TitleThis is a paragraph with extra spaces.');
+    });
+
+    it('handles empty HTML', () => {
+      const result = service['stripHtml']('');
+      expect(result).toBe('');
+    });
+
+    it('handles HTML with only tags', () => {
+      const result = service['stripHtml']('<div><span></span></div>');
+      expect(result).toBe('');
+    });
+  });
+
   describe('buildOtpHtml', () => {
     it('generates OTP HTML with correct code and TTL', () => {
       const html = service['buildOtpHtml']('123456', 5);
