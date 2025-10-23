@@ -468,16 +468,9 @@ export class YoutubeLiveService {
                 console.log(`❌ [Individual] No live streams found for ${handle} (${channelId})`);
                 results.set(channelId, null);
                 
-                // Handle not-found escalation for back-to-back cron
+                // Handle not-found escalation for all cron types
                 const notFoundKey = `videoIdNotFound:${channelId}`;
-                if (cronType === 'back-to-back-fix') {
-                  await this.handleNotFoundEscalation(channelId, handle, notFoundKey);
-                } else {
-                  // For other cron types, use the old behavior
-                  const notFoundTTL = 900; // 15 minutes - fixed short duration for not-found cache
-                  await this.redisService.set(notFoundKey, '1', notFoundTTL);
-                  console.log(`❌ [Individual] Cached not-found for ${handle} (${channelId}) - YouTube API returned no live streams (TTL: ${notFoundTTL}s)`);
-                }
+                await this.handleNotFoundEscalation(channelId, handle, notFoundKey);
               }
             } catch (error) {
               console.error(`❌ [Individual] Error testing channel ${channelId}:`, error.message);
@@ -531,16 +524,9 @@ export class YoutubeLiveService {
           } else {
             results.set(channelId, null);
             
-            // Handle not-found escalation for back-to-back cron
+            // Handle not-found escalation for all cron types
             const notFoundKey = `videoIdNotFound:${channelId}`;
-            if (cronType === 'back-to-back-fix') {
-              await this.handleNotFoundEscalation(channelId, handle, notFoundKey);
-            } else {
-              // For other cron types, use the old behavior
-              const notFoundTTL = 900; // 15 minutes - fixed short duration for not-found cache
-              await this.redisService.set(notFoundKey, '1', notFoundTTL);
-              console.log(`🚫 [Batch] Cached not-found for ${handle} (${channelId}) - YouTube API returned no live streams (TTL: ${notFoundTTL}s)`);
-            }
+            await this.handleNotFoundEscalation(channelId, handle, notFoundKey);
           }
         }
       }
