@@ -938,7 +938,7 @@ export class YoutubeLiveService {
       try {
         const streams = JSON.parse(cachedStreams);
         if (streams.primaryVideoId && (await this.isVideoLive(streams.primaryVideoId))) {
-          console.log(`✅ Cached streams still live for ${handle}: ${streams.primaryVideoId}`);
+          console.log(`✅  ${handle}: ${streams.primaryVideoId}`);
           this.validationCooldowns.set(channelId, now); // Update cooldown
           return; // Still live, no action needed
         }
