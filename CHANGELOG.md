@@ -17,6 +17,17 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.16.1] - 2025-10-22
+
+### Changed
+- Now not-found mark has attempt tracking and escalation
+- When escalation happens, program is marked not-found as a whole and email is sent.
+- Back-to-back cron now increments attempt counter for not-found programs (escalation after exactly 3 attempts instead of 4).
+- Fixed missing notFoundAttempts cache entries - now all cron types consistently call handleNotFoundEscalation.
+- Fixed additional missing notFoundAttempts cache entry in getLiveStreams method.
+- **Program-Specific Attempt Tracking**: Changed notFoundAttempts TTL from fixed 24 hours to program-end TTL to prevent cross-program contamination and ensure each program has its own attempt history.
+- **Fixed Back-to-Back Cron TTL Renewal Bug**: Back-to-back-fix cron was incorrectly renewing videoIdNotFound TTL instead of just incrementing attempt counter. Now it only increments attempts without setting new not-found flags.
+
 ## [1.16.0] - 2025-10-22
 
 ### Changed
