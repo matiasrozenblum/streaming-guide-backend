@@ -642,7 +642,7 @@ export class YoutubeLiveService {
 
       if (liveStreams.length === 0) {
         console.log(`🚫 No live streams for ${handle} (${context})`);
-        await this.redisService.set(notFoundKey, '1', 900);
+        await this.handleNotFoundEscalation(channelId, handle, notFoundKey);
         return null;
       }
 
