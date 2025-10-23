@@ -660,6 +660,7 @@ describe('YoutubeLiveService', () => {
       it('ignores not-found flags for back-to-back-fix cron and increments attempt counter', async () => {
         redisService.get.mockImplementation(async (key: string) => {
           if (key === 'videoIdNotFound:cid') return '1';
+          if (key === 'notFoundAttempts:cid') return JSON.stringify({ attempts: 1, firstAttempt: Date.now(), lastAttempt: Date.now(), escalated: false });
           return null;
         });
         
@@ -675,8 +676,10 @@ describe('YoutubeLiveService', () => {
 
         expect(result.get('cid')).toBe(null); // Should attempt fetch, not skip
         
-        // Should call handleNotFoundEscalation which increments attempt counter
-        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:cid', expect.any(String), 86400);
+        // Should call incrementNotFoundAttempts which updates attempt counter without setting new not-found flags
+        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:cid', expect.any(String), expect.any(Number));
+        // Should NOT set videoIdNotFound since back-to-back-fix doesn't set new not-found flags
+        expect(redisService.set).not.toHaveBeenCalledWith('videoIdNotFound:cid', '1', 900);
       });
 
       it('ignores not-found flags for manual cron', async () => {
