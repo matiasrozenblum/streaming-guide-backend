@@ -472,15 +472,21 @@ export class YoutubeLiveService {
                 console.log(`✅ [Individual] Cached ${streams.length} streams for ${handle} (${channelId}) (TTL: ${blockTTL}s)`);
               } else {
                 console.log(`❌ [Individual] No live streams found for ${handle} (${channelId})`);
-                results.set(channelId, null);
                 
                 // For back-to-back-fix cron, only increment attempts without setting new not-found flags
                 if (cronType === 'back-to-back-fix') {
                   await this.incrementNotFoundAttempts(channelId, handle);
-                } else {
-                  // Handle not-found escalation for other cron types (main and manual)
+                  results.set(channelId, null);
+                } else if (cronType === 'manual') {
+                  // Manual cron should attempt fetch, not skip
                   const notFoundKey = `videoIdNotFound:${channelId}`;
                   await this.handleNotFoundEscalationMain(channelId, handle, notFoundKey);
+                  results.set(channelId, null);
+                } else {
+                  // Handle not-found escalation for main cron type
+                  const notFoundKey = `videoIdNotFound:${channelId}`;
+                  await this.handleNotFoundEscalationMain(channelId, handle, notFoundKey);
+                  results.set(channelId, '__SKIPPED__');
                 }
               }
             } catch (error) {
@@ -533,15 +539,20 @@ export class YoutubeLiveService {
             await this.redisService.del(notFoundKey);
             console.log(`💾 [Batch] Cached ${streams.length} streams for ${handle} (${channelId}) (TTL: ${blockTTL}s)`);
         } else {
-          results.set(channelId, null);
-          
           // For back-to-back-fix cron, only increment attempts without setting new not-found flags
           if (cronType === 'back-to-back-fix') {
             await this.incrementNotFoundAttempts(channelId, handle);
-          } else {
-            // Handle not-found escalation for other cron types (main and manual)
+            results.set(channelId, null);
+          } else if (cronType === 'manual') {
+            // Manual cron should attempt fetch, not skip
             const notFoundKey = `videoIdNotFound:${channelId}`;
             await this.handleNotFoundEscalationMain(channelId, handle, notFoundKey);
+            results.set(channelId, null);
+          } else {
+            // Handle not-found escalation for main cron type
+            const notFoundKey = `videoIdNotFound:${channelId}`;
+            await this.handleNotFoundEscalationMain(channelId, handle, notFoundKey);
+            results.set(channelId, '__SKIPPED__');
           }
         }
         }

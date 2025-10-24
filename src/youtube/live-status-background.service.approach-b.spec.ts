@@ -62,6 +62,7 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
           provide: YoutubeLiveService,
           useValue: {
             getLiveStreams: jest.fn(),
+            getLiveStreamsMain: jest.fn(),
             isVideoLive: jest.fn(),
           },
         },
