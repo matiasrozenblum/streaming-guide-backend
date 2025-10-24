@@ -6,6 +6,7 @@ import { Program } from '../programs/programs.entity';
 import { CreateScheduleDto, CreateBulkSchedulesDto } from './dto/create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { YoutubeLiveService } from '../youtube/youtube-live.service';
+import { LiveStream } from '../youtube/interfaces/live-stream.interface';
 import { RedisService } from '../redis/redis.service';
 import { WeeklyOverridesService } from './weekly-overrides.service';
 import { SentryService } from '../sentry/sentry.service';
@@ -414,16 +415,16 @@ export class SchedulesService {
           
           // Cache the streams for future use
           const streamsKey = `liveStreamsByChannel:${channelId}`;
-          await this.redisService.set(streamsKey, JSON.stringify(allStreams), await getCurrentBlockTTL(channelId, schedules, this.sentryService));
+          await this.redisService.set(streamsKey, allStreams, await getCurrentBlockTTL(channelId, schedules, this.sentryService));
         } else {
           // Fallback to individual fetch if batch didn't work
           const streamsKey = `liveStreamsByChannel:${channelId}`;
-          const cachedStreams = await this.redisService.get<string>(streamsKey);
+          const cachedStreams = await this.redisService.get<LiveStream[]>(streamsKey);
           
           if (cachedStreams) {
             try {
-              const parsedStreams = JSON.parse(cachedStreams);
-              if (parsedStreams.length > 0) {
+              const parsedStreams = cachedStreams;
+              if (parsedStreams && parsedStreams.length > 0) {
                 allStreams = parsedStreams;
                 channelStreamCount = parsedStreams.length;
               }

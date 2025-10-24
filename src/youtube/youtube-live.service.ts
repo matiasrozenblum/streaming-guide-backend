@@ -140,10 +140,10 @@ export class YoutubeLiveService {
     }
 
     // cache-hit: reuse si sigue vivo
-    const cachedStreams = await this.redisService.get<string>(streamsKey);
+    const cachedStreams = await this.redisService.get<any>(streamsKey);
     if (cachedStreams) {
       try {
-        const streams = JSON.parse(cachedStreams);
+        const streams = cachedStreams;
         if (streams.primaryVideoId && (await this.isVideoLive(streams.primaryVideoId))) {
           console.log(`🔁 Reusing cached primary videoId for ${handle}`);
           return streams.primaryVideoId;
@@ -287,12 +287,12 @@ export class YoutubeLiveService {
       // Enhanced not-found logic with escalation detection
       const notFoundData = await this.redisService.get<string>(notFoundKey);
       const attemptTrackingKey = `notFoundAttempts:${channelId}`;
-      const attemptData = await this.redisService.get<string>(attemptTrackingKey);
+      const attemptData = await this.redisService.get<AttemptTracking>(attemptTrackingKey);
 
       if (notFoundData && cronType !== 'back-to-back-fix' && cronType !== 'manual') {
         // Check if escalated
         if (attemptData) {
-          const tracking: AttemptTracking = JSON.parse(attemptData);
+          const tracking: AttemptTracking = attemptData;
           if (tracking.escalated && tracking.programEndTime && Date.now() < tracking.programEndTime) {
             results.set(channelId, '__SKIPPED__');
             continue;
@@ -306,7 +306,7 @@ export class YoutubeLiveService {
 
       // CRITICAL: If not-found mark expired but we have attempt tracking, check for escalation
       if (!notFoundData && attemptData && cronType !== 'back-to-back-fix' && cronType !== 'manual') {
-        const tracking: AttemptTracking = JSON.parse(attemptData);
+        const tracking: AttemptTracking = attemptData;
         
         if (tracking.attempts >= 2 && !tracking.escalated) {
           // This is the third attempt after expiration - escalate immediately
@@ -340,10 +340,10 @@ export class YoutubeLiveService {
       }
 
       // Check cache
-      const cachedStreams = await this.redisService.get<string>(liveKey);
+      const cachedStreams = await this.redisService.get<LiveStream[]>(liveKey);
       if (cachedStreams) {
         try {
-          const parsedStreams: LiveStream[] = JSON.parse(cachedStreams);
+          const parsedStreams: LiveStream[] = cachedStreams;
           // Skip validation during bulk operations to improve performance for onDemand context
           if (parsedStreams.length > 0 && (context === 'onDemand' || (await this.isVideoLive(parsedStreams[0].videoId)))) {
             console.log(`🔁 [Batch] Reusing cached streams for channel ${channelId} (${parsedStreams.length} streams)`);
@@ -465,7 +465,7 @@ export class YoutubeLiveService {
                 const liveKey = `liveStreamsByChannel:${channelId}`;
                 const notFoundKey = `videoIdNotFound:${channelId}`;
                 const blockTTL = channelTTLs.get(channelId)!;
-                await this.redisService.set(liveKey, JSON.stringify(streams), blockTTL);
+                await this.redisService.set(liveKey, streams, blockTTL);
                 
                 // Clear the "not-found" flag since we found live streams
                 await this.redisService.del(notFoundKey);
@@ -527,7 +527,7 @@ export class YoutubeLiveService {
             const liveKey = `liveStreamsByChannel:${channelId}`;
             const notFoundKey = `videoIdNotFound:${channelId}`;
             const blockTTL = channelTTLs.get(channelId)!;
-            await this.redisService.set(liveKey, JSON.stringify(streams), blockTTL);
+            await this.redisService.set(liveKey, streams, blockTTL);
             
             // Clear the "not-found" flag since we found live streams
             await this.redisService.del(notFoundKey);
@@ -591,10 +591,10 @@ export class YoutubeLiveService {
     }
 
     // cache-hit: reuse si sigue vivo
-    const cachedStreams = await this.redisService.get<string>(liveKey);
+    const cachedStreams = await this.redisService.get<LiveStream[]>(liveKey);
     if (cachedStreams) {
       try {
-        const parsedStreams: LiveStream[] = JSON.parse(cachedStreams);
+        const parsedStreams: LiveStream[] = cachedStreams;
         // Skip validation during bulk operations to improve performance
         // Validate that at least the primary stream is still live (skip for onDemand context)
         if (parsedStreams.length > 0) {
@@ -687,7 +687,7 @@ export class YoutubeLiveService {
       };
 
       // Cache the streams
-      await this.redisService.set(liveKey, JSON.stringify(liveStreams), blockTTL);
+      await this.redisService.set(liveKey, liveStreams, blockTTL);
       
       // Clear the "not-found" flag since we found live streams
       await this.redisService.del(notFoundKey);
@@ -996,7 +996,7 @@ export class YoutubeLiveService {
 
       // Check streams cache
       const streamsKey = `liveStreamsByChannel:${channelId}`;
-      const cachedStreams = await this.redisService.get<string>(streamsKey);
+      const cachedStreams = await this.redisService.get<any>(streamsKey);
       
       if (!cachedStreams) {
         return; // No cached data to validate
@@ -1004,7 +1004,7 @@ export class YoutubeLiveService {
 
       // Check if cached streams are still live
       try {
-        const streams = JSON.parse(cachedStreams);
+        const streams = cachedStreams;
         if (streams.primaryVideoId && (await this.isVideoLive(streams.primaryVideoId))) {
           console.log(`✅  ${handle}: ${streams.primaryVideoId}`);
           this.validationCooldowns.set(channelId, now); // Update cooldown
@@ -1045,10 +1045,10 @@ export class YoutubeLiveService {
    */
   private async incrementNotFoundAttempts(channelId: string, handle: string): Promise<void> {
     const attemptTrackingKey = `notFoundAttempts:${channelId}`;
-    const existing = await this.redisService.get<string>(attemptTrackingKey);
+    const existing = await this.redisService.get<AttemptTracking>(attemptTrackingKey);
     
     if (existing) {
-      const tracking: AttemptTracking = JSON.parse(existing);
+      const tracking: AttemptTracking = existing;
       tracking.attempts += 1;
       tracking.lastAttempt = Date.now();
       
@@ -1073,7 +1073,7 @@ export class YoutubeLiveService {
     notFoundKey: string
   ): Promise<void> {
     const attemptTrackingKey = `notFoundAttempts:${channelId}`;
-    const existing = await this.redisService.get<string>(attemptTrackingKey);
+    const existing = await this.redisService.get<AttemptTracking>(attemptTrackingKey);
     
     if (!existing) {
       // First attempt
@@ -1095,7 +1095,7 @@ export class YoutubeLiveService {
       return;
     }
 
-    const tracking: AttemptTracking = JSON.parse(existing);
+    const tracking: AttemptTracking = existing;
     tracking.attempts++;
     tracking.lastAttempt = Date.now();
 
@@ -1142,7 +1142,7 @@ export class YoutubeLiveService {
     notFoundKey: string
   ): Promise<void> {
     const attemptTrackingKey = `notFoundAttempts:${channelId}`;
-    const existing = await this.redisService.get<string>(attemptTrackingKey);
+    const existing = await this.redisService.get<AttemptTracking>(attemptTrackingKey);
     
     if (!existing) {
       // First attempt - only increment attempts, no not-found mark
@@ -1162,7 +1162,7 @@ export class YoutubeLiveService {
       return;
     }
 
-    const tracking: AttemptTracking = JSON.parse(existing);
+    const tracking: AttemptTracking = existing;
     tracking.attempts++;
     tracking.lastAttempt = Date.now();
 

@@ -264,11 +264,11 @@ export class LiveStatusBackgroundService {
 
       // Check if we have a cached video ID first
       const streamsKey = `liveStreamsByChannel:${channelId}`;
-      const cachedStreams = await this.redisService.get<string>(streamsKey);
+      const cachedStreams = await this.redisService.get<any>(streamsKey);
       
       if (cachedStreams) {
         // We have a cached video ID, check if it needs validation
-        const streams = JSON.parse(cachedStreams);
+        const streams = cachedStreams;
         if (streams.primaryVideoId && Date.now() > streams.validationCooldown) {
           // Validation cooldown expired, check if video is still live
           const isStillLive = await this.youtubeLiveService.isVideoLive(streams.primaryVideoId);
