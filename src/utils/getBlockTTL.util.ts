@@ -43,18 +43,25 @@ export async function getCurrentBlockTTL(
     let prevEnd: number | null = null;
     let currentProgram: any = null;
     
+    console.log(`🔍 [TTL Debug] Channel ${channelId} - Current time: ${currentTimeInMinutes} minutes (${Math.floor(currentTimeInMinutes/60)}:${(currentTimeInMinutes%60).toString().padStart(2,'0')})`);
+    console.log(`🔍 [TTL Debug] Channel ${channelId} - Available programs:`, channelSched.map(s => `${s.startTime}-${s.endTime} (${s.start}-${s.end} min)`));
+    
     for (const seg of channelSched) {
+      console.log(`🔍 [TTL Debug] Checking program ${seg.programName} (${seg.startTime}-${seg.endTime}): ${seg.start} <= ${currentTimeInMinutes} && ${seg.end} > ${currentTimeInMinutes} = ${seg.start <= currentTimeInMinutes && seg.end > currentTimeInMinutes}`);
+      
       if (seg.start <= currentTimeInMinutes && seg.end > currentTimeInMinutes) {
         // incia bloque con este segmento
         prevEnd = seg.end;
         blockEnd = seg.end;
         currentProgram = seg;
+        console.log(`✅ [TTL Debug] Found current program: ${seg.programName} (${seg.startTime}-${seg.endTime}), blockEnd: ${blockEnd}`);
         continue;
       }
       if (prevEnd !== null && seg.start - prevEnd < 2) {
         // extiende bloque
         blockEnd = seg.end;
         prevEnd = seg.end;
+        console.log(`🔄 [TTL Debug] Extended block to: ${blockEnd} (${Math.floor(blockEnd/60)}:${(blockEnd%60).toString().padStart(2,'0')})`);
         continue;
       }
       // si bloque ya detectado y sin extender, salimos
@@ -69,6 +76,8 @@ export async function getCurrentBlockTTL(
     // calcular segundos hasta blockEnd - use centralized timezone utility
     const endMoment = TimezoneUtil.todayAtTime(`${Math.floor(blockEnd / 60).toString().padStart(2, '0')}:${(blockEnd % 60).toString().padStart(2, '0')}`);
     const ttl = endMoment.diff(now, 'second');
+    
+    console.log(`🔍 [TTL Debug] Channel ${channelId} - Final calculation: blockEnd=${blockEnd} (${Math.floor(blockEnd/60)}:${(blockEnd%60).toString().padStart(2,'0')}), TTL=${ttl}s`);
     
     // Check if TTL is negative (program already ended)
     if (ttl < 0) {
@@ -110,29 +119,14 @@ export async function getCurrentBlockTTL(
         }
       }
       
-      // Try to find the next program starting after the current time
-      const nextProgram = channelSched.find(seg => seg.start > currentTimeInMinutes);
+      // IMPORTANT: Even if program ended early, we should still cache until the original program end time
+      // This prevents excessive API calls when programs end early but streams are still live
+      console.log(`🔄 Program ended early for ${channelId}, but using original program end time for caching`);
+      console.log(`✅ Using original program end TTL: ${Math.abs(ttl)}s (program was supposed to end ${Math.abs(ttl)}s ago)`);
       
-      if (nextProgram) {
-        console.log(`🔄 Found next program for ${channelId}: ${nextProgram.programName} starting at ${nextProgram.startTime}`);
-        
-        // Calculate TTL until the next program starts - use centralized timezone utility
-        const nextStartMoment = TimezoneUtil.todayAtTime(`${Math.floor(nextProgram.start / 60).toString().padStart(2, '0')}:${(nextProgram.start % 60).toString().padStart(2, '0')}`);
-        const nextProgramTTL = nextStartMoment.diff(now, 'second');
-        
-        // Use a minimum TTL of 60 seconds to avoid immediate expiration
-        const fallbackTTL = Math.max(nextProgramTTL, 60);
-        
-        console.log(`✅ Using next program TTL: ${fallbackTTL}s (next program starts in ${nextProgramTTL}s)`);
-        
-        // Log the fallback (console log only - no Sentry alert needed for successful fallback)
-        
-        return fallbackTTL;
-      } else {
-        // No next program found, use end of day TTL
-        console.log(`🔄 No next program found for ${channelId}, using end of day TTL`);
-        return getEndOfDayTTL();
-      }
+      // Return a small positive TTL (60 seconds) to avoid immediate expiration
+      // This ensures we don't cache for too long after program end, but also don't expire immediately
+      return 60;
     }
     
     return ttl;

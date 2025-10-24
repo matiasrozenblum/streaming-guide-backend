@@ -69,7 +69,6 @@ export class SchedulesService {
     
     // Try cache first (unless skipCache is true)
     if (!skipCache) {
-      console.log(`[SCHEDULES-CACHE] Checking unified cache for ${cacheKey}`);
       schedules = await this.redisService.get<Schedule[]>(cacheKey);
       if (schedules) {
         console.log(`[SCHEDULES-CACHE] HIT for ${cacheKey} (${Date.now() - startTime}ms) - ${schedules.length} total schedules`);
@@ -269,7 +268,6 @@ export class SchedulesService {
   }
 
   async enrichSchedules(schedules: Schedule[], liveStatus: boolean = false): Promise<any[]> {
-    console.log('[enrichSchedules] Starting enrichment of', schedules.length, 'schedules');
     const now = TimezoneUtil.now();
     const currentNum = TimezoneUtil.currentTimeInMinutes();
     const currentDay = TimezoneUtil.currentDayOfWeek();
@@ -292,7 +290,6 @@ export class SchedulesService {
     // Live status will be handled by OptimizedSchedulesService using cached data
     let batchStreamsResults = new Map<string, any>();
     if (liveStatus && channelGroups.size > 0) {
-      console.log('[enrichSchedules] Skipping live status fetching - will be handled by OptimizedSchedulesService');
       
       // Trigger async background fetch for live status (non-blocking)
       const liveChannelIds: string[] = [];
@@ -314,7 +311,6 @@ export class SchedulesService {
         // Trigger async background fetch (non-blocking)
         setImmediate(async () => {
           try {
-            console.log(`[enrichSchedules] Triggering async live status fetch for ${liveChannelIds.length} channels`);
             // Background live status will be handled by OptimizedSchedulesService
           } catch (error) {
             console.error('[enrichSchedules] Error in async live status fetch:', error.message);

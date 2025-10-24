@@ -563,6 +563,7 @@ export class YoutubeLiveService {
     blockTTL: number,
     context: 'cron' | 'onDemand' | 'program-start',
     ignoreNotFoundCache: boolean = false,
+    cronType?: 'main' | 'back-to-back-fix' | 'manual'
   ): Promise<LiveStreamsResult | null | '__SKIPPED__'> {
     // gating centralizado
     if (!(await this.configService.canFetchLive(handle))) {
@@ -654,7 +655,7 @@ export class YoutubeLiveService {
 
       if (liveStreams.length === 0) {
         console.log(`🚫 No live streams for ${handle} (${context})`);
-        await this.handleNotFoundEscalation(channelId, handle, notFoundKey, 'main');
+        await this.handleNotFoundEscalation(channelId, handle, notFoundKey, cronType || 'main');
         return null;
       }
 
@@ -807,7 +808,7 @@ export class YoutubeLiveService {
         console.log(`[${cronLabel}] TTL for ${handle}: ${ttl}s`);
         
         // Fetch live streams for this channel using the modern method
-        const liveStreamsResult = await this.getLiveStreams(channelId, handle, ttl, 'cron', cronType === 'back-to-back-fix');
+        const liveStreamsResult = await this.getLiveStreams(channelId, handle, ttl, 'cron', cronType === 'back-to-back-fix', cronType);
         
         if (liveStreamsResult && liveStreamsResult !== '__SKIPPED__' && liveStreamsResult.streamCount > 0) {
           results.set(channelId, liveStreamsResult);
@@ -951,7 +952,7 @@ export class YoutubeLiveService {
       const ttl = await getCurrentBlockTTL(channelId, schedules, this.sentryService);
       
       // Use the new getLiveStreams method to refresh (ignore not-found cache for back-to-back fix)
-      const streamsResult = await this.getLiveStreams(channelId, handle, ttl, 'program-start', true);
+      const streamsResult = await this.getLiveStreams(channelId, handle, ttl, 'program-start', true, 'main');
       
       if (streamsResult && streamsResult !== '__SKIPPED__') {
         console.log(`🆕 Refreshed streams for ${handle}: ${streamsResult.streamCount} streams, primary: ${streamsResult.primaryVideoId}`);
