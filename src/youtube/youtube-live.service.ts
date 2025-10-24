@@ -644,17 +644,30 @@ export class YoutubeLiveService {
       console.log(`🔍 [getLiveStreams] Response for ${handle}:`, JSON.stringify(data, null, 2));
       
 
-      const liveStreams: LiveStream[] = (data.items || []).map((item: any) => ({
+      const allStreams: LiveStream[] = (data.items || []).map((item: any) => ({
         videoId: item.id.videoId,
         title: item.snippet.title,
         publishedAt: item.snippet.publishedAt,
         description: item.snippet.description,
         thumbnailUrl: item.snippet.thumbnails?.medium?.url,
         channelTitle: item.snippet.channelTitle,
+        liveBroadcastContent: item.snippet.liveBroadcastContent, // Add this for validation
       }));
 
+      // Filter out scheduled streams - only keep actually live streams
+      const liveStreams: LiveStream[] = [];
+      for (const stream of allStreams) {
+        const isActuallyLive = await this.isVideoLive(stream.videoId);
+        if (isActuallyLive) {
+          liveStreams.push(stream);
+          console.log(`✅ [getLiveStreams] Confirmed live stream for ${handle}: ${stream.videoId} - ${stream.title}`);
+        } else {
+          console.log(`⏰ [getLiveStreams] Skipping scheduled stream for ${handle}: ${stream.videoId} - ${stream.title}`);
+        }
+      }
+
       if (liveStreams.length === 0) {
-        console.log(`🚫 No live streams for ${handle} (${context})`);
+        console.log(`🚫 No actually live streams for ${handle} (${context}) - all were scheduled`);
         await this.handleNotFoundEscalation(channelId, handle, notFoundKey, cronType || 'main');
         return null;
       }
