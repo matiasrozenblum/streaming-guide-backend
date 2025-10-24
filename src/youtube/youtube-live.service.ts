@@ -172,7 +172,7 @@ export class YoutubeLiveService {
 
       if (!videoId) {
         console.log(`🚫 No live video for ${handle} (${context})`);
-        await this.handleNotFoundEscalation(channelId, handle, notFoundKey);
+        await this.handleNotFoundEscalation(channelId, handle, notFoundKey, 'main');
         return null;
       }
 
@@ -476,7 +476,7 @@ export class YoutubeLiveService {
                 } else {
                   // Handle not-found escalation for other cron types
                   const notFoundKey = `videoIdNotFound:${channelId}`;
-                  await this.handleNotFoundEscalation(channelId, handle, notFoundKey);
+                  await this.handleNotFoundEscalation(channelId, handle, notFoundKey, cronType);
                 }
               }
             } catch (error) {
@@ -537,7 +537,7 @@ export class YoutubeLiveService {
           } else {
             // Handle not-found escalation for other cron types
             const notFoundKey = `videoIdNotFound:${channelId}`;
-            await this.handleNotFoundEscalation(channelId, handle, notFoundKey);
+            await this.handleNotFoundEscalation(channelId, handle, notFoundKey, cronType);
           }
         }
         }
@@ -654,7 +654,7 @@ export class YoutubeLiveService {
 
       if (liveStreams.length === 0) {
         console.log(`🚫 No live streams for ${handle} (${context})`);
-        await this.handleNotFoundEscalation(channelId, handle, notFoundKey);
+        await this.handleNotFoundEscalation(channelId, handle, notFoundKey, 'main');
         return null;
       }
 
@@ -1000,7 +1000,8 @@ export class YoutubeLiveService {
   private async handleNotFoundEscalation(
     channelId: string, 
     handle: string, 
-    notFoundKey: string
+    notFoundKey: string,
+    cronType?: 'main' | 'back-to-back-fix' | 'manual'
   ): Promise<void> {
     const attemptTrackingKey = `notFoundAttempts:${channelId}`;
     const existing = await this.redisService.get<string>(attemptTrackingKey);
@@ -1018,10 +1019,14 @@ export class YoutubeLiveService {
       const programEndTime = await this.getCurrentProgramEndTime(channelId);
       const ttlUntilProgramEnd = programEndTime ? Math.max(programEndTime - Date.now(), 3600) : 86400; // Min 1 hour, fallback to 24h
       await this.redisService.set(attemptTrackingKey, JSON.stringify(tracking), Math.floor(ttlUntilProgramEnd / 1000));
-      // Set current not-found mark (15 minutes TTL)
-      await this.redisService.set(notFoundKey, '1', 900);
       
-      console.log(`🚫 [First attempt] No live video for ${handle}, marking not-found for 15 minutes`);
+      // Only set not-found mark for main cron and manual execution, not for back-to-back-fix
+      if (cronType !== 'back-to-back-fix') {
+        await this.redisService.set(notFoundKey, '1', 900);
+        console.log(`🚫 [First attempt] No live video for ${handle}, marking not-found for 15 minutes`);
+      } else {
+        console.log(`🚫 [Back-to-back] First attempt for ${handle}, incrementing attempts only (no not-found mark)`);
+      }
       return;
     }
 
@@ -1052,9 +1057,13 @@ export class YoutubeLiveService {
         console.log(`🚫 [Fallback] No live video for ${handle}, marking not-found for 1 hour (couldn't determine program end)`);
       }
     } else {
-      // Second attempt - extend for another 15 minutes
-      await this.redisService.set(notFoundKey, '1', 900);
-      console.log(`🚫 [Second attempt] Still no live video for ${handle}, extending not-found for another 15 minutes`);
+      // Second attempt - only extend not-found mark for main cron and manual execution
+      if (cronType !== 'back-to-back-fix') {
+        await this.redisService.set(notFoundKey, '1', 900);
+        console.log(`🚫 [Second attempt] Still no live video for ${handle}, extending not-found for another 15 minutes`);
+      } else {
+        console.log(`🚫 [Back-to-back] Second attempt for ${handle}, incrementing attempts only (no not-found mark renewal)`);
+      }
     }
     
     // Update persistent tracking with program-end TTL
@@ -1113,6 +1122,12 @@ export class YoutubeLiveService {
    * Send escalation email notification
    */
   private async sendEscalationEmail(channelId: string, handle: string): Promise<void> {
+    // Only send emails in production environment
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`📧 [${process.env.NODE_ENV || 'development'}] Escalation email skipped for ${handle} (not production environment)`);
+      return;
+    }
+
     try {
       // Get channel and program information
       const channel = await this.channelsRepository.findOne({
