@@ -91,4 +91,12 @@ export class RedisService implements OnModuleInit {
 
     await pipeline.exec();
   }
+
+  /**
+   * Delete all keys in the current database
+   * WARNING: This will delete ALL data in Redis!
+   */
+  async flushAll(): Promise<void> {
+    await this.client.flushall();
+  }
 }

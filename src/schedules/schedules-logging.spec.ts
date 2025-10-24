@@ -142,11 +142,11 @@ describe('SchedulesService Logging Improvements', () => {
       await service.findAll({ dayOfWeek: 'monday' });
       
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[SCHEDULES-CACHE] Checking unified cache for schedules:week:complete')
+        expect.stringContaining('[SCHEDULES-CACHE] MISS for unified cache schedules:week:complete')
       );
       
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[SCHEDULES-CACHE] MISS for unified cache schedules:week:complete')
+        expect.stringContaining('[SCHEDULES-CACHE] Lock acquired for unified cache schedules:week:complete')
       );
       
       consoleSpy.mockRestore();

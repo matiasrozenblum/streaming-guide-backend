@@ -17,7 +17,20 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
-## [1.16.1] - 2025-10-22
+## [1.16.2] - 2025-10-25
+
+### Added
+- Added cache flushall endpoint for admin usage
+
+### Changed
+- Separated methods per cron type
+
+### Fixed
+- Fixed cache value data structure
+- Fixed cache value double parsed as string
+- Fixed not-found mark calculation
+
+## [1.16.1] - 2025-10-23
 
 ### Changed
 - Now not-found mark has attempt tracking and escalation

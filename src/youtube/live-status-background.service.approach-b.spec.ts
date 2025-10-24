@@ -62,6 +62,7 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
           provide: YoutubeLiveService,
           useValue: {
             getLiveStreams: jest.fn(),
+            getLiveStreamsMain: jest.fn(),
             isVideoLive: jest.fn(),
           },
         },
@@ -268,7 +269,7 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
         return Promise.resolve([]);
       });
       jest.spyOn(schedulesService, 'findByDay').mockResolvedValue(mockSchedules);
-      jest.spyOn(youtubeLiveService, 'getLiveStreams').mockResolvedValue(mockLiveStreamsResult);
+      jest.spyOn(youtubeLiveService, 'getLiveStreamsMain').mockResolvedValue(mockLiveStreamsResult);
       jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
       jest.spyOn(configService, 'canFetchLive').mockResolvedValue(true);
 

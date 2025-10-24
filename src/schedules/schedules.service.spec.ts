@@ -200,7 +200,7 @@ describe('SchedulesService', () => {
           provide: YoutubeLiveService,
           useValue: {
             getLiveVideoId: jest.fn(),
-            getLiveStreams: jest.fn(),
+            getLiveStreamsMain: jest.fn(),
           },
         },
         {
@@ -307,7 +307,7 @@ describe('SchedulesService', () => {
         .mockResolvedValueOnce(null); // schedules cache miss
       
       // Mock getLiveStreams to return actual stream data
-      jest.spyOn(youtubeLiveService, 'getLiveStreams').mockResolvedValue({
+      jest.spyOn(youtubeLiveService, 'getLiveStreamsMain').mockResolvedValue({
         streams: [{
           videoId: 'live-video-id',
           title: 'Live Stream',
@@ -513,7 +513,7 @@ describe('SchedulesService', () => {
       jest.spyOn(configService, 'canFetchLive').mockResolvedValue(true);
       
       // Mock YouTube service
-      jest.spyOn(youtubeLiveService, 'getLiveStreams').mockResolvedValue(mockStreams);
+      jest.spyOn(youtubeLiveService, 'getLiveStreamsMain').mockResolvedValue(mockStreams);
 
       const result = await service.enrichSchedules(testSchedules, true);
 
@@ -588,7 +588,7 @@ describe('SchedulesService', () => {
       jest.spyOn(configService, 'canFetchLive').mockResolvedValue(true);
       
       // Mock YouTube service
-      jest.spyOn(youtubeLiveService, 'getLiveStreams').mockResolvedValue(mockStreams);
+      jest.spyOn(youtubeLiveService, 'getLiveStreamsMain').mockResolvedValue(mockStreams);
 
       // Mock TimezoneUtil for this test (10:30 is within 10:00-12:00 range)
       jest.spyOn(TimezoneUtil, 'now').mockReturnValue(dayjs().tz('America/Argentina/Buenos_Aires').hour(10).minute(30));
@@ -668,7 +668,7 @@ describe('SchedulesService', () => {
       jest.spyOn(configService, 'canFetchLive').mockResolvedValue(true);
       
       // Mock YouTube service
-      jest.spyOn(youtubeLiveService, 'getLiveStreams').mockResolvedValue(mockStreams);
+      jest.spyOn(youtubeLiveService, 'getLiveStreamsMain').mockResolvedValue(mockStreams);
 
       const result = await service.enrichSchedules([testSchedule], true);
 
@@ -683,7 +683,7 @@ describe('SchedulesService', () => {
       
     });
 
-    it('should use getLiveStreams to enrich live programs', async () => {
+    it('should use getLiveStreamsMain to enrich live programs', async () => {
       const testSchedule = {
         id: 1,
         day_of_week: 'monday',
@@ -715,7 +715,7 @@ describe('SchedulesService', () => {
       jest.spyOn(configService, 'canFetchLive').mockResolvedValue(true);
       
       // Mock YouTube service - getLiveStreams returns actual stream data
-      jest.spyOn(youtubeLiveService, 'getLiveStreams').mockResolvedValue({
+      jest.spyOn(youtubeLiveService, 'getLiveStreamsMain').mockResolvedValue({
         streams: [{
           videoId: 'fallback-video-id',
           title: 'Live Stream',
@@ -737,7 +737,7 @@ describe('SchedulesService', () => {
       // Should use stream video ID
       expect(result[0].program.stream_url).toBe('https://www.youtube.com/embed/fallback-video-id?autoplay=1');
       
-      // Should have live_streams from getLiveStreams
+      // Should have live_streams from getLiveStreamsMain
       expect(result[0].program.live_streams).toHaveLength(1);
       expect(result[0].program.live_streams[0].videoId).toBe('fallback-video-id');
       expect(result[0].program.stream_count).toBe(1);
@@ -818,7 +818,7 @@ describe('SchedulesService', () => {
       jest.spyOn(configService, 'canFetchLive').mockResolvedValue(true);
       
       // Mock YouTube service
-      const getLiveStreamsSpy = jest.spyOn(youtubeLiveService, 'getLiveStreams').mockResolvedValue({
+      const getLiveStreamsSpy = jest.spyOn(youtubeLiveService, 'getLiveStreamsMain').mockResolvedValue({
         streams: [],
         primaryVideoId: null,
         streamCount: 0
