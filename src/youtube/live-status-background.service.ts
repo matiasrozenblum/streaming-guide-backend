@@ -277,7 +277,7 @@ export class LiveStatusBackgroundService {
             console.log(`[LIVE-STATUS-BG] Video ID ${streams.primaryVideoId} still live for ${handle}`);
             // Update the cache with new validation cooldown
             streams.validationCooldown = Date.now() + (30 * 60 * 1000);
-            await this.redisService.set(streamsKey, JSON.stringify(streams), ttl);
+            await this.redisService.set(streamsKey, streams, ttl);
             return this.createCacheDataFromStreams(channelId, handle, streams, ttl, blockEndTime);
           } else {
             // Video is no longer live, clear cache and fetch new one

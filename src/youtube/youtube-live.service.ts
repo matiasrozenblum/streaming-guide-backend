@@ -186,7 +186,7 @@ export class YoutubeLiveService {
         primaryVideoId: videoId,
         streamCount: 1
       };
-      await this.redisService.set(streamsKey, JSON.stringify(streamsData), blockTTL);
+      await this.redisService.set(streamsKey, streamsData, blockTTL);
       
       // Clear the "not-found" flag and attempt tracking since we found live streams
       await this.redisService.del(notFoundKey);
@@ -340,17 +340,17 @@ export class YoutubeLiveService {
       }
 
       // Check cache
-      const cachedStreams = await this.redisService.get<LiveStream[]>(liveKey);
+      const cachedStreams = await this.redisService.get<any>(liveKey);
       if (cachedStreams) {
         try {
-          const parsedStreams: LiveStream[] = cachedStreams;
+          const parsedStreams: LiveStream[] = cachedStreams.streams;
           // Skip validation during bulk operations to improve performance for onDemand context
           if (parsedStreams.length > 0 && (context === 'onDemand' || (await this.isVideoLive(parsedStreams[0].videoId)))) {
             console.log(`🔁 [Batch] Reusing cached streams for channel ${channelId} (${parsedStreams.length} streams)`);
             results.set(channelId, {
               streams: parsedStreams,
-              primaryVideoId: parsedStreams[0].videoId,
-              streamCount: parsedStreams.length
+              primaryVideoId: cachedStreams.primaryVideoId,
+              streamCount: cachedStreams.streamCount
             });
             continue;
           } else {
@@ -465,7 +465,7 @@ export class YoutubeLiveService {
                 const liveKey = `liveStreamsByChannel:${channelId}`;
                 const notFoundKey = `videoIdNotFound:${channelId}`;
                 const blockTTL = channelTTLs.get(channelId)!;
-                await this.redisService.set(liveKey, streams, blockTTL);
+                await this.redisService.set(liveKey, liveStreamsResult, blockTTL);
                 
                 // Clear the "not-found" flag since we found live streams
                 await this.redisService.del(notFoundKey);
@@ -527,7 +527,7 @@ export class YoutubeLiveService {
             const liveKey = `liveStreamsByChannel:${channelId}`;
             const notFoundKey = `videoIdNotFound:${channelId}`;
             const blockTTL = channelTTLs.get(channelId)!;
-            await this.redisService.set(liveKey, streams, blockTTL);
+            await this.redisService.set(liveKey, liveStreamsResult, blockTTL);
             
             // Clear the "not-found" flag since we found live streams
             await this.redisService.del(notFoundKey);
@@ -591,10 +591,10 @@ export class YoutubeLiveService {
     }
 
     // cache-hit: reuse si sigue vivo
-    const cachedStreams = await this.redisService.get<LiveStream[]>(liveKey);
+    const cachedStreams = await this.redisService.get<any>(liveKey);
     if (cachedStreams) {
       try {
-        const parsedStreams: LiveStream[] = cachedStreams;
+        const parsedStreams: LiveStream[] = cachedStreams.streams;
         // Skip validation during bulk operations to improve performance
         // Validate that at least the primary stream is still live (skip for onDemand context)
         if (parsedStreams.length > 0) {
@@ -605,8 +605,8 @@ export class YoutubeLiveService {
             console.log(`🔁 Reusing cached streams for ${handle} (${parsedStreams.length} streams)`);
             return {
               streams: parsedStreams,
-              primaryVideoId: parsedStreams[0].videoId,
-              streamCount: parsedStreams.length
+              primaryVideoId: cachedStreams.primaryVideoId,
+              streamCount: cachedStreams.streamCount
             };
           } else {
             console.log(`🔄 Cached video ${parsedStreams[0].videoId} no longer live for ${handle}, forcing refresh`);
@@ -687,7 +687,7 @@ export class YoutubeLiveService {
       };
 
       // Cache the streams
-      await this.redisService.set(liveKey, liveStreams, blockTTL);
+      await this.redisService.set(liveKey, result, blockTTL);
       
       // Clear the "not-found" flag since we found live streams
       await this.redisService.del(notFoundKey);

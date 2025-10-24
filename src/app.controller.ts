@@ -463,20 +463,16 @@ export class AppController {
     return { key, cachedValue };
   }
 
+  @UseGuards(AuthGuard('jwt'))
+  @Roles('admin')
   @Get('cache-test-del')
   async cacheTestDel() {
-    const patterns = [
-      'cron:count:*',
-      'onDemand:count:*',
-      'cron:*:count:*',
-      'onDemand:*:count:*',
-    ];
-
-    for (const pattern of patterns) {
-      await this.redisService.delByPattern(pattern);
-    }
-
-    return { message: 'All counter entries deleted.' };
+    await this.redisService.flushAll();
+    
+    return { 
+      message: 'All cache entries deleted using FLUSHALL command',
+      method: 'flushAll'
+    };
   }
 
   @UseGuards(AuthGuard('jwt'))

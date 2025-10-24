@@ -415,18 +415,18 @@ export class SchedulesService {
           
           // Cache the streams for future use
           const streamsKey = `liveStreamsByChannel:${channelId}`;
-          await this.redisService.set(streamsKey, allStreams, await getCurrentBlockTTL(channelId, schedules, this.sentryService));
+          await this.redisService.set(streamsKey, batchStreamsResult, await getCurrentBlockTTL(channelId, schedules, this.sentryService));
         } else {
           // Fallback to individual fetch if batch didn't work
           const streamsKey = `liveStreamsByChannel:${channelId}`;
-          const cachedStreams = await this.redisService.get<LiveStream[]>(streamsKey);
+          const cachedStreams = await this.redisService.get<any>(streamsKey);
           
           if (cachedStreams) {
             try {
               const parsedStreams = cachedStreams;
-              if (parsedStreams && parsedStreams.length > 0) {
-                allStreams = parsedStreams;
-                channelStreamCount = parsedStreams.length;
+              if (parsedStreams.streams && parsedStreams.streams.length > 0) {
+                allStreams = parsedStreams.streams;
+                channelStreamCount = parsedStreams.streamCount;
               }
             } catch (error) {
               console.warn(`Failed to parse cached streams for ${handle}:`, error);
