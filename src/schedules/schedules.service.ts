@@ -6,6 +6,7 @@ import { Program } from '../programs/programs.entity';
 import { CreateScheduleDto, CreateBulkSchedulesDto } from './dto/create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { YoutubeLiveService } from '../youtube/youtube-live.service';
+import { LiveStream } from '../youtube/interfaces/live-stream.interface';
 import { RedisService } from '../redis/redis.service';
 import { WeeklyOverridesService } from './weekly-overrides.service';
 import { SentryService } from '../sentry/sentry.service';
@@ -69,7 +70,6 @@ export class SchedulesService {
     
     // Try cache first (unless skipCache is true)
     if (!skipCache) {
-      console.log(`[SCHEDULES-CACHE] Checking unified cache for ${cacheKey}`);
       schedules = await this.redisService.get<Schedule[]>(cacheKey);
       if (schedules) {
         console.log(`[SCHEDULES-CACHE] HIT for ${cacheKey} (${Date.now() - startTime}ms) - ${schedules.length} total schedules`);
@@ -269,7 +269,6 @@ export class SchedulesService {
   }
 
   async enrichSchedules(schedules: Schedule[], liveStatus: boolean = false): Promise<any[]> {
-    console.log('[enrichSchedules] Starting enrichment of', schedules.length, 'schedules');
     const now = TimezoneUtil.now();
     const currentNum = TimezoneUtil.currentTimeInMinutes();
     const currentDay = TimezoneUtil.currentDayOfWeek();
@@ -292,7 +291,6 @@ export class SchedulesService {
     // Live status will be handled by OptimizedSchedulesService using cached data
     let batchStreamsResults = new Map<string, any>();
     if (liveStatus && channelGroups.size > 0) {
-      console.log('[enrichSchedules] Skipping live status fetching - will be handled by OptimizedSchedulesService');
       
       // Trigger async background fetch for live status (non-blocking)
       const liveChannelIds: string[] = [];
@@ -314,7 +312,6 @@ export class SchedulesService {
         // Trigger async background fetch (non-blocking)
         setImmediate(async () => {
           try {
-            console.log(`[enrichSchedules] Triggering async live status fetch for ${liveChannelIds.length} channels`);
             // Background live status will be handled by OptimizedSchedulesService
           } catch (error) {
             console.error('[enrichSchedules] Error in async live status fetch:', error.message);
@@ -418,18 +415,18 @@ export class SchedulesService {
           
           // Cache the streams for future use
           const streamsKey = `liveStreamsByChannel:${channelId}`;
-          await this.redisService.set(streamsKey, JSON.stringify(allStreams), await getCurrentBlockTTL(channelId, schedules, this.sentryService));
+          await this.redisService.set(streamsKey, batchStreamsResult, await getCurrentBlockTTL(channelId, schedules, this.sentryService));
         } else {
           // Fallback to individual fetch if batch didn't work
           const streamsKey = `liveStreamsByChannel:${channelId}`;
-          const cachedStreams = await this.redisService.get<string>(streamsKey);
+          const cachedStreams = await this.redisService.get<any>(streamsKey);
           
           if (cachedStreams) {
             try {
-              const parsedStreams = JSON.parse(cachedStreams);
-              if (parsedStreams.length > 0) {
-                allStreams = parsedStreams;
-                channelStreamCount = parsedStreams.length;
+              const parsedStreams = cachedStreams;
+              if (parsedStreams.streams && parsedStreams.streams.length > 0) {
+                allStreams = parsedStreams.streams;
+                channelStreamCount = parsedStreams.streamCount;
               }
             } catch (error) {
               console.warn(`Failed to parse cached streams for ${handle}:`, error);
@@ -440,11 +437,10 @@ export class SchedulesService {
           if (allStreams.length === 0) {
             const ttl = await getCurrentBlockTTL(channelId, schedules, this.sentryService);
             
-            const streamsResult = await this.youtubeLiveService.getLiveStreams(
+            const streamsResult = await this.youtubeLiveService.getLiveStreamsMain(
               channelId,
               handle,
-              ttl,
-              'onDemand'
+              ttl
             );
             
             if (streamsResult && streamsResult !== '__SKIPPED__') {
@@ -553,11 +549,10 @@ export class SchedulesService {
           const canFetch = await this.configService.canFetchLive(handle);
           if (canFetch) {
         // Try to get multiple streams first
-        const liveStreams = await this.youtubeLiveService.getLiveStreams(
+        const liveStreams = await this.youtubeLiveService.getLiveStreamsMain(
           channelId,
           handle,
-          100, // Default TTL
-          'onDemand'
+          100 // Default TTL
         );
         
         
@@ -567,11 +562,10 @@ export class SchedulesService {
           streamUrl = `https://www.youtube.com/embed/${firstStream.videoId}?autoplay=1`;
         } else {
               // Fallback to getLiveStreams method (same as bulk enrichment)
-              const streamsResult = await this.youtubeLiveService.getLiveStreams(
+              const streamsResult = await this.youtubeLiveService.getLiveStreamsMain(
                 channelId,
                 handle,
-                100, // Default TTL
-                'onDemand'
+                100 // Default TTL
               );
               if (streamsResult && streamsResult !== '__SKIPPED__' && typeof streamsResult === 'object' && 'streams' in streamsResult && streamsResult.streams.length > 0) {
                 const firstStream = streamsResult.streams[0];

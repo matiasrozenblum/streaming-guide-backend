@@ -5,6 +5,7 @@ export interface LiveStream {
   description: string;
   thumbnailUrl?: string;
   channelTitle?: string;
+  liveBroadcastContent?: string; // 'live', 'upcoming', or 'none'
 }
 
 export interface LiveStreamsResult {

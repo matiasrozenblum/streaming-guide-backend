@@ -115,11 +115,10 @@ export class OptimizedSchedulesService {
             setImmediate(async () => {
               try {
                 console.log(`[OPTIMIZED-SCHEDULES] Triggering async fetch for ${schedule.program.channel.handle}...`);
-                await this.youtubeLiveService.getLiveStreams(
+                await this.youtubeLiveService.getLiveStreamsMain(
                   channelId,
                   schedule.program.channel.handle,
-                  300, // 5 min TTL for on-demand fetches
-                  'onDemand' // Special programs use on-demand fetching
+                  300 // 5 min TTL for on-demand fetches
                 );
                 console.log(`[OPTIMIZED-SCHEDULES] Async fetch completed for ${schedule.program.channel.handle}`);
               } catch (error) {

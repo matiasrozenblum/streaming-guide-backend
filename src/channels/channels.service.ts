@@ -382,7 +382,6 @@ export class ChannelsService {
       acc[channelId].push(schedule);
       return acc;
     }, {} as Record<number, any[]>);
-    console.log(`[CHANNELS-SCHEDULES] Grouped schedules (${Date.now() - groupStart}ms)`);
 
     // Get all channels for the result structure
     const channelsQueryStart = Date.now();
@@ -442,7 +441,6 @@ export class ChannelsService {
    */
   async getTodaySchedules(deviceId?: string, liveStatus?: boolean, raw?: string): Promise<ChannelWithSchedules[]> {
     const today = TimezoneUtil.currentDayOfWeek();
-    console.log(`[SCHEDULES-TODAY] Starting optimized today's schedules fetch for ${today}`);
     
     return this.getChannelsWithSchedules(today, deviceId, liveStatus, raw);
   }
@@ -451,7 +449,6 @@ export class ChannelsService {
    * Get full week schedules - optimized for background loading
    */
   async getWeekSchedules(deviceId?: string, liveStatus?: boolean, raw?: string): Promise<ChannelWithSchedules[]> {
-    console.log('[SCHEDULES-WEEK] Starting optimized week schedules fetch');
     
     return this.getChannelsWithSchedules(undefined, deviceId, liveStatus, raw);
   }

@@ -63,12 +63,16 @@ export class YoutubeLiveService {
     // YouTube API usage tracking removed - no longer needed
     
     // Main cron: runs every hour at :00
-    cron.schedule('0 * * * *', () => this.fetchLiveVideoIds('main'), {
+    cron.schedule('0 * * * *', () => this.fetchLiveVideoIdsMain(), {
       timezone: 'America/Argentina/Buenos_Aires',
     });
     
-    // Back-to-back fix cron: runs 7 minutes after each hour to catch overlapping programs
-    cron.schedule('7 * * * *', () => this.fetchLiveVideoIds('back-to-back-fix'), {
+    // Back-to-back fix cron: runs twice per hour at :07 and :37 to catch overlapping programs
+    cron.schedule('7 * * * *', () => this.fetchLiveVideoIdsBackToBack(), {
+      timezone: 'America/Argentina/Buenos_Aires',
+    });
+    
+    cron.schedule('37 * * * *', () => this.fetchLiveVideoIdsBackToBack(), {
       timezone: 'America/Argentina/Buenos_Aires',
     });
 
@@ -136,10 +140,10 @@ export class YoutubeLiveService {
     }
 
     // cache-hit: reuse si sigue vivo
-    const cachedStreams = await this.redisService.get<string>(streamsKey);
+    const cachedStreams = await this.redisService.get<any>(streamsKey);
     if (cachedStreams) {
       try {
-        const streams = JSON.parse(cachedStreams);
+        const streams = cachedStreams;
         if (streams.primaryVideoId && (await this.isVideoLive(streams.primaryVideoId))) {
           console.log(`🔁 Reusing cached primary videoId for ${handle}`);
           return streams.primaryVideoId;
@@ -172,7 +176,7 @@ export class YoutubeLiveService {
 
       if (!videoId) {
         console.log(`🚫 No live video for ${handle} (${context})`);
-        await this.handleNotFoundEscalation(channelId, handle, notFoundKey);
+        await this.handleNotFoundEscalationMain(channelId, handle, notFoundKey);
         return null;
       }
 
@@ -182,7 +186,7 @@ export class YoutubeLiveService {
         primaryVideoId: videoId,
         streamCount: 1
       };
-      await this.redisService.set(streamsKey, JSON.stringify(streamsData), blockTTL);
+      await this.redisService.set(streamsKey, streamsData, blockTTL);
       
       // Clear the "not-found" flag and attempt tracking since we found live streams
       await this.redisService.del(notFoundKey);
@@ -283,12 +287,12 @@ export class YoutubeLiveService {
       // Enhanced not-found logic with escalation detection
       const notFoundData = await this.redisService.get<string>(notFoundKey);
       const attemptTrackingKey = `notFoundAttempts:${channelId}`;
-      const attemptData = await this.redisService.get<string>(attemptTrackingKey);
+      const attemptData = await this.redisService.get<AttemptTracking>(attemptTrackingKey);
 
       if (notFoundData && cronType !== 'back-to-back-fix' && cronType !== 'manual') {
         // Check if escalated
         if (attemptData) {
-          const tracking: AttemptTracking = JSON.parse(attemptData);
+          const tracking: AttemptTracking = attemptData;
           if (tracking.escalated && tracking.programEndTime && Date.now() < tracking.programEndTime) {
             results.set(channelId, '__SKIPPED__');
             continue;
@@ -302,7 +306,7 @@ export class YoutubeLiveService {
 
       // CRITICAL: If not-found mark expired but we have attempt tracking, check for escalation
       if (!notFoundData && attemptData && cronType !== 'back-to-back-fix' && cronType !== 'manual') {
-        const tracking: AttemptTracking = JSON.parse(attemptData);
+        const tracking: AttemptTracking = attemptData;
         
         if (tracking.attempts >= 2 && !tracking.escalated) {
           // This is the third attempt after expiration - escalate immediately
@@ -313,7 +317,7 @@ export class YoutubeLiveService {
             const ttlUntilProgramEnd = Math.max(programEndTime - Date.now(), 60);
             await this.redisService.set(notFoundKey, '1', Math.floor(ttlUntilProgramEnd / 1000));
             // Update attempt tracking with program-end TTL
-            const ttlUntilProgramEndForTracking = Math.max(programEndTime - Date.now(), 3600); // Min 1 hour
+            const ttlUntilProgramEndForTracking = Math.max(programEndTime - Date.now(), 60); // Min 1 minute
             await this.redisService.set(attemptTrackingKey, JSON.stringify(tracking), Math.floor(ttlUntilProgramEndForTracking / 1000));
             
             const handle = channelHandleMap?.get(channelId) || 'unknown';
@@ -336,17 +340,17 @@ export class YoutubeLiveService {
       }
 
       // Check cache
-      const cachedStreams = await this.redisService.get<string>(liveKey);
+      const cachedStreams = await this.redisService.get<any>(liveKey);
       if (cachedStreams) {
         try {
-          const parsedStreams: LiveStream[] = JSON.parse(cachedStreams);
+          const parsedStreams: LiveStream[] = cachedStreams.streams;
           // Skip validation during bulk operations to improve performance for onDemand context
           if (parsedStreams.length > 0 && (context === 'onDemand' || (await this.isVideoLive(parsedStreams[0].videoId)))) {
             console.log(`🔁 [Batch] Reusing cached streams for channel ${channelId} (${parsedStreams.length} streams)`);
             results.set(channelId, {
               streams: parsedStreams,
-              primaryVideoId: parsedStreams[0].videoId,
-              streamCount: parsedStreams.length
+              primaryVideoId: cachedStreams.primaryVideoId,
+              streamCount: cachedStreams.streamCount
             });
             continue;
           } else {
@@ -461,22 +465,28 @@ export class YoutubeLiveService {
                 const liveKey = `liveStreamsByChannel:${channelId}`;
                 const notFoundKey = `videoIdNotFound:${channelId}`;
                 const blockTTL = channelTTLs.get(channelId)!;
-                await this.redisService.set(liveKey, JSON.stringify(streams), blockTTL);
+                await this.redisService.set(liveKey, liveStreamsResult, blockTTL);
                 
                 // Clear the "not-found" flag since we found live streams
                 await this.redisService.del(notFoundKey);
                 console.log(`✅ [Individual] Cached ${streams.length} streams for ${handle} (${channelId}) (TTL: ${blockTTL}s)`);
               } else {
                 console.log(`❌ [Individual] No live streams found for ${handle} (${channelId})`);
-                results.set(channelId, null);
                 
                 // For back-to-back-fix cron, only increment attempts without setting new not-found flags
                 if (cronType === 'back-to-back-fix') {
                   await this.incrementNotFoundAttempts(channelId, handle);
-                } else {
-                  // Handle not-found escalation for other cron types
+                  results.set(channelId, null);
+                } else if (cronType === 'manual') {
+                  // Manual cron should attempt fetch, not skip
                   const notFoundKey = `videoIdNotFound:${channelId}`;
-                  await this.handleNotFoundEscalation(channelId, handle, notFoundKey);
+                  await this.handleNotFoundEscalationMain(channelId, handle, notFoundKey);
+                  results.set(channelId, null);
+                } else {
+                  // Handle not-found escalation for main cron type
+                  const notFoundKey = `videoIdNotFound:${channelId}`;
+                  await this.handleNotFoundEscalationMain(channelId, handle, notFoundKey);
+                  results.set(channelId, '__SKIPPED__');
                 }
               }
             } catch (error) {
@@ -523,21 +533,26 @@ export class YoutubeLiveService {
             const liveKey = `liveStreamsByChannel:${channelId}`;
             const notFoundKey = `videoIdNotFound:${channelId}`;
             const blockTTL = channelTTLs.get(channelId)!;
-            await this.redisService.set(liveKey, JSON.stringify(streams), blockTTL);
+            await this.redisService.set(liveKey, liveStreamsResult, blockTTL);
             
             // Clear the "not-found" flag since we found live streams
             await this.redisService.del(notFoundKey);
             console.log(`💾 [Batch] Cached ${streams.length} streams for ${handle} (${channelId}) (TTL: ${blockTTL}s)`);
         } else {
-          results.set(channelId, null);
-          
           // For back-to-back-fix cron, only increment attempts without setting new not-found flags
           if (cronType === 'back-to-back-fix') {
             await this.incrementNotFoundAttempts(channelId, handle);
-          } else {
-            // Handle not-found escalation for other cron types
+            results.set(channelId, null);
+          } else if (cronType === 'manual') {
+            // Manual cron should attempt fetch, not skip
             const notFoundKey = `videoIdNotFound:${channelId}`;
-            await this.handleNotFoundEscalation(channelId, handle, notFoundKey);
+            await this.handleNotFoundEscalationMain(channelId, handle, notFoundKey);
+            results.set(channelId, null);
+          } else {
+            // Handle not-found escalation for main cron type
+            const notFoundKey = `videoIdNotFound:${channelId}`;
+            await this.handleNotFoundEscalationMain(channelId, handle, notFoundKey);
+            results.set(channelId, '__SKIPPED__');
           }
         }
         }
@@ -555,14 +570,15 @@ export class YoutubeLiveService {
   }
 
   /**
-   * Gets all live streams for a channel (new method supporting multiple streams)
+   * Internal method that handles the core logic for getting live streams
    */
-  async getLiveStreams(
+  private async getLiveStreamsInternal(
     channelId: string,
     handle: string,
     blockTTL: number,
     context: 'cron' | 'onDemand' | 'program-start',
     ignoreNotFoundCache: boolean = false,
+    cronType: 'main' | 'back-to-back-fix' | 'manual'
   ): Promise<LiveStreamsResult | null | '__SKIPPED__'> {
     // gating centralizado
     if (!(await this.configService.canFetchLive(handle))) {
@@ -586,10 +602,10 @@ export class YoutubeLiveService {
     }
 
     // cache-hit: reuse si sigue vivo
-    const cachedStreams = await this.redisService.get<string>(liveKey);
+    const cachedStreams = await this.redisService.get<any>(liveKey);
     if (cachedStreams) {
       try {
-        const parsedStreams: LiveStream[] = JSON.parse(cachedStreams);
+        const parsedStreams: LiveStream[] = cachedStreams.streams;
         // Skip validation during bulk operations to improve performance
         // Validate that at least the primary stream is still live (skip for onDemand context)
         if (parsedStreams.length > 0) {
@@ -600,8 +616,8 @@ export class YoutubeLiveService {
             console.log(`🔁 Reusing cached streams for ${handle} (${parsedStreams.length} streams)`);
             return {
               streams: parsedStreams,
-              primaryVideoId: parsedStreams[0].videoId,
-              streamCount: parsedStreams.length
+              primaryVideoId: cachedStreams.primaryVideoId,
+              streamCount: cachedStreams.streamCount
             };
           } else {
             console.log(`🔄 Cached video ${parsedStreams[0].videoId} no longer live for ${handle}, forcing refresh`);
@@ -643,18 +659,35 @@ export class YoutubeLiveService {
       console.log(`🔍 [getLiveStreams] Response for ${handle}:`, JSON.stringify(data, null, 2));
       
 
-      const liveStreams: LiveStream[] = (data.items || []).map((item: any) => ({
+      const allStreams: LiveStream[] = (data.items || []).map((item: any) => ({
         videoId: item.id.videoId,
         title: item.snippet.title,
         publishedAt: item.snippet.publishedAt,
         description: item.snippet.description,
         thumbnailUrl: item.snippet.thumbnails?.medium?.url,
         channelTitle: item.snippet.channelTitle,
+        liveBroadcastContent: item.snippet.liveBroadcastContent, // Add this for validation
       }));
 
+      // Filter out scheduled streams - only keep actually live streams
+      const liveStreams: LiveStream[] = [];
+      for (const stream of allStreams) {
+        const isActuallyLive = await this.isVideoLive(stream.videoId);
+        if (isActuallyLive) {
+          liveStreams.push(stream);
+          console.log(`✅ [getLiveStreams] Confirmed live stream for ${handle}: ${stream.videoId} - ${stream.title}`);
+        } else {
+          console.log(`⏰ [getLiveStreams] Skipping scheduled stream for ${handle}: ${stream.videoId} - ${stream.title}`);
+        }
+      }
+
       if (liveStreams.length === 0) {
-        console.log(`🚫 No live streams for ${handle} (${context})`);
-        await this.handleNotFoundEscalation(channelId, handle, notFoundKey);
+        console.log(`🚫 No actually live streams for ${handle} (${context}) - all were scheduled`);
+        if (cronType === 'back-to-back-fix') {
+          await this.handleNotFoundEscalationBackToBack(channelId, handle, notFoundKey);
+        } else {
+          await this.handleNotFoundEscalationMain(channelId, handle, notFoundKey);
+        }
         return null;
       }
 
@@ -665,7 +698,7 @@ export class YoutubeLiveService {
       };
 
       // Cache the streams
-      await this.redisService.set(liveKey, JSON.stringify(liveStreams), blockTTL);
+      await this.redisService.set(liveKey, result, blockTTL);
       
       // Clear the "not-found" flag since we found live streams
       await this.redisService.del(notFoundKey);
@@ -736,6 +769,27 @@ export class YoutubeLiveService {
     }
   }
 
+  /**
+   * Get live streams for main cron - should extend not-found marks
+   */
+  async getLiveStreamsMain(channelId: string, handle: string, blockTTL: number): Promise<LiveStreamsResult | null | '__SKIPPED__'> {
+    return this.getLiveStreamsInternal(channelId, handle, blockTTL, 'cron', false, 'main');
+  }
+
+  /**
+   * Get live streams for back-to-back-fix cron - should only increment attempts, NOT extend not-found marks
+   */
+  async getLiveStreamsBackToBack(channelId: string, handle: string, blockTTL: number): Promise<LiveStreamsResult | null | '__SKIPPED__'> {
+    return this.getLiveStreamsInternal(channelId, handle, blockTTL, 'cron', true, 'back-to-back-fix');
+  }
+
+  /**
+   * Get live streams for manual execution - should extend not-found marks
+   */
+  async getLiveStreamsManual(channelId: string, handle: string, blockTTL: number): Promise<LiveStreamsResult | null | '__SKIPPED__'> {
+    return this.getLiveStreamsInternal(channelId, handle, blockTTL, 'cron', false, 'manual');
+  }
+
   public async isVideoLive(videoId: string): Promise<boolean> {
     try {
       // Track API usage
@@ -751,10 +805,32 @@ export class YoutubeLiveService {
   }
 
   /**
-   * Itera canales con programación hoy y llama a getLiveVideoId
+   * Main cron job - runs every hour at :00
+   * Should extend not-found marks on second attempt
    */
-  async fetchLiveVideoIds(cronType: 'main' | 'back-to-back-fix' | 'manual' = 'main') {
-    const cronLabel = cronType === 'main' ? '🕐 MAIN CRON' : cronType === 'back-to-back-fix' ? '🔄 BACK-TO-BACK FIX CRON' : '🔧 MANUAL EXECUTION';
+  async fetchLiveVideoIdsMain() {
+    return this.fetchLiveVideoIdsInternal('main', '🕐 MAIN CRON');
+  }
+
+  /**
+   * Back-to-back fix cron job - runs at :07 and :37
+   * Should only increment attempts, NOT extend not-found marks
+   */
+  async fetchLiveVideoIdsBackToBack() {
+    return this.fetchLiveVideoIdsInternal('back-to-back-fix', '🔄 BACK-TO-BACK FIX CRON');
+  }
+
+  /**
+   * Manual execution method
+   */
+  async fetchLiveVideoIdsManual() {
+    return this.fetchLiveVideoIdsInternal('manual', '🔧 MANUAL EXECUTION');
+  }
+
+  /**
+   * Internal method that handles the actual logic for all cron types
+   */
+  private async fetchLiveVideoIdsInternal(cronType: 'main' | 'back-to-back-fix' | 'manual', cronLabel: string) {
     const currentTime = TimezoneUtil.currentTimeString();
     
     console.log(`${cronLabel} started at ${currentTime}`);
@@ -806,8 +882,13 @@ export class YoutubeLiveService {
         const ttl = await getCurrentBlockTTL(channelId, rawSchedules, this.sentryService);
         console.log(`[${cronLabel}] TTL for ${handle}: ${ttl}s`);
         
-        // Fetch live streams for this channel using the modern method
-        const liveStreamsResult = await this.getLiveStreams(channelId, handle, ttl, 'cron', cronType === 'back-to-back-fix');
+        // Fetch live streams for this channel using the appropriate method based on cron type
+        let liveStreamsResult;
+        if (cronType === 'back-to-back-fix') {
+          liveStreamsResult = await this.getLiveStreamsBackToBack(channelId, handle, ttl);
+        } else {
+          liveStreamsResult = await this.getLiveStreamsMain(channelId, handle, ttl);
+        }
         
         if (liveStreamsResult && liveStreamsResult !== '__SKIPPED__' && liveStreamsResult.streamCount > 0) {
           results.set(channelId, liveStreamsResult);
@@ -926,7 +1007,7 @@ export class YoutubeLiveService {
 
       // Check streams cache
       const streamsKey = `liveStreamsByChannel:${channelId}`;
-      const cachedStreams = await this.redisService.get<string>(streamsKey);
+      const cachedStreams = await this.redisService.get<any>(streamsKey);
       
       if (!cachedStreams) {
         return; // No cached data to validate
@@ -934,7 +1015,7 @@ export class YoutubeLiveService {
 
       // Check if cached streams are still live
       try {
-        const streams = JSON.parse(cachedStreams);
+        const streams = cachedStreams;
         if (streams.primaryVideoId && (await this.isVideoLive(streams.primaryVideoId))) {
           console.log(`✅  ${handle}: ${streams.primaryVideoId}`);
           this.validationCooldowns.set(channelId, now); // Update cooldown
@@ -950,8 +1031,8 @@ export class YoutubeLiveService {
       const schedules = await this.schedulesService.findByDay(dayjs().tz('America/Argentina/Buenos_Aires').format('dddd').toLowerCase());
       const ttl = await getCurrentBlockTTL(channelId, schedules, this.sentryService);
       
-      // Use the new getLiveStreams method to refresh (ignore not-found cache for back-to-back fix)
-      const streamsResult = await this.getLiveStreams(channelId, handle, ttl, 'program-start', true);
+      // Use the main cron method to refresh (should extend not-found marks)
+      const streamsResult = await this.getLiveStreamsMain(channelId, handle, ttl);
       
       if (streamsResult && streamsResult !== '__SKIPPED__') {
         console.log(`🆕 Refreshed streams for ${handle}: ${streamsResult.streamCount} streams, primary: ${streamsResult.primaryVideoId}`);
@@ -975,16 +1056,16 @@ export class YoutubeLiveService {
    */
   private async incrementNotFoundAttempts(channelId: string, handle: string): Promise<void> {
     const attemptTrackingKey = `notFoundAttempts:${channelId}`;
-    const existing = await this.redisService.get<string>(attemptTrackingKey);
+    const existing = await this.redisService.get<AttemptTracking>(attemptTrackingKey);
     
     if (existing) {
-      const tracking: AttemptTracking = JSON.parse(existing);
+      const tracking: AttemptTracking = existing;
       tracking.attempts += 1;
       tracking.lastAttempt = Date.now();
       
       // Update attempt tracking with program-end TTL (without setting new not-found flags)
       const programEndTime = await this.getCurrentProgramEndTime(channelId);
-      const ttlUntilProgramEnd = programEndTime ? Math.max(programEndTime - Date.now(), 3600) : 86400; // Min 1 hour, fallback to 24h
+      const ttlUntilProgramEnd = programEndTime ? Math.max(programEndTime - Date.now(), 60) : 86400; // Min 1 minute, fallback to 24h
       await this.redisService.set(attemptTrackingKey, JSON.stringify(tracking), Math.floor(ttlUntilProgramEnd / 1000));
       
       console.log(`🔄 [Back-to-back] Incremented attempt count for ${handle} (${channelId}) - now ${tracking.attempts} attempts`);
@@ -995,15 +1076,15 @@ export class YoutubeLiveService {
   }
 
   /**
-   * Handle not-found escalation logic
+   * Handle not-found escalation for main cron and manual execution - should extend not-found marks
    */
-  private async handleNotFoundEscalation(
+  private async handleNotFoundEscalationMain(
     channelId: string, 
     handle: string, 
     notFoundKey: string
   ): Promise<void> {
     const attemptTrackingKey = `notFoundAttempts:${channelId}`;
-    const existing = await this.redisService.get<string>(attemptTrackingKey);
+    const existing = await this.redisService.get<AttemptTracking>(attemptTrackingKey);
     
     if (!existing) {
       // First attempt
@@ -1016,16 +1097,16 @@ export class YoutubeLiveService {
       
       // Set persistent tracking with program-end TTL
       const programEndTime = await this.getCurrentProgramEndTime(channelId);
-      const ttlUntilProgramEnd = programEndTime ? Math.max(programEndTime - Date.now(), 3600) : 86400; // Min 1 hour, fallback to 24h
+      const ttlUntilProgramEnd = programEndTime ? Math.max(programEndTime - Date.now(), 60) : 86400; // Min 1 minute, fallback to 24h
       await this.redisService.set(attemptTrackingKey, JSON.stringify(tracking), Math.floor(ttlUntilProgramEnd / 1000));
-      // Set current not-found mark (15 minutes TTL)
-      await this.redisService.set(notFoundKey, '1', 900);
       
+      // Set not-found mark for main cron and manual execution
+      await this.redisService.set(notFoundKey, '1', 900);
       console.log(`🚫 [First attempt] No live video for ${handle}, marking not-found for 15 minutes`);
       return;
     }
 
-    const tracking: AttemptTracking = JSON.parse(existing);
+    const tracking: AttemptTracking = existing;
     tracking.attempts++;
     tracking.lastAttempt = Date.now();
 
@@ -1039,7 +1120,7 @@ export class YoutubeLiveService {
         await this.redisService.set(notFoundKey, '1', Math.floor(ttlUntilProgramEnd / 1000));
         
         // Update attempt tracking with program-end TTL
-        const ttlUntilProgramEndForTracking = Math.max(programEndTime - Date.now(), 3600); // Min 1 hour
+        const ttlUntilProgramEndForTracking = Math.max(programEndTime - Date.now(), 60); // Min 1 minute
         await this.redisService.set(attemptTrackingKey, JSON.stringify(tracking), Math.floor(ttlUntilProgramEndForTracking / 1000));
         
         console.log(`🚫 [ESCALATED] No live video for ${handle} after 3 attempts, marking not-found until program end (${new Date(programEndTime).toLocaleTimeString()})`);
@@ -1052,14 +1133,80 @@ export class YoutubeLiveService {
         console.log(`🚫 [Fallback] No live video for ${handle}, marking not-found for 1 hour (couldn't determine program end)`);
       }
     } else {
-      // Second attempt - extend for another 15 minutes
+      // Second attempt - extend not-found mark for main cron and manual execution
       await this.redisService.set(notFoundKey, '1', 900);
       console.log(`🚫 [Second attempt] Still no live video for ${handle}, extending not-found for another 15 minutes`);
     }
     
     // Update persistent tracking with program-end TTL
     const programEndTime = await this.getCurrentProgramEndTime(channelId);
-    const ttlUntilProgramEnd = programEndTime ? Math.max(programEndTime - Date.now(), 3600) : 86400; // Min 1 hour, fallback to 24h
+    const ttlUntilProgramEnd = programEndTime ? Math.max(programEndTime - Date.now(), 60) : 86400; // Min 1 minute, fallback to 24h
+    await this.redisService.set(attemptTrackingKey, JSON.stringify(tracking), Math.floor(ttlUntilProgramEnd / 1000));
+  }
+
+  /**
+   * Handle not-found escalation for back-to-back-fix cron - should only increment attempts, NOT extend not-found marks
+   */
+  private async handleNotFoundEscalationBackToBack(
+    channelId: string, 
+    handle: string, 
+    notFoundKey: string
+  ): Promise<void> {
+    const attemptTrackingKey = `notFoundAttempts:${channelId}`;
+    const existing = await this.redisService.get<AttemptTracking>(attemptTrackingKey);
+    
+    if (!existing) {
+      // First attempt - only increment attempts, no not-found mark
+      const tracking: AttemptTracking = {
+        attempts: 1,
+        firstAttempt: Date.now(),
+        lastAttempt: Date.now(),
+        escalated: false
+      };
+      
+      // Set persistent tracking with program-end TTL
+      const programEndTime = await this.getCurrentProgramEndTime(channelId);
+      const ttlUntilProgramEnd = programEndTime ? Math.max(programEndTime - Date.now(), 60) : 86400; // Min 1 minute, fallback to 24h
+      await this.redisService.set(attemptTrackingKey, JSON.stringify(tracking), Math.floor(ttlUntilProgramEnd / 1000));
+      
+      console.log(`🚫 [Back-to-back] First attempt for ${handle}, incrementing attempts only (no not-found mark)`);
+      return;
+    }
+
+    const tracking: AttemptTracking = existing;
+    tracking.attempts++;
+    tracking.lastAttempt = Date.now();
+
+    if (tracking.attempts >= 3) {
+      // Third attempt - escalate to program duration
+      const programEndTime = await this.getCurrentProgramEndTime(channelId);
+      if (programEndTime) {
+        tracking.programEndTime = programEndTime;
+        tracking.escalated = true;
+        const ttlUntilProgramEnd = Math.max(programEndTime - Date.now(), 60);
+        await this.redisService.set(notFoundKey, '1', Math.floor(ttlUntilProgramEnd / 1000));
+        
+        // Update attempt tracking with program-end TTL
+        const ttlUntilProgramEndForTracking = Math.max(programEndTime - Date.now(), 60); // Min 1 minute
+        await this.redisService.set(attemptTrackingKey, JSON.stringify(tracking), Math.floor(ttlUntilProgramEndForTracking / 1000));
+        
+        console.log(`🚫 [ESCALATED] No live video for ${handle} after 3 attempts, marking not-found until program end (${new Date(programEndTime).toLocaleTimeString()})`);
+        
+        // Send email notification
+        await this.sendEscalationEmail(channelId, handle);
+      } else {
+        // Fallback to 1 hour
+        await this.redisService.set(notFoundKey, '1', 3600);
+        console.log(`🚫 [Fallback] No live video for ${handle}, marking not-found for 1 hour (couldn't determine program end)`);
+      }
+    } else {
+      // Second attempt - only increment attempts, no not-found mark renewal
+      console.log(`🚫 [Back-to-back] Second attempt for ${handle}, incrementing attempts only (no not-found mark renewal)`);
+    }
+    
+    // Update persistent tracking with program-end TTL
+    const programEndTime = await this.getCurrentProgramEndTime(channelId);
+    const ttlUntilProgramEnd = programEndTime ? Math.max(programEndTime - Date.now(), 60) : 86400; // Min 1 minute, fallback to 24h
     await this.redisService.set(attemptTrackingKey, JSON.stringify(tracking), Math.floor(ttlUntilProgramEnd / 1000));
   }
 
@@ -1113,6 +1260,12 @@ export class YoutubeLiveService {
    * Send escalation email notification
    */
   private async sendEscalationEmail(channelId: string, handle: string): Promise<void> {
+    // Only send emails in production environment
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`📧 [${process.env.NODE_ENV || 'development'}] Escalation email skipped for ${handle} (not production environment)`);
+      return;
+    }
+
     try {
       // Get channel and program information
       const channel = await this.channelsRepository.findOne({
