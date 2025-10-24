@@ -436,11 +436,10 @@ export class SchedulesService {
           if (allStreams.length === 0) {
             const ttl = await getCurrentBlockTTL(channelId, schedules, this.sentryService);
             
-            const streamsResult = await this.youtubeLiveService.getLiveStreams(
+            const streamsResult = await this.youtubeLiveService.getLiveStreamsMain(
               channelId,
               handle,
-              ttl,
-              'onDemand'
+              ttl
             );
             
             if (streamsResult && streamsResult !== '__SKIPPED__') {
@@ -549,11 +548,10 @@ export class SchedulesService {
           const canFetch = await this.configService.canFetchLive(handle);
           if (canFetch) {
         // Try to get multiple streams first
-        const liveStreams = await this.youtubeLiveService.getLiveStreams(
+        const liveStreams = await this.youtubeLiveService.getLiveStreamsMain(
           channelId,
           handle,
-          100, // Default TTL
-          'onDemand'
+          100 // Default TTL
         );
         
         
@@ -563,11 +561,10 @@ export class SchedulesService {
           streamUrl = `https://www.youtube.com/embed/${firstStream.videoId}?autoplay=1`;
         } else {
               // Fallback to getLiveStreams method (same as bulk enrichment)
-              const streamsResult = await this.youtubeLiveService.getLiveStreams(
+              const streamsResult = await this.youtubeLiveService.getLiveStreamsMain(
                 channelId,
                 handle,
-                100, // Default TTL
-                'onDemand'
+                100 // Default TTL
               );
               if (streamsResult && streamsResult !== '__SKIPPED__' && typeof streamsResult === 'object' && 'streams' in streamsResult && streamsResult.streams.length > 0) {
                 const firstStream = streamsResult.streams[0];

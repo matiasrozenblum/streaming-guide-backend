@@ -301,15 +301,12 @@ export class LiveStatusBackgroundService {
         return this.createNotLiveCacheData(channelId, handle, ttl);
       }
       
-      // Fetch live streams from YouTube
+      // Fetch live streams from YouTube using main cron method (should extend not-found marks)
       console.log(`[LIVE-STATUS-BG] Fetching live streams for ${handle} (${channelId})`);
-      const liveStreams = await this.youtubeLiveService.getLiveStreams(
+      const liveStreams = await this.youtubeLiveService.getLiveStreamsMain(
         channelId,
         handle,
-        ttl,
-        'cron', // Background context
-        false, // Don't ignore not-found cache
-        'main' // Use main cron type to enable escalation
+        ttl
       );
       console.log(`[LIVE-STATUS-BG] Live streams result for ${handle}:`, liveStreams);
 

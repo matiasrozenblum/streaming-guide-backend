@@ -432,7 +432,7 @@ export class AppController {
   @Roles('admin')
   @Post('youtube/fetch-live-ids')
   async fetchYoutubeLiveIds() {
-    await this.youtubeLiveService.fetchLiveVideoIds('manual');
+    await this.youtubeLiveService.fetchLiveVideoIdsManual();
     return { 
       success: true, 
       message: 'YouTube live video IDs fetched successfully.' 
