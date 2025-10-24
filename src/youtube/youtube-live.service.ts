@@ -563,6 +563,7 @@ export class YoutubeLiveService {
     blockTTL: number,
     context: 'cron' | 'onDemand' | 'program-start',
     ignoreNotFoundCache: boolean = false,
+    cronType?: 'main' | 'back-to-back-fix' | 'manual'
   ): Promise<LiveStreamsResult | null | '__SKIPPED__'> {
     // gating centralizado
     if (!(await this.configService.canFetchLive(handle))) {
@@ -654,7 +655,7 @@ export class YoutubeLiveService {
 
       if (liveStreams.length === 0) {
         console.log(`🚫 No live streams for ${handle} (${context})`);
-        await this.handleNotFoundEscalation(channelId, handle, notFoundKey, 'main');
+        await this.handleNotFoundEscalation(channelId, handle, notFoundKey, cronType || 'main');
         return null;
       }
 

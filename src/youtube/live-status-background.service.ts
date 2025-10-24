@@ -262,13 +262,54 @@ export class LiveStatusBackgroundService {
       // Calculate block end time for cache metadata
       const blockEndTime = this.calculateBlockEndTime(liveSchedules, currentTime);
 
+      // Check if we have a cached video ID first
+      const streamsKey = `liveStreamsByChannel:${channelId}`;
+      const cachedStreams = await this.redisService.get<string>(streamsKey);
+      
+      if (cachedStreams) {
+        // We have a cached video ID, check if it needs validation
+        const streams = JSON.parse(cachedStreams);
+        if (streams.primaryVideoId && Date.now() > streams.validationCooldown) {
+          // Validation cooldown expired, check if video is still live
+          const isStillLive = await this.youtubeLiveService.isVideoLive(streams.primaryVideoId);
+          if (isStillLive) {
+            // Video is still live, update cooldown and continue
+            console.log(`[LIVE-STATUS-BG] Video ID ${streams.primaryVideoId} still live for ${handle}`);
+            // Update the cache with new validation cooldown
+            streams.validationCooldown = Date.now() + (30 * 60 * 1000);
+            await this.redisService.set(streamsKey, JSON.stringify(streams), ttl);
+            return this.createCacheDataFromStreams(channelId, handle, streams, ttl, blockEndTime);
+          } else {
+            // Video is no longer live, clear cache and fetch new one
+            console.log(`[LIVE-STATUS-BG] Video ID ${streams.primaryVideoId} no longer live for ${handle}, fetching new one`);
+            await this.redisService.del(streamsKey);
+          }
+        } else if (streams.primaryVideoId) {
+          // Validation cooldown still active, use cached data
+          console.log(`[LIVE-STATUS-BG] Using cached video ID ${streams.primaryVideoId} for ${handle} (cooldown active)`);
+          return this.createCacheDataFromStreams(channelId, handle, streams, ttl, blockEndTime);
+        }
+      }
+      
+      // No cached video ID or validation failed, check not-found cache
+      const notFoundKey = `videoIdNotFound:${channelId}`;
+      const notFoundData = await this.redisService.get<string>(notFoundKey);
+      
+      if (notFoundData) {
+        // Channel is marked as not-found, skip fetching
+        console.log(`[LIVE-STATUS-BG] Skipping ${handle} - marked as not-found`);
+        return this.createNotLiveCacheData(channelId, handle, ttl);
+      }
+      
       // Fetch live streams from YouTube
       console.log(`[LIVE-STATUS-BG] Fetching live streams for ${handle} (${channelId})`);
       const liveStreams = await this.youtubeLiveService.getLiveStreams(
         channelId,
         handle,
         ttl,
-        'cron' // Background context
+        'cron', // Background context
+        false, // Don't ignore not-found cache
+        'main' // Use main cron type to enable escalation
       );
       console.log(`[LIVE-STATUS-BG] Live streams result for ${handle}:`, liveStreams);
 
@@ -385,6 +426,54 @@ export class LiveStatusBackgroundService {
   private convertTimeToNumber(time: string): number {
     const [h, m] = time.split(':').map(Number);
     return h * 60 + m;
+  }
+
+  /**
+   * Create cache data from existing streams
+   */
+  private createCacheDataFromStreams(
+    channelId: string, 
+    handle: string, 
+    streams: any, 
+    ttl: number, 
+    blockEndTime: number
+  ): LiveStatusCache {
+    return {
+      channelId,
+      handle,
+      isLive: streams.streams && streams.streams.length > 0,
+      streamUrl: streams.streams && streams.streams.length > 0 
+        ? `https://www.youtube.com/embed/${streams.primaryVideoId}?autoplay=1`
+        : null,
+      videoId: streams.primaryVideoId || null,
+      lastUpdated: Date.now(),
+      ttl,
+      blockEndTime,
+      validationCooldown: Date.now() + (30 * 60 * 1000),
+      lastValidation: Date.now(),
+      streams: streams.streams || [],
+      streamCount: streams.streamCount || 0,
+    };
+  }
+
+  /**
+   * Create cache data for not-live channels
+   */
+  private createNotLiveCacheData(channelId: string, handle: string, ttl: number): LiveStatusCache {
+    return {
+      channelId,
+      handle,
+      isLive: false,
+      streamUrl: null,
+      videoId: null,
+      lastUpdated: Date.now(),
+      ttl,
+      blockEndTime: 24 * 60, // End of day
+      validationCooldown: Date.now() + (30 * 60 * 1000),
+      lastValidation: Date.now(),
+      streams: [],
+      streamCount: 0,
+    };
   }
 
   /**
