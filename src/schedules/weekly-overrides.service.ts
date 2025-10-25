@@ -209,7 +209,11 @@ export class WeeklyOverridesService {
     // Create override ID
     let overrideId: string;
     if (dto.overrideType === 'create') {
-      overrideId = `special_${dto.specialProgram!.name.replace(/\s+/g, '_').toLowerCase()}_${weekStartDate}`;
+      // New format includes channel ID and day of week to prevent collisions
+      const channelId = dto.specialProgram!.channelId;
+      const name = dto.specialProgram!.name.replace(/\s+/g, '_').toLowerCase();
+      const dayOfWeek = dto.newDayOfWeek?.toLowerCase() || 'unknown';
+      overrideId = `special_channel_${channelId}_${name}_${dayOfWeek}_${weekStartDate}`;
     } else if (dto.programId) {
       overrideId = `program_${dto.programId}_${weekStartDate}`;
     } else {
