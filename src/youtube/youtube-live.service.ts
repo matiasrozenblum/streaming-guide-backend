@@ -318,7 +318,7 @@ export class YoutubeLiveService {
             await this.redisService.set(notFoundKey, '1', Math.floor(ttlUntilProgramEnd / 1000));
             // Update attempt tracking with program-end TTL
             const ttlUntilProgramEndForTracking = Math.max(programEndTime - Date.now(), 60); // Min 1 minute
-            await this.redisService.set(attemptTrackingKey, JSON.stringify(tracking), Math.floor(ttlUntilProgramEndForTracking / 1000));
+            await this.redisService.set(attemptTrackingKey, tracking, Math.floor(ttlUntilProgramEndForTracking / 1000));
             
             const handle = channelHandleMap?.get(channelId) || 'unknown';
             console.log(`🚫 [ESCALATED ON EXPIRATION] No live video for ${handle} after 3 attempts, marking not-found until program end`);
@@ -1066,7 +1066,7 @@ export class YoutubeLiveService {
       // Update attempt tracking with program-end TTL (without setting new not-found flags)
       const programEndTime = await this.getCurrentProgramEndTime(channelId);
       const ttlUntilProgramEnd = programEndTime ? Math.max(programEndTime - Date.now(), 60) : 86400; // Min 1 minute, fallback to 24h
-      await this.redisService.set(attemptTrackingKey, JSON.stringify(tracking), Math.floor(ttlUntilProgramEnd / 1000));
+      await this.redisService.set(attemptTrackingKey, tracking, Math.floor(ttlUntilProgramEnd / 1000));
       
       console.log(`🔄 [Back-to-back] Incremented attempt count for ${handle} (${channelId}) - now ${tracking.attempts} attempts`);
     } else {
@@ -1099,7 +1099,7 @@ export class YoutubeLiveService {
       // Set persistent tracking with program-end TTL
       const programEndTime = await this.getCurrentProgramEndTime(channelId);
       const ttlUntilProgramEnd = programEndTime ? Math.max(programEndTime - Date.now(), 60) : 86400; // Min 1 minute, fallback to 24h
-      await this.redisService.set(attemptTrackingKey, JSON.stringify(tracking), Math.floor(ttlUntilProgramEnd / 1000));
+      await this.redisService.set(attemptTrackingKey, tracking, Math.floor(ttlUntilProgramEnd / 1000));
       
       // Set not-found mark for main cron and manual execution
       await this.redisService.set(notFoundKey, '1', 900);
@@ -1122,7 +1122,7 @@ export class YoutubeLiveService {
         
         // Update attempt tracking with program-end TTL
         const ttlUntilProgramEndForTracking = Math.max(programEndTime - Date.now(), 60); // Min 1 minute
-        await this.redisService.set(attemptTrackingKey, JSON.stringify(tracking), Math.floor(ttlUntilProgramEndForTracking / 1000));
+        await this.redisService.set(attemptTrackingKey, tracking, Math.floor(ttlUntilProgramEndForTracking / 1000));
         
         console.log(`🚫 [ESCALATED] No live video for ${handle} after 3 attempts, marking not-found until program end (${new Date(programEndTime).toLocaleTimeString()})`);
         
@@ -1142,7 +1142,7 @@ export class YoutubeLiveService {
     // Update persistent tracking with program-end TTL
     const programEndTime = await this.getCurrentProgramEndTime(channelId);
     const ttlUntilProgramEnd = programEndTime ? Math.max(programEndTime - Date.now(), 60) : 86400; // Min 1 minute, fallback to 24h
-    await this.redisService.set(attemptTrackingKey, JSON.stringify(tracking), Math.floor(ttlUntilProgramEnd / 1000));
+    await this.redisService.set(attemptTrackingKey, tracking, Math.floor(ttlUntilProgramEnd / 1000));
   }
 
   /**
@@ -1168,7 +1168,7 @@ export class YoutubeLiveService {
       // Set persistent tracking with program-end TTL
       const programEndTime = await this.getCurrentProgramEndTime(channelId);
       const ttlUntilProgramEnd = programEndTime ? Math.max(programEndTime - Date.now(), 60) : 86400; // Min 1 minute, fallback to 24h
-      await this.redisService.set(attemptTrackingKey, JSON.stringify(tracking), Math.floor(ttlUntilProgramEnd / 1000));
+      await this.redisService.set(attemptTrackingKey, tracking, Math.floor(ttlUntilProgramEnd / 1000));
       
       console.log(`🚫 [Back-to-back] First attempt for ${handle}, incrementing attempts only (no not-found mark)`);
       return;
@@ -1189,7 +1189,7 @@ export class YoutubeLiveService {
         
         // Update attempt tracking with program-end TTL
         const ttlUntilProgramEndForTracking = Math.max(programEndTime - Date.now(), 60); // Min 1 minute
-        await this.redisService.set(attemptTrackingKey, JSON.stringify(tracking), Math.floor(ttlUntilProgramEndForTracking / 1000));
+        await this.redisService.set(attemptTrackingKey, tracking, Math.floor(ttlUntilProgramEndForTracking / 1000));
         
         console.log(`🚫 [ESCALATED] No live video for ${handle} after 3 attempts, marking not-found until program end (${new Date(programEndTime).toLocaleTimeString()})`);
         
@@ -1208,7 +1208,7 @@ export class YoutubeLiveService {
     // Update persistent tracking with program-end TTL
     const programEndTime = await this.getCurrentProgramEndTime(channelId);
     const ttlUntilProgramEnd = programEndTime ? Math.max(programEndTime - Date.now(), 60) : 86400; // Min 1 minute, fallback to 24h
-    await this.redisService.set(attemptTrackingKey, JSON.stringify(tracking), Math.floor(ttlUntilProgramEnd / 1000));
+    await this.redisService.set(attemptTrackingKey, tracking, Math.floor(ttlUntilProgramEnd / 1000));
   }
 
   /**
