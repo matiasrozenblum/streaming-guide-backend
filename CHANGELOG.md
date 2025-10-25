@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.16.3] - 2025-10-25
+
+### Changed
+- Changed special programs key generation to avoid collisions adding channel id and date
+
 ## [1.16.2] - 2025-10-25
 
 ### Added
