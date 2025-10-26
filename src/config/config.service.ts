@@ -15,13 +15,46 @@ export class ConfigService {
   private readonly HOLIDAY_OVERRIDE_PREFIX = 'config:holiday_override:';
   private readonly HOLIDAY_CACHE_KEY = 'config:holiday_status';
   
+  private cacheSeeded = false;
+  
   constructor(
     @InjectRepository(Config)
     private configRepository: Repository<Config>,
     private readonly redisService: RedisService,
   ) {
-    // Seed cache on startup
-    this.seedCache();
+    // Seed cache asynchronously on first use, not in constructor
+  }
+
+  /**
+   * Ensure cache is seeded (only runs once)
+   */
+  private async ensureCacheSeeded(): Promise<void> {
+    if (this.cacheSeeded) return;
+    
+    // Use Redis lock to ensure only one instance seeds the cache
+    const lockKey = 'config:seed_lock';
+    const lockValue = `${Date.now()}`;
+    const lockTTL = 30; // 30 seconds
+    
+    try {
+      // Try to acquire lock
+      const acquired = await this.redisService.client.set(lockKey, lockValue, 'EX', lockTTL, 'NX');
+      
+      if (acquired) {
+        // We got the lock, seed the cache
+        await this.seedCache();
+        this.cacheSeeded = true;
+        // Release lock
+        await this.redisService.del(lockKey);
+      } else {
+        // Another instance is seeding, wait and mark as seeded
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        this.cacheSeeded = true;
+      }
+    } catch (error) {
+      console.error('[ConfigService] Failed to ensure cache seeded:', error.message);
+      this.cacheSeeded = true; // Mark as seeded to avoid blocking
+    }
   }
 
   /**
@@ -109,6 +142,9 @@ export class ConfigService {
   }
 
   async isYoutubeFetchEnabledFor(handle: string): Promise<boolean> {
+    // Ensure cache is seeded before reading
+    await this.ensureCacheSeeded();
+    
     const perChannelKey = `youtube.fetch_enabled.${handle}`;
     
     // Check Redis cache first
@@ -123,7 +159,7 @@ export class ConfigService {
       return cachedGlobal;
     }
     
-    // Cache miss - fetch from DB (shouldn't happen after seedCache)
+    // Cache miss - fetch from DB and warm cache
     const perChannel = await this.get(perChannelKey);
     if (perChannel != null) {
       const value = perChannel === 'true';
