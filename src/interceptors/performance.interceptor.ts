@@ -12,11 +12,18 @@ export class PerformanceInterceptor implements NestInterceptor {
     const response = context.switchToHttp().getResponse();
     const startTime = Date.now();
     
+    // Generate unique request ID for tracing
+    const requestId = Math.random().toString(36).substr(2, 9);
+    request.id = requestId; // Attach to request for downstream access
+    
     // Ensure we get the correct route path, not the full URL
     const routePath = request.route?.path || request.path || request.url.split('?')[0];
     const endpoint = `${request.method} ${routePath}`;
     const userAgent = request.headers['user-agent'] || 'unknown';
     const ip = request.ip || request.connection?.remoteAddress || 'unknown';
+    
+    // Log request start with ID
+    console.log(`[${requestId}] 📥 Starting request: ${endpoint}`);
 
     // Add breadcrumb for performance tracking
     this.sentryService.addBreadcrumb({
@@ -36,8 +43,8 @@ export class PerformanceInterceptor implements NestInterceptor {
       tap((data) => {
         const responseTime = Date.now() - startTime;
         
-        // Log performance metrics
-        console.log(`📊 API Performance: ${endpoint} - ${responseTime}ms`);
+        // Log performance metrics with request ID
+        console.log(`[${requestId}] 📊 API Performance: ${endpoint} - ${responseTime}ms`);
         
         // Alert on slow responses (P3 - Medium Priority) - COMMENTED OUT
         // Temporarily disabled due to known performance issues with channels/schedules endpoint
@@ -90,8 +97,8 @@ export class PerformanceInterceptor implements NestInterceptor {
       catchError((error) => {
         const responseTime = Date.now() - startTime;
         
-        // Log error performance metrics
-        console.error(`❌ API Error: ${endpoint} - ${responseTime}ms - ${error.message}`);
+        // Log error performance metrics with request ID
+        console.error(`[${requestId}] ❌ API Error: ${endpoint} - ${responseTime}ms - ${error.message}`);
         
         // Alert on API errors (P2 - High Priority)
         this.sentryService.captureMessage(
