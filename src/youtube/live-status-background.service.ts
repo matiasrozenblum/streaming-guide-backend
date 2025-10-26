@@ -6,6 +6,7 @@ import { YoutubeLiveService } from './youtube-live.service';
 import { SchedulesService } from '../schedules/schedules.service';
 import { RedisService } from '../redis/redis.service';
 import { ConfigService } from '../config/config.service';
+import { SentryService } from '../sentry/sentry.service';
 import { TimezoneUtil } from '../utils/timezone.util';
 import { Channel } from '../channels/channels.entity';
 import { getCurrentBlockTTL } from '../utils/getBlockTTL.util';
@@ -46,6 +47,7 @@ export class LiveStatusBackgroundService {
     private readonly schedulesService: SchedulesService,
     private readonly redisService: RedisService,
     private readonly configService: ConfigService,
+    private readonly sentryService: SentryService,
     @InjectRepository(Channel)
     private readonly channelsRepository: Repository<Channel>,
   ) {}
@@ -265,8 +267,9 @@ export class LiveStatusBackgroundService {
       }
 
       // Calculate TTL using block TTL logic for accurate timing
-      const schedules = await this.schedulesService.findByDay(currentDay);
-      const ttl = await getCurrentBlockTTL(channelId, schedules);
+      // ✅ CRITICAL: Use channelSchedules (from allSchedules with overrides) instead of findByDay
+      // findByDay doesn't include weekly overrides, which is why futurock's cache was failing
+      const ttl = await getCurrentBlockTTL(channelId, channelSchedules, this.sentryService);
       
       // Calculate block end time for cache metadata
       const blockEndTime = this.calculateBlockEndTime(liveSchedules, currentTime);
