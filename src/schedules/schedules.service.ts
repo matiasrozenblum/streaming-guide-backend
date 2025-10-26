@@ -782,18 +782,24 @@ export class SchedulesService {
   /**
    * Find schedules by start time for a specific day
    * Used for program start detection to validate cached video IDs
+   * OPTIMIZED: Uses cached schedules instead of database query
    */
   async findByStartTime(dayOfWeek: string, startTime: string): Promise<Schedule[]> {
     try {
-      const schedules = await this.schedulesRepository
-        .createQueryBuilder('schedule')
-        .leftJoinAndSelect('schedule.program', 'program')
-        .leftJoinAndSelect('program.channel', 'channel')
-        .where('schedule.day_of_week = :dayOfWeek', { dayOfWeek })
-        .andWhere('schedule.start_time = :startTime', { startTime })
-        .getMany();
+      // Use cached schedules instead of database query
+      const allSchedules = await this.findAll({
+        dayOfWeek,
+        applyOverrides: true,
+        liveStatus: false,
+      });
+      
+      // Filter by start time
+      const matchingSchedules = allSchedules.filter(schedule => 
+        schedule.start_time === startTime || schedule.start_time.startsWith(startTime)
+      );
 
-      return schedules;
+      console.log(`[PROGRAM-START] Found ${matchingSchedules.length} programs starting at ${startTime} on ${dayOfWeek} (from cache)`);
+      return matchingSchedules;
     } catch (error) {
       console.error(`Error finding schedules for ${dayOfWeek} at ${startTime}:`, error);
       this.sentryService.captureException(error);
