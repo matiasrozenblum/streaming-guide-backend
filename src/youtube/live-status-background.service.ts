@@ -93,10 +93,12 @@ export class LiveStatusBackgroundService {
 
       // Check which channels need cache updates
       for (const [channelId, channelInfo] of liveChannels) {
+        console.log(`[LIVE-STATUS-BG] Checking cache for channel ${channelInfo.handle} (${channelId})`);
         const cacheKey = `${this.CACHE_PREFIX}${channelId}`;
         const cached = await this.redisService.get<LiveStatusCache>(cacheKey);
         
         if (!cached || await this.shouldUpdateCache(cached)) {
+          console.log(`[LIVE-STATUS-BG] Cache update needed for channel ${channelInfo.handle} (${channelId})`);
           channelsToUpdate.push(channelId);
         }
       }
