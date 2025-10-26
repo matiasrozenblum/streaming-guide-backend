@@ -850,7 +850,21 @@ export class YoutubeLiveService {
     const visibleSchedules = schedules.filter(s => s.program.channel?.is_visible === true);
   
     // 2) Filter only schedules that are "on-air" right now (time-based, not YouTube live status)
-    const liveNow = visibleSchedules.filter(s => s.program.is_live);
+    // CRITICAL: Only process schedules that have actual programs (not ghost schedules)
+    const liveNow = visibleSchedules.filter(s => {
+      // Must have a valid program with a name
+      if (!s.program || !s.program.name || s.program.name.trim() === '') {
+        return false;
+      }
+      
+      // Must have valid start and end times
+      if (!s.start_time || !s.end_time) {
+        return false;
+      }
+      
+      // Must be marked as live by the enrichment logic
+      return s.program.is_live;
+    });
   
     // 3) Deduplicás canales de esos schedules
     const map = new Map<string,string>();
@@ -861,6 +875,18 @@ export class YoutubeLiveService {
       }
     }
   
+    console.log(`${cronLabel} - Total schedules: ${schedules.length}`);
+    console.log(`${cronLabel} - Visible schedules: ${visibleSchedules.length}`);
+    console.log(`${cronLabel} - Live schedules (after validation): ${liveNow.length}`);
+    
+    // Log details of live schedules for debugging
+    if (liveNow.length > 0) {
+      console.log(`${cronLabel} - Live schedule details:`);
+      liveNow.forEach(s => {
+        console.log(`  - ${s.program.channel?.handle}: "${s.program.name}" (${s.start_time}-${s.end_time})`);
+      });
+    }
+    
     console.log(`${cronLabel} - Channels to refresh: ${map.size}`);
     
     if (map.size === 0) {

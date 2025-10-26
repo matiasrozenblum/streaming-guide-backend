@@ -474,36 +474,19 @@ export class LiveStatusBackgroundService {
   }
 
   /**
-   * Update live status for all channels (Approach B: separate cache management)
+   * Update live status for channels that actually have live programs
+   * This method should NOT update all channels - only those with live programs
    */
   private async updateLiveStatusForAllChannels(): Promise<void> {
     try {
-      this.logger.log('[LIVE-STATUS-UPDATE] Updating live status for all channels');
+      this.logger.log('[LIVE-STATUS-UPDATE] Skipping bulk update - only updating channels with live programs');
       
-      // Get all channels that have live schedules
-      const channels = await this.channelsRepository.find({
-        where: { is_visible: true },
-        select: ['id', 'name', 'handle', 'youtube_channel_id']
-      });
-
-      const channelIds = channels
-        .filter(channel => channel.youtube_channel_id)
-        .map(channel => channel.youtube_channel_id);
-
-      if (channelIds.length === 0) {
-        this.logger.log('[LIVE-STATUS-UPDATE] No channels with YouTube IDs found');
-        return;
-      }
-
-      this.logger.log(`[LIVE-STATUS-UPDATE] Updating live status for ${channelIds.length} channels`);
+      // This method was causing excessive API calls by updating ALL channels
+      // Instead, we only update channels that have live programs (handled in main loop)
+      // No action needed here - the main updateLiveStatusBackground method handles this correctly
       
-      // Update live status for all channels
-      await this.updateChannelsInBatches(channelIds);
-      
-      this.logger.log('[LIVE-STATUS-UPDATE] Completed live status update for all channels');
-
     } catch (error) {
-      this.logger.error('[LIVE-STATUS-UPDATE] Error updating live status for all channels:', error);
+      this.logger.error('[LIVE-STATUS-UPDATE] Error in live status update:', error);
     }
   }
 }

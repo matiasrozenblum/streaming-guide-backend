@@ -342,11 +342,13 @@ export class SchedulesService {
       let isLive = false;
       let streamUrl = program.stream_url || program.youtube_url;
 
-      // Si estamos en horario
+      // Si estamos en horario AND we have a valid program
       if (
         schedule.day_of_week === currentDay &&
         currentNum >= startNum &&
-        currentNum < endNum
+        currentNum < endNum &&
+        program.name && 
+        program.name.trim() !== ''
       ) {
         isLive = true;
       }
@@ -396,7 +398,9 @@ export class SchedulesService {
       const endNum = this.convertTimeToNumber(schedule.end_time);
       return schedule.day_of_week === currentDay &&
              currentNum >= startNum &&
-             currentNum < endNum;
+             currentNum < endNum &&
+             schedule.program.name && 
+             schedule.program.name.trim() !== '';
     });
 
     let allStreams: any[] = [];
