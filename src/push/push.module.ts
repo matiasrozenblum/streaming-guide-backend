@@ -12,6 +12,7 @@ import { Schedule } from '../schedules/schedules.entity';
 import { Program } from '../programs/programs.entity';
 import { Channel } from '../channels/channels.entity';
 import { ConfigModule } from '../config/config.module';
+import { SchedulesModule } from '../schedules/schedules.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { ConfigModule } from '../config/config.module';
     NotificationsModule,
     EmailModule,
     ConfigModule,
+    SchedulesModule, // ✅ Added to access SchedulesService
   ],
   providers: [PushService, PushScheduler],
   controllers: [PushController],
