@@ -226,6 +226,16 @@ export class SchedulesService {
       console.log('[SCHEDULES-OVERRIDES] Applying weekly overrides...');
       schedules = await this.weeklyOverridesService.applyWeeklyOverrides(schedules, currentWeekStart);
       console.log(`[SCHEDULES-OVERRIDES] Applied overrides (${Date.now() - overridesStart}ms)`);
+      
+      // Re-filter by day_of_week after applying overrides
+      // This is necessary because applyWeeklyOverrides adds ALL create overrides regardless of day
+      if (options.dayOfWeek) {
+        const beforeFilter = schedules.length;
+        schedules = schedules.filter(s => s.day_of_week === options.dayOfWeek);
+        if (beforeFilter !== schedules.length) {
+          console.log(`[SCHEDULES-OVERRIDES] Re-filtered to ${options.dayOfWeek}: ${schedules.length}/${beforeFilter} schedules (removed ${beforeFilter - schedules.length} from other days)`);
+        }
+      }
     }
 
     // Enrich with live status if requested
