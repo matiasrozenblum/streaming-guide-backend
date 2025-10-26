@@ -232,7 +232,7 @@ export class LiveStatusBackgroundService {
         }
       } catch (error) {
         // If we can't check the config (e.g., database connection issue), log and skip
-        this.logger.error(`❌ Error checking fetch config for ${handle}:`, error.message);
+        this.logger.error(`❌ Error checking fetch config for ${handle}: with error ${error.message}`, error.message);
         return null;
       }
 

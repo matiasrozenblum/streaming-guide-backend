@@ -242,7 +242,7 @@ export class WeeklyOverridesService {
       expiresAt,
       createdAt: new Date(),
       panelistIds: dto.panelistIds, // Keep legacy field for backward compatibility
-      panelists: completePanelists.length > 0 ? completePanelists : undefined, // Store complete objects
+      panelists: completePanelists, // Always store complete objects (even if empty array)
       specialProgram: dto.specialProgram ? {
         ...dto.specialProgram,
         channel: completeChannel, // Store complete channel object
@@ -376,7 +376,7 @@ export class WeeklyOverridesService {
       weekStartDate: existingOverride.weekStartDate,
       expiresAt: existingOverride.expiresAt,
       // Update complete objects
-      panelists: completePanelists.length > 0 ? completePanelists : undefined,
+      panelists: completePanelists, // Always store complete objects (even if empty array)
       specialProgram: dto.specialProgram ? {
         ...dto.specialProgram,
         channel: completeChannel,
