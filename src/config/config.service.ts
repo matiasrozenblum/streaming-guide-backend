@@ -4,46 +4,52 @@ import { Config } from './config.entity';
 import { Repository } from 'typeorm';
 import * as DateHolidays from 'date-holidays';
 import { TimezoneUtil } from '../utils/timezone.util';
+import { RedisService } from '../redis/redis.service';
 
 @Injectable()
 export class ConfigService {
   private readonly hd = new ((DateHolidays as any).default ?? DateHolidays)('AR');
   
-  // Permanent cache (never expires, only invalidated on set/remove)
-  private fetchEnabledCache = new Map<string, boolean>(); // 'youtube.fetch_enabled' or 'youtube.fetch_enabled.{handle}'
-  private holidayOverrideCache = new Map<string, boolean>(); // 'youtube.fetch_override_holiday.{handle}'
-  
-  // Daily cache for holiday status
-  private holidayCache: { date: string; isHoliday: boolean } | null = null;
+  // Redis key prefixes for config cache
+  private readonly FETCH_ENABLED_PREFIX = 'config:fetch_enabled:';
+  private readonly HOLIDAY_OVERRIDE_PREFIX = 'config:holiday_override:';
+  private readonly HOLIDAY_CACHE_KEY = 'config:holiday_status';
   
   constructor(
     @InjectRepository(Config)
     private configRepository: Repository<Config>,
+    private readonly redisService: RedisService,
   ) {
     // Seed cache on startup
     this.seedCache();
   }
 
   /**
-   * Seed caches with all fetch_enabled and holiday override values
+   * Seed Redis cache with all fetch_enabled and holiday override values
    */
   private async seedCache(): Promise<void> {
     try {
       const allConfigs = await this.configRepository.find();
       
+      let fetchEnabledCount = 0;
+      let holidayOverrideCount = 0;
+      
       for (const config of allConfigs) {
         const value = config.value === 'true';
         
         if (config.key === 'youtube.fetch_enabled' || config.key.startsWith('youtube.fetch_enabled.')) {
-          this.fetchEnabledCache.set(config.key, value);
+          // Store in Redis with no TTL (permanent)
+          await this.redisService.set(`${this.FETCH_ENABLED_PREFIX}${config.key}`, value);
+          fetchEnabledCount++;
         } else if (config.key.startsWith('youtube.fetch_override_holiday.')) {
-          this.holidayOverrideCache.set(config.key, value);
+          await this.redisService.set(`${this.HOLIDAY_OVERRIDE_PREFIX}${config.key}`, value);
+          holidayOverrideCount++;
         }
       }
       
-      console.log(`[ConfigService] Cache seeded: ${this.fetchEnabledCache.size} fetch_enabled, ${this.holidayOverrideCache.size} holiday overrides`);
+      console.log(`[ConfigService] Redis cache seeded: ${fetchEnabledCount} fetch_enabled, ${holidayOverrideCount} holiday overrides`);
     } catch (error) {
-      console.error('[ConfigService] Failed to seed cache:', error.message);
+      console.error('[ConfigService] Failed to seed Redis cache:', error.message);
     }
   }
 
@@ -73,13 +79,13 @@ export class ConfigService {
 
     const result = await this.configRepository.save(config);
     
-    // Update cache when value changes
+    // Update Redis cache when value changes
     const boolValue = value === 'true';
     
     if (key === 'youtube.fetch_enabled' || key.startsWith('youtube.fetch_enabled.')) {
-      this.fetchEnabledCache.set(key, boolValue);
+      await this.redisService.set(`${this.FETCH_ENABLED_PREFIX}${key}`, boolValue);
     } else if (key.startsWith('youtube.fetch_override_holiday.')) {
-      this.holidayOverrideCache.set(key, boolValue);
+      await this.redisService.set(`${this.HOLIDAY_OVERRIDE_PREFIX}${key}`, boolValue);
     }
     
     return result;
@@ -94,38 +100,40 @@ export class ConfigService {
   async remove(key: string): Promise<void> {
     await this.configRepository.delete({ key });
     
-    // Remove from cache
+    // Remove from Redis cache
     if (key === 'youtube.fetch_enabled' || key.startsWith('youtube.fetch_enabled.')) {
-      this.fetchEnabledCache.delete(key);
+      await this.redisService.del(`${this.FETCH_ENABLED_PREFIX}${key}`);
     } else if (key.startsWith('youtube.fetch_override_holiday.')) {
-      this.holidayOverrideCache.delete(key);
+      await this.redisService.del(`${this.HOLIDAY_OVERRIDE_PREFIX}${key}`);
     }
   }
 
   async isYoutubeFetchEnabledFor(handle: string): Promise<boolean> {
     const perChannelKey = `youtube.fetch_enabled.${handle}`;
     
-    // Check cache first
-    if (this.fetchEnabledCache.has(perChannelKey)) {
-      return this.fetchEnabledCache.get(perChannelKey)!;
+    // Check Redis cache first
+    const cachedPerChannel = await this.redisService.get<boolean>(`${this.FETCH_ENABLED_PREFIX}${perChannelKey}`);
+    if (cachedPerChannel !== null) {
+      return cachedPerChannel;
     }
     
     // Fallback to global if not in cache
-    if (this.fetchEnabledCache.has('youtube.fetch_enabled')) {
-      return this.fetchEnabledCache.get('youtube.fetch_enabled')!;
+    const cachedGlobal = await this.redisService.get<boolean>(`${this.FETCH_ENABLED_PREFIX}youtube.fetch_enabled`);
+    if (cachedGlobal !== null) {
+      return cachedGlobal;
     }
     
     // Cache miss - fetch from DB (shouldn't happen after seedCache)
     const perChannel = await this.get(perChannelKey);
     if (perChannel != null) {
       const value = perChannel === 'true';
-      this.fetchEnabledCache.set(perChannelKey, value);
+      await this.redisService.set(`${this.FETCH_ENABLED_PREFIX}${perChannelKey}`, value);
       return value;
     }
 
     const global = await this.get('youtube.fetch_enabled');
     const value = global === 'true';
-    this.fetchEnabledCache.set('youtube.fetch_enabled', value);
+    await this.redisService.set(`${this.FETCH_ENABLED_PREFIX}youtube.fetch_enabled`, value);
     return value;
   }
 
@@ -137,28 +145,38 @@ export class ConfigService {
     // Check if today is a holiday (cached daily) - using Argentina/Buenos Aires timezone
     const today = TimezoneUtil.currentDateString(); // YYYY-MM-DD in Argentina time
     
-    if (!this.holidayCache || this.holidayCache.date !== today) {
+    // Check Redis for holiday status
+    const cachedHoliday = await this.redisService.get<{ date: string; isHoliday: boolean }>(this.HOLIDAY_CACHE_KEY);
+    
+    let isHoliday: boolean;
+    if (!cachedHoliday || cachedHoliday.date !== today) {
       // Check holiday using Argentina timezone
       const argentinaDate = TimezoneUtil.now().toDate();
-      const isHoliday = !!this.hd.isHoliday(argentinaDate);
-      this.holidayCache = { date: today, isHoliday };
+      isHoliday = !!this.hd.isHoliday(argentinaDate);
+      
+      // Cache until end of day (Argentina time)
+      const ttl = TimezoneUtil.ttlUntilEndOfDay();
+      await this.redisService.set(this.HOLIDAY_CACHE_KEY, { date: today, isHoliday }, ttl);
+    } else {
+      isHoliday = cachedHoliday.isHoliday;
     }
     
-    if (!this.holidayCache.isHoliday) {
+    if (!isHoliday) {
       return true; // Not a holiday, can fetch
     }
     
-    // It's a holiday - check override
+    // It's a holiday - check override from Redis
     const overrideKey = `youtube.fetch_override_holiday.${handle}`;
     
-    // Check cache first
-    if (this.holidayOverrideCache.has(overrideKey)) {
-      return this.holidayOverrideCache.get(overrideKey)!;
+    // Check Redis cache first
+    const cachedOverride = await this.redisService.get<boolean>(`${this.HOLIDAY_OVERRIDE_PREFIX}${overrideKey}`);
+    if (cachedOverride !== null) {
+      return cachedOverride;
     }
     
     // Cache miss - fetch from DB
     const override = await this.getBoolean(overrideKey);
-    this.holidayOverrideCache.set(overrideKey, override);
+    await this.redisService.set(`${this.HOLIDAY_OVERRIDE_PREFIX}${overrideKey}`, override);
     return override;
   }
 }
