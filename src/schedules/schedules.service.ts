@@ -342,14 +342,14 @@ export class SchedulesService {
       let isLive = false;
       let streamUrl = program.stream_url || program.youtube_url;
 
-      // Si estamos en horario AND we have a valid program
-      if (
+      // Only set isLive if liveStatus is enabled
+      if (liveStatus && (
         schedule.day_of_week === currentDay &&
         currentNum >= startNum &&
         currentNum < endNum &&
         program.name && 
         program.name.trim() !== ''
-      ) {
+      )) {
         isLive = true;
       }
 
@@ -392,8 +392,8 @@ export class SchedulesService {
       return enriched;
     }
 
-    // Find live schedules for this channel
-    const liveSchedules = schedules.filter(schedule => {
+    // Find live schedules for this channel (only if liveStatus is enabled)
+    const liveSchedules = liveStatus ? schedules.filter(schedule => {
       const startNum = this.convertTimeToNumber(schedule.start_time);
       const endNum = this.convertTimeToNumber(schedule.end_time);
       return schedule.day_of_week === currentDay &&
@@ -401,7 +401,7 @@ export class SchedulesService {
              currentNum < endNum &&
              schedule.program.name && 
              schedule.program.name.trim() !== '';
-    });
+    }) : [];
 
     let allStreams: any[] = [];
     let channelStreamCount = 0;

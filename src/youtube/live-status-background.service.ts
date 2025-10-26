@@ -168,6 +168,7 @@ export class LiveStatusBackgroundService {
     const batchSize = 10; // Process 10 channels at a time
 
     for (let i = 0; i < channelIds.length; i += batchSize) {
+      console.log(`[LIVE-STATUS-BG] Updating channel ${channelIds[i]}`);
       const batch = channelIds.slice(i, i + batchSize);
       this.logger.log(`🔄 Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(channelIds.length / batchSize)}: ${batch.length} channels`);
 
@@ -225,7 +226,13 @@ export class LiveStatusBackgroundService {
       }
 
       // Check if channel is enabled for live fetching
-      if (!(await this.configService.canFetchLive(handle))) {
+      try {
+        if (!(await this.configService.canFetchLive(handle))) {
+          return null;
+        }
+      } catch (error) {
+        // If we can't check the config (e.g., database connection issue), log and skip
+        this.logger.error(`❌ Error checking fetch config for ${handle}:`, error.message);
         return null;
       }
 

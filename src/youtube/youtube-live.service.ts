@@ -125,9 +125,14 @@ export class YoutubeLiveService {
     context: 'cron' | 'onDemand' | 'program-start',
   ): Promise<string | null | '__SKIPPED__'> {
     // gating centralizado
-    if (!(await this.configService.canFetchLive(handle))) {
-      console.log(`[YouTube] fetch skipped for ${handle}`);
-      return '__SKIPPED__';
+    try {
+      if (!(await this.configService.canFetchLive(handle))) {
+        console.log(`[YouTube] fetch skipped for ${handle}`);
+        return '__SKIPPED__';
+      }
+    } catch (error) {
+      // If we can't check the config (e.g., database connection issue), assume it can fetch
+      console.warn(`⚠️ Error checking fetch config for ${handle}, allowing fetch:`, error.message);
     }
 
     const streamsKey = `liveStreamsByChannel:${channelId}`;
@@ -581,9 +586,14 @@ export class YoutubeLiveService {
     cronType: 'main' | 'back-to-back-fix' | 'manual'
   ): Promise<LiveStreamsResult | null | '__SKIPPED__'> {
     // gating centralizado
-    if (!(await this.configService.canFetchLive(handle))) {
-      console.log(`[YouTube] fetch skipped for ${handle}`);
-      return '__SKIPPED__';
+    try {
+      if (!(await this.configService.canFetchLive(handle))) {
+        console.log(`[YouTube] fetch skipped for ${handle}`);
+        return '__SKIPPED__';
+      }
+    } catch (error) {
+      // If we can't check the config (e.g., database connection issue), assume it can fetch
+      console.warn(`⚠️ Error checking fetch config for ${handle}, allowing fetch:`, error.message);
     }
 
     // Deduplication: Check if a fetch is already in progress for this channel
