@@ -987,8 +987,9 @@ export class YoutubeLiveService {
       }
 
       // Validate cached video IDs for channels with starting programs
+      // Force validation (bypass cooldown) since a new program is starting
       for (const [channelId, handle] of channelMap.entries()) {
-        await this.validateCachedVideoId(channelId, handle);
+        await this.validateCachedVideoId(channelId, handle, true);
       }
 
       // Schedule a follow-up check 7 minutes later for delayed starts
@@ -1018,8 +1019,9 @@ export class YoutubeLiveService {
       }
 
       // Validate cached video IDs for channels with starting programs
+      // Force validation (bypass cooldown) for delayed check
       for (const [channelId, handle] of channelMap.entries()) {
-        await this.validateCachedVideoId(channelId, handle);
+        await this.validateCachedVideoId(channelId, handle, true);
       }
     } catch (error) {
       console.error('Error in delayed program start check:', error);
@@ -1029,16 +1031,23 @@ export class YoutubeLiveService {
 
   /**
    * Validate if cached video ID is still live and refresh if needed
+   * @param channelId YouTube channel ID
+   * @param handle Channel handle  
+   * @param forceFresh Force validation even if cooldown is active (used for program transitions)
    */
-  private async validateCachedVideoId(channelId: string, handle: string) {
+  private async validateCachedVideoId(channelId: string, handle: string, forceFresh: boolean = false) {
     try {
-      // Check cooldown to prevent excessive API calls
+      // Check cooldown to prevent excessive API calls (unless forced)
       const now = Date.now();
       const lastValidation = this.validationCooldowns.get(channelId);
       
-      if (lastValidation && (now - lastValidation) < this.COOLDOWN_PERIOD) {
+      if (!forceFresh && lastValidation && (now - lastValidation) < this.COOLDOWN_PERIOD) {
         console.log(`⏳ Skipping validation for ${handle} (cooldown active)`);
         return;
+      }
+      
+      if (forceFresh && lastValidation && (now - lastValidation) < this.COOLDOWN_PERIOD) {
+        console.log(`🔄 Forcing validation for ${handle} despite cooldown (program transition)`);
       }
 
       // Check streams cache
