@@ -59,7 +59,19 @@ export class LiveStatusBackgroundService {
   @Cron('*/2 * * * *') // Every 2 minutes
   async updateLiveStatusBackground() {
     const startTime = Date.now();
-    this.logger.log('🔄 Starting background live status update');
+    
+    // Distributed lock to prevent multiple replicas from running simultaneously
+    const lockKey = 'cron:live-status-background:lock';
+    const lockTTL = 90; // 90 seconds (less than 2-minute cron interval)
+    
+    const acquired = await this.redisService.setNX(lockKey, { timestamp: Date.now() }, lockTTL);
+    
+    if (!acquired) {
+      this.logger.log('⏸️  Skipping background update - another replica is already running');
+      return;
+    }
+    
+    this.logger.log('🔄 Starting background live status update (lock acquired)');
 
     try {
       const currentDay = TimezoneUtil.currentDayOfWeek();
