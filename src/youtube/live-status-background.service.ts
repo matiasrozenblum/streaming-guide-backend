@@ -274,32 +274,41 @@ export class LiveStatusBackgroundService {
       // Calculate block end time for cache metadata
       const blockEndTime = this.calculateBlockEndTime(liveSchedules, currentTime);
 
-      // Check if we have a cached video ID first
+      // Check our own live status cache first for cooldown tracking
+      const statusCacheKey = `${this.CACHE_PREFIX}${channelId}`;
+      const cachedStatus = await this.redisService.get<LiveStatusCache>(statusCacheKey);
+      
+      // Check if we have cached streams from YouTube service
       const streamsKey = `liveStreamsByChannel:${channelId}`;
       const cachedStreams = await this.redisService.get<any>(streamsKey);
       
-      if (cachedStreams) {
-        // We have a cached video ID, check if it needs validation
-        const streams = cachedStreams;
-        if (streams.primaryVideoId && Date.now() > streams.validationCooldown) {
+      if (cachedStreams && cachedStreams.primaryVideoId) {
+        // We have cached streams - check if we need to validate using OUR cooldown (not YouTube service's)
+        const needsValidation = !cachedStatus || !cachedStatus.validationCooldown || Date.now() > cachedStatus.validationCooldown;
+        
+        if (needsValidation) {
           // Validation cooldown expired, check if video is still live
-          const isStillLive = await this.youtubeLiveService.isVideoLive(streams.primaryVideoId);
+          const isStillLive = await this.youtubeLiveService.isVideoLive(cachedStreams.primaryVideoId);
           if (isStillLive) {
-            // Video is still live, update cooldown and continue
-            console.log(`[LIVE-STATUS-BG] Video ID ${streams.primaryVideoId} still live for ${handle}`);
-            // Update the cache with new validation cooldown
-            streams.validationCooldown = Date.now() + (30 * 60 * 1000);
-            await this.redisService.set(streamsKey, streams, ttl);
-            return this.createCacheDataFromStreams(channelId, handle, streams, ttl, blockEndTime);
+            // Video is still live, create cache with new cooldown
+            console.log(`[LIVE-STATUS-BG] Video ID ${cachedStreams.primaryVideoId} still live for ${handle}`);
+            const cacheData = this.createCacheDataFromStreams(channelId, handle, cachedStreams, ttl, blockEndTime);
+            await this.cacheLiveStatus(channelId, cacheData);
+            return cacheData;
           } else {
             // Video is no longer live, clear cache and fetch new one
-            console.log(`[LIVE-STATUS-BG] Video ID ${streams.primaryVideoId} no longer live for ${handle}, fetching new one`);
+            console.log(`[LIVE-STATUS-BG] Video ID ${cachedStreams.primaryVideoId} no longer live for ${handle}, fetching new one`);
             await this.redisService.del(streamsKey);
+            await this.redisService.del(statusCacheKey); // Also clear our status cache
           }
-        } else if (streams.primaryVideoId) {
+        } else {
           // Validation cooldown still active, use cached data
-          console.log(`[LIVE-STATUS-BG] Using cached video ID ${streams.primaryVideoId} for ${handle} (cooldown active)`);
-          return this.createCacheDataFromStreams(channelId, handle, streams, ttl, blockEndTime);
+          console.log(`[LIVE-STATUS-BG] Using cached video ID ${cachedStreams.primaryVideoId} for ${handle} (cooldown active)`);
+          // Return existing status cache or create new one
+          if (cachedStatus) {
+            return cachedStatus;
+          }
+          return this.createCacheDataFromStreams(channelId, handle, cachedStreams, ttl, blockEndTime);
         }
       }
       
