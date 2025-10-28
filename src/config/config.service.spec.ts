@@ -3,6 +3,7 @@ import { ConfigService } from './config.service';
 import { Config } from './config.entity';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { RedisService } from '../redis/redis.service';
 
 describe('ConfigService', () => {
   let service: ConfigService;
@@ -22,6 +23,14 @@ describe('ConfigService', () => {
         {
           provide: getRepositoryToken(Config),
           useValue: mockRepository,
+        },
+        {
+          provide: RedisService,
+          useValue: {
+            get: jest.fn(),
+            set: jest.fn(),
+            del: jest.fn(),
+          },
         },
       ],
     }).compile();

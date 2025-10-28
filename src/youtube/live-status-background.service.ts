@@ -6,6 +6,7 @@ import { YoutubeLiveService } from './youtube-live.service';
 import { SchedulesService } from '../schedules/schedules.service';
 import { RedisService } from '../redis/redis.service';
 import { ConfigService } from '../config/config.service';
+import { SentryService } from '../sentry/sentry.service';
 import { TimezoneUtil } from '../utils/timezone.util';
 import { Channel } from '../channels/channels.entity';
 import { getCurrentBlockTTL } from '../utils/getBlockTTL.util';
@@ -46,6 +47,7 @@ export class LiveStatusBackgroundService {
     private readonly schedulesService: SchedulesService,
     private readonly redisService: RedisService,
     private readonly configService: ConfigService,
+    private readonly sentryService: SentryService,
     @InjectRepository(Channel)
     private readonly channelsRepository: Repository<Channel>,
   ) {}
@@ -57,7 +59,19 @@ export class LiveStatusBackgroundService {
   @Cron('*/2 * * * *') // Every 2 minutes
   async updateLiveStatusBackground() {
     const startTime = Date.now();
-    this.logger.log('🔄 Starting background live status update');
+    
+    // Distributed lock to prevent multiple replicas from running simultaneously
+    const lockKey = 'cron:live-status-background:lock';
+    const lockTTL = 90; // 90 seconds (less than 2-minute cron interval)
+    
+    const acquired = await this.redisService.setNX(lockKey, { timestamp: Date.now() }, lockTTL);
+    
+    if (!acquired) {
+      this.logger.log('⏸️  Skipping background update - another replica is already running');
+      return;
+    }
+    
+    this.logger.log('🔄 Starting background live status update (lock acquired)');
 
     try {
       const currentDay = TimezoneUtil.currentDayOfWeek();
@@ -93,10 +107,12 @@ export class LiveStatusBackgroundService {
 
       // Check which channels need cache updates
       for (const [channelId, channelInfo] of liveChannels) {
+        console.log(`[LIVE-STATUS-BG] Checking cache for channel ${channelInfo.handle} (${channelId})`);
         const cacheKey = `${this.CACHE_PREFIX}${channelId}`;
         const cached = await this.redisService.get<LiveStatusCache>(cacheKey);
         
         if (!cached || await this.shouldUpdateCache(cached)) {
+          console.log(`[LIVE-STATUS-BG] Cache update needed for channel ${channelInfo.handle} (${channelId})`);
           channelsToUpdate.push(channelId);
         }
       }
@@ -166,6 +182,7 @@ export class LiveStatusBackgroundService {
     const batchSize = 10; // Process 10 channels at a time
 
     for (let i = 0; i < channelIds.length; i += batchSize) {
+      console.log(`[LIVE-STATUS-BG] Updating channel ${channelIds[i]}`);
       const batch = channelIds.slice(i, i + batchSize);
       this.logger.log(`🔄 Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(channelIds.length / batchSize)}: ${batch.length} channels`);
 
@@ -223,7 +240,13 @@ export class LiveStatusBackgroundService {
       }
 
       // Check if channel is enabled for live fetching
-      if (!(await this.configService.canFetchLive(handle))) {
+      try {
+        if (!(await this.configService.canFetchLive(handle))) {
+          return null;
+        }
+      } catch (error) {
+        // If we can't check the config (e.g., database connection issue), log and skip
+        this.logger.error(`❌ Error checking fetch config for ${handle}: with error ${error.message}`, error.message);
         return null;
       }
 
@@ -256,38 +279,48 @@ export class LiveStatusBackgroundService {
       }
 
       // Calculate TTL using block TTL logic for accurate timing
-      const schedules = await this.schedulesService.findByDay(currentDay);
-      const ttl = await getCurrentBlockTTL(channelId, schedules);
+      // ✅ CRITICAL: Use channelSchedules (from allSchedules with overrides) instead of findByDay
+      // findByDay doesn't include weekly overrides, which is why futurock's cache was failing
+      const ttl = await getCurrentBlockTTL(channelId, channelSchedules, this.sentryService);
       
       // Calculate block end time for cache metadata
       const blockEndTime = this.calculateBlockEndTime(liveSchedules, currentTime);
 
-      // Check if we have a cached video ID first
+      // Check our own live status cache first for cooldown tracking
+      const statusCacheKey = `${this.CACHE_PREFIX}${channelId}`;
+      const cachedStatus = await this.redisService.get<LiveStatusCache>(statusCacheKey);
+      
+      // Check if we have cached streams from YouTube service
       const streamsKey = `liveStreamsByChannel:${channelId}`;
       const cachedStreams = await this.redisService.get<any>(streamsKey);
       
-      if (cachedStreams) {
-        // We have a cached video ID, check if it needs validation
-        const streams = cachedStreams;
-        if (streams.primaryVideoId && Date.now() > streams.validationCooldown) {
+      if (cachedStreams && cachedStreams.primaryVideoId) {
+        // We have cached streams - check if we need to validate using OUR cooldown (not YouTube service's)
+        const needsValidation = !cachedStatus || !cachedStatus.validationCooldown || Date.now() > cachedStatus.validationCooldown;
+        
+        if (needsValidation) {
           // Validation cooldown expired, check if video is still live
-          const isStillLive = await this.youtubeLiveService.isVideoLive(streams.primaryVideoId);
+          const isStillLive = await this.youtubeLiveService.isVideoLive(cachedStreams.primaryVideoId);
           if (isStillLive) {
-            // Video is still live, update cooldown and continue
-            console.log(`[LIVE-STATUS-BG] Video ID ${streams.primaryVideoId} still live for ${handle}`);
-            // Update the cache with new validation cooldown
-            streams.validationCooldown = Date.now() + (30 * 60 * 1000);
-            await this.redisService.set(streamsKey, streams, ttl);
-            return this.createCacheDataFromStreams(channelId, handle, streams, ttl, blockEndTime);
+            // Video is still live, create cache with new cooldown
+            console.log(`[LIVE-STATUS-BG] Video ID ${cachedStreams.primaryVideoId} still live for ${handle}`);
+            const cacheData = this.createCacheDataFromStreams(channelId, handle, cachedStreams, ttl, blockEndTime);
+            await this.cacheLiveStatus(channelId, cacheData);
+            return cacheData;
           } else {
             // Video is no longer live, clear cache and fetch new one
-            console.log(`[LIVE-STATUS-BG] Video ID ${streams.primaryVideoId} no longer live for ${handle}, fetching new one`);
+            console.log(`[LIVE-STATUS-BG] Video ID ${cachedStreams.primaryVideoId} no longer live for ${handle}, fetching new one`);
             await this.redisService.del(streamsKey);
+            await this.redisService.del(statusCacheKey); // Also clear our status cache
           }
-        } else if (streams.primaryVideoId) {
+        } else {
           // Validation cooldown still active, use cached data
-          console.log(`[LIVE-STATUS-BG] Using cached video ID ${streams.primaryVideoId} for ${handle} (cooldown active)`);
-          return this.createCacheDataFromStreams(channelId, handle, streams, ttl, blockEndTime);
+          console.log(`[LIVE-STATUS-BG] Using cached video ID ${cachedStreams.primaryVideoId} for ${handle} (cooldown active)`);
+          // Return existing status cache or create new one
+          if (cachedStatus) {
+            return cachedStatus;
+          }
+          return this.createCacheDataFromStreams(channelId, handle, cachedStreams, ttl, blockEndTime);
         }
       }
       
@@ -474,36 +507,19 @@ export class LiveStatusBackgroundService {
   }
 
   /**
-   * Update live status for all channels (Approach B: separate cache management)
+   * Update live status for channels that actually have live programs
+   * This method should NOT update all channels - only those with live programs
    */
   private async updateLiveStatusForAllChannels(): Promise<void> {
     try {
-      this.logger.log('[LIVE-STATUS-UPDATE] Updating live status for all channels');
+      this.logger.log('[LIVE-STATUS-UPDATE] Skipping bulk update - only updating channels with live programs');
       
-      // Get all channels that have live schedules
-      const channels = await this.channelsRepository.find({
-        where: { is_visible: true },
-        select: ['id', 'name', 'handle', 'youtube_channel_id']
-      });
-
-      const channelIds = channels
-        .filter(channel => channel.youtube_channel_id)
-        .map(channel => channel.youtube_channel_id);
-
-      if (channelIds.length === 0) {
-        this.logger.log('[LIVE-STATUS-UPDATE] No channels with YouTube IDs found');
-        return;
-      }
-
-      this.logger.log(`[LIVE-STATUS-UPDATE] Updating live status for ${channelIds.length} channels`);
+      // This method was causing excessive API calls by updating ALL channels
+      // Instead, we only update channels that have live programs (handled in main loop)
+      // No action needed here - the main updateLiveStatusBackground method handles this correctly
       
-      // Update live status for all channels
-      await this.updateChannelsInBatches(channelIds);
-      
-      this.logger.log('[LIVE-STATUS-UPDATE] Completed live status update for all channels');
-
     } catch (error) {
-      this.logger.error('[LIVE-STATUS-UPDATE] Error updating live status for all channels:', error);
+      this.logger.error('[LIVE-STATUS-UPDATE] Error in live status update:', error);
     }
   }
 }

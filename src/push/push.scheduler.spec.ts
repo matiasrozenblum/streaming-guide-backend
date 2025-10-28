@@ -10,6 +10,7 @@ import { UserSubscription, NotificationMethod } from '../users/user-subscription
 import { PushSubscriptionEntity } from './push-subscription.entity';
 import * as dayjs from 'dayjs';
 import { ConfigService } from '../config/config.service';
+import { SchedulesService } from '../schedules/schedules.service';
 
 // Mock dayjs
 jest.mock('dayjs', () => {
@@ -42,6 +43,7 @@ jest.mock('dayjs', () => {
 });
 
 describe('PushScheduler', () => {
+  let module: TestingModule;
   let scheduler: PushScheduler;
   let pushService: PushService;
   let emailService: EmailService;
@@ -67,8 +69,8 @@ describe('PushScheduler', () => {
   const mockSchedule = {
     id: 1,
     day_of_week: 'friday',
-    start_time: '10:10:00',
-    end_time: '11:00:00',
+    start_time: '07:10:00',
+    end_time: '08:00:00',
     program: mockProgram,
   };
 
@@ -120,7 +122,7 @@ describe('PushScheduler', () => {
   const mockPushSubscriptionRepository = {};
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       providers: [
         PushScheduler,
         {
@@ -149,6 +151,12 @@ describe('PushScheduler', () => {
             canFetchLive: jest.fn().mockResolvedValue(true),
           },
         },
+        {
+          provide: SchedulesService,
+          useValue: {
+            findAll: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -162,11 +170,15 @@ describe('PushScheduler', () => {
     pushSubscriptionRepository = module.get<Repository<PushSubscriptionEntity>>(
       getRepositoryToken(PushSubscriptionEntity)
     );
-
+    
     // Mock logger methods
     jest.spyOn(scheduler['logger'], 'log').mockImplementation();
     jest.spyOn(scheduler['logger'], 'debug').mockImplementation();
     jest.spyOn(scheduler['logger'], 'error').mockImplementation();
+    
+    // Setup default SchedulesService mock to prevent undefined errors
+    const schedulesService = module.get(SchedulesService);
+    jest.spyOn(schedulesService, 'findAll').mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -175,16 +187,12 @@ describe('PushScheduler', () => {
 
   describe('handleNotificationsCron', () => {
     it('should send push notifications for due schedules', async () => {
-      mockScheduleRepository.find.mockResolvedValue([mockSchedule]);
+      const schedulesService = module.get(SchedulesService);
+      jest.spyOn(schedulesService, 'findAll').mockResolvedValue([mockSchedule]);
       mockUserSubscriptionRepository.find.mockResolvedValue([mockUserSubscription]);
       mockPushService.sendNotification.mockResolvedValue(undefined);
 
       await scheduler.handleNotificationsCron();
-
-      expect(mockScheduleRepository.find).toHaveBeenCalledWith({
-        where: { day_of_week: 'friday', start_time: '07:10:00' },
-        relations: ['program', 'program.channel'],
-      });
 
       expect(mockUserSubscriptionRepository.find).toHaveBeenCalledWith({
         where: { 
@@ -212,7 +220,8 @@ describe('PushScheduler', () => {
         notificationMethod: NotificationMethod.EMAIL,
       };
 
-      mockScheduleRepository.find.mockResolvedValue([mockSchedule]);
+      const schedulesService = module.get(SchedulesService);
+      jest.spyOn(schedulesService, 'findAll').mockResolvedValue([mockSchedule]);
       mockUserSubscriptionRepository.find.mockResolvedValue([emailSubscription]);
       mockEmailService.mailerService.sendMail.mockResolvedValue(undefined);
 
@@ -231,7 +240,8 @@ describe('PushScheduler', () => {
         notificationMethod: NotificationMethod.BOTH,
       };
 
-      mockScheduleRepository.find.mockResolvedValue([mockSchedule]);
+      const schedulesService = module.get(SchedulesService);
+      jest.spyOn(schedulesService, 'findAll').mockResolvedValue([mockSchedule]);
       mockUserSubscriptionRepository.find.mockResolvedValue([bothSubscription]);
       mockPushService.sendNotification.mockResolvedValue(undefined);
       mockEmailService.mailerService.sendMail.mockResolvedValue(undefined);
@@ -247,7 +257,8 @@ describe('PushScheduler', () => {
       const schedule2 = { ...mockSchedule, id: 2, program: program2 };
       const subscription2 = { ...mockUserSubscription, id: 'sub-2', program: program2 };
 
-      mockScheduleRepository.find.mockResolvedValue([mockSchedule, schedule2]);
+      const schedulesService = module.get(SchedulesService);
+      jest.spyOn(schedulesService, 'findAll').mockResolvedValue([mockSchedule, schedule2]);
       mockUserSubscriptionRepository.find.mockResolvedValue([mockUserSubscription, subscription2]);
       mockPushService.sendNotification.mockResolvedValue(undefined);
 
@@ -293,7 +304,8 @@ describe('PushScheduler', () => {
         user: userWithMultipleDevices,
       };
 
-      mockScheduleRepository.find.mockResolvedValue([mockSchedule]);
+      const schedulesService = module.get(SchedulesService);
+      jest.spyOn(schedulesService, 'findAll').mockResolvedValue([mockSchedule]);
       mockUserSubscriptionRepository.find.mockResolvedValue([subscriptionWithMultipleDevices]);
       mockPushService.sendNotification.mockResolvedValue(undefined);
 
@@ -326,7 +338,8 @@ describe('PushScheduler', () => {
         user: userWithMultipleSubscriptions,
       };
 
-      mockScheduleRepository.find.mockResolvedValue([mockSchedule]);
+      const schedulesService = module.get(SchedulesService);
+      jest.spyOn(schedulesService, 'findAll').mockResolvedValue([mockSchedule]);
       mockUserSubscriptionRepository.find.mockResolvedValue([subscription]);
       mockPushService.sendNotification.mockResolvedValue(undefined);
 
@@ -346,7 +359,8 @@ describe('PushScheduler', () => {
         user: userWithoutDevices,
       };
 
-      mockScheduleRepository.find.mockResolvedValue([mockSchedule]);
+      const schedulesService = module.get(SchedulesService);
+      jest.spyOn(schedulesService, 'findAll').mockResolvedValue([mockSchedule]);
       mockUserSubscriptionRepository.find.mockResolvedValue([subscriptionWithoutDevices]);
 
       await scheduler.handleNotificationsCron();
@@ -370,7 +384,8 @@ describe('PushScheduler', () => {
         user: userWithDeviceWithoutSubscriptions,
       };
 
-      mockScheduleRepository.find.mockResolvedValue([mockSchedule]);
+      const schedulesService = module.get(SchedulesService);
+      jest.spyOn(schedulesService, 'findAll').mockResolvedValue([mockSchedule]);
       mockUserSubscriptionRepository.find.mockResolvedValue([subscription]);
 
       await scheduler.handleNotificationsCron();
@@ -379,7 +394,8 @@ describe('PushScheduler', () => {
     });
 
     it('should handle push notification failures gracefully', async () => {
-      mockScheduleRepository.find.mockResolvedValue([mockSchedule]);
+      const schedulesService = module.get(SchedulesService);
+      jest.spyOn(schedulesService, 'findAll').mockResolvedValue([mockSchedule]);
       mockUserSubscriptionRepository.find.mockResolvedValue([mockUserSubscription]);
       mockPushService.sendNotification.mockRejectedValue(new Error('Push failed'));
 
@@ -397,7 +413,8 @@ describe('PushScheduler', () => {
         notificationMethod: NotificationMethod.EMAIL,
       };
 
-      mockScheduleRepository.find.mockResolvedValue([mockSchedule]);
+      const schedulesService = module.get(SchedulesService);
+      jest.spyOn(schedulesService, 'findAll').mockResolvedValue([mockSchedule]);
       mockUserSubscriptionRepository.find.mockResolvedValue([emailSubscription]);
       mockEmailService.mailerService.sendMail.mockRejectedValue(new Error('Email failed'));
 
@@ -410,7 +427,8 @@ describe('PushScheduler', () => {
     });
 
     it('should return early when no schedules match', async () => {
-      mockScheduleRepository.find.mockResolvedValue([]);
+      const schedulesService = module.get(SchedulesService);
+      jest.spyOn(schedulesService, 'findAll').mockResolvedValue([]);
 
       await scheduler.handleNotificationsCron();
 
@@ -419,7 +437,8 @@ describe('PushScheduler', () => {
     });
 
     it('should return early when no subscriptions exist', async () => {
-      mockScheduleRepository.find.mockResolvedValue([mockSchedule]);
+      const schedulesService = module.get(SchedulesService);
+      jest.spyOn(schedulesService, 'findAll').mockResolvedValue([mockSchedule]);
       mockUserSubscriptionRepository.find.mockResolvedValue([]);
 
       await scheduler.handleNotificationsCron();
@@ -446,7 +465,8 @@ describe('PushScheduler', () => {
         program: programWithoutChannel,
       };
 
-      mockScheduleRepository.find.mockResolvedValue([scheduleWithoutChannel]);
+      const schedulesService = module.get(SchedulesService);
+      jest.spyOn(schedulesService, 'findAll').mockResolvedValue([scheduleWithoutChannel]);
       mockUserSubscriptionRepository.find.mockResolvedValue([subscriptionWithoutChannel]);
       mockPushService.sendNotification.mockResolvedValue(undefined);
 
@@ -461,7 +481,8 @@ describe('PushScheduler', () => {
     });
 
     it('should log successful notifications', async () => {
-      mockScheduleRepository.find.mockResolvedValue([mockSchedule]);
+      const schedulesService = module.get(SchedulesService);
+      jest.spyOn(schedulesService, 'findAll').mockResolvedValue([mockSchedule]);
       mockUserSubscriptionRepository.find.mockResolvedValue([mockUserSubscription]);
       mockPushService.sendNotification.mockResolvedValue(undefined);
 
@@ -478,7 +499,8 @@ describe('PushScheduler', () => {
         notificationMethod: NotificationMethod.EMAIL,
       };
 
-      mockScheduleRepository.find.mockResolvedValue([mockSchedule]);
+      const schedulesService = module.get(SchedulesService);
+      jest.spyOn(schedulesService, 'findAll').mockResolvedValue([mockSchedule]);
       mockUserSubscriptionRepository.find.mockResolvedValue([emailSubscription]);
       mockEmailService.mailerService.sendMail.mockResolvedValue(undefined);
 

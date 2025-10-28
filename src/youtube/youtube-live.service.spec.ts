@@ -112,7 +112,7 @@ describe('YoutubeLiveService', () => {
       const result = await service.getLiveVideoId('cid', 'handle', 100, 'cron');
       // Should set both the not-found key and attempt tracking
       expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:cid', '1', 900);
-      expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:cid', expect.any(String), expect.any(Number));
+      expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:cid', expect.any(Object), expect.any(Number));
       expect(result).toBe(null);
     });
 
@@ -134,8 +134,8 @@ describe('YoutubeLiveService', () => {
 
     it('calls getLiveStreams for channels with schedule', async () => {
       const schedules = [
-        { program: { channel: { youtube_channel_id: 'cid1', handle: 'h1', is_visible: true }, is_live: true } },
-        { program: { channel: { youtube_channel_id: 'cid2', handle: 'h2', is_visible: true }, is_live: true } },
+        { program: { channel: { youtube_channel_id: 'cid1', handle: 'h1', is_visible: true }, is_live: true, name: 'Test Program 1' }, start_time: '08:00', end_time: '10:00', day_of_week: 'monday' },
+        { program: { channel: { youtube_channel_id: 'cid2', handle: 'h2', is_visible: true }, is_live: true, name: 'Test Program 2' }, start_time: '10:00', end_time: '12:00', day_of_week: 'monday' },
       ];
       schedulesService.findAll.mockResolvedValue(schedules as any);
       
@@ -165,7 +165,7 @@ describe('YoutubeLiveService', () => {
 
     it('passes SentryService to getCurrentBlockTTL', async () => {
       const schedules = [
-        { program: { channel: { youtube_channel_id: 'cid1', handle: 'h1', is_visible: true }, is_live: true } },
+        { program: { channel: { youtube_channel_id: 'cid1', handle: 'h1', is_visible: true }, is_live: true, name: 'Test Program' }, start_time: '08:00', end_time: '10:00', day_of_week: 'monday' },
       ];
       schedulesService.findAll.mockResolvedValue(schedules as any);
       jest.spyOn(service, 'getLiveStreamsMain').mockResolvedValue({
@@ -411,11 +411,13 @@ describe('YoutubeLiveService', () => {
 
         await (service as any).handleNotFoundEscalationMain('cid', 'handle', 'videoIdNotFound:cid');
 
-        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:cid', expect.any(String), expect.any(Number));
+        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:cid', expect.any(Object), expect.any(Number));
         expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:cid', '1', 900);
         
-        const trackingData = JSON.parse(redisService.set.mock.calls[0][1]);
-        expect(trackingData).toEqual({
+        const trackingCall = redisService.set.mock.calls.find(call => call[0] === 'notFoundAttempts:cid');
+        expect(trackingCall).toBeDefined();
+        const trackingData = trackingCall![1];
+        expect(trackingData).toMatchObject({
           attempts: 1,
           firstAttempt: expect.any(Number),
           lastAttempt: expect.any(Number),
@@ -435,12 +437,12 @@ describe('YoutubeLiveService', () => {
 
         await (service as any).handleNotFoundEscalationMain('cid', 'handle', 'videoIdNotFound:cid');
 
-        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:cid', expect.any(String), expect.any(Number));
+        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:cid', expect.any(Object), expect.any(Number));
         expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:cid', '1', 900);
         
         const trackingCall = redisService.set.mock.calls.find(call => call[0] === 'notFoundAttempts:cid');
         expect(trackingCall).toBeDefined();
-        const trackingData = JSON.parse(trackingCall![1]);
+        const trackingData = trackingCall![1];
         expect(trackingData.attempts).toBe(2);
         expect(trackingData.escalated).toBe(false);
       });
@@ -461,12 +463,12 @@ describe('YoutubeLiveService', () => {
 
         await (service as any).handleNotFoundEscalationMain('cid', 'handle', 'videoIdNotFound:cid');
 
-        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:cid', expect.any(String), expect.any(Number));
+        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:cid', expect.any(Object), expect.any(Number));
         expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:cid', '1', expect.any(Number));
         
         const trackingCall = redisService.set.mock.calls.find(call => call[0] === 'notFoundAttempts:cid');
         expect(trackingCall).toBeDefined();
-        const trackingData = JSON.parse(trackingCall![1]);
+        const trackingData = trackingCall![1];
         expect(trackingData.attempts).toBe(3);
         expect(trackingData.escalated).toBe(true);
         expect(trackingData.programEndTime).toBeDefined();
@@ -498,7 +500,7 @@ describe('YoutubeLiveService', () => {
 
         await (service as any).handleNotFoundEscalationBackToBack('cid', 'handle', 'videoIdNotFound:cid');
 
-        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:cid', expect.any(String), expect.any(Number));
+        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:cid', expect.any(Object), expect.any(Number));
         expect(redisService.set).not.toHaveBeenCalledWith('videoIdNotFound:cid', '1', 900);
       });
 
@@ -515,7 +517,7 @@ describe('YoutubeLiveService', () => {
 
         await (service as any).handleNotFoundEscalationBackToBack('cid', 'handle', 'videoIdNotFound:cid');
 
-        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:cid', expect.any(String), expect.any(Number));
+        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:cid', expect.any(Object), expect.any(Number));
         expect(redisService.set).not.toHaveBeenCalledWith('videoIdNotFound:cid', '1', 900);
       });
     });
@@ -705,7 +707,7 @@ describe('YoutubeLiveService', () => {
 
         expect(result.get('cid')).toBe('__SKIPPED__');
         expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:cid', '1', expect.any(Number));
-        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:cid', expect.any(String), expect.any(Number));
+        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:cid', expect.any(Object), expect.any(Number));
         expect((service as any).sendEscalationEmail).toHaveBeenCalledWith('cid', 'handle');
       });
 
@@ -729,7 +731,7 @@ describe('YoutubeLiveService', () => {
         expect(result.get('cid')).toBe(null); // Should attempt fetch, not skip
         
         // Should call incrementNotFoundAttempts which updates attempt counter without setting new not-found flags
-        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:cid', expect.any(String), expect.any(Number));
+        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:cid', expect.any(Object), expect.any(Number));
         // Should NOT set videoIdNotFound since back-to-back-fix doesn't set new not-found flags
         expect(redisService.set).not.toHaveBeenCalledWith('videoIdNotFound:cid', '1', 900);
       });

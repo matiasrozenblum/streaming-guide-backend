@@ -59,7 +59,7 @@ import { PerformanceInterceptor } from './interceptors/performance.interceptor';
           synchronize: false, // Temporarily disabled to prevent schema conflicts
           logging: false,
           extra: {
-            max: 50, // Increased from 20 to handle more concurrent requests
+            max: 35, // Reduced from 50. Supabase Dedicated Pooler allows 40 per user+db. With 1 instance, 35 provides buffer while maximizing throughput. Monitor actual usage.
             min: 5, // Keep minimum connections ready
             connectionTimeoutMillis: 30000, // Increased from 2000ms to 30s for better resilience
             idleTimeoutMillis: 30000,

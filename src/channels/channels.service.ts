@@ -147,8 +147,9 @@ export class ChannelsService {
     // Clear unified cache
     try {
       await this.redisService.del('schedules:week:complete');
+      await this.redisService.del('channels:visible_with_categories');
     } catch (error) {
-      console.error('❌ Error clearing schedules cache:', error.message);
+      console.error('❌ Error clearing caches:', error.message);
     }
     
     // Warm cache asynchronously (non-blocking)
@@ -201,8 +202,9 @@ export class ChannelsService {
     // Clear unified cache
     try {
       await this.redisService.del('schedules:week:complete');
+      await this.redisService.del('channels:visible_with_categories');
     } catch (error) {
-      console.error('❌ Error clearing schedules cache:', error.message);
+      console.error('❌ Error clearing caches:', error.message);
     }
     
     // Warm cache asynchronously (non-blocking)
@@ -267,8 +269,9 @@ export class ChannelsService {
     // Clear unified cache
     try {
       await this.redisService.del('schedules:week:complete');
+      await this.redisService.del('channels:visible_with_categories');
     } catch (error) {
-      console.error('❌ Error clearing schedules cache:', error.message);
+      console.error('❌ Error clearing caches:', error.message);
     }
     
     // Warm cache asynchronously (non-blocking)
@@ -294,8 +297,9 @@ export class ChannelsService {
     // Clear unified cache
     try {
       await this.redisService.del('schedules:week:complete');
+      await this.redisService.del('channels:visible_with_categories');
     } catch (error) {
-      console.error('❌ Error clearing schedules cache:', error.message);
+      console.error('❌ Error clearing caches:', error.message);
     }
     
     // Warm cache asynchronously (non-blocking)
@@ -383,14 +387,24 @@ export class ChannelsService {
       return acc;
     }, {} as Record<number, any[]>);
 
-    // Get all channels for the result structure
+    // Get all channels for the result structure (with caching)
     const channelsQueryStart = Date.now();
-    const channels = await this.channelsRepository.find({
-      where: { is_visible: true },
-      order: { order: 'ASC' },
-      relations: ['categories'],
-    });
-    console.log(`[CHANNELS-SCHEDULES] Channels query completed (${Date.now() - channelsQueryStart}ms) - ${channels.length} channels`);
+    const channelsCacheKey = 'channels:visible_with_categories';
+    
+    let channels = await this.redisService.get<any[]>(channelsCacheKey);
+    if (!channels) {
+      channels = await this.channelsRepository.find({
+        where: { is_visible: true },
+        order: { order: 'ASC' },
+        relations: ['categories'],
+      });
+      
+      // Cache for 30 minutes (matches schedules cache TTL)
+      await this.redisService.set(channelsCacheKey, channels, 1800);
+      console.log(`[CHANNELS-SCHEDULES] Channels query completed from DB (${Date.now() - channelsQueryStart}ms) - ${channels.length} channels`);
+    } else {
+      console.log(`[CHANNELS-SCHEDULES] Channels from cache (${Date.now() - channelsQueryStart}ms) - ${channels.length} channels`);
+    }
 
     // Build final result
     const resultStart = Date.now();

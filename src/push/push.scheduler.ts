@@ -14,6 +14,7 @@ import { EmailService } from '../email/email.service';
 import { buildProgramNotificationHtml } from '../email/email.templates';
 import { ConfigService } from '../config/config.service';
 import { TimezoneUtil } from '../utils/timezone.util';
+import { SchedulesService } from '../schedules/schedules.service';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -32,6 +33,7 @@ export class PushScheduler {
     @InjectRepository(PushSubscriptionEntity)
     private readonly subsRepo: Repository<PushSubscriptionEntity>,
     private readonly configService: ConfigService,
+    private readonly schedulesService: SchedulesService,
   ) {}
 
   @Cron(CronExpression.EVERY_MINUTE, {
@@ -45,11 +47,16 @@ export class PushScheduler {
     const timeString = target.format('HH:mm:ss');
     this.logger.log(`Buscando schedules para ${dayOfWeek} a las ${timeString}`);
 
-    // 2) Obtener schedules que empiezan en 10 min
-    const dueSchedules = await this.scheduleRepo.find({
-      where: { day_of_week: dayOfWeek, start_time: timeString },
-      relations: ['program', 'program.channel'],
+    // 2) Obtener schedules usando el servicio (usa cache Redis de 30 min)
+    const allSchedules = await this.schedulesService.findAll({
+      dayOfWeek,
+      applyOverrides: true,
+      liveStatus: false,
+      skipCache: false, // ✅ IMPORTANTE: Usar cache para reducir carga en DB
     });
+    
+    // Filtrar schedules que empiezan en 10 min
+    const dueSchedules = allSchedules.filter(s => s.start_time === timeString);
     if (dueSchedules.length === 0) {
       this.logger.debug('Ningún programa coincide.');
       return;

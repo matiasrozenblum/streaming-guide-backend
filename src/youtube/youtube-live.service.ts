@@ -95,7 +95,7 @@ export class YoutubeLiveService {
     try {
       // Store the notification in Redis for SSE clients to pick up
       const notification = {
-        type: 'live_status_change',
+        type: 'live_status_changed',  // Fixed: frontend expects 'live_status_changed' not 'live_status_change'
         channelId,
         videoId,
         channelName,
@@ -125,9 +125,14 @@ export class YoutubeLiveService {
     context: 'cron' | 'onDemand' | 'program-start',
   ): Promise<string | null | '__SKIPPED__'> {
     // gating centralizado
-    if (!(await this.configService.canFetchLive(handle))) {
-      console.log(`[YouTube] fetch skipped for ${handle}`);
-      return '__SKIPPED__';
+    try {
+      if (!(await this.configService.canFetchLive(handle))) {
+        console.log(`[YouTube] fetch skipped for ${handle}`);
+        return '__SKIPPED__';
+      }
+    } catch (error) {
+      // If we can't check the config (e.g., database connection issue), assume it can fetch
+      console.warn(`⚠️ Error checking fetch config for ${handle}, allowing fetch:`, error.message);
     }
 
     const streamsKey = `liveStreamsByChannel:${channelId}`;
@@ -318,7 +323,7 @@ export class YoutubeLiveService {
             await this.redisService.set(notFoundKey, '1', Math.floor(ttlUntilProgramEnd / 1000));
             // Update attempt tracking with program-end TTL
             const ttlUntilProgramEndForTracking = Math.max(programEndTime - Date.now(), 60); // Min 1 minute
-            await this.redisService.set(attemptTrackingKey, JSON.stringify(tracking), Math.floor(ttlUntilProgramEndForTracking / 1000));
+            await this.redisService.set(attemptTrackingKey, tracking, Math.floor(ttlUntilProgramEndForTracking / 1000));
             
             const handle = channelHandleMap?.get(channelId) || 'unknown';
             console.log(`🚫 [ESCALATED ON EXPIRATION] No live video for ${handle} after 3 attempts, marking not-found until program end`);
@@ -581,9 +586,14 @@ export class YoutubeLiveService {
     cronType: 'main' | 'back-to-back-fix' | 'manual'
   ): Promise<LiveStreamsResult | null | '__SKIPPED__'> {
     // gating centralizado
-    if (!(await this.configService.canFetchLive(handle))) {
-      console.log(`[YouTube] fetch skipped for ${handle}`);
-      return '__SKIPPED__';
+    try {
+      if (!(await this.configService.canFetchLive(handle))) {
+        console.log(`[YouTube] fetch skipped for ${handle}`);
+        return '__SKIPPED__';
+      }
+    } catch (error) {
+      // If we can't check the config (e.g., database connection issue), assume it can fetch
+      console.warn(`⚠️ Error checking fetch config for ${handle}, allowing fetch:`, error.message);
     }
 
     // Deduplication: Check if a fetch is already in progress for this channel
@@ -850,7 +860,21 @@ export class YoutubeLiveService {
     const visibleSchedules = schedules.filter(s => s.program.channel?.is_visible === true);
   
     // 2) Filter only schedules that are "on-air" right now (time-based, not YouTube live status)
-    const liveNow = visibleSchedules.filter(s => s.program.is_live);
+    // CRITICAL: Only process schedules that have actual programs (not ghost schedules)
+    const liveNow = visibleSchedules.filter(s => {
+      // Must have a valid program with a name
+      if (!s.program || !s.program.name || s.program.name.trim() === '') {
+        return false;
+      }
+      
+      // Must have valid start and end times
+      if (!s.start_time || !s.end_time) {
+        return false;
+      }
+      
+      // Must be marked as live by the enrichment logic
+      return s.program.is_live;
+    });
   
     // 3) Deduplicás canales de esos schedules
     const map = new Map<string,string>();
@@ -861,6 +885,18 @@ export class YoutubeLiveService {
       }
     }
   
+    console.log(`${cronLabel} - Total schedules: ${schedules.length}`);
+    console.log(`${cronLabel} - Visible schedules: ${visibleSchedules.length}`);
+    console.log(`${cronLabel} - Live schedules (after validation): ${liveNow.length}`);
+    
+    // Log details of live schedules for debugging
+    if (liveNow.length > 0) {
+      console.log(`${cronLabel} - Live schedule details:`);
+      liveNow.forEach(s => {
+        console.log(`  - ${s.program.channel?.handle}: "${s.program.name}" (${s.start_time}-${s.end_time})`);
+      });
+    }
+    
     console.log(`${cronLabel} - Channels to refresh: ${map.size}`);
     
     if (map.size === 0) {
@@ -951,8 +987,9 @@ export class YoutubeLiveService {
       }
 
       // Validate cached video IDs for channels with starting programs
+      // Force validation (bypass cooldown) since a new program is starting
       for (const [channelId, handle] of channelMap.entries()) {
-        await this.validateCachedVideoId(channelId, handle);
+        await this.validateCachedVideoId(channelId, handle, true);
       }
 
       // Schedule a follow-up check 7 minutes later for delayed starts
@@ -982,8 +1019,9 @@ export class YoutubeLiveService {
       }
 
       // Validate cached video IDs for channels with starting programs
+      // Force validation (bypass cooldown) for delayed check
       for (const [channelId, handle] of channelMap.entries()) {
-        await this.validateCachedVideoId(channelId, handle);
+        await this.validateCachedVideoId(channelId, handle, true);
       }
     } catch (error) {
       console.error('Error in delayed program start check:', error);
@@ -993,16 +1031,23 @@ export class YoutubeLiveService {
 
   /**
    * Validate if cached video ID is still live and refresh if needed
+   * @param channelId YouTube channel ID
+   * @param handle Channel handle  
+   * @param forceFresh Force validation even if cooldown is active (used for program transitions)
    */
-  private async validateCachedVideoId(channelId: string, handle: string) {
+  private async validateCachedVideoId(channelId: string, handle: string, forceFresh: boolean = false) {
     try {
-      // Check cooldown to prevent excessive API calls
+      // Check cooldown to prevent excessive API calls (unless forced)
       const now = Date.now();
       const lastValidation = this.validationCooldowns.get(channelId);
       
-      if (lastValidation && (now - lastValidation) < this.COOLDOWN_PERIOD) {
+      if (!forceFresh && lastValidation && (now - lastValidation) < this.COOLDOWN_PERIOD) {
         console.log(`⏳ Skipping validation for ${handle} (cooldown active)`);
         return;
+      }
+      
+      if (forceFresh && lastValidation && (now - lastValidation) < this.COOLDOWN_PERIOD) {
+        console.log(`🔄 Forcing validation for ${handle} despite cooldown (program transition)`);
       }
 
       // Check streams cache
@@ -1066,7 +1111,7 @@ export class YoutubeLiveService {
       // Update attempt tracking with program-end TTL (without setting new not-found flags)
       const programEndTime = await this.getCurrentProgramEndTime(channelId);
       const ttlUntilProgramEnd = programEndTime ? Math.max(programEndTime - Date.now(), 60) : 86400; // Min 1 minute, fallback to 24h
-      await this.redisService.set(attemptTrackingKey, JSON.stringify(tracking), Math.floor(ttlUntilProgramEnd / 1000));
+      await this.redisService.set(attemptTrackingKey, tracking, Math.floor(ttlUntilProgramEnd / 1000));
       
       console.log(`🔄 [Back-to-back] Incremented attempt count for ${handle} (${channelId}) - now ${tracking.attempts} attempts`);
     } else {
@@ -1099,7 +1144,7 @@ export class YoutubeLiveService {
       // Set persistent tracking with program-end TTL
       const programEndTime = await this.getCurrentProgramEndTime(channelId);
       const ttlUntilProgramEnd = programEndTime ? Math.max(programEndTime - Date.now(), 60) : 86400; // Min 1 minute, fallback to 24h
-      await this.redisService.set(attemptTrackingKey, JSON.stringify(tracking), Math.floor(ttlUntilProgramEnd / 1000));
+      await this.redisService.set(attemptTrackingKey, tracking, Math.floor(ttlUntilProgramEnd / 1000));
       
       // Set not-found mark for main cron and manual execution
       await this.redisService.set(notFoundKey, '1', 900);
@@ -1122,7 +1167,7 @@ export class YoutubeLiveService {
         
         // Update attempt tracking with program-end TTL
         const ttlUntilProgramEndForTracking = Math.max(programEndTime - Date.now(), 60); // Min 1 minute
-        await this.redisService.set(attemptTrackingKey, JSON.stringify(tracking), Math.floor(ttlUntilProgramEndForTracking / 1000));
+        await this.redisService.set(attemptTrackingKey, tracking, Math.floor(ttlUntilProgramEndForTracking / 1000));
         
         console.log(`🚫 [ESCALATED] No live video for ${handle} after 3 attempts, marking not-found until program end (${new Date(programEndTime).toLocaleTimeString()})`);
         
@@ -1142,7 +1187,7 @@ export class YoutubeLiveService {
     // Update persistent tracking with program-end TTL
     const programEndTime = await this.getCurrentProgramEndTime(channelId);
     const ttlUntilProgramEnd = programEndTime ? Math.max(programEndTime - Date.now(), 60) : 86400; // Min 1 minute, fallback to 24h
-    await this.redisService.set(attemptTrackingKey, JSON.stringify(tracking), Math.floor(ttlUntilProgramEnd / 1000));
+    await this.redisService.set(attemptTrackingKey, tracking, Math.floor(ttlUntilProgramEnd / 1000));
   }
 
   /**
@@ -1168,7 +1213,7 @@ export class YoutubeLiveService {
       // Set persistent tracking with program-end TTL
       const programEndTime = await this.getCurrentProgramEndTime(channelId);
       const ttlUntilProgramEnd = programEndTime ? Math.max(programEndTime - Date.now(), 60) : 86400; // Min 1 minute, fallback to 24h
-      await this.redisService.set(attemptTrackingKey, JSON.stringify(tracking), Math.floor(ttlUntilProgramEnd / 1000));
+      await this.redisService.set(attemptTrackingKey, tracking, Math.floor(ttlUntilProgramEnd / 1000));
       
       console.log(`🚫 [Back-to-back] First attempt for ${handle}, incrementing attempts only (no not-found mark)`);
       return;
@@ -1189,7 +1234,7 @@ export class YoutubeLiveService {
         
         // Update attempt tracking with program-end TTL
         const ttlUntilProgramEndForTracking = Math.max(programEndTime - Date.now(), 60); // Min 1 minute
-        await this.redisService.set(attemptTrackingKey, JSON.stringify(tracking), Math.floor(ttlUntilProgramEndForTracking / 1000));
+        await this.redisService.set(attemptTrackingKey, tracking, Math.floor(ttlUntilProgramEndForTracking / 1000));
         
         console.log(`🚫 [ESCALATED] No live video for ${handle} after 3 attempts, marking not-found until program end (${new Date(programEndTime).toLocaleTimeString()})`);
         
@@ -1208,7 +1253,7 @@ export class YoutubeLiveService {
     // Update persistent tracking with program-end TTL
     const programEndTime = await this.getCurrentProgramEndTime(channelId);
     const ttlUntilProgramEnd = programEndTime ? Math.max(programEndTime - Date.now(), 60) : 86400; // Min 1 minute, fallback to 24h
-    await this.redisService.set(attemptTrackingKey, JSON.stringify(tracking), Math.floor(ttlUntilProgramEnd / 1000));
+    await this.redisService.set(attemptTrackingKey, tracking, Math.floor(ttlUntilProgramEnd / 1000));
   }
 
   /**

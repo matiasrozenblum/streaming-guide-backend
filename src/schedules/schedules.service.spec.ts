@@ -827,8 +827,8 @@ describe('SchedulesService', () => {
 
       expect(result).toHaveLength(1);
       
-      // Program should be live (time-based)
-      expect(result[0].program.is_live).toBe(true);
+      // When liveStatus=false, should preserve original is_live state
+      expect(result[0].program.is_live).toBe(false);
       
       // Should use original stream_url/youtube_url (no live stream fetching)
       expect(result[0].program.stream_url).toBe('https://youtube.com/program-a');
