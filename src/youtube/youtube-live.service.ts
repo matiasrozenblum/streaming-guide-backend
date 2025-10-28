@@ -95,7 +95,7 @@ export class YoutubeLiveService {
     try {
       // Store the notification in Redis for SSE clients to pick up
       const notification = {
-        type: 'live_status_change',
+        type: 'live_status_changed',  // Fixed: frontend expects 'live_status_changed' not 'live_status_change'
         channelId,
         videoId,
         channelName,
