@@ -102,7 +102,7 @@ export class YoutubeController {
     try {
       // Manually trigger a live status notification for testing
       const notification = {
-        type: 'live_status_change',
+        type: 'live_status_changed',  // Fixed: frontend expects 'live_status_changed' not 'live_status_change'
         channelId: body.channelId,
         videoId: body.videoId || 'test_video_id_123',
         channelName: body.channelName,
