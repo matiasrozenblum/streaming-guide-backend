@@ -31,6 +31,7 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
   let schedulesService: SchedulesService;
   let redisService: RedisService;
   let configService: ConfigService;
+  let channelsRepository: any;
 
   const mockLiveStatusCache = {
     channelId: 'CHANNEL_123',
@@ -108,6 +109,7 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
     schedulesService = module.get<SchedulesService>(SchedulesService);
     redisService = module.get<RedisService>(RedisService);
     configService = module.get<ConfigService>(ConfigService);
+    channelsRepository = module.get(getRepositoryToken(Channel));
   });
 
   afterEach(() => {
@@ -196,14 +198,14 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
           programs: []
         }
       ];
-      jest.spyOn(service['channelsRepository'], 'find').mockResolvedValue(mockChannels);
+      jest.spyOn(channelsRepository, 'find').mockResolvedValue(mockChannels);
       jest.spyOn(service as any, 'updateChannelsInBatches').mockResolvedValue(new Map([['CHANNEL_123', mockLiveStatusCache]]));
 
       // Act
       await (service as any).updateLiveStatusForAllChannels();
 
       // Assert
-      expect(service['channelsRepository'].find).toHaveBeenCalledWith({
+      expect(channelsRepository.find).toHaveBeenCalledWith({
         where: { is_visible: true },
         select: ['id', 'name', 'handle', 'youtube_channel_id']
       });

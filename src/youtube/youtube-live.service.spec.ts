@@ -414,8 +414,10 @@ describe('YoutubeLiveService', () => {
         expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:cid', expect.any(Object), expect.any(Number));
         expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:cid', '1', 900);
         
-        const trackingData = JSON.parse(redisService.set.mock.calls[0][1]);
-        expect(trackingData).toEqual({
+        const trackingCall = redisService.set.mock.calls.find(call => call[0] === 'notFoundAttempts:cid');
+        expect(trackingCall).toBeDefined();
+        const trackingData = trackingCall![1];
+        expect(trackingData).toMatchObject({
           attempts: 1,
           firstAttempt: expect.any(Number),
           lastAttempt: expect.any(Number),
@@ -440,7 +442,7 @@ describe('YoutubeLiveService', () => {
         
         const trackingCall = redisService.set.mock.calls.find(call => call[0] === 'notFoundAttempts:cid');
         expect(trackingCall).toBeDefined();
-        const trackingData = JSON.parse(trackingCall![1]);
+        const trackingData = trackingCall![1];
         expect(trackingData.attempts).toBe(2);
         expect(trackingData.escalated).toBe(false);
       });
@@ -466,7 +468,7 @@ describe('YoutubeLiveService', () => {
         
         const trackingCall = redisService.set.mock.calls.find(call => call[0] === 'notFoundAttempts:cid');
         expect(trackingCall).toBeDefined();
-        const trackingData = JSON.parse(trackingCall![1]);
+        const trackingData = trackingCall![1];
         expect(trackingData.attempts).toBe(3);
         expect(trackingData.escalated).toBe(true);
         expect(trackingData.programEndTime).toBeDefined();
