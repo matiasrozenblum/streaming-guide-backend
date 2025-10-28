@@ -4,10 +4,14 @@ import { Repository, In, DataSource } from 'typeorm';
 import { Schedule } from './schedules.entity';
 import { Panelist } from '../panelists/panelists.entity';
 import { RedisService } from '../redis/redis.service';
+import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
 import * as updateLocale from 'dayjs/plugin/updateLocale';
+
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
+const REVALIDATE_SECRET = process.env.REVALIDATE_SECRET || 'changeme';
 
 export interface WeeklyOverrideDto {
   scheduleId?: number; // Optional for special programs or program-level overrides
@@ -74,6 +78,7 @@ export interface WeeklyOverride {
 export class WeeklyOverridesService {
   private readonly logger = new Logger(WeeklyOverridesService.name);
   private dayjs: typeof dayjs;
+  private notifyUtil: NotifyAndRevalidateUtil;
 
   constructor(
     @InjectRepository(Schedule)
@@ -97,6 +102,11 @@ export class WeeklyOverridesService {
     this.dayjs.updateLocale('en', {
       weekStart: 1
     });
+    this.notifyUtil = new NotifyAndRevalidateUtil(
+      this.redisService,
+      FRONTEND_URL,
+      REVALIDATE_SECRET
+    );
   }
 
   /**
@@ -264,6 +274,15 @@ export class WeeklyOverridesService {
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
 
+    // Notify frontend via SSE
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: 'override_created',
+      entity: 'override',
+      entityId: overrideId,
+      payload: { override },
+      revalidatePaths: ['/'],
+    });
+
     return override;
   }
 
@@ -399,6 +418,15 @@ export class WeeklyOverridesService {
     
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
+
+    // Notify frontend via SSE
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: 'override_updated',
+      entity: 'override',
+      entityId: overrideId,
+      payload: { override: updatedOverride },
+      revalidatePaths: ['/'],
+    });
 
     return updatedOverride;
   }
@@ -646,6 +674,15 @@ export class WeeklyOverridesService {
     
     // Warm cache asynchronously (non-blocking)
     setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
+    
+    // Notify frontend via SSE
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: 'override_deleted',
+      entity: 'override',
+      entityId: overrideId,
+      payload: {},
+      revalidatePaths: ['/'],
+    });
     
     return true;
   }
@@ -958,6 +995,15 @@ export class WeeklyOverridesService {
       
       // Warm cache asynchronously (non-blocking)
       setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
+      
+      // Notify frontend via SSE
+      await this.notifyUtil.notifyAndRevalidate({
+        eventType: 'overrides_bulk_deleted',
+        entity: 'override',
+        entityId: programId,
+        payload: { deletedCount: deleted },
+        revalidatePaths: ['/'],
+      });
     }
     return deleted;
   }
