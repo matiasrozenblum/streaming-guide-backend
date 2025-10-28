@@ -1032,7 +1032,8 @@ export class YoutubeLiveService {
       }
 
       // Video ID/streams are no longer live, refresh them
-      this.logger.debug(`🔄 Cached data no longer live for ${handle}, refreshing...`);
+      const oldVideoId = cachedStreams.primaryVideoId;
+      this.logger.debug(`🔄 Cached video ID no longer live for ${handle} (${oldVideoId}), refreshing...`);
       
       const schedules = await this.schedulesService.findByDay(dayjs().tz('America/Argentina/Buenos_Aires').format('dddd').toLowerCase());
       const ttl = await getCurrentBlockTTL(channelId, schedules, this.sentryService);
@@ -1041,7 +1042,11 @@ export class YoutubeLiveService {
       const streamsResult = await this.getLiveStreamsMain(channelId, handle, ttl);
       
       if (streamsResult && streamsResult !== '__SKIPPED__') {
-        this.logger.debug(`🆕 Refreshed streams for ${handle}: ${streamsResult.streamCount} streams, primary: ${streamsResult.primaryVideoId}`);
+        if (oldVideoId && oldVideoId !== streamsResult.primaryVideoId) {
+          this.logger.debug(`🔄 Video ID rotated for ${handle}: ${oldVideoId} → ${streamsResult.primaryVideoId} (SSE notification sent)`);
+        } else {
+          this.logger.debug(`🆕 Refreshed streams for ${handle}: ${streamsResult.streamCount} streams, primary: ${streamsResult.primaryVideoId}`);
+        }
       } else {
         // Clear streams cache if no streams found
         await this.redisService.del(streamsKey);
