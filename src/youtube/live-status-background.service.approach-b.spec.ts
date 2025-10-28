@@ -178,38 +178,17 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
   });
 
   describe('updateLiveStatusForAllChannels', () => {
-    it('should update live status for all visible channels', async () => {
+    it('should skip bulk update and only log', async () => {
       // Arrange
-      const mockChannels = [
-        {
-          id: 1,
-          name: 'Test Channel',
-          handle: 'testchannel',
-          youtube_channel_id: 'CHANNEL_123',
-          logo_url: '',
-          description: '',
-          order: 1,
-          is_visible: true,
-          background_color: '',
-          show_only_when_scheduled: false,
-          created_at: new Date(),
-          updated_at: new Date(),
-          categories: [],
-          programs: []
-        }
-      ];
-      jest.spyOn(channelsRepository, 'find').mockResolvedValue(mockChannels);
-      jest.spyOn(service as any, 'updateChannelsInBatches').mockResolvedValue(new Map([['CHANNEL_123', mockLiveStatusCache]]));
+      jest.spyOn(service['logger'], 'log');
 
       // Act
       await (service as any).updateLiveStatusForAllChannels();
 
       // Assert
-      expect(channelsRepository.find).toHaveBeenCalledWith({
-        where: { is_visible: true },
-        select: ['id', 'name', 'handle', 'youtube_channel_id']
-      });
-      expect(service['updateChannelsInBatches']).toHaveBeenCalledWith(['CHANNEL_123']);
+      expect(service['logger'].log).toHaveBeenCalledWith(
+        '[LIVE-STATUS-UPDATE] Skipping bulk update - only updating channels with live programs'
+      );
     });
 
     it('should handle no channels gracefully', async () => {
