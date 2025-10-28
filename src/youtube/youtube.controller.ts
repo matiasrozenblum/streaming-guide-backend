@@ -1,4 +1,4 @@
-import { Controller, Get, Res, Sse, Post, Body } from '@nestjs/common';
+import { Controller, Get, Res, Sse, Post, Body, Logger } from '@nestjs/common';
 import { Response } from 'express';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
@@ -18,6 +18,7 @@ interface LiveNotification {
 
 @Controller('youtube')
 export class YoutubeController {
+  private readonly logger = new Logger(YoutubeController.name);
   private sentNotifications = new Set<string>(); // Track sent notifications
 
   constructor(
@@ -50,7 +51,7 @@ export class YoutubeController {
               if (notificationString && typeof notificationString === 'string') {
                 try {
                   const notification = JSON.parse(notificationString) as LiveNotification;
-                  console.log('🔔 Processing SSE notification:', notification.type, notification.entity || notification.channelId);
+                  this.logger.debug('🔔 Processing SSE notification:', notification.type, notification.entity || notification.channelId);
                   
                   // Create a unique identifier for this notification
                   const notificationId = notification.channelId 
@@ -59,15 +60,15 @@ export class YoutubeController {
                   
                   // Only send if we haven't sent this notification before
                   if (!this.sentNotifications.has(notificationId)) {
-                    console.log('📡 Notification not sent before, proceeding to send...');
+                    this.logger.debug('📡 Notification not sent before, proceeding to send...');
                     this.sentNotifications.add(notificationId);
                     
-                    console.log('📡 Sending SSE event to frontend:', notification);
+                    this.logger.debug('📡 Sending SSE event to frontend:', notification);
                     subscriber.next({
                       data: JSON.stringify(notification),
                       type: 'message',
                     } as MessageEvent);
-                    console.log('📡 SSE event sent successfully');
+                    this.logger.debug('📡 SSE event sent successfully');
                     
                     // Clean up the notification from Redis after sending
                     await this.redisService.del(key);
@@ -77,16 +78,16 @@ export class YoutubeController {
                       this.sentNotifications.delete(notificationId);
                     }, 60000);
                   } else {
-                    console.log('📡 Notification already sent, skipping:', notificationId);
+                    this.logger.debug('📡 Notification already sent, skipping:', notificationId);
                   }
                 } catch (error) {
-                  console.error('Error parsing notification:', error);
+                  this.logger.error('Error parsing notification:', error);
                 }
               }
             }
           }
         } catch (error) {
-          console.error('Error in live events SSE:', error);
+          this.logger.error('Error in live events SSE:', error);
         }
       }, 5000); // Check every 5 seconds
 
@@ -115,10 +116,10 @@ export class YoutubeController {
         300 // 5 minutes TTL
       );
       
-      console.log(`🧪 Test notification sent for ${body.channelName}`);
+      this.logger.debug(`🧪 Test notification sent for ${body.channelName}`);
       return { success: true, message: 'Test notification sent' };
     } catch (error) {
-      console.error('Failed to send test notification:', error);
+      this.logger.error('Failed to send test notification:', error);
       return { success: false, error: error.message };
     }
   }

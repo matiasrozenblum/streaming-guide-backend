@@ -17,6 +17,12 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.16.5] - 2025-10-28
+
+### Changed
+- Implemented logger instances in several files
+- Reduced amount of logs to keep below railway consuming limit
+
 ## [1.16.4] - 2025-10-27
 
 ### Fixed

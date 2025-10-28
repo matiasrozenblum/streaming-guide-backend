@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, FindOneOptions, FindManyOptions, FindOptionsWhere } from 'typeorm';
 import { Schedule } from './schedules.entity';
@@ -33,6 +33,7 @@ interface FindAllOptions {
 
 @Injectable()
 export class SchedulesService {
+  private readonly logger = new Logger(SchedulesService.name);
   private dayjs: typeof dayjs;
   private notifyUtil: NotifyAndRevalidateUtil;
 
@@ -72,13 +73,11 @@ export class SchedulesService {
     if (!skipCache) {
       schedules = await this.redisService.get<Schedule[]>(cacheKey);
       if (schedules) {
-        console.log(`[SCHEDULES-CACHE] HIT for ${cacheKey} (${Date.now() - startTime}ms) - ${schedules.length} total schedules`);
+        this.logger.debug(`Cache HIT: ${schedules.length} schedules (${Date.now() - startTime}ms)`);
         
         // Filter by day if requested (after cache hit)
         if (dayOfWeek) {
-          const originalCount = schedules.length;
           schedules = schedules.filter(s => s.day_of_week === dayOfWeek);
-          console.log(`[SCHEDULES-CACHE] Filtered to ${dayOfWeek}: ${schedules.length}/${originalCount} schedules`);
         }
         
         // Cache hit - proceed to process schedules (overrides + enrichment)
@@ -87,7 +86,7 @@ export class SchedulesService {
     }
 
     // Cache miss - implement distributed lock to prevent thundering herd
-    console.log(`[SCHEDULES-CACHE] MISS for unified cache ${cacheKey}`);
+    this.logger.debug(`Cache MISS: ${cacheKey}`);
     const lockKey = `lock:${cacheKey}`;
     let lockAcquired = false;
     
@@ -97,20 +96,16 @@ export class SchedulesService {
       
       if (!lockAcquired) {
         // Another request is fetching - wait and retry from cache
-        console.log(`[SCHEDULES-CACHE] Lock held by another request, waiting for unified cache to populate...`);
+        this.logger.debug(`Lock held by another request, waiting for cache...`);
         
         // Wait up to 8 seconds for the other request to populate cache
         for (let i = 0; i < 80; i++) {
           await new Promise(r => setTimeout(r, 100));
           schedules = await this.redisService.get<Schedule[]>(cacheKey);
           if (schedules) {
-            console.log(`[SCHEDULES-CACHE] Unified cache populated by another request after ${(i + 1) * 100}ms`);
-            
             // Filter by day if requested (after cache hit)
             if (dayOfWeek) {
-              const originalCount = schedules.length;
               schedules = schedules.filter(s => s.day_of_week === dayOfWeek);
-              console.log(`[SCHEDULES-CACHE] Filtered to ${dayOfWeek}: ${schedules.length}/${originalCount} schedules`);
             }
             
             return this.processSchedules(schedules, options, startTime);
@@ -118,9 +113,7 @@ export class SchedulesService {
         }
         
         // Timeout waiting for cache - log warning and proceed to fetch
-        console.warn(`[SCHEDULES-CACHE] Lock timeout after 8s, proceeding to fetch anyway`);
-      } else {
-        console.log(`[SCHEDULES-CACHE] Lock acquired for unified cache ${cacheKey}`);
+        this.logger.warn(`Lock timeout after 8s, proceeding to fetch`);
       }
     }
 
@@ -131,13 +124,10 @@ export class SchedulesService {
       
       // Store complete week in unified cache
       await this.redisService.set(cacheKey, schedules, 1800);
-      console.log(`[SCHEDULES-CACHE] Stored ${schedules.length} complete week schedules in unified cache`);
       
       // Filter by day if requested (after storing complete data)
       if (dayOfWeek) {
-        const originalCount = schedules.length;
         schedules = schedules.filter(s => s.day_of_week === dayOfWeek);
-        console.log(`[SCHEDULES-CACHE] Filtered to ${dayOfWeek}: ${schedules.length}/${originalCount} schedules`);
       }
       
       // Process and return
@@ -146,7 +136,6 @@ export class SchedulesService {
       // Always release lock if we acquired it
       if (lockAcquired) {
         await this.redisService.del(lockKey);
-        console.log(`[SCHEDULES-CACHE] Released lock for unified cache ${cacheKey}`);
       }
     }
   }
@@ -157,7 +146,6 @@ export class SchedulesService {
    */
   private async fetchSchedulesFromDatabase(dayOfWeek?: string, relations?: string[]): Promise<Schedule[]> {
     const dbStart = Date.now();
-    console.log(`[SCHEDULES-DB] Starting query for ${dayOfWeek || 'all days'} at ${new Date().toISOString()}`);
     
     // Optimized query structure - selective panelists join to prevent data explosion
     // CRITICAL: This preserves ALL data - channel, program, panelists, categories
@@ -177,13 +165,7 @@ export class SchedulesService {
     
     const schedules = await queryBuilder.getMany();
     const dbQueryTime = Date.now() - dbStart;
-    console.log(`[SCHEDULES-DB] Query completed (${dbQueryTime}ms) - ${schedules.length} schedules`);
-    
-    // Debug: Check data completeness
-    const schedulesWithPanelists = schedules.filter(s => s.program?.panelists && s.program.panelists.length > 0);
-    const totalPanelists = schedules.reduce((sum, s) => sum + (s.program?.panelists?.length || 0), 0);
-    const schedulesWithCategories = schedules.filter(s => s.program?.channel?.categories && s.program.channel.categories.length > 0);
-    console.log(`[SCHEDULES-DB] Data completeness - Schedules: ${schedules.length}, With panelists: ${schedulesWithPanelists.length}, Total panelists: ${totalPanelists}, With categories: ${schedulesWithCategories.length}`);
+    this.logger.debug(`DB query: ${schedules.length} schedules (${dbQueryTime}ms)`);
     
     // Alert on slow database queries
     if (dbQueryTime > 3000) { // 3 seconds
@@ -222,28 +204,18 @@ export class SchedulesService {
     // Apply weekly overrides for current week (unless raw=true)
     if (options.applyOverrides) {
       const currentWeekStart = this.weeklyOverridesService.getWeekStartDate('current');
-      const overridesStart = Date.now();
-      console.log('[SCHEDULES-OVERRIDES] Applying weekly overrides...');
       schedules = await this.weeklyOverridesService.applyWeeklyOverrides(schedules, currentWeekStart);
-      console.log(`[SCHEDULES-OVERRIDES] Applied overrides (${Date.now() - overridesStart}ms)`);
       
       // Re-filter by day_of_week after applying overrides
       // This is necessary because applyWeeklyOverrides adds ALL create overrides regardless of day
       if (options.dayOfWeek) {
-        const beforeFilter = schedules.length;
         schedules = schedules.filter(s => s.day_of_week === options.dayOfWeek);
-        if (beforeFilter !== schedules.length) {
-          console.log(`[SCHEDULES-OVERRIDES] Re-filtered to ${options.dayOfWeek}: ${schedules.length}/${beforeFilter} schedules (removed ${beforeFilter - schedules.length} from other days)`);
-        }
       }
     }
 
     // Enrich with live status if requested
-    const enrichStart = Date.now();
-    console.log(`[SCHEDULES-ENRICH] Enriching ${schedules.length} schedules...`);
     const enriched = await this.enrichSchedules(schedules, options.liveStatus || false);
-    console.log(`[SCHEDULES-ENRICH] Enriched ${schedules.length} schedules (${Date.now() - enrichStart}ms)`);
-    console.log(`[SCHEDULES-TOTAL] Completed in ${Date.now() - startTime}ms`);
+    this.logger.debug(`Completed in ${Date.now() - startTime}ms`);
     return enriched;
   }
 
@@ -256,7 +228,6 @@ export class SchedulesService {
    * PUBLIC: Can be called by other services (Programs, Channels, etc.) after cache invalidation
    */
   async warmSchedulesCache(): Promise<void> {
-    console.log('[CACHE-WARM] Starting unified cache warming...');
     const warmStart = Date.now();
     
     try {
@@ -267,12 +238,9 @@ export class SchedulesService {
         liveStatus: false, 
         applyOverrides: true 
       });
-      console.log(`[CACHE-WARM] Warmed unified cache (complete week data)`);
-      
-      
-      console.log(`[CACHE-WARM] Cache warming completed in ${Date.now() - warmStart}ms`);
+      this.logger.debug(`Cache warmed (${Date.now() - warmStart}ms)`);
     } catch (error) {
-      console.error('[CACHE-WARM] Failed to warm unified cache:', error);
+      this.logger.error('Failed to warm cache', error);
       // Log to Sentry but don't throw - cache warming failure shouldn't break operations
       this.sentryService.captureException(error);
     }
@@ -324,7 +292,7 @@ export class SchedulesService {
           try {
             // Background live status will be handled by OptimizedSchedulesService
           } catch (error) {
-            console.error('[enrichSchedules] Error in async live status fetch:', error.message);
+            this.logger.error('Error in async live status fetch', error.message);
           }
         });
       }
@@ -376,7 +344,6 @@ export class SchedulesService {
       });
     }
 
-    console.log('[enrichSchedules] Enriched', enriched.length, 'schedules');
     return enriched;
   }
 
@@ -425,7 +392,7 @@ export class SchedulesService {
         if (batchStreamsResult && batchStreamsResult !== '__SKIPPED__' && batchStreamsResult.streams) {
           allStreams = batchStreamsResult.streams;
           channelStreamCount = batchStreamsResult.streamCount;
-          console.log(`[enrichSchedulesForChannel] Using batch results for ${handle}: ${allStreams.length} streams`);
+          this.logger.debug(`Using batch results: ${handle} (${allStreams.length} streams)`);
           
           // Cache the streams for future use
           const streamsKey = `liveStreamsByChannel:${channelId}`;
@@ -443,7 +410,7 @@ export class SchedulesService {
                 channelStreamCount = parsedStreams.streamCount;
               }
             } catch (error) {
-              console.warn(`Failed to parse cached streams for ${handle}:`, error);
+              this.logger.warn(`Failed to parse cached streams for ${handle}:`, error);
             }
           }
 
@@ -589,7 +556,7 @@ export class SchedulesService {
             }
           }
         } catch (error) {
-          console.warn(`Failed to fetch live stream for ${handle}:`, error);
+          this.logger.warn(`Failed to fetch live stream for ${handle}:`, error);
         }
       }
     }
@@ -722,7 +689,7 @@ export class SchedulesService {
     setImmediate(() => this.warmSchedulesCache());
 
     // Notify and revalidate
-    console.log('📅 Sending schedule update notification for schedule ID:', id);
+    this.logger.debug(`Sending schedule update notification for ID: ${id}`);
     await this.notifyUtil.notifyAndRevalidate({
       eventType: 'schedule_updated',
       entity: 'schedule',
@@ -808,10 +775,10 @@ export class SchedulesService {
         schedule.start_time === startTime || schedule.start_time.startsWith(startTime)
       );
 
-      console.log(`[PROGRAM-START] Found ${matchingSchedules.length} programs starting at ${startTime} on ${dayOfWeek} (from cache)`);
+      this.logger.debug(`Found ${matchingSchedules.length} programs at ${startTime} on ${dayOfWeek}`);
       return matchingSchedules;
     } catch (error) {
-      console.error(`Error finding schedules for ${dayOfWeek} at ${startTime}:`, error);
+      this.logger.error(`Error finding schedules for ${dayOfWeek} at ${startTime}:`, error);
       this.sentryService.captureException(error);
       return [];
     }

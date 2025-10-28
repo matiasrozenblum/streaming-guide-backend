@@ -107,12 +107,12 @@ export class LiveStatusBackgroundService {
 
       // Check which channels need cache updates
       for (const [channelId, channelInfo] of liveChannels) {
-        console.log(`[LIVE-STATUS-BG] Checking cache for channel ${channelInfo.handle} (${channelId})`);
+        this.logger.debug(`[LIVE-STATUS-BG] Checking cache for channel ${channelInfo.handle} (${channelId})`);
         const cacheKey = `${this.CACHE_PREFIX}${channelId}`;
         const cached = await this.redisService.get<LiveStatusCache>(cacheKey);
         
         if (!cached || await this.shouldUpdateCache(cached)) {
-          console.log(`[LIVE-STATUS-BG] Cache update needed for channel ${channelInfo.handle} (${channelId})`);
+          this.logger.debug(`[LIVE-STATUS-BG] Cache update needed for channel ${channelInfo.handle} (${channelId})`);
           channelsToUpdate.push(channelId);
         }
       }
@@ -182,7 +182,7 @@ export class LiveStatusBackgroundService {
     const batchSize = 10; // Process 10 channels at a time
 
     for (let i = 0; i < channelIds.length; i += batchSize) {
-      console.log(`[LIVE-STATUS-BG] Updating channel ${channelIds[i]}`);
+      this.logger.debug(`[LIVE-STATUS-BG] Updating channel ${channelIds[i]}`);
       const batch = channelIds.slice(i, i + batchSize);
       this.logger.log(`🔄 Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(channelIds.length / batchSize)}: ${batch.length} channels`);
 
@@ -303,19 +303,19 @@ export class LiveStatusBackgroundService {
           const isStillLive = await this.youtubeLiveService.isVideoLive(cachedStreams.primaryVideoId);
           if (isStillLive) {
             // Video is still live, create cache with new cooldown
-            console.log(`[LIVE-STATUS-BG] Video ID ${cachedStreams.primaryVideoId} still live for ${handle}`);
+            this.logger.debug(`[LIVE-STATUS-BG] Video ID ${cachedStreams.primaryVideoId} still live for ${handle}`);
             const cacheData = this.createCacheDataFromStreams(channelId, handle, cachedStreams, ttl, blockEndTime);
             await this.cacheLiveStatus(channelId, cacheData);
             return cacheData;
           } else {
             // Video is no longer live, clear cache and fetch new one
-            console.log(`[LIVE-STATUS-BG] Video ID ${cachedStreams.primaryVideoId} no longer live for ${handle}, fetching new one`);
+            this.logger.debug(`[LIVE-STATUS-BG] Video ID ${cachedStreams.primaryVideoId} no longer live for ${handle}, fetching new one`);
             await this.redisService.del(streamsKey);
             await this.redisService.del(statusCacheKey); // Also clear our status cache
           }
         } else {
           // Validation cooldown still active, use cached data
-          console.log(`[LIVE-STATUS-BG] Using cached video ID ${cachedStreams.primaryVideoId} for ${handle} (cooldown active)`);
+          this.logger.debug(`[LIVE-STATUS-BG] Using cached video ID ${cachedStreams.primaryVideoId} for ${handle} (cooldown active)`);
           // Return existing status cache or create new one
           if (cachedStatus) {
             return cachedStatus;
@@ -330,18 +330,18 @@ export class LiveStatusBackgroundService {
       
       if (notFoundData) {
         // Channel is marked as not-found, skip fetching
-        console.log(`[LIVE-STATUS-BG] Skipping ${handle} - marked as not-found`);
+        this.logger.debug(`[LIVE-STATUS-BG] Skipping ${handle} - marked as not-found`);
         return this.createNotLiveCacheData(channelId, handle, ttl);
       }
       
       // Fetch live streams from YouTube using main cron method (should extend not-found marks)
-      console.log(`[LIVE-STATUS-BG] Fetching live streams for ${handle} (${channelId})`);
+      this.logger.debug(`[LIVE-STATUS-BG] Fetching live streams for ${handle} (${channelId})`);
       const liveStreams = await this.youtubeLiveService.getLiveStreamsMain(
         channelId,
         handle,
         ttl
       );
-      console.log(`[LIVE-STATUS-BG] Live streams result for ${handle}:`, liveStreams);
+      this.logger.debug(`[LIVE-STATUS-BG] Live streams result for ${handle}:`, liveStreams);
 
       const cacheData: LiveStatusCache = {
         channelId,
@@ -361,7 +361,7 @@ export class LiveStatusBackgroundService {
         streamCount: liveStreams && liveStreams !== '__SKIPPED__' ? liveStreams.streamCount : 0,
       };
 
-      console.log(`[LIVE-STATUS-BG] Cache data for ${handle}:`, cacheData);
+      this.logger.debug(`[LIVE-STATUS-BG] Cache data for ${handle}:`, cacheData);
 
       await this.cacheLiveStatus(channelId, cacheData);
       return cacheData;
