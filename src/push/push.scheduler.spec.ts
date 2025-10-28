@@ -10,6 +10,7 @@ import { UserSubscription, NotificationMethod } from '../users/user-subscription
 import { PushSubscriptionEntity } from './push-subscription.entity';
 import * as dayjs from 'dayjs';
 import { ConfigService } from '../config/config.service';
+import { SchedulesService } from '../schedules/schedules.service';
 
 // Mock dayjs
 jest.mock('dayjs', () => {
@@ -147,6 +148,12 @@ describe('PushScheduler', () => {
           provide: ConfigService,
           useValue: {
             canFetchLive: jest.fn().mockResolvedValue(true),
+          },
+        },
+        {
+          provide: SchedulesService,
+          useValue: {
+            findAll: jest.fn(),
           },
         },
       ],
