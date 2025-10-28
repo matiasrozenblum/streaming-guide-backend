@@ -4,6 +4,7 @@ import { YoutubeLiveService } from './youtube-live.service';
 import { SchedulesService } from '../schedules/schedules.service';
 import { RedisService } from '../redis/redis.service';
 import { ConfigService } from '../config/config.service';
+import { SentryService } from '../sentry/sentry.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Channel } from '../channels/channels.entity';
 
@@ -85,6 +86,12 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
           provide: ConfigService,
           useValue: {
             canFetchLive: jest.fn().mockResolvedValue(true),
+          },
+        },
+        {
+          provide: SentryService,
+          useValue: {
+            captureException: jest.fn(),
           },
         },
         {

@@ -4,6 +4,7 @@ import { YoutubeLiveService } from './youtube-live.service';
 import { SchedulesService } from '../schedules/schedules.service';
 import { RedisService } from '../redis/redis.service';
 import { ConfigService } from '../config/config.service';
+import { SentryService } from '../sentry/sentry.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Channel } from '../channels/channels.entity';
 
@@ -18,6 +19,7 @@ describe('LiveStatusBackgroundService Block End Time Calculation', () => {
         { provide: SchedulesService, useValue: { findByDay: jest.fn() } },
         { provide: RedisService, useValue: { get: jest.fn(), set: jest.fn() } },
         { provide: ConfigService, useValue: { canFetchLive: jest.fn() } },
+        { provide: SentryService, useValue: { captureException: jest.fn() } },
         { provide: getRepositoryToken(Channel), useValue: { find: jest.fn() } },
       ],
     }).compile();
