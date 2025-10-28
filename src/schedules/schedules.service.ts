@@ -226,6 +226,16 @@ export class SchedulesService {
       console.log('[SCHEDULES-OVERRIDES] Applying weekly overrides...');
       schedules = await this.weeklyOverridesService.applyWeeklyOverrides(schedules, currentWeekStart);
       console.log(`[SCHEDULES-OVERRIDES] Applied overrides (${Date.now() - overridesStart}ms)`);
+      
+      // Re-filter by day_of_week after applying overrides
+      // This is necessary because applyWeeklyOverrides adds ALL create overrides regardless of day
+      if (options.dayOfWeek) {
+        const beforeFilter = schedules.length;
+        schedules = schedules.filter(s => s.day_of_week === options.dayOfWeek);
+        if (beforeFilter !== schedules.length) {
+          console.log(`[SCHEDULES-OVERRIDES] Re-filtered to ${options.dayOfWeek}: ${schedules.length}/${beforeFilter} schedules (removed ${beforeFilter - schedules.length} from other days)`);
+        }
+      }
     }
 
     // Enrich with live status if requested
@@ -342,12 +352,14 @@ export class SchedulesService {
       let isLive = false;
       let streamUrl = program.stream_url || program.youtube_url;
 
-      // Si estamos en horario
-      if (
+      // Only set isLive if liveStatus is enabled
+      if (liveStatus && (
         schedule.day_of_week === currentDay &&
         currentNum >= startNum &&
-        currentNum < endNum
-      ) {
+        currentNum < endNum &&
+        program.name && 
+        program.name.trim() !== ''
+      )) {
         isLive = true;
       }
 
@@ -390,14 +402,16 @@ export class SchedulesService {
       return enriched;
     }
 
-    // Find live schedules for this channel
-    const liveSchedules = schedules.filter(schedule => {
+    // Find live schedules for this channel (only if liveStatus is enabled)
+    const liveSchedules = liveStatus ? schedules.filter(schedule => {
       const startNum = this.convertTimeToNumber(schedule.start_time);
       const endNum = this.convertTimeToNumber(schedule.end_time);
       return schedule.day_of_week === currentDay &&
              currentNum >= startNum &&
-             currentNum < endNum;
-    });
+             currentNum < endNum &&
+             schedule.program.name && 
+             schedule.program.name.trim() !== '';
+    }) : [];
 
     let allStreams: any[] = [];
     let channelStreamCount = 0;
@@ -778,18 +792,24 @@ export class SchedulesService {
   /**
    * Find schedules by start time for a specific day
    * Used for program start detection to validate cached video IDs
+   * OPTIMIZED: Uses cached schedules instead of database query
    */
   async findByStartTime(dayOfWeek: string, startTime: string): Promise<Schedule[]> {
     try {
-      const schedules = await this.schedulesRepository
-        .createQueryBuilder('schedule')
-        .leftJoinAndSelect('schedule.program', 'program')
-        .leftJoinAndSelect('program.channel', 'channel')
-        .where('schedule.day_of_week = :dayOfWeek', { dayOfWeek })
-        .andWhere('schedule.start_time = :startTime', { startTime })
-        .getMany();
+      // Use cached schedules instead of database query
+      const allSchedules = await this.findAll({
+        dayOfWeek,
+        applyOverrides: true,
+        liveStatus: false,
+      });
+      
+      // Filter by start time
+      const matchingSchedules = allSchedules.filter(schedule => 
+        schedule.start_time === startTime || schedule.start_time.startsWith(startTime)
+      );
 
-      return schedules;
+      console.log(`[PROGRAM-START] Found ${matchingSchedules.length} programs starting at ${startTime} on ${dayOfWeek} (from cache)`);
+      return matchingSchedules;
     } catch (error) {
       console.error(`Error finding schedules for ${dayOfWeek} at ${startTime}:`, error);
       this.sentryService.captureException(error);

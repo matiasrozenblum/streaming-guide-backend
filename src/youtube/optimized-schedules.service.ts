@@ -7,9 +7,6 @@ import { RedisService } from '../redis/redis.service';
 
 @Injectable()
 export class OptimizedSchedulesService {
-  // Global set to track channels that have async fetches in progress (across all requests)
-  private readonly globalAsyncFetchTriggered = new Set<string>();
-
   constructor(
     private readonly schedulesService: SchedulesService,
     private readonly weeklyOverridesService: WeeklyOverridesService,
@@ -109,11 +106,21 @@ export class OptimizedSchedulesService {
             stream_count: 0,
           };
           
-          // Trigger async background fetch (non-blocking) - but only once per channel globally
-          if (schedule.program.channel?.handle && !this.globalAsyncFetchTriggered.has(channelId)) {
-            this.globalAsyncFetchTriggered.add(channelId); // Mark as triggered BEFORE setImmediate
+          // Trigger async background fetch (non-blocking) - with Redis-based deduplication
+          if (schedule.program.channel?.handle) {
+            const fetchLockKey = `async-fetch-triggered:${channelId}`;
+            const fetchLockTTL = 300; // 5 minutes - matches cache TTL
+            
             setImmediate(async () => {
               try {
+                // Try to acquire lock - only one replica/request should trigger the fetch
+                const lockAcquired = await this.redisService.setNX(fetchLockKey, { timestamp: Date.now() }, fetchLockTTL);
+                
+                if (!lockAcquired) {
+                  console.log(`[OPTIMIZED-SCHEDULES] Async fetch already triggered for ${schedule.program.channel.handle}, skipping duplicate`);
+                  return;
+                }
+                
                 console.log(`[OPTIMIZED-SCHEDULES] Triggering async fetch for ${schedule.program.channel.handle}...`);
                 await this.youtubeLiveService.getLiveStreamsMain(
                   channelId,
@@ -123,10 +130,9 @@ export class OptimizedSchedulesService {
                 console.log(`[OPTIMIZED-SCHEDULES] Async fetch completed for ${schedule.program.channel.handle}`);
               } catch (error) {
                 console.error(`[OPTIMIZED-SCHEDULES] Async fetch failed for ${channelId}:`, error.message);
-              } finally {
-                // Clean up the global set after the fetch completes (success or failure)
-                this.globalAsyncFetchTriggered.delete(channelId);
               }
+              // Note: We don't delete the lock - let it expire naturally after 5 minutes
+              // This prevents rapid re-fetching even if the API call completes quickly
             });
           }
         } else {

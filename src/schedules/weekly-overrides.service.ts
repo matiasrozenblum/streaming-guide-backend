@@ -209,7 +209,11 @@ export class WeeklyOverridesService {
     // Create override ID
     let overrideId: string;
     if (dto.overrideType === 'create') {
-      overrideId = `special_${dto.specialProgram!.name.replace(/\s+/g, '_').toLowerCase()}_${weekStartDate}`;
+      // New format includes channel ID and day of week to prevent collisions
+      const channelId = dto.specialProgram!.channelId;
+      const name = dto.specialProgram!.name.replace(/\s+/g, '_').toLowerCase();
+      const dayOfWeek = dto.newDayOfWeek?.toLowerCase() || 'unknown';
+      overrideId = `special_channel_${channelId}_${name}_${dayOfWeek}_${weekStartDate}`;
     } else if (dto.programId) {
       overrideId = `program_${dto.programId}_${weekStartDate}`;
     } else {
@@ -238,7 +242,7 @@ export class WeeklyOverridesService {
       expiresAt,
       createdAt: new Date(),
       panelistIds: dto.panelistIds, // Keep legacy field for backward compatibility
-      panelists: completePanelists.length > 0 ? completePanelists : undefined, // Store complete objects
+      panelists: completePanelists, // Always store complete objects (even if empty array)
       specialProgram: dto.specialProgram ? {
         ...dto.specialProgram,
         channel: completeChannel, // Store complete channel object
@@ -372,7 +376,7 @@ export class WeeklyOverridesService {
       weekStartDate: existingOverride.weekStartDate,
       expiresAt: existingOverride.expiresAt,
       // Update complete objects
-      panelists: completePanelists.length > 0 ? completePanelists : undefined,
+      panelists: completePanelists, // Always store complete objects (even if empty array)
       specialProgram: dto.specialProgram ? {
         ...dto.specialProgram,
         channel: completeChannel,
