@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.16.6] - 2025-10-28
+
+### Added
+- Added more SSE events
+
 ## [1.16.5] - 2025-10-28
 
 ### Changed
