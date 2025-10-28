@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { SchedulesService } from '../schedules/schedules.service';
 import { WeeklyOverridesService } from '../schedules/weekly-overrides.service';
 import { LiveStatusBackgroundService } from './live-status-background.service';
@@ -7,6 +7,8 @@ import { RedisService } from '../redis/redis.service';
 
 @Injectable()
 export class OptimizedSchedulesService {
+  private readonly logger = new Logger(OptimizedSchedulesService.name);
+  
   constructor(
     private readonly schedulesService: SchedulesService,
     private readonly weeklyOverridesService: WeeklyOverridesService,
@@ -96,7 +98,7 @@ export class OptimizedSchedulesService {
         } else if (isCurrentlyLive) {
           // Program is live by time but background cache says no live stream
           // Mark as live but don't block on YouTube API calls
-          console.log(`[OPTIMIZED-SCHEDULES] Program "${schedule.program.name}" is live by time but cache says no stream. Marking as live without blocking API call.`);
+          this.logger.debug(`[OPTIMIZED-SCHEDULES] Program "${schedule.program.name}" is live by time but cache says no stream. Marking as live without blocking API call.`);
           
           enrichedSchedule.program = {
             ...schedule.program,
@@ -117,19 +119,19 @@ export class OptimizedSchedulesService {
                 const lockAcquired = await this.redisService.setNX(fetchLockKey, { timestamp: Date.now() }, fetchLockTTL);
                 
                 if (!lockAcquired) {
-                  console.log(`[OPTIMIZED-SCHEDULES] Async fetch already triggered for ${schedule.program.channel.handle}, skipping duplicate`);
+                  this.logger.debug(`[OPTIMIZED-SCHEDULES] Async fetch already triggered for ${schedule.program.channel.handle}, skipping duplicate`);
                   return;
                 }
                 
-                console.log(`[OPTIMIZED-SCHEDULES] Triggering async fetch for ${schedule.program.channel.handle}...`);
+                this.logger.debug(`[OPTIMIZED-SCHEDULES] Triggering async fetch for ${schedule.program.channel.handle}...`);
                 await this.youtubeLiveService.getLiveStreamsMain(
                   channelId,
                   schedule.program.channel.handle,
                   300 // 5 min TTL for on-demand fetches
                 );
-                console.log(`[OPTIMIZED-SCHEDULES] Async fetch completed for ${schedule.program.channel.handle}`);
+                this.logger.debug(`[OPTIMIZED-SCHEDULES] Async fetch completed for ${schedule.program.channel.handle}`);
               } catch (error) {
-                console.error(`[OPTIMIZED-SCHEDULES] Async fetch failed for ${channelId}:`, error.message);
+                this.logger.error(`[OPTIMIZED-SCHEDULES] Async fetch failed for ${channelId}:`, error.message);
               }
               // Note: We don't delete the lock - let it expire naturally after 5 minutes
               // This prevents rapid re-fetching even if the API call completes quickly
