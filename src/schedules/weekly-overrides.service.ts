@@ -655,11 +655,11 @@ export class WeeklyOverridesService {
    */
   async applyWeeklyOverrides(schedules: Schedule[], weekStartDate: string): Promise<Schedule[]> {
     const start = Date.now();
-    this.logger.debug('[applyWeeklyOverrides] START for week', weekStartDate, 'with', schedules.length, 'schedules');
+    this.logger.debug(`START for week ${weekStartDate} with ${schedules.length} schedules`);
     const overrides = await this.getOverridesForWeek(weekStartDate);
     
     if (overrides.length === 0) {
-      this.logger.debug('[applyWeeklyOverrides] No overrides. Completed in', Date.now() - start, 'ms');
+      this.logger.debug(`No overrides. Completed in ${Date.now() - start}ms`);
       return schedules;
     }
 
@@ -856,7 +856,7 @@ export class WeeklyOverridesService {
         modifiedSchedules.push(virtualSchedule);
       }
     }
-    this.logger.debug('[applyWeeklyOverrides] Completed in', Date.now() - start, 'ms');
+    this.logger.debug(`Completed in ${Date.now() - start}ms`);
     return modifiedSchedules;
   }
 
