@@ -787,14 +787,14 @@ describe('YoutubeLiveService', () => {
         const originalEnv = process.env.NODE_ENV;
         process.env.NODE_ENV = 'staging';
         
-        const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+        const loggerSpy = jest.spyOn(service['logger'], 'debug').mockImplementation();
         
         await (service as any).sendEscalationEmail('cid', 'handle');
         
-        expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Escalation email skipped'));
+        expect(loggerSpy).toHaveBeenCalledWith(expect.stringContaining('Escalation email skipped'));
         
         process.env.NODE_ENV = originalEnv;
-        consoleSpy.mockRestore();
+        loggerSpy.mockRestore();
       });
 
       it('sends email in production environment', async () => {

@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, Inject, forwardRef, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, DataSource } from 'typeorm';
 import { Schedule } from './schedules.entity';
@@ -72,6 +72,7 @@ export interface WeeklyOverride {
 
 @Injectable()
 export class WeeklyOverridesService {
+  private readonly logger = new Logger(WeeklyOverridesService.name);
   private dayjs: typeof dayjs;
 
   constructor(
@@ -423,23 +424,23 @@ export class WeeklyOverridesService {
 
     // Migrate panelists if we have panelistIds but no panelists
     if (override.panelistIds && override.panelistIds.length > 0 && !override.panelists) {
-      console.log(`[OVERRIDE-MIGRATION] Migrating panelists for override ${override.id}`);
+      this.logger.debug(`[OVERRIDE-MIGRATION] Migrating panelists for override ${override.id}`);
       try {
         const panelists = await this.panelistsRepository.find({
           where: { id: In(override.panelistIds) },
         });
         migratedOverride.panelists = panelists;
         needsMigration = true;
-        console.log(`[OVERRIDE-MIGRATION] Migrated ${panelists.length} panelists for override ${override.id}`);
+        this.logger.debug(`[OVERRIDE-MIGRATION] Migrated ${panelists.length} panelists for override ${override.id}`);
       } catch (error) {
-        console.error(`[OVERRIDE-MIGRATION] Failed to migrate panelists for override ${override.id}:`, error.message);
+        this.logger.error(`[OVERRIDE-MIGRATION] Failed to migrate panelists for override ${override.id}:`, error.message);
         // Keep original structure if migration fails
       }
     }
 
     // Migrate channel if we have channelId but no channel object
     if (override.specialProgram?.channelId && !override.specialProgram?.channel) {
-      console.log(`[OVERRIDE-MIGRATION] Migrating channel for override ${override.id}`);
+      this.logger.debug(`[OVERRIDE-MIGRATION] Migrating channel for override ${override.id}`);
       try {
         const channelIdsArray = [override.specialProgram.channelId];
         const placeholders = channelIdsArray.map((_, index) => `$${index + 1}`).join(',');
@@ -455,10 +456,10 @@ export class WeeklyOverridesService {
             channel: channels[0],
           };
           needsMigration = true;
-          console.log(`[OVERRIDE-MIGRATION] Migrated channel for override ${override.id}`);
+          this.logger.debug(`[OVERRIDE-MIGRATION] Migrated channel for override ${override.id}`);
         }
       } catch (error) {
-        console.error(`[OVERRIDE-MIGRATION] Failed to migrate channel for override ${override.id}:`, error.message);
+        this.logger.error(`[OVERRIDE-MIGRATION] Failed to migrate channel for override ${override.id}:`, error.message);
         // Keep original structure if migration fails
       }
     }
@@ -474,10 +475,10 @@ export class WeeklyOverridesService {
         
         if (secondsUntilExpiry > 0) {
           await this.redisService.set(key, migratedOverride, secondsUntilExpiry);
-          console.log(`[OVERRIDE-MIGRATION] Saved migrated override ${override.id} to cache`);
+          this.logger.debug(`[OVERRIDE-MIGRATION] Saved migrated override ${override.id} to cache`);
         }
       } catch (error) {
-        console.error(`[OVERRIDE-MIGRATION] Failed to save migrated override ${override.id}:`, error.message);
+        this.logger.error(`[OVERRIDE-MIGRATION] Failed to save migrated override ${override.id}:`, error.message);
       }
     }
 
@@ -493,11 +494,11 @@ export class WeeklyOverridesService {
     // Try cache first
     const cached = await this.redisService.get<WeeklyOverride[]>(cacheKey);
     if (cached) {
-      console.log(`[OVERRIDES-CACHE] Cache hit for week ${weekStartDate}: ${cached.length} overrides`);
+      this.logger.debug(`[OVERRIDES-CACHE] Cache hit for week ${weekStartDate}: ${cached.length} overrides`);
       return cached;
     }
 
-    console.log(`[OVERRIDES-CACHE] Cache miss for week ${weekStartDate}, fetching from individual caches`);
+    this.logger.debug(`[OVERRIDES-CACHE] Cache miss for week ${weekStartDate}, fetching from individual caches`);
     
     // Fetch from individual caches (existing logic)
     const overrides = await this.fetchOverridesFromIndividualCaches(weekStartDate);
@@ -523,7 +524,7 @@ export class WeeklyOverridesService {
 
     // Cache the combined result with smart TTL
     await this.redisService.set(cacheKey, overrides, ttlSeconds);
-    console.log(`[OVERRIDES-CACHE] Cached ${overrides.length} overrides for week ${weekStartDate} with TTL ${ttlSeconds}s`);
+    this.logger.debug(`[OVERRIDES-CACHE] Cached ${overrides.length} overrides for week ${weekStartDate} with TTL ${ttlSeconds}s`);
     
     return overrides;
   }
@@ -538,7 +539,7 @@ export class WeeklyOverridesService {
     const existingCache = await this.redisService.get<WeeklyOverride[]>(cacheKey);
     if (existingCache) {
       // Cache exists - update it by refetching from individual caches
-      console.log(`[OVERRIDES-CACHE] Updating existing cache for week ${weekStartDate}`);
+      this.logger.debug(`[OVERRIDES-CACHE] Updating existing cache for week ${weekStartDate}`);
       const updatedOverrides = await this.fetchOverridesFromIndividualCaches(weekStartDate);
       
       // Calculate smart TTL
@@ -559,11 +560,11 @@ export class WeeklyOverridesService {
       
       // Update the cache
       await this.redisService.set(cacheKey, updatedOverrides, ttlSeconds);
-      console.log(`[OVERRIDES-CACHE] Updated cache for week ${weekStartDate} with ${updatedOverrides.length} overrides, TTL ${ttlSeconds}s`);
+      this.logger.debug(`[OVERRIDES-CACHE] Updated cache for week ${weekStartDate} with ${updatedOverrides.length} overrides, TTL ${ttlSeconds}s`);
     } else {
       // Cache doesn't exist - just delete the key to be safe
       await this.redisService.del(cacheKey);
-      console.log(`[OVERRIDES-CACHE] No existing cache for week ${weekStartDate}, cleared key`);
+      this.logger.debug(`[OVERRIDES-CACHE] No existing cache for week ${weekStartDate}, cleared key`);
     }
   }
 
@@ -600,7 +601,7 @@ export class WeeklyOverridesService {
             const migratedOverride = await this.migrateOverrideToNewStructure(override);
             overrides.push(migratedOverride);
           } catch (error) {
-            console.warn(`[WEEKLY-OVERRIDES] Failed to parse override ${keys[i]}:`, error);
+            this.logger.warn(`[WEEKLY-OVERRIDES] Failed to parse override ${keys[i]}:`, error);
           }
         }
       }
@@ -654,11 +655,11 @@ export class WeeklyOverridesService {
    */
   async applyWeeklyOverrides(schedules: Schedule[], weekStartDate: string): Promise<Schedule[]> {
     const start = Date.now();
-    console.log('[applyWeeklyOverrides] START for week', weekStartDate, 'with', schedules.length, 'schedules');
+    this.logger.debug('[applyWeeklyOverrides] START for week', weekStartDate, 'with', schedules.length, 'schedules');
     const overrides = await this.getOverridesForWeek(weekStartDate);
     
     if (overrides.length === 0) {
-      console.log('[applyWeeklyOverrides] No overrides. Completed in', Date.now() - start, 'ms');
+      this.logger.debug('[applyWeeklyOverrides] No overrides. Completed in', Date.now() - start, 'ms');
       return schedules;
     }
 
@@ -855,7 +856,7 @@ export class WeeklyOverridesService {
         modifiedSchedules.push(virtualSchedule);
       }
     }
-    console.log('[applyWeeklyOverrides] Completed in', Date.now() - start, 'ms');
+    this.logger.debug('[applyWeeklyOverrides] Completed in', Date.now() - start, 'ms');
     return modifiedSchedules;
   }
 
@@ -908,7 +909,7 @@ export class WeeklyOverridesService {
               expiredKeys.push(keys[index]);
             }
           } catch (error) {
-            console.warn(`[WEEKLY-OVERRIDES] Failed to parse override ${keys[index]} for cleanup:`, error);
+            this.logger.warn(`[WEEKLY-OVERRIDES] Failed to parse override ${keys[index]} for cleanup:`, error);
           }
         }
       });

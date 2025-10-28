@@ -1,4 +1,4 @@
-import { Injectable, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Inject, forwardRef, Logger } from '@nestjs/common';
 import axios from 'axios';
 import * as cron from 'node-cron';
 import * as dayjs from 'dayjs';
@@ -30,6 +30,7 @@ interface AttemptTracking {
 
 @Injectable()
 export class YoutubeLiveService {
+  private readonly logger = new Logger(YoutubeLiveService.name);
   private readonly apiKey = process.env.YOUTUBE_API_KEY;
   private readonly apiUrl = 'https://www.googleapis.com/youtube/v3';
   private readonly validationCooldowns = new Map<string, number>(); // Track last validation time per channel
@@ -51,14 +52,12 @@ export class YoutubeLiveService {
     dayjs.extend(utc);
     dayjs.extend(timezone);
 
-    console.log('🚀 YoutubeLiveService initialized');
+    this.logger.log('🚀 YoutubeLiveService initialized');
     
-    // Log current timezone info for debugging
+    // Reduced timezone logging to one line only during initialization
     const now = dayjs().tz('America/Argentina/Buenos_Aires');
     const serverTime = dayjs();
-    console.log(`🌍 Server timezone: ${serverTime.format('Z')} (${serverTime.format('YYYY-MM-DD HH:mm:ss')})`);
-    console.log(`🌍 Argentina timezone: ${now.format('Z')} (${now.format('YYYY-MM-DD HH:mm:ss')})`);
-    console.log(`⏰ Daily reset cron scheduled for midnight Argentina time (00:00:00)`);
+    this.logger.debug(`Timezone: Server=${serverTime.format('Z')} ARG=${now.format('Z')}`);
     
     // YouTube API usage tracking removed - no longer needed
     
@@ -108,9 +107,9 @@ export class YoutubeLiveService {
         300 // 5 minutes TTL
       );
       
-      console.log(`📡 Notified clients about live status change for ${channelName}: ${videoId || 'no video'}`);
+      this.logger.debug(`Notified live status change for ${channelName}: ${videoId || 'no video'}`);
     } catch (error) {
-      console.error('Failed to notify live status change:', error);
+      this.logger.error('Failed to notify live status change:', error);
     }
   }
 
@@ -127,12 +126,12 @@ export class YoutubeLiveService {
     // gating centralizado
     try {
       if (!(await this.configService.canFetchLive(handle))) {
-        console.log(`[YouTube] fetch skipped for ${handle}`);
+        this.logger.debug(`[YouTube] fetch skipped for ${handle}`);
         return '__SKIPPED__';
       }
     } catch (error) {
       // If we can't check the config (e.g., database connection issue), assume it can fetch
-      console.warn(`⚠️ Error checking fetch config for ${handle}, allowing fetch:`, error.message);
+      this.logger.warn(`⚠️ Error checking fetch config for ${handle}, allowing fetch:`, error.message);
     }
 
     const streamsKey = `liveStreamsByChannel:${channelId}`;
@@ -140,7 +139,7 @@ export class YoutubeLiveService {
 
     // skip rápido si ya está marcado como no-found
     if (await this.redisService.get<string>(notFoundKey)) {
-      console.log(`🚫 Skipping ${handle}, marked as not-found`);
+      this.logger.debug(`🚫 Skipping ${handle}, marked as not-found`);
       return '__SKIPPED__';
     }
 
@@ -150,16 +149,16 @@ export class YoutubeLiveService {
       try {
         const streams = cachedStreams;
         if (streams.primaryVideoId && (await this.isVideoLive(streams.primaryVideoId))) {
-          console.log(`🔁 Reusing cached primary videoId for ${handle}`);
+          this.logger.debug(`🔁 Reusing cached primary videoId for ${handle}`);
           return streams.primaryVideoId;
         }
         // If cached streams are no longer live, clear the cache
         await this.redisService.del(streamsKey);
-        console.log(`🗑️ Deleted cached streams for ${handle} (no longer live)`);
+        this.logger.debug(`🗑️ Deleted cached streams for ${handle} (no longer live)`);
       } catch (error) {
         // If parsing fails, clear the corrupted cache
         await this.redisService.del(streamsKey);
-        console.log(`🗑️ Deleted corrupted cached streams for ${handle}`);
+        this.logger.debug(`🗑️ Deleted corrupted cached streams for ${handle}`);
       }
     }
 
@@ -180,7 +179,7 @@ export class YoutubeLiveService {
       const videoId = data.items?.[0]?.id?.videoId ?? null;
 
       if (!videoId) {
-        console.log(`🚫 No live video for ${handle} (${context})`);
+        this.logger.debug(`🚫 No live video for ${handle} (${context})`);
         await this.handleNotFoundEscalationMain(channelId, handle, notFoundKey);
         return null;
       }
@@ -196,7 +195,7 @@ export class YoutubeLiveService {
       // Clear the "not-found" flag and attempt tracking since we found live streams
       await this.redisService.del(notFoundKey);
       await this.redisService.del(`notFoundAttempts:${channelId}`);
-      console.log(`📌 Cached ${handle} → ${videoId} (TTL ${blockTTL}s)`);
+      this.logger.debug(`📌 Cached ${handle} → ${videoId} (TTL ${blockTTL}s)`);
 
       // Notify clients about the new video ID
       if (context === 'cron') {
@@ -206,7 +205,7 @@ export class YoutubeLiveService {
       return videoId;
     } catch (err) {
       const errorMessage = err.message || err;
-      console.error(`❌ Error fetching live video for ${handle}:`, errorMessage);
+      this.logger.error(`❌ Error fetching live video for ${handle}:`, errorMessage);
       
       // Enhanced error reporting with Sentry
       const is403Error = errorMessage.includes('403') || errorMessage.includes('forbidden');
@@ -277,7 +276,7 @@ export class YoutubeLiveService {
     
     if (channelIds.length === 0) return results;
 
-    console.log(`[Batch] Fetching live streams for ${channelIds.length} channels`);
+    this.logger.debug(`Fetching live streams for ${channelIds.length} channels`);
     
     // First, check cache for each channel and collect channels that need fresh fetching
     const channelsToFetch: string[] = [];
@@ -326,7 +325,7 @@ export class YoutubeLiveService {
             await this.redisService.set(attemptTrackingKey, tracking, Math.floor(ttlUntilProgramEndForTracking / 1000));
             
             const handle = channelHandleMap?.get(channelId) || 'unknown';
-            console.log(`🚫 [ESCALATED ON EXPIRATION] No live video for ${handle} after 3 attempts, marking not-found until program end`);
+            this.logger.warn(`No live video for ${handle} after 3 attempts, marking not-found until program end`);
             
             // Send email notification
             await this.sendEscalationEmail(channelId, handle);
@@ -341,7 +340,7 @@ export class YoutubeLiveService {
       if (notFoundData && (cronType === 'back-to-back-fix' || cronType === 'manual')) {
         const handle = channelHandleMap?.get(channelId) || 'unknown';
         const executionType = cronType === 'back-to-back-fix' ? 'Back-to-back' : 'Manual';
-        console.log(`🔄 [${executionType}] Ignoring not-found flag for ${handle} (${channelId}) - checking anyway`);
+        this.logger.debug(`Ignoring not-found flag for ${handle} (${channelId}) - checking anyway`);
       }
 
       // Check cache
@@ -351,7 +350,7 @@ export class YoutubeLiveService {
           const parsedStreams: LiveStream[] = cachedStreams.streams;
           // Skip validation during bulk operations to improve performance for onDemand context
           if (parsedStreams.length > 0 && (context === 'onDemand' || (await this.isVideoLive(parsedStreams[0].videoId)))) {
-            console.log(`🔁 [Batch] Reusing cached streams for channel ${channelId} (${parsedStreams.length} streams)`);
+            this.logger.debug(`Reusing cached streams for ${channelId} (${parsedStreams.length} streams)`);
             results.set(channelId, {
               streams: parsedStreams,
               primaryVideoId: cachedStreams.primaryVideoId,
@@ -361,10 +360,10 @@ export class YoutubeLiveService {
           } else {
             // If cached streams are invalid, delete them
             await this.redisService.del(liveKey);
-            console.log(`🗑️ [Batch] Deleted cached streams for channel ${channelId} (no longer live)`);
+            this.logger.debug(`Deleted cached streams for ${channelId} (no longer live)`);
           }
         } catch (error) {
-          console.warn(`[Batch] Failed to parse cached streams for channel ${channelId}:`, error);
+          this.logger.warn(`Failed to parse cached streams for ${channelId}:`, error);
           await this.redisService.del(liveKey);
         }
       }
@@ -375,13 +374,11 @@ export class YoutubeLiveService {
 
     // Only fetch channels that don't have valid cached data
     if (channelsToFetch.length === 0) {
-      console.log(`[Batch] All channels served from cache`);
+      this.logger.debug(`All channels served from cache`);
       return results;
     }
 
-    console.log(`[Batch] Fresh fetch needed for ${channelsToFetch.length} channels (${channelIds.length - channelsToFetch.length} served from cache)`);
-    console.log(`[Batch] Channels to fetch: ${channelsToFetch.map(id => channelHandleMap?.get(id) || id).join(', ')}`);
-    console.log(`[Batch] Channels served from cache: ${Array.from(results.keys()).map(id => channelHandleMap?.get(id) || id).join(', ')}`);
+    this.logger.debug(`Fresh fetch for ${channelsToFetch.length}/${channelIds.length} channels`);
     
     try {
       // YouTube API supports up to 50 channel IDs in a single search request
@@ -396,7 +393,7 @@ export class YoutubeLiveService {
         const channelIdsParam = chunk.join(',');
         
         // Track API usage for batch call (this will send individual events for each channel)
-        console.log(`[Batch] Making YouTube API call for ${chunk.length} channels: ${chunk.join(', ')}`);
+        this.logger.debug(`YouTube API batch call for ${chunk.length} channels`);
         
         // Send individual PostHog events for each channel in the batch
         for (const channelId of chunk) {
@@ -418,17 +415,14 @@ export class YoutubeLiveService {
           },
         });
 
-        console.log(`🔍 [Batch] YouTube API response for ${chunk.length} channels: ${data.items?.length || 0} live streams found`);
-        console.log(`🔍 [Batch] Request URL: ${this.apiUrl}/search?part=snippet&channelId=${channelIdsParam}&eventType=live&type=video&key=${this.apiKey}&maxResults=5`);
+        this.logger.debug(`YouTube API found ${data.items?.length || 0} live streams for ${chunk.length} channels`);
         if (data.items && data.items.length > 0) {
-          console.log(`🔍 [Batch] Found live streams for channels: ${data.items.map(item => `${item.snippet.channelTitle} (${item.snippet.channelId})`).join(', ')}`);
-          console.log(`🔍 [Batch] Video IDs found: ${data.items.map(item => item.id.videoId).join(', ')}`);
+          // Skip verbose channel and video ID logs - only log count
         } else {
-          console.log(`🔍 [Batch] No live streams found in YouTube API response for channels: ${chunk.join(', ')}`);
-          console.log(`🔍 [Batch] Full API response:`, JSON.stringify(data, null, 2));
+          this.logger.debug(`No live streams found for batch (${chunk.length} channels)`);
           
           // FALLBACK: Try individual requests for channels that failed in batch
-          console.log(`🔄 [Batch] Batch request failed, attempting individual requests for ${chunk.length} channels...`);
+          this.logger.debug(`Batch request returned no results, trying individual requests for ${chunk.length} channels`);
           for (const channelId of chunk) {
             try {
               const individualResponse = await axios.get(`${this.apiUrl}/search`, {
@@ -443,10 +437,10 @@ export class YoutubeLiveService {
               });
               
               const handle = channelHandleMap?.get(channelId) || 'unknown';
-              console.log(`🔄 [Individual] Channel ${handle} (${channelId}): ${individualResponse.data.items?.length || 0} live streams found`);
+              this.logger.debug(`Individual request for ${handle}: ${individualResponse.data.items?.length || 0} streams found`);
               
               if (individualResponse.data.items && individualResponse.data.items.length > 0) {
-                console.log(`✅ [Individual] Found live stream: ${individualResponse.data.items[0].id.videoId} for ${individualResponse.data.items[0].snippet.channelTitle}`);
+                this.logger.debug(`✅ [Individual] Found live stream: ${individualResponse.data.items[0].id.videoId} for ${individualResponse.data.items[0].snippet.channelTitle}`);
                 
                 // Process the individual result as if it came from batch
                 const streams = individualResponse.data.items.map((item: any) => ({
@@ -474,9 +468,9 @@ export class YoutubeLiveService {
                 
                 // Clear the "not-found" flag since we found live streams
                 await this.redisService.del(notFoundKey);
-                console.log(`✅ [Individual] Cached ${streams.length} streams for ${handle} (${channelId}) (TTL: ${blockTTL}s)`);
+                this.logger.debug(`✅ [Individual] Cached ${streams.length} streams for ${handle} (${channelId}) (TTL: ${blockTTL}s)`);
               } else {
-                console.log(`❌ [Individual] No live streams found for ${handle} (${channelId})`);
+                this.logger.debug(`❌ [Individual] No live streams found for ${handle} (${channelId})`);
                 
                 // For back-to-back-fix cron, only increment attempts without setting new not-found flags
                 if (cronType === 'back-to-back-fix') {
@@ -495,7 +489,7 @@ export class YoutubeLiveService {
                 }
               }
             } catch (error) {
-              console.error(`❌ [Individual] Error testing channel ${channelId}:`, error.message);
+              this.logger.error(`❌ [Individual] Error testing channel ${channelId}:`, error.message);
               results.set(channelId, null);
             }
           }
@@ -542,7 +536,7 @@ export class YoutubeLiveService {
             
             // Clear the "not-found" flag since we found live streams
             await this.redisService.del(notFoundKey);
-            console.log(`💾 [Batch] Cached ${streams.length} streams for ${handle} (${channelId}) (TTL: ${blockTTL}s)`);
+            this.logger.debug(`💾 [Batch] Cached ${streams.length} streams for ${handle} (${channelId}) (TTL: ${blockTTL}s)`);
         } else {
           // For back-to-back-fix cron, only increment attempts without setting new not-found flags
           if (cronType === 'back-to-back-fix') {
@@ -563,11 +557,11 @@ export class YoutubeLiveService {
         }
       }
 
-      console.log(`[Batch] Completed batch fetch for ${channelsToFetch.length} channels`);
+      this.logger.debug(`[Batch] Completed batch fetch for ${channelsToFetch.length} channels`);
       return results;
       
     } catch (error) {
-      console.error(`[Batch] Error in batch fetch:`, error);
+      this.logger.error(`[Batch] Error in batch fetch:`, error);
       // Return null for all channels on error
       channelIds.forEach(channelId => results.set(channelId, null));
       return results;
@@ -588,17 +582,17 @@ export class YoutubeLiveService {
     // gating centralizado
     try {
       if (!(await this.configService.canFetchLive(handle))) {
-        console.log(`[YouTube] fetch skipped for ${handle}`);
+        this.logger.debug(`[YouTube] fetch skipped for ${handle}`);
         return '__SKIPPED__';
       }
     } catch (error) {
       // If we can't check the config (e.g., database connection issue), assume it can fetch
-      console.warn(`⚠️ Error checking fetch config for ${handle}, allowing fetch:`, error.message);
+      this.logger.warn(`⚠️ Error checking fetch config for ${handle}, allowing fetch:`, error.message);
     }
 
     // Deduplication: Check if a fetch is already in progress for this channel
     if (this.inFlightFetches.has(channelId)) {
-      console.log(`⏳ [getLiveStreams] Fetch already in progress for ${handle} (${channelId}), skipping duplicate`);
+      this.logger.debug(`⏳ [getLiveStreams] Fetch already in progress for ${handle} (${channelId}), skipping duplicate`);
       return '__SKIPPED__';
     }
 
@@ -607,7 +601,7 @@ export class YoutubeLiveService {
 
     // skip rápido si ya está marcado como no-found (unless explicitly ignored)
     if (!ignoreNotFoundCache && await this.redisService.get<string>(notFoundKey)) {
-      console.log(`🚫 Skipping ${handle}, marked as not-found`);
+      this.logger.debug(`🚫 Skipping ${handle}, marked as not-found`);
       return '__SKIPPED__';
     }
 
@@ -623,23 +617,23 @@ export class YoutubeLiveService {
           const isValid = shouldValidate ? (await this.isVideoLive(parsedStreams[0].videoId)) : true;
           
           if (isValid) {
-            console.log(`🔁 Reusing cached streams for ${handle} (${parsedStreams.length} streams)`);
+            this.logger.debug(`🔁 Reusing cached streams for ${handle} (${parsedStreams.length} streams)`);
             return {
               streams: parsedStreams,
               primaryVideoId: cachedStreams.primaryVideoId,
               streamCount: cachedStreams.streamCount
             };
           } else {
-            console.log(`🔄 Cached video ${parsedStreams[0].videoId} no longer live for ${handle}, forcing refresh`);
+            this.logger.debug(`🔄 Cached video ${parsedStreams[0].videoId} no longer live for ${handle}, forcing refresh`);
             // Delete cache and continue to make fresh API call
             await this.redisService.del(liveKey);
           }
         }
       } catch (error) {
-        console.warn(`Failed to parse cached streams for ${handle}:`, error);
+        this.logger.warn(`Failed to parse cached streams for ${handle}:`, error);
         // If parsing fails, delete the corrupted cache
         await this.redisService.del(liveKey);
-        console.log(`🗑️ Deleted corrupted cached streams for ${handle}`);
+        this.logger.debug(`🗑️ Deleted corrupted cached streams for ${handle}`);
       }
     }
 
@@ -652,8 +646,8 @@ export class YoutubeLiveService {
       // YouTube API usage tracking removed
       
       const requestUrl = `${this.apiUrl}/search?part=snippet&channelId=${channelId}&eventType=live&type=video&key=${this.apiKey}&maxResults=5`;
-      console.log(`🔍 [getLiveStreams] Making request for ${handle}: ${requestUrl}`);
-      console.log(`🔍 [getLiveStreams] Using API key: ${this.apiKey ? this.apiKey.substring(0, 10) + '...' : 'NOT_SET'}`);
+      this.logger.debug(`🔍 [getLiveStreams] Making request for ${handle}: ${requestUrl}`);
+      this.logger.debug(`🔍 [getLiveStreams] Using API key: ${this.apiKey ? this.apiKey.substring(0, 10) + '...' : 'NOT_SET'}`);
       
       const { data } = await axios.get(`${this.apiUrl}/search`, {
         params: {
@@ -666,7 +660,7 @@ export class YoutubeLiveService {
         },
       });
       
-      console.log(`🔍 [getLiveStreams] Response for ${handle}:`, JSON.stringify(data, null, 2));
+      this.logger.debug(`🔍 [getLiveStreams] Response for ${handle}:`, JSON.stringify(data, null, 2));
       
 
       const allStreams: LiveStream[] = (data.items || []).map((item: any) => ({
@@ -685,14 +679,14 @@ export class YoutubeLiveService {
         const isActuallyLive = await this.isVideoLive(stream.videoId);
         if (isActuallyLive) {
           liveStreams.push(stream);
-          console.log(`✅ [getLiveStreams] Confirmed live stream for ${handle}: ${stream.videoId} - ${stream.title}`);
+          this.logger.debug(`✅ [getLiveStreams] Confirmed live stream for ${handle}: ${stream.videoId} - ${stream.title}`);
         } else {
-          console.log(`⏰ [getLiveStreams] Skipping scheduled stream for ${handle}: ${stream.videoId} - ${stream.title}`);
+          this.logger.debug(`⏰ [getLiveStreams] Skipping scheduled stream for ${handle}: ${stream.videoId} - ${stream.title}`);
         }
       }
 
       if (liveStreams.length === 0) {
-        console.log(`🚫 No actually live streams for ${handle} (${context}) - all were scheduled`);
+        this.logger.debug(`🚫 No actually live streams for ${handle} (${context}) - all were scheduled`);
         if (cronType === 'back-to-back-fix') {
           await this.handleNotFoundEscalationBackToBack(channelId, handle, notFoundKey);
         } else {
@@ -712,7 +706,7 @@ export class YoutubeLiveService {
       
       // Clear the "not-found" flag since we found live streams
       await this.redisService.del(notFoundKey);
-      console.log(`📌 Cached ${handle} → ${liveStreams.length} streams (TTL ${blockTTL}s)`);
+      this.logger.debug(`📌 Cached ${handle} → ${liveStreams.length} streams (TTL ${blockTTL}s)`);
 
       // Notify clients about the new streams
       if (context === 'cron') {
@@ -722,7 +716,7 @@ export class YoutubeLiveService {
       return result;
     } catch (err) {
       const errorMessage = err.message || err;
-      console.error(`❌ Error fetching live streams for ${handle}:`, errorMessage);
+      this.logger.error(`❌ Error fetching live streams for ${handle}:`, errorMessage);
       
       // Enhanced error reporting with Sentry
       const is403Error = errorMessage.includes('403') || errorMessage.includes('forbidden');
@@ -843,7 +837,7 @@ export class YoutubeLiveService {
   private async fetchLiveVideoIdsInternal(cronType: 'main' | 'back-to-back-fix' | 'manual', cronLabel: string) {
     const currentTime = TimezoneUtil.currentTimeString();
     
-    console.log(`${cronLabel} started at ${currentTime}`);
+    this.logger.debug(`${cronLabel} started at ${currentTime}`);
     
     const today = TimezoneUtil.currentDayOfWeek();
   
@@ -885,38 +879,20 @@ export class YoutubeLiveService {
       }
     }
   
-    console.log(`${cronLabel} - Total schedules: ${schedules.length}`);
-    console.log(`${cronLabel} - Visible schedules: ${visibleSchedules.length}`);
-    console.log(`${cronLabel} - Live schedules (after validation): ${liveNow.length}`);
-    
-    // Log details of live schedules for debugging
-    if (liveNow.length > 0) {
-      console.log(`${cronLabel} - Live schedule details:`);
-      liveNow.forEach(s => {
-        console.log(`  - ${s.program.channel?.handle}: "${s.program.name}" (${s.start_time}-${s.end_time})`);
-      });
-    }
-    
-    console.log(`${cronLabel} - Channels to refresh: ${map.size}`);
+    this.logger.debug(`${cronLabel}: ${visibleSchedules.length}/${liveNow.length} visible/live, refreshing ${map.size} channels`);
     
     if (map.size === 0) {
-      console.log(`${cronLabel} - No live channels to refresh`);
+      this.logger.debug(`${cronLabel} - No live channels to refresh`);
       return;
     }
-    
-    // Use individual fetches instead of batch (batch is failing)
-    console.log(`[${cronLabel}] Executing individual fetches for ${map.size} channels`);
     
     const results = new Map<string, any>();
     
     // Process each channel individually
     for (const [channelId, handle] of map.entries()) {
       try {
-        console.log(`[${cronLabel}] Fetching live status for ${handle} (${channelId})`);
-        
         // Calculate TTL for this channel
         const ttl = await getCurrentBlockTTL(channelId, rawSchedules, this.sentryService);
-        console.log(`[${cronLabel}] TTL for ${handle}: ${ttl}s`);
         
         // Fetch live streams for this channel using the appropriate method based on cron type
         let liveStreamsResult;
@@ -928,34 +904,19 @@ export class YoutubeLiveService {
         
         if (liveStreamsResult && liveStreamsResult !== '__SKIPPED__' && liveStreamsResult.streamCount > 0) {
           results.set(channelId, liveStreamsResult);
-          console.log(`[${cronLabel}] Found ${liveStreamsResult.streamCount} live streams for ${handle}`);
-        } else if (liveStreamsResult === '__SKIPPED__') {
-          console.log(`[${cronLabel}] Skipped ${handle} (disabled)`);
-        } else {
-          console.log(`[${cronLabel}] No live streams for ${handle}`);
         }
         
         // Small delay between requests to be respectful to YouTube API
         await new Promise(resolve => setTimeout(resolve, 100));
         
       } catch (error) {
-        console.error(`[${cronLabel}] Error fetching live status for ${handle}:`, error.message);
+        this.logger.error(`[${cronLabel}] Error fetching live status for ${handle}:`, error.message);
       }
     }
     
-    // Log individual results
-    const resultsSummary = Array.from(results.entries()).map(([cid, result]) => {
-      const handle = map.get(cid);
-      if (result && result.streamCount > 0) {
-        return `${handle}: LIVE (${result.streamCount} streams)`;
-      } else {
-        return `${handle}: NO_LIVE`;
-      }
-    }).join(', ');
-    
-    console.log(`[${cronLabel}] Individual fetch results: ${resultsSummary}`);
-    
-    console.log(`${cronLabel} completed - processed ${map.size} channels`);
+    // Log summary
+    const liveCount = Array.from(results.values()).filter(r => r && r.streamCount > 0).length;
+    this.logger.debug(`${cronLabel} completed - ${liveCount}/${map.size} channels live`);
   }
 
 
@@ -976,7 +937,7 @@ export class YoutubeLiveService {
         return; // No programs starting
       }
 
-      console.log(`🎬 Program start detection: ${startingPrograms.length} programs starting at ${currentMinute}`);
+      this.logger.debug(`🎬 Program start detection: ${startingPrograms.length} programs starting at ${currentMinute}`);
       
       // Group by channel to avoid duplicate API calls
       const channelMap = new Map<string, string>();
@@ -998,7 +959,7 @@ export class YoutubeLiveService {
       }, 7 * 60 * 1000); // 7 minutes
 
     } catch (error) {
-      console.error('Error in program start detection:', error);
+      this.logger.error('Error in program start detection:', error);
       this.sentryService.captureException(error);
     }
   }
@@ -1008,7 +969,7 @@ export class YoutubeLiveService {
    */
   private async checkDelayedProgramStarts(programs: any[]) {
     try {
-      console.log(`🔄 Delayed program start check: validating ${programs.length} programs`);
+      this.logger.debug(`🔄 Delayed program start check: validating ${programs.length} programs`);
       
       // Group by channel to avoid duplicate API calls
       const channelMap = new Map<string, string>();
@@ -1024,7 +985,7 @@ export class YoutubeLiveService {
         await this.validateCachedVideoId(channelId, handle, true);
       }
     } catch (error) {
-      console.error('Error in delayed program start check:', error);
+      this.logger.error('Error in delayed program start check:', error);
       this.sentryService.captureException(error);
     }
   }
@@ -1042,12 +1003,12 @@ export class YoutubeLiveService {
       const lastValidation = this.validationCooldowns.get(channelId);
       
       if (!forceFresh && lastValidation && (now - lastValidation) < this.COOLDOWN_PERIOD) {
-        console.log(`⏳ Skipping validation for ${handle} (cooldown active)`);
+        this.logger.debug(`⏳ Skipping validation for ${handle} (cooldown active)`);
         return;
       }
       
       if (forceFresh && lastValidation && (now - lastValidation) < this.COOLDOWN_PERIOD) {
-        console.log(`🔄 Forcing validation for ${handle} despite cooldown (program transition)`);
+        this.logger.debug(`🔄 Forcing validation for ${handle} despite cooldown (program transition)`);
       }
 
       // Check streams cache
@@ -1062,16 +1023,16 @@ export class YoutubeLiveService {
       try {
         const streams = cachedStreams;
         if (streams.primaryVideoId && (await this.isVideoLive(streams.primaryVideoId))) {
-          console.log(`✅  ${handle}: ${streams.primaryVideoId}`);
+          this.logger.debug(`✅  ${handle}: ${streams.primaryVideoId}`);
           this.validationCooldowns.set(channelId, now); // Update cooldown
           return; // Still live, no action needed
         }
       } catch (error) {
-        console.warn(`Failed to parse cached streams for ${handle}:`, error);
+        this.logger.warn(`Failed to parse cached streams for ${handle}:`, error);
       }
 
       // Video ID/streams are no longer live, refresh them
-      console.log(`🔄 Cached data no longer live for ${handle}, refreshing...`);
+      this.logger.debug(`🔄 Cached data no longer live for ${handle}, refreshing...`);
       
       const schedules = await this.schedulesService.findByDay(dayjs().tz('America/Argentina/Buenos_Aires').format('dddd').toLowerCase());
       const ttl = await getCurrentBlockTTL(channelId, schedules, this.sentryService);
@@ -1080,18 +1041,18 @@ export class YoutubeLiveService {
       const streamsResult = await this.getLiveStreamsMain(channelId, handle, ttl);
       
       if (streamsResult && streamsResult !== '__SKIPPED__') {
-        console.log(`🆕 Refreshed streams for ${handle}: ${streamsResult.streamCount} streams, primary: ${streamsResult.primaryVideoId}`);
+        this.logger.debug(`🆕 Refreshed streams for ${handle}: ${streamsResult.streamCount} streams, primary: ${streamsResult.primaryVideoId}`);
       } else {
         // Clear streams cache if no streams found
         await this.redisService.del(streamsKey);
-        console.log(`🗑️ Cleared streams cache for ${handle} (no streams found)`);
+        this.logger.debug(`🗑️ Cleared streams cache for ${handle} (no streams found)`);
       }
 
       // Update cooldown after validation
       this.validationCooldowns.set(channelId, now);
       
     } catch (error) {
-      console.error(`Error validating cached video ID for ${handle}:`, error);
+      this.logger.error(`Error validating cached video ID for ${handle}:`, error);
       this.sentryService.captureException(error);
     }
   }
@@ -1113,10 +1074,10 @@ export class YoutubeLiveService {
       const ttlUntilProgramEnd = programEndTime ? Math.max(programEndTime - Date.now(), 60) : 86400; // Min 1 minute, fallback to 24h
       await this.redisService.set(attemptTrackingKey, tracking, Math.floor(ttlUntilProgramEnd / 1000));
       
-      console.log(`🔄 [Back-to-back] Incremented attempt count for ${handle} (${channelId}) - now ${tracking.attempts} attempts`);
+      this.logger.debug(`🔄 [Back-to-back] Incremented attempt count for ${handle} (${channelId}) - now ${tracking.attempts} attempts`);
     } else {
       // If no existing tracking, this shouldn't happen for back-to-back cron, but handle gracefully
-      console.log(`⚠️ [Back-to-back] No attempt tracking found for ${handle} (${channelId}) - this shouldn't happen`);
+      this.logger.debug(`⚠️ [Back-to-back] No attempt tracking found for ${handle} (${channelId}) - this shouldn't happen`);
     }
   }
 
@@ -1148,7 +1109,7 @@ export class YoutubeLiveService {
       
       // Set not-found mark for main cron and manual execution
       await this.redisService.set(notFoundKey, '1', 900);
-      console.log(`🚫 [First attempt] No live video for ${handle}, marking not-found for 15 minutes`);
+      this.logger.debug(`🚫 [First attempt] No live video for ${handle}, marking not-found for 15 minutes`);
       return;
     }
 
@@ -1169,19 +1130,19 @@ export class YoutubeLiveService {
         const ttlUntilProgramEndForTracking = Math.max(programEndTime - Date.now(), 60); // Min 1 minute
         await this.redisService.set(attemptTrackingKey, tracking, Math.floor(ttlUntilProgramEndForTracking / 1000));
         
-        console.log(`🚫 [ESCALATED] No live video for ${handle} after 3 attempts, marking not-found until program end (${new Date(programEndTime).toLocaleTimeString()})`);
+        this.logger.debug(`🚫 [ESCALATED] No live video for ${handle} after 3 attempts, marking not-found until program end (${new Date(programEndTime).toLocaleTimeString()})`);
         
         // Send email notification
         await this.sendEscalationEmail(channelId, handle);
       } else {
         // Fallback to 1 hour
         await this.redisService.set(notFoundKey, '1', 3600);
-        console.log(`🚫 [Fallback] No live video for ${handle}, marking not-found for 1 hour (couldn't determine program end)`);
+        this.logger.debug(`🚫 [Fallback] No live video for ${handle}, marking not-found for 1 hour (couldn't determine program end)`);
       }
     } else {
       // Second attempt - extend not-found mark for main cron and manual execution
       await this.redisService.set(notFoundKey, '1', 900);
-      console.log(`🚫 [Second attempt] Still no live video for ${handle}, extending not-found for another 15 minutes`);
+      this.logger.debug(`🚫 [Second attempt] Still no live video for ${handle}, extending not-found for another 15 minutes`);
     }
     
     // Update persistent tracking with program-end TTL
@@ -1215,7 +1176,7 @@ export class YoutubeLiveService {
       const ttlUntilProgramEnd = programEndTime ? Math.max(programEndTime - Date.now(), 60) : 86400; // Min 1 minute, fallback to 24h
       await this.redisService.set(attemptTrackingKey, tracking, Math.floor(ttlUntilProgramEnd / 1000));
       
-      console.log(`🚫 [Back-to-back] First attempt for ${handle}, incrementing attempts only (no not-found mark)`);
+      this.logger.debug(`🚫 [Back-to-back] First attempt for ${handle}, incrementing attempts only (no not-found mark)`);
       return;
     }
 
@@ -1236,18 +1197,18 @@ export class YoutubeLiveService {
         const ttlUntilProgramEndForTracking = Math.max(programEndTime - Date.now(), 60); // Min 1 minute
         await this.redisService.set(attemptTrackingKey, tracking, Math.floor(ttlUntilProgramEndForTracking / 1000));
         
-        console.log(`🚫 [ESCALATED] No live video for ${handle} after 3 attempts, marking not-found until program end (${new Date(programEndTime).toLocaleTimeString()})`);
+        this.logger.debug(`🚫 [ESCALATED] No live video for ${handle} after 3 attempts, marking not-found until program end (${new Date(programEndTime).toLocaleTimeString()})`);
         
         // Send email notification
         await this.sendEscalationEmail(channelId, handle);
       } else {
         // Fallback to 1 hour
         await this.redisService.set(notFoundKey, '1', 3600);
-        console.log(`🚫 [Fallback] No live video for ${handle}, marking not-found for 1 hour (couldn't determine program end)`);
+        this.logger.debug(`🚫 [Fallback] No live video for ${handle}, marking not-found for 1 hour (couldn't determine program end)`);
       }
     } else {
       // Second attempt - only increment attempts, no not-found mark renewal
-      console.log(`🚫 [Back-to-back] Second attempt for ${handle}, incrementing attempts only (no not-found mark renewal)`);
+      this.logger.debug(`🚫 [Back-to-back] Second attempt for ${handle}, incrementing attempts only (no not-found mark renewal)`);
     }
     
     // Update persistent tracking with program-end TTL
@@ -1289,7 +1250,7 @@ export class YoutubeLiveService {
       
       return null;
     } catch (error) {
-      console.error('Error getting program end time:', error);
+      this.logger.error('Error getting program end time:', error);
       return null;
     }
   }
@@ -1308,7 +1269,7 @@ export class YoutubeLiveService {
   private async sendEscalationEmail(channelId: string, handle: string): Promise<void> {
     // Only send emails in production environment
     if (process.env.NODE_ENV !== 'production') {
-      console.log(`📧 [${process.env.NODE_ENV || 'development'}] Escalation email skipped for ${handle} (not production environment)`);
+      this.logger.debug(`📧 [${process.env.NODE_ENV || 'development'}] Escalation email skipped for ${handle} (not production environment)`);
       return;
     }
 
@@ -1320,7 +1281,7 @@ export class YoutubeLiveService {
       });
 
       if (!channel) {
-        console.error(`Channel not found for ID: ${channelId}`);
+        this.logger.error(`Channel not found for ID: ${channelId}`);
         return;
       }
 
@@ -1370,10 +1331,11 @@ export class YoutubeLiveService {
         html: htmlContent,
       });
 
-      console.log(`📧 Email de escalación enviado para ${programName} (${channelName})`);
+      this.logger.debug(`📧 Email de escalación enviado para ${programName} (${channelName})`);
     } catch (error) {
-      console.error('Error sending escalation email:', error);
+      this.logger.error('Error sending escalation email:', error);
       this.sentryService.captureException(error);
     }
   }
 }
+
