@@ -87,70 +87,6 @@ export class YoutubeLiveService {
 
   // YouTube API usage stats method removed - no longer needed
 
-  /**
-   * Phase 4: Blue-green cache migration helper
-   * Reads from both old (channelId) and new (handle) formats
-   */
-  private async readCacheKeyWithFallback<T>(
-    keyPrefix: string, 
-    identifier: string, // channelId or handle
-    channelId: string, 
-    handle: string,
-    keyName: string
-  ): Promise<T | null> {
-    // Try new format first (handle-based)
-    const newKey = `${keyPrefix}${handle}`;
-    const newValue = await this.redisService.get<T>(newKey);
-    if (newValue) {
-      return newValue;
-    }
-
-    // Fallback to old format (channelId-based)
-    const oldKey = `${keyPrefix}${channelId}`;
-    const oldValue = await this.redisService.get<T>(oldKey);
-    if (oldValue) {
-      // Log fallback to monitor migration progress
-      this.logger.warn(`⚠️ MIGRATION FALLBACK: Using old cache format for ${keyName} on ${handle} - will migrate to new format on next write`);
-      return oldValue;
-    }
-
-    return null;
-  }
-
-  /**
-   * Phase 4: Blue-green cache migration helper
-   * Writes to both old (channelId) and new (handle) formats
-   */
-  private async writeCacheKeyBothFormats<T>(
-    keyPrefix: string,
-    value: T,
-    ttl: number,
-    channelId: string,
-    handle: string
-  ): Promise<void> {
-    // Write to new format (handle-based) - target format
-    const newKey = `${keyPrefix}${handle}`;
-    await this.redisService.set(newKey, value, ttl);
-
-    // Write to old format (channelId-based) - for backward compatibility during migration
-    const oldKey = `${keyPrefix}${channelId}`;
-    await this.redisService.set(oldKey, value, ttl);
-  }
-
-  /**
-   * Phase 4: Blue-green cache migration helper
-   * Deletes from both old (channelId) and new (handle) formats
-   */
-  private async deleteCacheKeyBothFormats(
-    keyPrefix: string,
-    channelId: string,
-    handle: string
-  ): Promise<void> {
-    await Promise.all([
-      this.redisService.del(`${keyPrefix}${handle}`),
-      this.redisService.del(`${keyPrefix}${channelId}`)
-    ]);
-  }
 
   /**
    * Notify connected clients about live status changes
@@ -199,30 +135,18 @@ export class YoutubeLiveService {
       this.logger.warn(`⚠️ Error checking fetch config for ${handle}, allowing fetch:`, error.message);
     }
 
-    // Phase 4: Blue-green migration - try new format first
-    const streamsKeyNew = `liveStreamsByChannel:${handle}`;
-    const streamsKeyOld = `liveStreamsByChannel:${channelId}`;
-    const notFoundKeyNew = `videoIdNotFound:${handle}`;
-    const notFoundKeyOld = `videoIdNotFound:${channelId}`;
+    // Migration complete - only use new format
+    const streamsKey = `liveStreamsByChannel:${handle}`;
+    const notFoundKey = `videoIdNotFound:${handle}`;
 
     // skip rápido si ya está marcado como no-found
-    const notFoundNew = await this.redisService.get<string>(notFoundKeyNew);
-    const notFoundOld = await this.redisService.get<string>(notFoundKeyOld);
-    if (notFoundNew || notFoundOld) {
-      if (notFoundOld && !notFoundNew) {
-        this.logger.warn(`⚠️ MIGRATION FALLBACK: Using old notFoundKey format in getLiveVideoId for ${handle}`);
-      }
+    if (await this.redisService.get<string>(notFoundKey)) {
       this.logger.debug(`🚫 Skipping ${handle}, marked as not-found`);
       return '__SKIPPED__';
     }
 
-    // cache-hit: reuse si sigue vivo - try new format first
-    const cachedStreamsNew = await this.redisService.get<any>(streamsKeyNew);
-    const cachedStreamsOld = await this.redisService.get<any>(streamsKeyOld);
-    const cachedStreams = cachedStreamsNew || cachedStreamsOld;
-    if (cachedStreamsOld && !cachedStreamsNew) {
-      this.logger.warn(`⚠️ MIGRATION FALLBACK: Using old liveStreamsByChannel format in getLiveVideoId for ${handle}`);
-    }
+    // cache-hit: reuse si sigue vivo
+    const cachedStreams = await this.redisService.get<any>(streamsKey);
     if (cachedStreams) {
       try {
         const streams = cachedStreams;
@@ -230,14 +154,12 @@ export class YoutubeLiveService {
           this.logger.debug(`🔁 Reusing cached primary videoId for ${handle}`);
           return streams.primaryVideoId;
         }
-        // If cached streams are no longer live, clear the cache - both formats
-        await this.redisService.del(streamsKeyNew);
-        await this.redisService.del(streamsKeyOld);
+        // If cached streams are no longer live, clear the cache
+        await this.redisService.del(streamsKey);
         this.logger.debug(`🗑️ Deleted cached streams for ${handle} (no longer live)`);
       } catch (error) {
-        // If parsing fails, clear the corrupted cache - both formats
-        await this.redisService.del(streamsKeyNew);
-        await this.redisService.del(streamsKeyOld);
+        // If parsing fails, clear the corrupted cache
+        await this.redisService.del(streamsKey);
         this.logger.debug(`🗑️ Deleted corrupted cached streams for ${handle}`);
       }
     }
@@ -260,24 +182,21 @@ export class YoutubeLiveService {
 
       if (!videoId) {
         this.logger.debug(`🚫 No live video for ${handle} (${context})`);
-        await this.handleNotFoundEscalationMain(channelId, handle, notFoundKeyNew);
+        await this.handleNotFoundEscalationMain(channelId, handle, notFoundKey);
         return null;
       }
 
-      // Phase 4: Cache as streams format for consistency - write to both formats
+      // Migration complete - Cache as streams format for consistency
       const streamsData = {
         streams: [{ videoId, title: '', description: '', thumbnailUrl: '', publishedAt: new Date().toISOString() }],
         primaryVideoId: videoId,
         streamCount: 1
       };
-      await this.redisService.set(streamsKeyNew, streamsData, blockTTL);
-      await this.redisService.set(streamsKeyOld, streamsData, blockTTL);
+      await this.redisService.set(streamsKey, streamsData, blockTTL);
       
-      // Clear the "not-found" flag and attempt tracking since we found live streams - both formats
-      await this.redisService.del(notFoundKeyNew);
-      await this.redisService.del(notFoundKeyOld);
+      // Clear the "not-found" flag and attempt tracking since we found live streams
+      await this.redisService.del(notFoundKey);
       await this.redisService.del(`notFoundAttempts:${handle}`);
-      await this.redisService.del(`notFoundAttempts:${channelId}`);
       this.logger.debug(`📌 Cached ${handle} → ${videoId} (TTL ${blockTTL}s)`);
 
       // Notify clients about the new video ID
@@ -545,18 +464,14 @@ export class YoutubeLiveService {
                 
                 results.set(channelId, liveStreamsResult);
                 
-                // Phase 4: Cache the result to both formats (blue-green migration)
-                const liveKeyNew = `liveStreamsByChannel:${handle}`;
-                const liveKeyOld = `liveStreamsByChannel:${channelId}`;
-                const notFoundKeyNew = `videoIdNotFound:${handle}`;
-                const notFoundKeyOld = `videoIdNotFound:${channelId}`;
+                // Migration complete - Cache the result to new format only
+                const liveKey = `liveStreamsByChannel:${handle}`;
+                const notFoundKey = `videoIdNotFound:${handle}`;
                 const blockTTL = channelTTLs.get(channelId)!;
-                await this.redisService.set(liveKeyNew, liveStreamsResult, blockTTL);
-                await this.redisService.set(liveKeyOld, liveStreamsResult, blockTTL);
+                await this.redisService.set(liveKey, liveStreamsResult, blockTTL);
                 
-                // Clear the "not-found" flag since we found live streams - both formats
-                await this.redisService.del(notFoundKeyNew);
-                await this.redisService.del(notFoundKeyOld);
+                // Clear the "not-found" flag since we found live streams
+                await this.redisService.del(notFoundKey);
                 this.logger.debug(`✅ [Individual] Cached ${streams.length} streams for ${handle} (${channelId}) (TTL: ${blockTTL}s)`);
               } else {
                 this.logger.debug(`❌ [Individual] No live streams found for ${handle} (${channelId})`);
@@ -617,18 +532,14 @@ export class YoutubeLiveService {
             
             results.set(channelId, liveStreamsResult);
             
-            // Phase 4: Cache the result to both formats (blue-green migration)
-            const liveKeyNew = `liveStreamsByChannel:${handle}`;
-            const liveKeyOld = `liveStreamsByChannel:${channelId}`;
-            const notFoundKeyNew = `videoIdNotFound:${handle}`;
-            const notFoundKeyOld = `videoIdNotFound:${channelId}`;
+            // Migration complete - Cache the result to new format only
+            const liveKey = `liveStreamsByChannel:${handle}`;
+            const notFoundKey = `videoIdNotFound:${handle}`;
             const blockTTL = channelTTLs.get(channelId)!;
-            await this.redisService.set(liveKeyNew, liveStreamsResult, blockTTL);
-            await this.redisService.set(liveKeyOld, liveStreamsResult, blockTTL);
+            await this.redisService.set(liveKey, liveStreamsResult, blockTTL);
             
-            // Clear the "not-found" flag since we found live streams - both formats
-            await this.redisService.del(notFoundKeyNew);
-            await this.redisService.del(notFoundKeyOld);
+            // Clear the "not-found" flag since we found live streams
+            await this.redisService.del(notFoundKey);
             this.logger.debug(`💾 [Batch] Cached ${streams.length} streams for ${handle} (${channelId}) (TTL: ${blockTTL}s)`);
         } else {
           // For back-to-back-fix cron, only increment attempts without setting new not-found flags
@@ -642,7 +553,7 @@ export class YoutubeLiveService {
             results.set(channelId, null);
           } else {
             // Handle not-found escalation for main cron type
-            const notFoundKey = `videoIdNotFound:${channelId}`;
+            const notFoundKey = `videoIdNotFound:${handle}`;
             await this.handleNotFoundEscalationMain(channelId, handle, notFoundKey);
             results.set(channelId, '__SKIPPED__');
           }
@@ -689,32 +600,20 @@ export class YoutubeLiveService {
       return '__SKIPPED__';
     }
 
-    // Phase 4: Blue-green migration - try new format first
-    const notFoundKeyNew = `videoIdNotFound:${handle}`;
-    const notFoundKeyOld = `videoIdNotFound:${channelId}`;
-    const liveKeyNew = `liveStreamsByChannel:${handle}`;
-    const liveKeyOld = `liveStreamsByChannel:${channelId}`;
+    // Migration complete - only use new format
+    const notFoundKey = `videoIdNotFound:${handle}`;
+    const liveKey = `liveStreamsByChannel:${handle}`;
 
     // skip rápido si ya está marcado como no-found (unless explicitly ignored)
     if (!ignoreNotFoundCache) {
-      const notFoundNew = await this.redisService.get<string>(notFoundKeyNew);
-      const notFoundOld = await this.redisService.get<string>(notFoundKeyOld);
-      if (notFoundNew || notFoundOld) {
-        if (notFoundOld && !notFoundNew) {
-          this.logger.warn(`⚠️ MIGRATION FALLBACK: Using old notFoundKey format for ${handle}`);
-        }
+      if (await this.redisService.get<string>(notFoundKey)) {
         this.logger.debug(`🚫 Skipping ${handle}, marked as not-found`);
         return '__SKIPPED__';
       }
     }
 
-    // cache-hit: reuse si sigue vivo - try new format first
-    const cachedStreamsNew = await this.redisService.get<any>(liveKeyNew);
-    const cachedStreamsOld = await this.redisService.get<any>(liveKeyOld);
-    const cachedStreams = cachedStreamsNew || cachedStreamsOld;
-    if (cachedStreamsOld && !cachedStreamsNew) {
-      this.logger.warn(`⚠️ MIGRATION FALLBACK: Using old liveStreamsByChannel format for ${handle}`);
-    }
+    // cache-hit: reuse si sigue vivo
+    const cachedStreams = await this.redisService.get<any>(liveKey);
     if (cachedStreams) {
       try {
         const parsedStreams: LiveStream[] = cachedStreams.streams;
@@ -733,16 +632,14 @@ export class YoutubeLiveService {
             };
           } else {
             this.logger.debug(`🔄 Cached video ${parsedStreams[0].videoId} no longer live for ${handle}, forcing refresh`);
-            // Delete cache and continue to make fresh API call - both formats
-            await this.redisService.del(liveKeyNew);
-            await this.redisService.del(liveKeyOld);
+            // Delete cache and continue to make fresh API call
+            await this.redisService.del(liveKey);
           }
         }
       } catch (error) {
         this.logger.warn(`Failed to parse cached streams for ${handle}:`, error);
-        // If parsing fails, delete the corrupted cache - both formats
-        await this.redisService.del(liveKeyNew);
-        await this.redisService.del(liveKeyOld);
+        // If parsing fails, delete the corrupted cache
+        await this.redisService.del(liveKey);
         this.logger.debug(`🗑️ Deleted corrupted cached streams for ${handle}`);
       }
     }
@@ -798,9 +695,9 @@ export class YoutubeLiveService {
       if (liveStreams.length === 0) {
         this.logger.debug(`🚫 No actually live streams for ${handle} (${context}) - all were scheduled`);
         if (cronType === 'back-to-back-fix') {
-          await this.handleNotFoundEscalationBackToBack(channelId, handle, notFoundKeyNew);
+          await this.handleNotFoundEscalationBackToBack(channelId, handle, notFoundKey);
         } else {
-          await this.handleNotFoundEscalationMain(channelId, handle, notFoundKeyNew);
+          await this.handleNotFoundEscalationMain(channelId, handle, notFoundKey);
         }
         return null;
       }
@@ -811,13 +708,11 @@ export class YoutubeLiveService {
         streamCount: liveStreams.length
       };
 
-      // Phase 4: Cache the streams to both formats (blue-green migration)
-      await this.redisService.set(liveKeyNew, result, blockTTL);
-      await this.redisService.set(liveKeyOld, result, blockTTL);
+      // Migration complete - Cache the streams to new format
+      await this.redisService.set(liveKey, result, blockTTL);
       
-      // Clear the "not-found" flag since we found live streams - both formats
-      await this.redisService.del(notFoundKeyNew);
-      await this.redisService.del(notFoundKeyOld);
+      // Clear the "not-found" flag since we found live streams
+      await this.redisService.del(notFoundKey);
       this.logger.debug(`📌 Cached ${handle} → ${liveStreams.length} streams (TTL ${blockTTL}s)`);
 
       // Notify clients about the new streams
@@ -1123,18 +1018,12 @@ export class YoutubeLiveService {
         this.logger.debug(`🔄 Forcing validation for ${handle} despite cooldown (program transition)`);
       }
 
-      // Check streams cache - Phase 4: Try new format first, fallback to old
-      const streamsKeyNew = `liveStreamsByChannel:${handle}`;
-      const streamsKeyOld = `liveStreamsByChannel:${channelId}`;
-      const cachedStreams = await this.redisService.get<any>(streamsKeyNew) || await this.redisService.get<any>(streamsKeyOld);
+      // Migration complete - Check streams cache
+      const streamsKey = `liveStreamsByChannel:${handle}`;
+      const cachedStreams = await this.redisService.get<any>(streamsKey);
       
       if (!cachedStreams) {
         return; // No cached data to validate
-      }
-      
-      // Log fallback if using old format
-      if (await this.redisService.get<any>(streamsKeyOld) && !(await this.redisService.get<any>(streamsKeyNew))) {
-        this.logger.warn(`⚠️ MIGRATION FALLBACK: Using old liveStreamsByChannel format in validateCachedVideoId for ${handle}`);
       }
 
       // Check if cached streams are still live
@@ -1166,9 +1055,8 @@ export class YoutubeLiveService {
           this.logger.debug(`🆕 Refreshed streams for ${handle}: ${streamsResult.streamCount} streams, primary: ${streamsResult.primaryVideoId}`);
         }
       } else {
-        // Clear streams cache if no streams found - both formats
-        await this.redisService.del(streamsKeyNew);
-        await this.redisService.del(streamsKeyOld);
+        // Clear streams cache if no streams found
+        await this.redisService.del(streamsKey);
         this.logger.debug(`🗑️ Cleared streams cache for ${handle} (no streams found)`);
       }
 
@@ -1233,7 +1121,7 @@ export class YoutubeLiveService {
       
       // Phase 4: Set not-found mark for main cron and manual execution - both formats
       await this.redisService.set(notFoundKey, '1', 900);
-      await this.redisService.set(`videoIdNotFound:${channelId}`, '1', 900);
+      await this.redisService.set(`videoIdNotFound:${handle}`, '1', 900);
       this.logger.debug(`🚫 [First attempt] No live video for ${handle}, marking not-found for 15 minutes`);
       return;
     }
@@ -1250,7 +1138,7 @@ export class YoutubeLiveService {
         tracking.escalated = true;
         const ttlUntilProgramEnd = Math.max(programEndTime - Date.now(), 60);
         await this.redisService.set(notFoundKey, '1', Math.floor(ttlUntilProgramEnd / 1000));
-        await this.redisService.set(`videoIdNotFound:${channelId}`, '1', Math.floor(ttlUntilProgramEnd / 1000));
+        await this.redisService.set(`videoIdNotFound:${handle}`, '1', Math.floor(ttlUntilProgramEnd / 1000));
         
         // Update attempt tracking with program-end TTL
         const ttlUntilProgramEndForTracking = Math.max(programEndTime - Date.now(), 60); // Min 1 minute
@@ -1263,13 +1151,13 @@ export class YoutubeLiveService {
       } else {
         // Fallback to 1 hour - both formats
         await this.redisService.set(notFoundKey, '1', 3600);
-        await this.redisService.set(`videoIdNotFound:${channelId}`, '1', 3600);
+        await this.redisService.set(`videoIdNotFound:${handle}`, '1', 3600);
         this.logger.debug(`🚫 [Fallback] No live video for ${handle}, marking not-found for 1 hour (couldn't determine program end)`);
       }
     } else {
       // Second attempt - extend not-found mark for main cron and manual execution - both formats
       await this.redisService.set(notFoundKey, '1', 900);
-      await this.redisService.set(`videoIdNotFound:${channelId}`, '1', 900);
+      await this.redisService.set(`videoIdNotFound:${handle}`, '1', 900);
       this.logger.debug(`🚫 [Second attempt] Still no live video for ${handle}, extending not-found for another 15 minutes`);
     }
     
@@ -1320,7 +1208,7 @@ export class YoutubeLiveService {
         tracking.escalated = true;
         const ttlUntilProgramEnd = Math.max(programEndTime - Date.now(), 60);
         await this.redisService.set(notFoundKey, '1', Math.floor(ttlUntilProgramEnd / 1000));
-        await this.redisService.set(`videoIdNotFound:${channelId}`, '1', Math.floor(ttlUntilProgramEnd / 1000));
+        await this.redisService.set(`videoIdNotFound:${handle}`, '1', Math.floor(ttlUntilProgramEnd / 1000));
         
         // Update attempt tracking with program-end TTL
         const ttlUntilProgramEndForTracking = Math.max(programEndTime - Date.now(), 60); // Min 1 minute
@@ -1333,7 +1221,7 @@ export class YoutubeLiveService {
       } else {
         // Fallback to 1 hour - both formats
         await this.redisService.set(notFoundKey, '1', 3600);
-        await this.redisService.set(`videoIdNotFound:${channelId}`, '1', 3600);
+        await this.redisService.set(`videoIdNotFound:${handle}`, '1', 3600);
         this.logger.debug(`🚫 [Fallback] No live video for ${handle}, marking not-found for 1 hour (couldn't determine program end)`);
       }
     } else {

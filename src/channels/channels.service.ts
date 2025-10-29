@@ -474,30 +474,26 @@ export class ChannelsService {
   }
 
   /**
-   * Invalidate live status caches for a specific YouTube channel ID and handle
-   * Used when channel handle changes and YouTube channel ID changes
+   * Invalidate live status caches for a specific handle
+   * Used when channel handle changes
    */
-  private async invalidateLiveStatusCaches(youtubeChannelId: string, handle?: string): Promise<void> {
+  private async invalidateLiveStatusCaches(_youtubeChannelId: string, handle?: string): Promise<void> {
+    if (!handle) {
+      return; // Can't invalidate without handle
+    }
+    
     try {
-      // Invalidate unified live status cache - old format (channel ID based)
-      await this.redisService.del(`liveStatus:${youtubeChannelId}`);
-      console.log(`🗑️ Invalidated live status cache (old format) for YouTube channel ID: ${youtubeChannelId}`);
+      // Invalidate unified live status cache - new format (handle based)
+      await this.redisService.del(`liveStatusByHandle:${handle}`);
+      console.log(`🗑️ Invalidated live status cache for handle: ${handle}`);
       
-      // Phase 4: Invalidate unified live status cache - new format (handle based)
-      if (handle) {
-        await this.redisService.del(`liveStatusByHandle:${handle}`);
-        console.log(`🗑️ Invalidated live status cache (new format) for handle: ${handle}`);
-      }
-      
-      // Invalidate cache keys that use handle format (Phase 4 migration)
-      if (handle) {
-        await this.redisService.del(`liveStreamsByChannel:${handle}`);
-        await this.redisService.del(`videoIdNotFound:${handle}`);
-        await this.redisService.del(`notFoundAttempts:${handle}`);
-        console.log(`🗑️ Invalidated handle-based cache keys for: ${handle}`);
-      }
+      // Invalidate all cache keys that use handle format
+      await this.redisService.del(`liveStreamsByChannel:${handle}`);
+      await this.redisService.del(`videoIdNotFound:${handle}`);
+      await this.redisService.del(`notFoundAttempts:${handle}`);
+      console.log(`🗑️ Invalidated handle-based cache keys for: ${handle}`);
     } catch (error) {
-      console.error(`❌ Error invalidating live status cache for ${youtubeChannelId}:`, error.message);
+      console.error(`❌ Error invalidating live status cache for ${handle}:`, error.message);
     }
   }
 

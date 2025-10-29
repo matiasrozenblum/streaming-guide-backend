@@ -110,7 +110,8 @@ export class OptimizedSchedulesService {
           
           // Trigger async background fetch (non-blocking) - with Redis-based deduplication
           if (schedule.program.channel?.handle) {
-            const fetchLockKey = `async-fetch-triggered:${channelId}`;
+            const handle = schedule.program.channel.handle;
+            const fetchLockKey = `async-fetch-triggered:${handle}`;
             const fetchLockTTL = 300; // 5 minutes - matches cache TTL
             
             setImmediate(async () => {
@@ -119,11 +120,11 @@ export class OptimizedSchedulesService {
                 const lockAcquired = await this.redisService.setNX(fetchLockKey, { timestamp: Date.now() }, fetchLockTTL);
                 
                 if (!lockAcquired) {
-                  this.logger.debug(`[OPTIMIZED-SCHEDULES] Async fetch already triggered for ${schedule.program.channel.handle}, skipping duplicate`);
+                  this.logger.debug(`[OPTIMIZED-SCHEDULES] Async fetch already triggered for ${handle}, skipping duplicate`);
                   return;
                 }
                 
-                this.logger.debug(`[OPTIMIZED-SCHEDULES] Triggering async fetch for ${schedule.program.channel.handle}...`);
+                this.logger.debug(`[OPTIMIZED-SCHEDULES] Triggering async fetch for ${handle}...`);
                 await this.youtubeLiveService.getLiveStreamsMain(
                   channelId,
                   schedule.program.channel.handle,
