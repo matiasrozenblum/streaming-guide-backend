@@ -28,7 +28,7 @@ interface LiveStatusCache {
   lastUpdated: number;
   ttl: number;
   // Block-aware fields for accurate timing
-  blockEndTime: number; // When the current block ends (in minutes)
+  blockEndTime: number | null; // When the current block ends (in minutes), null if unknown
   validationCooldown: number; // When we can validate again (timestamp)
   lastValidation: number; // Last time we validated the video ID
   // Stream details (unified cache - replaces liveStreamsByChannel)
@@ -302,7 +302,7 @@ export class LiveStatusBackgroundService {
           videoId: null,
           lastUpdated: Date.now(),
           ttl: 5 * 60, // 5 minutes
-          blockEndTime: 24 * 60, // End of day
+          blockEndTime: null, // No current program - unknown when next one starts
           validationCooldown: Date.now() + (30 * 60 * 1000),
           lastValidation: Date.now(),
           // Unified stream data
@@ -328,7 +328,10 @@ export class LiveStatusBackgroundService {
       // CRITICAL: Detect program block transitions
       // If blockEndTime changed, it means we've transitioned between programs (old program ended, new one started)
       // This ensures we refresh cache on program transitions, not just when TTL expires
-      const programBlockChanged = cachedStatus && cachedStatus.blockEndTime && cachedStatus.blockEndTime !== blockEndTime;
+      // Skip if blockEndTime is null (needs enrichment)
+      const programBlockChanged = cachedStatus && 
+        cachedStatus.blockEndTime !== null && 
+        cachedStatus.blockEndTime !== blockEndTime;
       if (programBlockChanged) {
         this.logger.debug(`[LIVE-STATUS-BG] Program block changed for ${handle}: blockEndTime ${cachedStatus.blockEndTime} → ${blockEndTime}, invalidating cache`);
         await this.redisService.del(statusCacheKey);
@@ -466,17 +469,17 @@ export class LiveStatusBackgroundService {
       return true;
     }
     
-    // CRITICAL: Cache with blockEndTime=1440 means no program was live when cache was created
-    // This is suspicious if the channel now has live programs - force a refresh to check
-    if (cached.blockEndTime === 1440 && cached.isLive) {
-      this.logger.debug(`[LIVE-STATUS-BG] Suspicious cache: blockEndTime=1440 but isLive=true, forcing refresh`);
+    // CRITICAL: Cache with blockEndTime=null means it was created without schedule context (by main cron)
+    // This needs to be enriched by the background service - force a refresh
+    if (cached.blockEndTime === null && cached.isLive) {
+      this.logger.debug(`[LIVE-STATUS-BG] Cache needs enrichment: blockEndTime=null but isLive=true, forcing refresh`);
       return true;
     }
     
     // CRITICAL: Detect program block changes by checking if we're past the cached blockEndTime
     // If blockEndTime is in the past, the program that was live when cache was created has ended
     // This ensures cache refreshes when programs transition, even if TTL hasn't fully expired
-    if (cached.blockEndTime && cached.blockEndTime !== 1440) {
+    if (cached.blockEndTime !== null) {
       const currentTimeInMinutes = this.convertTimeToMinutes(now);
       if (currentTimeInMinutes >= cached.blockEndTime) {
         this.logger.debug(`[LIVE-STATUS-BG] Cache blockEndTime (${cached.blockEndTime}) has passed (current: ${currentTimeInMinutes}), program ended - forcing refresh`);
@@ -507,7 +510,7 @@ export class LiveStatusBackgroundService {
    * Calculate block end time for cache metadata
    * Uses the same logic as getCurrentBlockTTL but returns the end time in minutes
    */
-  private calculateBlockEndTime(schedules: any[], currentTime: number): number {
+  private calculateBlockEndTime(schedules: any[], currentTime: number): number | null {
     // Sort schedules by start time
     const sortedSchedules = schedules
       .map(s => ({
@@ -537,7 +540,7 @@ export class LiveStatusBackgroundService {
       if (blockEnd !== null) break;
     }
     
-    return blockEnd || (24 * 60); // Fallback to end of day
+    return blockEnd || null; // Return null if no block found (unknown when program ends)
   }
 
   /**
@@ -588,7 +591,7 @@ export class LiveStatusBackgroundService {
       videoId: null,
       lastUpdated: Date.now(),
       ttl,
-      blockEndTime: 24 * 60, // End of day
+      blockEndTime: null, // No current program - unknown when next one starts
       validationCooldown: Date.now() + (30 * 60 * 1000),
       lastValidation: Date.now(),
       streams: [],

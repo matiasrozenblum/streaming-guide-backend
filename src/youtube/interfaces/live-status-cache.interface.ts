@@ -21,7 +21,7 @@ export interface LiveStatusCache {
   lastUpdated: number;
   ttl: number;
   // Block-aware fields for accurate timing
-  blockEndTime: number; // When the current block ends (in minutes)
+  blockEndTime: number | null; // When the current block ends (in minutes), null if unknown
   validationCooldown: number; // When we can validate again (timestamp)
   lastValidation: number; // Last time we validated the video ID
   // Stream details (unified with liveStreamsByChannel)
@@ -50,7 +50,7 @@ export function createLiveStatusCacheFromStreams(
     videoId: streamsResult.primaryVideoId || null,
     lastUpdated: Date.now(),
     ttl,
-    blockEndTime: 24 * 60, // End of day (will be enriched by background service if needed)
+    blockEndTime: null, // Unknown - will be set by background service when it has schedule context
     validationCooldown: Date.now() + (30 * 60 * 1000), // 30 min default cooldown
     lastValidation: Date.now(),
     streams: streamsResult.streams || [],
