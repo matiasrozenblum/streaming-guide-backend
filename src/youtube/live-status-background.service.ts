@@ -470,10 +470,22 @@ export class LiveStatusBackgroundService {
     }
     
     // CRITICAL: Cache with blockEndTime=null means it was created without schedule context (by main cron)
-    // This needs to be enriched by the background service - force a refresh
-    if (cached.blockEndTime === null && cached.isLive) {
-      this.logger.debug(`[LIVE-STATUS-BG] Cache needs enrichment: blockEndTime=null but isLive=true, forcing refresh`);
-      return true;
+    // This is normal - main cron creates cache with streams but without schedule context
+    // Background cron will enrich it with proper blockEndTime when it runs
+    // Only force refresh if cache is stale (>10 minutes old with null blockEndTime)
+    if (cached.blockEndTime === null) {
+      const age = now - cached.lastUpdated;
+      const ageMinutes = age / (60 * 1000);
+      
+      if (ageMinutes > 10) {
+        // Cache is stale (>10min) and still hasn't been enriched - something is wrong, force refresh
+        this.logger.debug(`[LIVE-STATUS-BG] Stale cache with null blockEndTime (${Math.round(ageMinutes)}min old), forcing refresh`);
+        return true;
+      } else {
+        // Cache is fresh (<10min) with null blockEndTime - this is normal, wait for background cron to enrich
+        this.logger.debug(`[LIVE-STATUS-BG] Fresh cache with null blockEndTime (${Math.round(ageMinutes)}min old), will be enriched on next cycle`);
+        return false; // Don't force refresh, but will be updated by background cron
+      }
     }
     
     // CRITICAL: Detect program block changes by checking if we're past the cached blockEndTime
