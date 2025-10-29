@@ -63,9 +63,26 @@ export class OptimizedSchedulesService {
       }
     }
 
-    // Get cached live status for all channels
-    const channelIds = Array.from(channelGroups.keys());
-    const liveStatusMap = await this.liveStatusBackgroundService.getLiveStatusForChannels(channelIds);
+    // Build channelId -> handle map and get cached live status for all channels
+    const channelIdToHandle = new Map<string, string>();
+    const handles: string[] = [];
+    for (const schedule of schedules) {
+      const channelId = schedule.program.channel?.youtube_channel_id;
+      const handle = schedule.program.channel?.handle;
+      if (channelId && handle && !channelIdToHandle.has(channelId)) {
+        channelIdToHandle.set(channelId, handle);
+        handles.push(handle);
+      }
+    }
+    const liveStatusMapByHandle = await this.liveStatusBackgroundService.getLiveStatusForChannels(handles);
+    
+    // Convert handle-based map back to channelId-based map for compatibility
+    const liveStatusMap = new Map<string, any>();
+    for (const [channelId, handle] of channelIdToHandle) {
+      if (liveStatusMapByHandle.has(handle)) {
+        liveStatusMap.set(channelId, liveStatusMapByHandle.get(handle));
+      }
+    }
 
     // Enrich schedules with cached live status
     const enriched: any[] = [];

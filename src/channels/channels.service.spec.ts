@@ -181,7 +181,10 @@ describe('ChannelsService - Channel Handle Change Detection', () => {
 
       // Assert
       expect(youtubeDiscoveryService.getChannelIdFromHandle).toHaveBeenCalledWith('@newhandle');
-      expect(redisService.del).toHaveBeenCalledWith('liveStatus:OLD_YOUTUBE_ID_123');
+      // Should invalidate old handle cache when handle changes
+      expect(redisService.del).toHaveBeenCalledWith('liveStatusByHandle:@oldhandle');
+      // Should also invalidate new handle cache when YouTube channel ID changes (wrong channel ID was cached)
+      expect(redisService.del).toHaveBeenCalledWith('liveStatusByHandle:@newhandle');
     });
 
     it('should not invalidate live status caches when handle does not change', async () => {
@@ -222,8 +225,9 @@ describe('ChannelsService - Channel Handle Change Detection', () => {
 
       // Assert
       expect(youtubeDiscoveryService.getChannelIdFromHandle).toHaveBeenCalledWith('@newhandle');
-      // Should still invalidate old caches even if new channel ID resolution fails
-      expect(redisService.del).toHaveBeenCalledWith('liveStatus:OLD_YOUTUBE_ID_123');
+      // Should still invalidate old handle cache even if new channel ID resolution fails
+      expect(redisService.del).toHaveBeenCalledWith('liveStatusByHandle:@oldhandle');
+      // Note: New handle cache won't be invalidated if channel ID resolution fails (no new channel ID to compare)
     });
 
     it('should handle cache invalidation errors gracefully', async () => {
