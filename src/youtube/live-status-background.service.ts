@@ -108,7 +108,7 @@ export class LiveStatusBackgroundService {
       // Check which channels need cache updates
       for (const [channelId, channelInfo] of liveChannels) {
         this.logger.debug(`[LIVE-STATUS-BG] Checking cache for channel ${channelInfo.handle} (${channelId})`);
-        const cached = await this.getCachedLiveStatus(channelId, channelInfo.handle);
+        const cached = await this.getCachedLiveStatus(channelInfo.handle);
         
         if (!cached || await this.shouldUpdateCache(cached)) {
           this.logger.debug(`[LIVE-STATUS-BG] Cache update needed for channel ${channelInfo.handle} (${channelId})`);
@@ -141,7 +141,7 @@ export class LiveStatusBackgroundService {
    * Get cached live status for a channel (fast, non-blocking)
    * Migration complete - only uses handle-based format
    */
-  async getCachedLiveStatus(channelId: string, handle?: string): Promise<LiveStatusCache | null> {
+  async getCachedLiveStatus(handle?: string): Promise<LiveStatusCache | null> {
     if (!handle) {
       return null;
     }
@@ -165,7 +165,6 @@ export class LiveStatusBackgroundService {
 
     // Check cache first
     for (const channelId of channelIds) {
-      // Phase 4: Try to get handle from any cached entry, otherwise pass undefined
       const cached = await this.getCachedLiveStatus(channelId);
       if (cached && !(await this.shouldUpdateCache(cached))) {
         results.set(channelId, cached);

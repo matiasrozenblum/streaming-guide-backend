@@ -228,14 +228,14 @@ export class ChannelsService {
           
           // Invalidate old live status caches when YouTube channel ID changes
           if (oldYoutubeChannelId && oldYoutubeChannelId !== newYoutubeChannelId) {
-            await this.invalidateLiveStatusCaches(oldYoutubeChannelId, oldHandle);
+            await this.invalidateLiveStatusCaches(oldHandle);
             console.log(`🗑️ Invalidated live status caches for old YouTube channel ID: ${oldYoutubeChannelId}`);
           }
         } else {
           console.log(`⚠️ Could not resolve YouTube channel ID for handle: ${updateChannelDto.handle}`);
           // Still invalidate old cache even if new channel ID resolution fails
           if (oldYoutubeChannelId) {
-            await this.invalidateLiveStatusCaches(oldYoutubeChannelId, oldHandle);
+            await this.invalidateLiveStatusCaches(oldHandle);
             console.log(`🗑️ Invalidated live status caches for old YouTube channel ID: ${oldYoutubeChannelId}`);
           }
         }
@@ -243,7 +243,7 @@ export class ChannelsService {
         console.error(`❌ Error updating YouTube channel ID for ${updated.name}:`, error.message);
         // Still invalidate old cache even if there's an error
         if (oldYoutubeChannelId) {
-          await this.invalidateLiveStatusCaches(oldYoutubeChannelId, oldHandle);
+          await this.invalidateLiveStatusCaches(oldHandle);
           console.log(`🗑️ Invalidated live status caches for old YouTube channel ID: ${oldYoutubeChannelId}`);
         }
       }
@@ -477,7 +477,7 @@ export class ChannelsService {
    * Invalidate live status caches for a specific handle
    * Used when channel handle changes
    */
-  private async invalidateLiveStatusCaches(_youtubeChannelId: string, handle?: string): Promise<void> {
+  private async invalidateLiveStatusCaches(handle?: string): Promise<void> {
     if (!handle) {
       return; // Can't invalidate without handle
     }
@@ -486,12 +486,6 @@ export class ChannelsService {
       // Invalidate unified live status cache - new format (handle based)
       await this.redisService.del(`liveStatusByHandle:${handle}`);
       console.log(`🗑️ Invalidated live status cache for handle: ${handle}`);
-      
-      // Invalidate all cache keys that use handle format
-      await this.redisService.del(`liveStreamsByChannel:${handle}`);
-      await this.redisService.del(`videoIdNotFound:${handle}`);
-      await this.redisService.del(`notFoundAttempts:${handle}`);
-      console.log(`🗑️ Invalidated handle-based cache keys for: ${handle}`);
     } catch (error) {
       console.error(`❌ Error invalidating live status cache for ${handle}:`, error.message);
     }
