@@ -134,8 +134,8 @@ export class YoutubeLiveService {
       this.logger.warn(`⚠️ Error checking fetch config for ${handle}, allowing fetch:`, error.message);
     }
 
-    const streamsKey = `liveStreamsByChannel:${channelId}`;
-    const notFoundKey = `videoIdNotFound:${channelId}`;
+    const streamsKey = `liveStreamsByChannel:${handle}`;
+    const notFoundKey = `videoIdNotFound:${handle}`;
 
     // skip rápido si ya está marcado como no-found
     if (await this.redisService.get<string>(notFoundKey)) {
@@ -194,7 +194,7 @@ export class YoutubeLiveService {
       
       // Clear the "not-found" flag and attempt tracking since we found live streams
       await this.redisService.del(notFoundKey);
-      await this.redisService.del(`notFoundAttempts:${channelId}`);
+      await this.redisService.del(`notFoundAttempts:${handle}`);
       this.logger.debug(`📌 Cached ${handle} → ${videoId} (TTL ${blockTTL}s)`);
 
       // Notify clients about the new video ID
@@ -283,14 +283,16 @@ export class YoutubeLiveService {
     const channelHandles = new Map<string, string>(); // Map channelId to handle for logging
     
     for (const channelId of channelIds) {
-      // We need to get the handle for this channel to check config and for logging
-      // For now, we'll fetch all and let individual channel processing handle the config check
-      const liveKey = `liveStreamsByChannel:${channelId}`;
-      const notFoundKey = `videoIdNotFound:${channelId}`;
-
+      const handle = channelHandleMap?.get(channelId) || 'unknown';
+      channelHandles.set(channelId, handle);
+      
+      // Check cache for this channel
+      const liveKey = `liveStreamsByChannel:${handle}`;
+      const notFoundKey = `videoIdNotFound:${handle}`;
+      const attemptTrackingKey = `notFoundAttempts:${handle}`;
+      
       // Enhanced not-found logic with escalation detection
       const notFoundData = await this.redisService.get<string>(notFoundKey);
-      const attemptTrackingKey = `notFoundAttempts:${channelId}`;
       const attemptData = await this.redisService.get<AttemptTracking>(attemptTrackingKey);
 
       if (notFoundData && cronType !== 'back-to-back-fix' && cronType !== 'manual') {
@@ -461,8 +463,8 @@ export class YoutubeLiveService {
                 results.set(channelId, liveStreamsResult);
                 
                 // Cache the result with intelligent TTL based on program schedule
-                const liveKey = `liveStreamsByChannel:${channelId}`;
-                const notFoundKey = `videoIdNotFound:${channelId}`;
+                const liveKey = `liveStreamsByChannel:${handle}`;
+                const notFoundKey = `videoIdNotFound:${handle}`;
                 const blockTTL = channelTTLs.get(channelId)!;
                 await this.redisService.set(liveKey, liveStreamsResult, blockTTL);
                 
@@ -478,12 +480,12 @@ export class YoutubeLiveService {
                   results.set(channelId, null);
                 } else if (cronType === 'manual') {
                   // Manual cron should attempt fetch, not skip
-                  const notFoundKey = `videoIdNotFound:${channelId}`;
+                  const notFoundKey = `videoIdNotFound:${handle}`;
                   await this.handleNotFoundEscalationMain(channelId, handle, notFoundKey);
                   results.set(channelId, null);
                 } else {
                   // Handle not-found escalation for main cron type
-                  const notFoundKey = `videoIdNotFound:${channelId}`;
+                  const notFoundKey = `videoIdNotFound:${handle}`;
                   await this.handleNotFoundEscalationMain(channelId, handle, notFoundKey);
                   results.set(channelId, '__SKIPPED__');
                 }
@@ -529,8 +531,8 @@ export class YoutubeLiveService {
             results.set(channelId, liveStreamsResult);
             
             // Cache the result with intelligent TTL based on program schedule
-            const liveKey = `liveStreamsByChannel:${channelId}`;
-            const notFoundKey = `videoIdNotFound:${channelId}`;
+            const liveKey = `liveStreamsByChannel:${handle}`;
+            const notFoundKey = `videoIdNotFound:${handle}`;
             const blockTTL = channelTTLs.get(channelId)!;
             await this.redisService.set(liveKey, liveStreamsResult, blockTTL);
             
@@ -596,8 +598,8 @@ export class YoutubeLiveService {
       return '__SKIPPED__';
     }
 
-    const liveKey = `liveStreamsByChannel:${channelId}`;
-    const notFoundKey = `videoIdNotFound:${channelId}`;
+    const liveKey = `liveStreamsByChannel:${handle}`;
+    const notFoundKey = `videoIdNotFound:${handle}`;
 
     // skip rápido si ya está marcado como no-found (unless explicitly ignored)
     if (!ignoreNotFoundCache && await this.redisService.get<string>(notFoundKey)) {
@@ -1032,7 +1034,8 @@ export class YoutubeLiveService {
       }
 
       // Video ID/streams are no longer live, refresh them
-      this.logger.debug(`🔄 Cached data no longer live for ${handle}, refreshing...`);
+      const oldVideoId = cachedStreams.primaryVideoId;
+      this.logger.debug(`🔄 Cached video ID no longer live for ${handle} (${oldVideoId}), refreshing...`);
       
       const schedules = await this.schedulesService.findByDay(dayjs().tz('America/Argentina/Buenos_Aires').format('dddd').toLowerCase());
       const ttl = await getCurrentBlockTTL(channelId, schedules, this.sentryService);
@@ -1041,7 +1044,11 @@ export class YoutubeLiveService {
       const streamsResult = await this.getLiveStreamsMain(channelId, handle, ttl);
       
       if (streamsResult && streamsResult !== '__SKIPPED__') {
-        this.logger.debug(`🆕 Refreshed streams for ${handle}: ${streamsResult.streamCount} streams, primary: ${streamsResult.primaryVideoId}`);
+        if (oldVideoId && oldVideoId !== streamsResult.primaryVideoId) {
+          this.logger.debug(`🔄 Video ID rotated for ${handle}: ${oldVideoId} → ${streamsResult.primaryVideoId} (SSE notification sent)`);
+        } else {
+          this.logger.debug(`🆕 Refreshed streams for ${handle}: ${streamsResult.streamCount} streams, primary: ${streamsResult.primaryVideoId}`);
+        }
       } else {
         // Clear streams cache if no streams found
         await this.redisService.del(streamsKey);
@@ -1061,7 +1068,7 @@ export class YoutubeLiveService {
    * Increment not-found attempts without setting new not-found flags (for back-to-back-fix cron)
    */
   private async incrementNotFoundAttempts(channelId: string, handle: string): Promise<void> {
-    const attemptTrackingKey = `notFoundAttempts:${channelId}`;
+    const attemptTrackingKey = `notFoundAttempts:${handle}`;
     const existing = await this.redisService.get<AttemptTracking>(attemptTrackingKey);
     
     if (existing) {
@@ -1089,7 +1096,7 @@ export class YoutubeLiveService {
     handle: string, 
     notFoundKey: string
   ): Promise<void> {
-    const attemptTrackingKey = `notFoundAttempts:${channelId}`;
+    const attemptTrackingKey = `notFoundAttempts:${handle}`;
     const existing = await this.redisService.get<AttemptTracking>(attemptTrackingKey);
     
     if (!existing) {
@@ -1158,7 +1165,7 @@ export class YoutubeLiveService {
     handle: string, 
     notFoundKey: string
   ): Promise<void> {
-    const attemptTrackingKey = `notFoundAttempts:${channelId}`;
+    const attemptTrackingKey = `notFoundAttempts:${handle}`;
     const existing = await this.redisService.get<AttemptTracking>(attemptTrackingKey);
     
     if (!existing) {
