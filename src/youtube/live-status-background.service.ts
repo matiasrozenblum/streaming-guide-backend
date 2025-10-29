@@ -325,7 +325,21 @@ export class LiveStatusBackgroundService {
       const statusCacheKey = `${this.CACHE_PREFIX}${handle}`;
       const cachedStatus = await this.redisService.get<LiveStatusCache>(statusCacheKey);
       
-      if (cachedStatus && cachedStatus.videoId) {
+      // CRITICAL: Detect program block transitions
+      // If blockEndTime changed, we've transitioned between programs - need to validate/fetch new video
+      // Skip if blockEndTime is null (cache needs enrichment from background cron)
+      const programBlockChanged = cachedStatus && 
+        cachedStatus.blockEndTime !== null && 
+        blockEndTime !== null &&
+        cachedStatus.blockEndTime !== blockEndTime;
+        
+      if (programBlockChanged) {
+        this.logger.debug(`[LIVE-STATUS-BG] Program block changed for ${handle}: blockEndTime ${cachedStatus.blockEndTime} → ${blockEndTime}, invalidating cache`);
+        await this.redisService.del(statusCacheKey);
+        // Continue to fetch fresh data below
+      }
+      
+      if (cachedStatus && cachedStatus.videoId && !programBlockChanged) {
         // We have cached status - check if we need to validate using video age
         // Only validate if video is >30 minutes old (to avoid excessive API calls)
         // CRITICAL: Use video age (lastValidation) instead of validationCooldown timestamp
