@@ -119,24 +119,24 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
   describe('getCachedLiveStatus', () => {
     it('should return cached live status for a channel', async () => {
       // Arrange
-      const channelId = 'CHANNEL_123';
+      const handle = 'testchannel';
       jest.spyOn(redisService, 'get').mockResolvedValue(mockLiveStatusCache);
 
       // Act
-      const result = await service.getCachedLiveStatus(channelId);
+      const result = await service.getCachedLiveStatus(handle);
 
       // Assert
-      expect(redisService.get).toHaveBeenCalledWith(`liveStatus:${channelId}`);
+      expect(redisService.get).toHaveBeenCalledWith(`liveStatusByHandle:${handle}`);
       expect(result).toEqual(mockLiveStatusCache);
     });
 
     it('should return null when no cached data exists', async () => {
       // Arrange
-      const channelId = 'CHANNEL_123';
+      const handle = 'testchannel';
       jest.spyOn(redisService, 'get').mockResolvedValue(null);
 
       // Act
-      const result = await service.getCachedLiveStatus(channelId);
+      const result = await service.getCachedLiveStatus(handle);
 
       // Assert
       expect(result).toBeNull();
@@ -146,34 +146,31 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
   describe('getLiveStatusForChannels', () => {
     it('should return cached data when available and not expired', async () => {
       // Arrange
-      const channelIds = ['CHANNEL_123'];
+      const handles = ['testhandle'];
       const mockCached = { ...mockLiveStatusCache, lastUpdated: Date.now() - 1000 }; // 1 second ago
       jest.spyOn(service, 'getCachedLiveStatus').mockResolvedValue(mockCached);
       jest.spyOn(service as any, 'shouldUpdateCache').mockResolvedValue(false);
-      jest.spyOn(service as any, 'updateChannelsInBatches').mockResolvedValue(new Map());
 
       // Act
-      const result = await service.getLiveStatusForChannels(channelIds);
+      const result = await service.getLiveStatusForChannels(handles);
 
       // Assert
-      expect(result.get('CHANNEL_123')).toEqual(mockCached);
-      expect(service['updateChannelsInBatches']).not.toHaveBeenCalled();
+      expect(result.get('testhandle')).toEqual(mockCached);
+      expect(service.getCachedLiveStatus).toHaveBeenCalledWith('testhandle');
     });
 
-    it('should update cache when data is expired', async () => {
+    it('should return empty map when data is expired (fresh updates handled by cron)', async () => {
       // Arrange
-      const channelIds = ['CHANNEL_123'];
+      const handles = ['testhandle'];
       const mockCached = { ...mockLiveStatusCache, lastUpdated: Date.now() - 10000 }; // 10 seconds ago
       jest.spyOn(service, 'getCachedLiveStatus').mockResolvedValue(mockCached);
       jest.spyOn(service as any, 'shouldUpdateCache').mockResolvedValue(true);
-      jest.spyOn(service as any, 'updateChannelsInBatches').mockResolvedValue(new Map([['CHANNEL_123', mockLiveStatusCache]]));
 
       // Act
-      const result = await service.getLiveStatusForChannels(channelIds);
+      const result = await service.getLiveStatusForChannels(handles);
 
       // Assert
-      expect(service['updateChannelsInBatches']).toHaveBeenCalledWith(['CHANNEL_123']);
-      expect(result.get('CHANNEL_123')).toEqual(mockLiveStatusCache);
+      expect(result.size).toBe(0); // No cached data when expired
     });
   });
 
@@ -272,7 +269,7 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
         streamCount: 1,
       }));
       expect(redisService.set).toHaveBeenCalledWith(
-        `liveStatus:${channelId}`,
+        `liveStatusByHandle:testchannel`,
         expect.objectContaining({
           streams: mockLiveStreamsResult.streams,
           streamCount: 1,
