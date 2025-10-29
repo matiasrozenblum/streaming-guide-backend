@@ -355,22 +355,33 @@ export class LiveStatusBackgroundService {
       const statusCacheKey = `${this.CACHE_PREFIX}${handle}`;
       const cachedStatus = await this.redisService.get<LiveStatusCache>(statusCacheKey);
       
+      // CRITICAL: Detect program block transitions
+      // If blockEndTime changed, it means we've transitioned between programs (old program ended, new one started)
+      // This ensures we validate/refresh on program transitions, not just when cooldown expires
+      const programBlockChanged = cachedStatus && cachedStatus.blockEndTime && cachedStatus.blockEndTime !== blockEndTime;
+      
       // Check if we have cached streams from YouTube service
       const streamsKey = `liveStreamsByChannel:${handle}`;
       const cachedStreams = await this.redisService.get<any>(streamsKey);
       
       if (cachedStreams && cachedStreams.primaryVideoId) {
-        // We have cached streams - check if we need to validate using OUR cooldown (not YouTube service's)
-        // Only validate if status cache exists and cooldown expired (to avoid excessive API calls)
-        const needsValidation = cachedStatus && cachedStatus.validationCooldown && Date.now() > cachedStatus.validationCooldown;
+        // We have cached streams - determine if we need to validate
+        // CRITICAL: Force validation on program transitions (even if cooldown active) to detect video rotations
+        // Also validate if cooldown expired normally
+        const needsValidation = programBlockChanged || 
+                               (cachedStatus && cachedStatus.validationCooldown && Date.now() > cachedStatus.validationCooldown);
+        
+        if (programBlockChanged) {
+          this.logger.debug(`[LIVE-STATUS-BG] Program block changed for ${handle}: blockEndTime ${cachedStatus.blockEndTime} → ${blockEndTime}, validating existing video ID before refresh`);
+        }
         
         if (needsValidation) {
-          // Validation cooldown expired, check if video is still live
-          // Use videos API (cheaper than search) to validate
+          // Validation needed - check if video is still live (use videos API - cheaper than search)
           const isStillLive = await this.youtubeLiveService.isVideoLive(cachedStreams.primaryVideoId);
+          
           if (isStillLive) {
-            // Video is still live, create cache with new cooldown
-            this.logger.debug(`[LIVE-STATUS-BG] Video ID ${cachedStreams.primaryVideoId} still live for ${handle}`);
+            // Video is still live across program transition - reuse with updated metadata
+            this.logger.debug(`[LIVE-STATUS-BG] Video ID ${cachedStreams.primaryVideoId} still live for ${handle}${programBlockChanged ? ' (after program transition)' : ''}`);
             const cacheData = this.createCacheDataFromStreams(channelId, handle, cachedStreams, ttl, blockEndTime);
             await this.cacheLiveStatus(channelId, cacheData);
             return cacheData;
@@ -380,10 +391,11 @@ export class LiveStatusBackgroundService {
             const hasLiveSchedules = liveSchedules.length > 0;
             
             if (hasLiveSchedules) {
-              // Program still scheduled, video might have rotated - fetch new one
-              this.logger.debug(`[LIVE-STATUS-BG] Video ID ${cachedStreams.primaryVideoId} no longer live for ${handle}, but program still scheduled - fetching new one`);
+              // Program still scheduled, video rotated - fetch new one
+              this.logger.debug(`[LIVE-STATUS-BG] Video ID ${cachedStreams.primaryVideoId} no longer live for ${handle}${programBlockChanged ? ' (video rotated during program transition)' : ''}, fetching new one`);
               await this.redisService.del(streamsKey);
               await this.redisService.del(statusCacheKey);
+              // Continue to fetch fresh data below
             } else {
               // Program ended, don't waste API quota - just mark as not live
               this.logger.debug(`[LIVE-STATUS-BG] Video ID ${cachedStreams.primaryVideoId} no longer live for ${handle}, and program ended - marking as not live`);
