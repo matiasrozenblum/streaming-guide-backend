@@ -34,6 +34,7 @@ describe('OptimizedSchedulesService', () => {
               id: 1,
               name: 'Test Channel',
               youtube_channel_id: 'test-channel-id',
+              handle: 'testchannel',
             },
           },
         },
@@ -43,7 +44,7 @@ describe('OptimizedSchedulesService', () => {
     mockLiveStatusBackgroundService = {
       getLiveStatusForChannels: jest.fn().mockResolvedValue(
         new Map([
-          ['test-channel-id', {
+          ['testchannel', {
             channelId: 'test-channel-id',
             handle: 'testchannel',
             isLive: true,
@@ -112,7 +113,7 @@ describe('OptimizedSchedulesService', () => {
 
     expect(result).toHaveLength(1);
     expect(duration).toBeLessThan(200); // Should be fast with cached live status
-    expect(mockLiveStatusBackgroundService.getLiveStatusForChannels).toHaveBeenCalledWith(['test-channel-id']);
+    expect(mockLiveStatusBackgroundService.getLiveStatusForChannels).toHaveBeenCalledWith(['testchannel']);
     
     // Check that live status was applied (10:30 is within 10:00-12:00 range)
     expect(result[0].program.is_live).toBe(true);

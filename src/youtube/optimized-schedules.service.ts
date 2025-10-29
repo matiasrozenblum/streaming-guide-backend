@@ -63,9 +63,26 @@ export class OptimizedSchedulesService {
       }
     }
 
-    // Get cached live status for all channels
-    const channelIds = Array.from(channelGroups.keys());
-    const liveStatusMap = await this.liveStatusBackgroundService.getLiveStatusForChannels(channelIds);
+    // Build channelId -> handle map and get cached live status for all channels
+    const channelIdToHandle = new Map<string, string>();
+    const handles: string[] = [];
+    for (const schedule of schedules) {
+      const channelId = schedule.program.channel?.youtube_channel_id;
+      const handle = schedule.program.channel?.handle;
+      if (channelId && handle && !channelIdToHandle.has(channelId)) {
+        channelIdToHandle.set(channelId, handle);
+        handles.push(handle);
+      }
+    }
+    const liveStatusMapByHandle = await this.liveStatusBackgroundService.getLiveStatusForChannels(handles);
+    
+    // Convert handle-based map back to channelId-based map for compatibility
+    const liveStatusMap = new Map<string, any>();
+    for (const [channelId, handle] of channelIdToHandle) {
+      if (liveStatusMapByHandle.has(handle)) {
+        liveStatusMap.set(channelId, liveStatusMapByHandle.get(handle));
+      }
+    }
 
     // Enrich schedules with cached live status
     const enriched: any[] = [];
@@ -110,7 +127,8 @@ export class OptimizedSchedulesService {
           
           // Trigger async background fetch (non-blocking) - with Redis-based deduplication
           if (schedule.program.channel?.handle) {
-            const fetchLockKey = `async-fetch-triggered:${channelId}`;
+            const handle = schedule.program.channel.handle;
+            const fetchLockKey = `async-fetch-triggered:${handle}`;
             const fetchLockTTL = 300; // 5 minutes - matches cache TTL
             
             setImmediate(async () => {
@@ -119,11 +137,11 @@ export class OptimizedSchedulesService {
                 const lockAcquired = await this.redisService.setNX(fetchLockKey, { timestamp: Date.now() }, fetchLockTTL);
                 
                 if (!lockAcquired) {
-                  this.logger.debug(`[OPTIMIZED-SCHEDULES] Async fetch already triggered for ${schedule.program.channel.handle}, skipping duplicate`);
+                  this.logger.debug(`[OPTIMIZED-SCHEDULES] Async fetch already triggered for ${handle}, skipping duplicate`);
                   return;
                 }
                 
-                this.logger.debug(`[OPTIMIZED-SCHEDULES] Triggering async fetch for ${schedule.program.channel.handle}...`);
+                this.logger.debug(`[OPTIMIZED-SCHEDULES] Triggering async fetch for ${handle}...`);
                 await this.youtubeLiveService.getLiveStreamsMain(
                   channelId,
                   schedule.program.channel.handle,

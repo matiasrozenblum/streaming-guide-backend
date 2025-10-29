@@ -395,11 +395,11 @@ export class SchedulesService {
           this.logger.debug(`Using batch results: ${handle} (${allStreams.length} streams)`);
           
           // Cache the streams for future use
-          const streamsKey = `liveStreamsByChannel:${channelId}`;
+          const streamsKey = `liveStreamsByChannel:${handle}`;
           await this.redisService.set(streamsKey, batchStreamsResult, await getCurrentBlockTTL(channelId, schedules, this.sentryService));
         } else {
           // Fallback to individual fetch if batch didn't work
-          const streamsKey = `liveStreamsByChannel:${channelId}`;
+          const streamsKey = `liveStreamsByChannel:${handle}`;
           const cachedStreams = await this.redisService.get<any>(streamsKey);
           
           if (cachedStreams) {
