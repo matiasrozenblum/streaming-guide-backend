@@ -199,17 +199,30 @@ export class YoutubeLiveService {
       this.logger.warn(`⚠️ Error checking fetch config for ${handle}, allowing fetch:`, error.message);
     }
 
-    const streamsKey = `liveStreamsByChannel:${handle}`;
-    const notFoundKey = `videoIdNotFound:${handle}`;
+    // Phase 4: Blue-green migration - try new format first
+    const streamsKeyNew = `liveStreamsByChannel:${handle}`;
+    const streamsKeyOld = `liveStreamsByChannel:${channelId}`;
+    const notFoundKeyNew = `videoIdNotFound:${handle}`;
+    const notFoundKeyOld = `videoIdNotFound:${channelId}`;
 
     // skip rápido si ya está marcado como no-found
-    if (await this.redisService.get<string>(notFoundKey)) {
+    const notFoundNew = await this.redisService.get<string>(notFoundKeyNew);
+    const notFoundOld = await this.redisService.get<string>(notFoundKeyOld);
+    if (notFoundNew || notFoundOld) {
+      if (notFoundOld && !notFoundNew) {
+        this.logger.warn(`⚠️ MIGRATION FALLBACK: Using old notFoundKey format in getLiveVideoId for ${handle}`);
+      }
       this.logger.debug(`🚫 Skipping ${handle}, marked as not-found`);
       return '__SKIPPED__';
     }
 
-    // cache-hit: reuse si sigue vivo
-    const cachedStreams = await this.redisService.get<any>(streamsKey);
+    // cache-hit: reuse si sigue vivo - try new format first
+    const cachedStreamsNew = await this.redisService.get<any>(streamsKeyNew);
+    const cachedStreamsOld = await this.redisService.get<any>(streamsKeyOld);
+    const cachedStreams = cachedStreamsNew || cachedStreamsOld;
+    if (cachedStreamsOld && !cachedStreamsNew) {
+      this.logger.warn(`⚠️ MIGRATION FALLBACK: Using old liveStreamsByChannel format in getLiveVideoId for ${handle}`);
+    }
     if (cachedStreams) {
       try {
         const streams = cachedStreams;
@@ -217,12 +230,14 @@ export class YoutubeLiveService {
           this.logger.debug(`🔁 Reusing cached primary videoId for ${handle}`);
           return streams.primaryVideoId;
         }
-        // If cached streams are no longer live, clear the cache
-        await this.redisService.del(streamsKey);
+        // If cached streams are no longer live, clear the cache - both formats
+        await this.redisService.del(streamsKeyNew);
+        await this.redisService.del(streamsKeyOld);
         this.logger.debug(`🗑️ Deleted cached streams for ${handle} (no longer live)`);
       } catch (error) {
-        // If parsing fails, clear the corrupted cache
-        await this.redisService.del(streamsKey);
+        // If parsing fails, clear the corrupted cache - both formats
+        await this.redisService.del(streamsKeyNew);
+        await this.redisService.del(streamsKeyOld);
         this.logger.debug(`🗑️ Deleted corrupted cached streams for ${handle}`);
       }
     }
@@ -245,21 +260,24 @@ export class YoutubeLiveService {
 
       if (!videoId) {
         this.logger.debug(`🚫 No live video for ${handle} (${context})`);
-        await this.handleNotFoundEscalationMain(channelId, handle, notFoundKey);
+        await this.handleNotFoundEscalationMain(channelId, handle, notFoundKeyNew);
         return null;
       }
 
-      // Cache as streams format for consistency
+      // Phase 4: Cache as streams format for consistency - write to both formats
       const streamsData = {
         streams: [{ videoId, title: '', description: '', thumbnailUrl: '', publishedAt: new Date().toISOString() }],
         primaryVideoId: videoId,
         streamCount: 1
       };
-      await this.redisService.set(streamsKey, streamsData, blockTTL);
+      await this.redisService.set(streamsKeyNew, streamsData, blockTTL);
+      await this.redisService.set(streamsKeyOld, streamsData, blockTTL);
       
-      // Clear the "not-found" flag and attempt tracking since we found live streams
-      await this.redisService.del(notFoundKey);
+      // Clear the "not-found" flag and attempt tracking since we found live streams - both formats
+      await this.redisService.del(notFoundKeyNew);
+      await this.redisService.del(notFoundKeyOld);
       await this.redisService.del(`notFoundAttempts:${handle}`);
+      await this.redisService.del(`notFoundAttempts:${channelId}`);
       this.logger.debug(`📌 Cached ${handle} → ${videoId} (TTL ${blockTTL}s)`);
 
       // Notify clients about the new video ID
