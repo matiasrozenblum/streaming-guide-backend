@@ -159,8 +159,14 @@ export class LiveStatusBackgroundService {
   /**
    * Get live status for multiple channels (uses background cache when available)
    * Migration complete - now accepts handles instead of channelIds
+   * 
+   * CRITICAL: Falls back to liveStreamsByChannel if liveStatusByHandle is missing/stale
+   * This prevents excessive API calls when streams cache exists but status cache doesn't
+   * 
+   * @param handles Array of channel handles to get status for
+   * @param handleToChannelId Optional map of handle -> channelId for accurate sync
    */
-  async getLiveStatusForChannels(handles: string[]): Promise<Map<string, LiveStatusCache>> {
+  async getLiveStatusForChannels(handles: string[], handleToChannelId?: Map<string, string>): Promise<Map<string, LiveStatusCache>> {
     const results = new Map<string, LiveStatusCache>();
     const handlesNeedingUpdate: string[] = [];
 
@@ -170,7 +176,43 @@ export class LiveStatusBackgroundService {
       if (cached && !(await this.shouldUpdateCache(cached))) {
         results.set(handle, cached);
       } else {
-        handlesNeedingUpdate.push(handle);
+        // liveStatusByHandle missing or stale - check liveStreamsByChannel as fallback
+        const streamsKey = `liveStreamsByChannel:${handle}`;
+        const cachedStreams = await this.redisService.get<any>(streamsKey);
+        
+        if (cachedStreams && cachedStreams.primaryVideoId) {
+          // Sync from liveStreamsByChannel to liveStatusByHandle
+          this.logger.debug(`[LIVE-STATUS-BG] Syncing liveStatusByHandle from liveStreamsByChannel for ${handle}`);
+          
+          // Create minimal cache entry from streams data
+          // Use default TTL and blockEndTime since we don't have schedules here
+          const channelId = handleToChannelId?.get(handle) || ''; // Use provided channelId if available
+          const syncedCache: LiveStatusCache = {
+            channelId,
+            handle,
+            isLive: cachedStreams.streams && cachedStreams.streams.length > 0,
+            streamUrl: cachedStreams.streams && cachedStreams.streams.length > 0
+              ? `https://www.youtube.com/embed/${cachedStreams.primaryVideoId}?autoplay=1`
+              : null,
+            videoId: cachedStreams.primaryVideoId || null,
+            lastUpdated: Date.now(),
+            ttl: 5 * 60, // Default 5 minutes
+            blockEndTime: 24 * 60, // End of day (will be corrected by background cron)
+            validationCooldown: Date.now() + (30 * 60 * 1000), // 30 min cooldown
+            lastValidation: Date.now(),
+            streams: cachedStreams.streams || [],
+            streamCount: cachedStreams.streamCount || 0,
+          };
+          
+          // Cache it to liveStatusByHandle to prevent future lookups
+          const statusCacheKey = `${this.CACHE_PREFIX}${handle}`;
+          await this.redisService.set(statusCacheKey, syncedCache, 5 * 60); // 5 min TTL
+          
+          results.set(handle, syncedCache);
+          this.logger.debug(`[LIVE-STATUS-BG] Synced liveStatusByHandle for ${handle}: isLive=${syncedCache.isLive}, streams=${syncedCache.streamCount}`);
+        } else {
+          handlesNeedingUpdate.push(handle);
+        }
       }
     }
 
@@ -302,10 +344,12 @@ export class LiveStatusBackgroundService {
       
       if (cachedStreams && cachedStreams.primaryVideoId) {
         // We have cached streams - check if we need to validate using OUR cooldown (not YouTube service's)
-        const needsValidation = !cachedStatus || !cachedStatus.validationCooldown || Date.now() > cachedStatus.validationCooldown;
+        // Only validate if status cache exists and cooldown expired (to avoid excessive API calls)
+        const needsValidation = cachedStatus && cachedStatus.validationCooldown && Date.now() > cachedStatus.validationCooldown;
         
         if (needsValidation) {
           // Validation cooldown expired, check if video is still live
+          // Use videos API (cheaper than search) to validate
           const isStillLive = await this.youtubeLiveService.isVideoLive(cachedStreams.primaryVideoId);
           if (isStillLive) {
             // Video is still live, create cache with new cooldown
@@ -314,10 +358,22 @@ export class LiveStatusBackgroundService {
             await this.cacheLiveStatus(channelId, cacheData);
             return cacheData;
           } else {
-            // Video is no longer live, clear cache and fetch new one
-            this.logger.debug(`[LIVE-STATUS-BG] Video ID ${cachedStreams.primaryVideoId} no longer live for ${handle}, fetching new one`);
-            await this.redisService.del(streamsKey);
-            await this.redisService.del(statusCacheKey); // Also clear our status cache
+            // Video is no longer live - check if program is still scheduled before triggering expensive search API
+            // If program ended, don't waste API quota searching for new streams
+            const hasLiveSchedules = liveSchedules.length > 0;
+            
+            if (hasLiveSchedules) {
+              // Program still scheduled, video might have rotated - fetch new one
+              this.logger.debug(`[LIVE-STATUS-BG] Video ID ${cachedStreams.primaryVideoId} no longer live for ${handle}, but program still scheduled - fetching new one`);
+              await this.redisService.del(streamsKey);
+              await this.redisService.del(statusCacheKey);
+            } else {
+              // Program ended, don't waste API quota - just mark as not live
+              this.logger.debug(`[LIVE-STATUS-BG] Video ID ${cachedStreams.primaryVideoId} no longer live for ${handle}, and program ended - marking as not live`);
+              const notLiveData = this.createNotLiveCacheData(channelId, handle, ttl);
+              await this.cacheLiveStatus(channelId, notLiveData);
+              return notLiveData;
+            }
           }
         } else {
           // Validation cooldown still active, but we should still update status from streams
@@ -400,7 +456,7 @@ export class LiveStatusBackgroundService {
 
   /**
    * Check if cache should be updated
-   * Considers both TTL and video ID validation needs
+   * Considers TTL - validation is done separately in updateChannelLiveStatus to avoid excessive API calls
    */
   private async shouldUpdateCache(cached: LiveStatusCache): Promise<boolean> {
     const now = Date.now();
@@ -411,20 +467,9 @@ export class LiveStatusBackgroundService {
       return true;
     }
     
-    // Check if we need to validate the video ID
-    if (cached.isLive && cached.videoId && now > cached.validationCooldown) {
-      // Validate if the cached video ID is still live
-      const isStillLive = await this.youtubeLiveService.isVideoLive(cached.videoId);
-      if (!isStillLive) {
-        this.logger.log(`🔄 Video ID ${cached.videoId} no longer live, updating cache`);
-        return true;
-      }
-      
-      // Update validation cooldown (validate again in 30 minutes)
-      cached.validationCooldown = now + (30 * 60 * 1000);
-      cached.lastValidation = now;
-      await this.cacheLiveStatus(cached.channelId, cached);
-    }
+    // DO NOT validate here - it causes excessive API calls
+    // Validation will happen in updateChannelLiveStatus when actually updating the cache
+    // This prevents cascading API calls during the initial check phase
     
     // Update when 80% of TTL has passed
     return age > cached.ttl * 1000 * 0.8;
