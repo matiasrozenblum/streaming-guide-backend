@@ -325,20 +325,7 @@ export class LiveStatusBackgroundService {
       const statusCacheKey = `${this.CACHE_PREFIX}${handle}`;
       const cachedStatus = await this.redisService.get<LiveStatusCache>(statusCacheKey);
       
-      // CRITICAL: Detect program block transitions
-      // If blockEndTime changed, it means we've transitioned between programs (old program ended, new one started)
-      // This ensures we refresh cache on program transitions, not just when TTL expires
-      // Skip if blockEndTime is null (needs enrichment)
-      const programBlockChanged = cachedStatus && 
-        cachedStatus.blockEndTime !== null && 
-        cachedStatus.blockEndTime !== blockEndTime;
-      if (programBlockChanged) {
-        this.logger.debug(`[LIVE-STATUS-BG] Program block changed for ${handle}: blockEndTime ${cachedStatus.blockEndTime} → ${blockEndTime}, invalidating cache`);
-        await this.redisService.del(statusCacheKey);
-        // Continue to fetch fresh data below
-      }
-      
-      if (cachedStatus && cachedStatus.videoId && !programBlockChanged) {
+      if (cachedStatus && cachedStatus.videoId) {
         // We have cached status - check if we need to validate using video age
         // Only validate if video is >30 minutes old (to avoid excessive API calls)
         // CRITICAL: Use video age (lastValidation) instead of validationCooldown timestamp
@@ -469,32 +456,25 @@ export class LiveStatusBackgroundService {
       return true;
     }
     
-    // CRITICAL: Cache with blockEndTime=null means it was created without schedule context (by main cron)
-    // This is normal - main cron creates cache with streams but without schedule context
-    // Background cron will enrich it with proper blockEndTime when it runs
-    // Only force refresh if cache is stale (>10 minutes old with null blockEndTime)
-    if (cached.blockEndTime === null) {
-      const age = now - cached.lastUpdated;
+    // CRITICAL: Enrichment needed - main cron created cache without blockEndTime
+    // Background cron needs to add the proper blockEndTime
+    if (cached.blockEndTime === null && cached.isLive) {
       const ageMinutes = age / (60 * 1000);
-      
-      if (ageMinutes > 10) {
-        // Cache is stale (>10min) and still hasn't been enriched - something is wrong, force refresh
-        this.logger.debug(`[LIVE-STATUS-BG] Stale cache with null blockEndTime (${Math.round(ageMinutes)}min old), forcing refresh`);
+      if (ageMinutes > 2) {
+        // Cache is >2 minutes old and still needs enrichment - refresh it
+        this.logger.debug(`[LIVE-STATUS-BG] Cache needs enrichment (null blockEndTime, ${Math.round(ageMinutes)}min old), forcing refresh`);
         return true;
-      } else {
-        // Cache is fresh (<10min) with null blockEndTime - this is normal, wait for background cron to enrich
-        this.logger.debug(`[LIVE-STATUS-BG] Fresh cache with null blockEndTime (${Math.round(ageMinutes)}min old), will be enriched on next cycle`);
-        return false; // Don't force refresh, but will be updated by background cron
       }
     }
     
-    // CRITICAL: Detect program block changes by checking if we're past the cached blockEndTime
-    // If blockEndTime is in the past, the program that was live when cache was created has ended
-    // This ensures cache refreshes when programs transition, even if TTL hasn't fully expired
+    // CRITICAL: Use blockEndTime for cache refresh check
+    // If we're past the blockEndTime, the program has ended - update cache metadata
+    // Note: This refreshes metadata (TTL, blockEndTime) but preserves video ID if still live
+    // The actual video ID validation happens in updateChannelLiveStatus (>30 min age check)
     if (cached.blockEndTime !== null) {
       const currentTimeInMinutes = this.convertTimeToMinutes(now);
       if (currentTimeInMinutes >= cached.blockEndTime) {
-        this.logger.debug(`[LIVE-STATUS-BG] Cache blockEndTime (${cached.blockEndTime}) has passed (current: ${currentTimeInMinutes}), program ended - forcing refresh`);
+        this.logger.debug(`[LIVE-STATUS-BG] Block ended for ${cached.handle}: blockEndTime (${cached.blockEndTime}) passed (current: ${currentTimeInMinutes}), refreshing metadata`);
         return true;
       }
     }
