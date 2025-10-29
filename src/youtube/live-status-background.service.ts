@@ -39,7 +39,8 @@ interface LiveStatusCache {
 @Injectable()
 export class LiveStatusBackgroundService {
   private readonly logger = new Logger(LiveStatusBackgroundService.name);
-  private readonly CACHE_PREFIX = 'liveStatus:';
+  private readonly CACHE_PREFIX = 'liveStatus:'; // Old format (being phased out)
+  private readonly CACHE_PREFIX_NEW = 'liveStatusByHandle:'; // New format (Phase 4)
   private readonly CACHE_TTL = 5 * 60; // 5 minutes default TTL
 
   constructor(
@@ -108,8 +109,7 @@ export class LiveStatusBackgroundService {
       // Check which channels need cache updates
       for (const [channelId, channelInfo] of liveChannels) {
         this.logger.debug(`[LIVE-STATUS-BG] Checking cache for channel ${channelInfo.handle} (${channelId})`);
-        const cacheKey = `${this.CACHE_PREFIX}${channelId}`;
-        const cached = await this.redisService.get<LiveStatusCache>(cacheKey);
+        const cached = await this.getCachedLiveStatus(channelId, channelInfo.handle);
         
         if (!cached || await this.shouldUpdateCache(cached)) {
           this.logger.debug(`[LIVE-STATUS-BG] Cache update needed for channel ${channelInfo.handle} (${channelId})`);
@@ -140,10 +140,30 @@ export class LiveStatusBackgroundService {
 
   /**
    * Get cached live status for a channel (fast, non-blocking)
+   * Phase 4: Blue-green migration - tries both old (channelId) and new (handle) formats
    */
-  async getCachedLiveStatus(channelId: string): Promise<LiveStatusCache | null> {
+  async getCachedLiveStatus(channelId: string, handle?: string): Promise<LiveStatusCache | null> {
+    // Try new format first (if handle provided)
+    if (handle) {
+      const newCacheKey = `${this.CACHE_PREFIX_NEW}${handle}`;
+      const newCache = await this.redisService.get<LiveStatusCache>(newCacheKey);
+      if (newCache) {
+        this.logger.debug(`[LIVE-STATUS-BG] Cache hit on new format for ${handle}`);
+        return newCache;
+      }
+    }
+    
+    // Fallback to old format - log this to track migration progress
     const cacheKey = `${this.CACHE_PREFIX}${channelId}`;
-    return await this.redisService.get<LiveStatusCache>(cacheKey);
+    const oldCache = await this.redisService.get<LiveStatusCache>(cacheKey);
+    if (oldCache) {
+      if (handle) {
+        // Phase 4: Log fallback to monitor migration progress
+        this.logger.warn(`⚠️ MIGRATION FALLBACK: Using old cache format for ${handle} - will migrate to new format on next write`);
+      }
+      return oldCache;
+    }
+    return null;
   }
 
   /**
@@ -155,6 +175,7 @@ export class LiveStatusBackgroundService {
 
     // Check cache first
     for (const channelId of channelIds) {
+      // Phase 4: Try to get handle from any cached entry, otherwise pass undefined
       const cached = await this.getCachedLiveStatus(channelId);
       if (cached && !(await this.shouldUpdateCache(cached))) {
         results.set(channelId, cached);
@@ -291,7 +312,7 @@ export class LiveStatusBackgroundService {
       const cachedStatus = await this.redisService.get<LiveStatusCache>(statusCacheKey);
       
       // Check if we have cached streams from YouTube service
-      const streamsKey = `liveStreamsByChannel:${channelId}`;
+      const streamsKey = `liveStreamsByChannel:${handle}`;
       const cachedStreams = await this.redisService.get<any>(streamsKey);
       
       if (cachedStreams && cachedStreams.primaryVideoId) {
@@ -374,10 +395,23 @@ export class LiveStatusBackgroundService {
 
   /**
    * Cache live status data
+   * Phase 4: Blue-green migration - writes to both old and new formats
    */
   private async cacheLiveStatus(channelId: string, data: LiveStatusCache): Promise<void> {
     const cacheKey = `${this.CACHE_PREFIX}${channelId}`;
+    
+    // Phase 4: Always write to both formats for blue-green migration
+    // Write to old format (channel ID based) - will be removed after migration
     await this.redisService.set(cacheKey, data, data.ttl);
+    this.logger.debug(`✅ Live status cache updated (old format) for channel ${data.handle} (${channelId})`);
+    
+    // Write to new format (handle based) - this is the target format
+    if (data.handle) {
+      const newCacheKey = `${this.CACHE_PREFIX_NEW}${data.handle}`;
+      await this.redisService.set(newCacheKey, data, data.ttl);
+      this.logger.debug(`✅ Live status cache updated (new format) for ${data.handle}`);
+    }
+    
     this.logger.log(`✅ Live status cache updated for channel ${data.handle} (${channelId}): isLive=${data.isLive}, streams=${data.streamCount}`);
   }
 
