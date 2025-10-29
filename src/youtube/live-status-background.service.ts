@@ -110,7 +110,41 @@ export class LiveStatusBackgroundService {
         this.logger.debug(`[LIVE-STATUS-BG] Checking cache for channel ${channelInfo.handle} (${channelId})`);
         const cached = await this.getCachedLiveStatus(channelInfo.handle);
         
-        if (!cached || await this.shouldUpdateCache(cached)) {
+        if (!cached) {
+          channelsToUpdate.push(channelId);
+          continue;
+        }
+        
+        // Check if program changed by comparing current schedules to cached program
+        const currentSchedules = allSchedules.filter(s => s.program?.channel?.youtube_channel_id === channelId);
+        const liveSchedules = currentSchedules.filter(s => {
+          const startNum = this.convertTimeToNumber(s.start_time);
+          const endNum = this.convertTimeToNumber(s.end_time);
+          return currentTime >= startNum && currentTime < endNum;
+        });
+        
+        // Check if program changed by comparing cached video age to scheduled program duration
+        // If video is older than the current program's start time, it's from a different program
+        if (cached.streams[0]?.publishedAt) {
+          const videoPublishedAt = new Date(cached.streams[0].publishedAt).getTime();
+          const videoAge = Date.now() - videoPublishedAt;
+          const videoAgeHours = videoAge / (3600 * 1000);
+          
+          if (liveSchedules.length > 0) {
+            const startTime = liveSchedules[0].start_time;
+            const [startHour, startMinute] = startTime.split(':').map(Number);
+            const startTimeInMinutes = startHour * 60 + startMinute;
+            
+            // If video was published before this program started, it's stale
+            if (videoAgeHours > 4 && startTimeInMinutes < currentTime) {
+              this.logger.debug(`[LIVE-STATUS-BG] Stale video detected for ${channelInfo.handle}: published ${Math.round(videoAgeHours)}h ago, current program started at ${startTime}, forcing update`);
+              channelsToUpdate.push(channelId);
+              continue;
+            }
+          }
+        }
+        
+        if (await this.shouldUpdateCache(cached)) {
           this.logger.debug(`[LIVE-STATUS-BG] Cache update needed for channel ${channelInfo.handle} (${channelId})`);
           channelsToUpdate.push(channelId);
         }
