@@ -170,23 +170,24 @@ export class LiveStatusBackgroundService {
     const results = new Map<string, LiveStatusCache>();
     const handlesNeedingUpdate: string[] = [];
 
-    // Check cache first
+    // CRITICAL: Always check liveStreamsByChannel FIRST as the source of truth
+    // liveStreamsByChannel is updated immediately when streams are fetched,
+    // while liveStatusByHandle might be stale even if it hasn't exceeded TTL
     for (const handle of handles) {
-      const cached = await this.getCachedLiveStatus(handle);
-      if (cached && !(await this.shouldUpdateCache(cached))) {
-        results.set(handle, cached);
-      } else {
-        // liveStatusByHandle missing or stale - check liveStreamsByChannel as fallback
-        const streamsKey = `liveStreamsByChannel:${handle}`;
-        const cachedStreams = await this.redisService.get<any>(streamsKey);
+      const streamsKey = `liveStreamsByChannel:${handle}`;
+      const cachedStreams = await this.redisService.get<any>(streamsKey);
+      
+      if (cachedStreams && cachedStreams.primaryVideoId) {
+        // liveStreamsByChannel exists and has data - use it as source of truth
+        // Check if liveStatusByHandle needs syncing by comparing videoId
+        const cached = await this.getCachedLiveStatus(handle);
+        const needsSync = !cached || cached.videoId !== cachedStreams.primaryVideoId || cached.isLive !== (cachedStreams.streams && cachedStreams.streams.length > 0);
         
-        if (cachedStreams && cachedStreams.primaryVideoId) {
+        if (needsSync) {
           // Sync from liveStreamsByChannel to liveStatusByHandle
-          this.logger.debug(`[LIVE-STATUS-BG] Syncing liveStatusByHandle from liveStreamsByChannel for ${handle}`);
+          this.logger.debug(`[LIVE-STATUS-BG] Syncing liveStatusByHandle from liveStreamsByChannel for ${handle} (videoId mismatch or stale)`);
           
-          // Create minimal cache entry from streams data
-          // Use default TTL and blockEndTime since we don't have schedules here
-          const channelId = handleToChannelId?.get(handle) || ''; // Use provided channelId if available
+          const channelId = handleToChannelId?.get(handle) || '';
           const syncedCache: LiveStatusCache = {
             channelId,
             handle,
@@ -196,20 +197,28 @@ export class LiveStatusBackgroundService {
               : null,
             videoId: cachedStreams.primaryVideoId || null,
             lastUpdated: Date.now(),
-            ttl: 5 * 60, // Default 5 minutes
-            blockEndTime: 24 * 60, // End of day (will be corrected by background cron)
-            validationCooldown: Date.now() + (30 * 60 * 1000), // 30 min cooldown
-            lastValidation: Date.now(),
+            ttl: cached?.ttl || 5 * 60, // Preserve TTL if exists, else default 5 minutes
+            blockEndTime: cached?.blockEndTime || 24 * 60, // Preserve blockEndTime if exists
+            validationCooldown: cached?.validationCooldown || Date.now() + (30 * 60 * 1000), // Preserve cooldown if exists
+            lastValidation: cached?.lastValidation || Date.now(),
             streams: cachedStreams.streams || [],
             streamCount: cachedStreams.streamCount || 0,
           };
           
-          // Cache it to liveStatusByHandle to prevent future lookups
+          // Cache it to liveStatusByHandle
           const statusCacheKey = `${this.CACHE_PREFIX}${handle}`;
-          await this.redisService.set(statusCacheKey, syncedCache, 5 * 60); // 5 min TTL
+          await this.redisService.set(statusCacheKey, syncedCache, syncedCache.ttl);
           
           results.set(handle, syncedCache);
-          this.logger.debug(`[LIVE-STATUS-BG] Synced liveStatusByHandle for ${handle}: isLive=${syncedCache.isLive}, streams=${syncedCache.streamCount}`);
+        } else {
+          // liveStatusByHandle is already in sync with liveStreamsByChannel
+          results.set(handle, cached);
+        }
+      } else {
+        // No liveStreamsByChannel data - fall back to liveStatusByHandle if it exists and is fresh
+        const cached = await this.getCachedLiveStatus(handle);
+        if (cached && !(await this.shouldUpdateCache(cached))) {
+          results.set(handle, cached);
         } else {
           handlesNeedingUpdate.push(handle);
         }
