@@ -113,7 +113,11 @@ describe('OptimizedSchedulesService', () => {
 
     expect(result).toHaveLength(1);
     expect(duration).toBeLessThan(200); // Should be fast with cached live status
-    expect(mockLiveStatusBackgroundService.getLiveStatusForChannels).toHaveBeenCalledWith(['testchannel']);
+    // The service now passes a handle-to-channelId map as second argument (optional)
+    expect(mockLiveStatusBackgroundService.getLiveStatusForChannels).toHaveBeenCalledWith(
+      ['testchannel'],
+      expect.any(Map)
+    );
     
     // Check that live status was applied (10:30 is within 10:00-12:00 range)
     expect(result[0].program.is_live).toBe(true);
