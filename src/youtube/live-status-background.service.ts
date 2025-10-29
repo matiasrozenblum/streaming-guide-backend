@@ -314,13 +314,18 @@ export class LiveStatusBackgroundService {
             await this.redisService.del(statusCacheKey); // Also clear our status cache
           }
         } else {
-          // Validation cooldown still active, use cached data
-          this.logger.debug(`[LIVE-STATUS-BG] Using cached video ID ${cachedStreams.primaryVideoId} for ${handle} (cooldown active)`);
-          // Return existing status cache or create new one
-          if (cachedStatus) {
-            return cachedStatus;
+          // Validation cooldown still active, but we should still update status from streams
+          // Streams cache is the source of truth - always create fresh status from it
+          this.logger.debug(`[LIVE-STATUS-BG] Using cached video ID ${cachedStreams.primaryVideoId} for ${handle} (cooldown active, updating status from streams)`);
+          // Always create fresh status from streams (streams cache is the source of truth)
+          const cacheData = this.createCacheDataFromStreams(channelId, handle, cachedStreams, ttl, blockEndTime);
+          // Preserve validation cooldown from cached status if it exists
+          if (cachedStatus && cachedStatus.validationCooldown) {
+            cacheData.validationCooldown = cachedStatus.validationCooldown;
+            cacheData.lastValidation = cachedStatus.lastValidation;
           }
-          return this.createCacheDataFromStreams(channelId, handle, cachedStreams, ttl, blockEndTime);
+          await this.cacheLiveStatus(channelId, cacheData);
+          return cacheData;
         }
       }
       
