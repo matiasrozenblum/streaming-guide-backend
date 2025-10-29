@@ -394,23 +394,29 @@ export class SchedulesService {
           channelStreamCount = batchStreamsResult.streamCount;
           this.logger.debug(`Using batch results: ${handle} (${allStreams.length} streams)`);
           
-          // Cache the streams for future use
-          const streamsKey = `liveStreamsByChannel:${handle}`;
-          await this.redisService.set(streamsKey, batchStreamsResult, await getCurrentBlockTTL(channelId, schedules, this.sentryService));
+          // Unified cache - write LiveStatusCache (replaces liveStreamsByChannel)
+          const statusCacheKey = `liveStatusByHandle:${handle}`;
+          const ttl = await getCurrentBlockTTL(channelId, schedules, this.sentryService);
+          // Import dynamically to avoid circular dependency
+          const { createLiveStatusCacheFromStreams } = await import('../youtube/interfaces/live-status-cache.interface');
+          const cacheData = createLiveStatusCacheFromStreams(channelId, handle, batchStreamsResult, ttl);
+          // Use cacheData.ttl to ensure Redis TTL matches the cache object's TTL field
+          await this.redisService.set(statusCacheKey, cacheData, cacheData.ttl);
         } else {
           // Fallback to individual fetch if batch didn't work
-          const streamsKey = `liveStreamsByChannel:${handle}`;
-          const cachedStreams = await this.redisService.get<any>(streamsKey);
+          // Unified cache - read from liveStatusByHandle (replaces liveStreamsByChannel)
+          const statusCacheKey = `liveStatusByHandle:${handle}`;
+          const cachedStatus = await this.redisService.get<any>(statusCacheKey);
           
-          if (cachedStreams) {
+          if (cachedStatus) {
             try {
-              const parsedStreams = cachedStreams;
-              if (parsedStreams.streams && parsedStreams.streams.length > 0) {
-                allStreams = parsedStreams.streams;
-                channelStreamCount = parsedStreams.streamCount;
+              // Support both old format (LiveStreamsResult) and new format (LiveStatusCache)
+              if (cachedStatus.streams && cachedStatus.streams.length > 0) {
+                allStreams = cachedStatus.streams;
+                channelStreamCount = cachedStatus.streamCount || cachedStatus.streams.length;
               }
             } catch (error) {
-              this.logger.warn(`Failed to parse cached streams for ${handle}:`, error);
+              this.logger.warn(`Failed to parse cached status for ${handle}:`, error);
             }
           }
 

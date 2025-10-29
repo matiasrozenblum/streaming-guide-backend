@@ -31,7 +31,7 @@ interface LiveStatusCache {
   blockEndTime: number; // When the current block ends (in minutes)
   validationCooldown: number; // When we can validate again (timestamp)
   lastValidation: number; // Last time we validated the video ID
-  // Stream details (unified with liveStreamsByChannel)
+  // Stream details (unified cache - replaces liveStreamsByChannel)
   streams: LiveStream[];
   streamCount: number;
 }
@@ -160,8 +160,7 @@ export class LiveStatusBackgroundService {
    * Get live status for multiple channels (uses background cache when available)
    * Migration complete - now accepts handles instead of channelIds
    * 
-   * CRITICAL: Falls back to liveStreamsByChannel if liveStatusByHandle is missing/stale
-   * This prevents excessive API calls when streams cache exists but status cache doesn't
+   * Uses unified cache (liveStatusByHandle) - no longer uses liveStreamsByChannel
    * 
    * @param handles Array of channel handles to get status for
    * @param handleToChannelId Optional map of handle -> channelId for accurate sync
@@ -173,51 +172,39 @@ export class LiveStatusBackgroundService {
     // Check cache first
     for (const handle of handles) {
       const cached = await this.getCachedLiveStatus(handle);
-      if (cached && !(await this.shouldUpdateCache(cached))) {
-        results.set(handle, cached);
-      } else {
-        // liveStatusByHandle missing or stale - check liveStreamsByChannel as fallback
-        const streamsKey = `liveStreamsByChannel:${handle}`;
-        const cachedStreams = await this.redisService.get<any>(streamsKey);
-        
-        if (cachedStreams && cachedStreams.primaryVideoId) {
-          // Sync from liveStreamsByChannel to liveStatusByHandle
-          this.logger.debug(`[LIVE-STATUS-BG] Syncing liveStatusByHandle from liveStreamsByChannel for ${handle}`);
-          
-          // Create minimal cache entry from streams data
-          // Use default TTL and blockEndTime since we don't have schedules here
-          const channelId = handleToChannelId?.get(handle) || ''; // Use provided channelId if available
-          const syncedCache: LiveStatusCache = {
-            channelId,
-            handle,
-            isLive: cachedStreams.streams && cachedStreams.streams.length > 0,
-            streamUrl: cachedStreams.streams && cachedStreams.streams.length > 0
-              ? `https://www.youtube.com/embed/${cachedStreams.primaryVideoId}?autoplay=1`
-              : null,
-            videoId: cachedStreams.primaryVideoId || null,
-            lastUpdated: Date.now(),
-            ttl: 5 * 60, // Default 5 minutes
-            blockEndTime: 24 * 60, // End of day (will be corrected by background cron)
-            validationCooldown: Date.now() + (30 * 60 * 1000), // 30 min cooldown
-            lastValidation: Date.now(),
-            streams: cachedStreams.streams || [],
-            streamCount: cachedStreams.streamCount || 0,
-          };
-          
-          // Cache it to liveStatusByHandle to prevent future lookups
-          const statusCacheKey = `${this.CACHE_PREFIX}${handle}`;
-          await this.redisService.set(statusCacheKey, syncedCache, 5 * 60); // 5 min TTL
-          
-          results.set(handle, syncedCache);
-          this.logger.debug(`[LIVE-STATUS-BG] Synced liveStatusByHandle for ${handle}: isLive=${syncedCache.isLive}, streams=${syncedCache.streamCount}`);
+      if (cached) {
+        const needsUpdate = await this.shouldUpdateCache(cached);
+        if (!needsUpdate) {
+          // Cache is fresh, use it
+          results.set(handle, cached);
         } else {
-          handlesNeedingUpdate.push(handle);
+          // Cache exists but is stale
+          // CRITICAL: Still return stale cache instead of nothing to prevent excessive async fetches
+          // The background cron will update it, but we don't want every request triggering fetches
+          // Only return empty if cache is truly missing or extremely old (>30 minutes)
+          const age = Date.now() - cached.lastUpdated;
+          const ageMinutes = age / (60 * 1000);
+          
+          if (ageMinutes < 30) {
+            // Return stale cache - better than triggering expensive API calls
+            // Background cron (runs every 2 min) will refresh it soon
+            this.logger.debug(`[LIVE-STATUS-BG] Returning stale cache for ${handle} (${Math.round(ageMinutes)}min old) to prevent async fetch`);
+            results.set(handle, cached);
+          } else {
+            // Cache is very old (>30 min) - don't return it, let async fetch happen
+            this.logger.debug(`[LIVE-STATUS-BG] Cache for ${handle} too old (${Math.round(ageMinutes)}min), not returning to allow refresh`);
+            handlesNeedingUpdate.push(handle);
+          }
         }
+      } else {
+        // liveStatusByHandle missing
+        // Note: liveStreamsByChannel no longer exists - everything uses liveStatusByHandle
+        handlesNeedingUpdate.push(handle);
       }
     }
 
     // Note: updateChannelsInBatches expects channelIds, so we can't use it here
-    // For now, return only cached results. Fresh updates are handled by the background cron.
+    // For now, return cached results (including stale ones <30min old). Fresh updates are handled by the background cron.
 
     return results;
   }
@@ -334,29 +321,40 @@ export class LiveStatusBackgroundService {
       // Calculate block end time for cache metadata
       const blockEndTime = this.calculateBlockEndTime(liveSchedules, currentTime);
 
-      // Check our own live status cache first for cooldown tracking
+      // Check unified cache (liveStatusByHandle replaces liveStreamsByChannel)
       const statusCacheKey = `${this.CACHE_PREFIX}${handle}`;
       const cachedStatus = await this.redisService.get<LiveStatusCache>(statusCacheKey);
       
-      // Check if we have cached streams from YouTube service
-      const streamsKey = `liveStreamsByChannel:${handle}`;
-      const cachedStreams = await this.redisService.get<any>(streamsKey);
+      // CRITICAL: Detect program block transitions
+      // If blockEndTime changed, it means we've transitioned between programs (old program ended, new one started)
+      // This ensures we refresh cache on program transitions, not just when TTL expires
+      const programBlockChanged = cachedStatus && cachedStatus.blockEndTime && cachedStatus.blockEndTime !== blockEndTime;
+      if (programBlockChanged) {
+        this.logger.debug(`[LIVE-STATUS-BG] Program block changed for ${handle}: blockEndTime ${cachedStatus.blockEndTime} → ${blockEndTime}, invalidating cache`);
+        await this.redisService.del(statusCacheKey);
+        // Continue to fetch fresh data below
+      }
       
-      if (cachedStreams && cachedStreams.primaryVideoId) {
-        // We have cached streams - check if we need to validate using OUR cooldown (not YouTube service's)
-        // Only validate if status cache exists and cooldown expired (to avoid excessive API calls)
-        const needsValidation = cachedStatus && cachedStatus.validationCooldown && Date.now() > cachedStatus.validationCooldown;
+      if (cachedStatus && cachedStatus.videoId && !programBlockChanged) {
+        // We have cached status - check if we need to validate using cooldown
+        // Only validate if cooldown expired (to avoid excessive API calls)
+        const needsValidation = cachedStatus.validationCooldown && Date.now() > cachedStatus.validationCooldown;
         
         if (needsValidation) {
           // Validation cooldown expired, check if video is still live
           // Use videos API (cheaper than search) to validate
-          const isStillLive = await this.youtubeLiveService.isVideoLive(cachedStreams.primaryVideoId);
+          const isStillLive = await this.youtubeLiveService.isVideoLive(cachedStatus.videoId);
           if (isStillLive) {
-            // Video is still live, create cache with new cooldown
-            this.logger.debug(`[LIVE-STATUS-BG] Video ID ${cachedStreams.primaryVideoId} still live for ${handle}`);
-            const cacheData = this.createCacheDataFromStreams(channelId, handle, cachedStreams, ttl, blockEndTime);
-            await this.cacheLiveStatus(channelId, cacheData);
-            return cacheData;
+            // Video is still live, update cache with current schedules metadata
+            this.logger.debug(`[LIVE-STATUS-BG] Video ID ${cachedStatus.videoId} still live for ${handle}`);
+            // Update TTL and blockEndTime from current schedules, preserve cooldown
+            cachedStatus.ttl = ttl;
+            cachedStatus.blockEndTime = blockEndTime;
+            cachedStatus.validationCooldown = Date.now() + (30 * 60 * 1000); // Reset cooldown
+            cachedStatus.lastValidation = Date.now();
+            cachedStatus.lastUpdated = Date.now();
+            await this.cacheLiveStatus(channelId, cachedStatus);
+            return cachedStatus;
           } else {
             // Video is no longer live - check if program is still scheduled before triggering expensive search API
             // If program ended, don't waste API quota searching for new streams
@@ -364,30 +362,25 @@ export class LiveStatusBackgroundService {
             
             if (hasLiveSchedules) {
               // Program still scheduled, video might have rotated - fetch new one
-              this.logger.debug(`[LIVE-STATUS-BG] Video ID ${cachedStreams.primaryVideoId} no longer live for ${handle}, but program still scheduled - fetching new one`);
-              await this.redisService.del(streamsKey);
+              this.logger.debug(`[LIVE-STATUS-BG] Video ID ${cachedStatus.videoId} no longer live for ${handle}, but program still scheduled - fetching new one`);
               await this.redisService.del(statusCacheKey);
             } else {
               // Program ended, don't waste API quota - just mark as not live
-              this.logger.debug(`[LIVE-STATUS-BG] Video ID ${cachedStreams.primaryVideoId} no longer live for ${handle}, and program ended - marking as not live`);
+              this.logger.debug(`[LIVE-STATUS-BG] Video ID ${cachedStatus.videoId} no longer live for ${handle}, and program ended - marking as not live`);
               const notLiveData = this.createNotLiveCacheData(channelId, handle, ttl);
               await this.cacheLiveStatus(channelId, notLiveData);
               return notLiveData;
             }
           }
         } else {
-          // Validation cooldown still active, but we should still update status from streams
-          // Streams cache is the source of truth - always create fresh status from it
-          this.logger.debug(`[LIVE-STATUS-BG] Using cached video ID ${cachedStreams.primaryVideoId} for ${handle} (cooldown active, updating status from streams)`);
-          // Always create fresh status from streams (streams cache is the source of truth)
-          const cacheData = this.createCacheDataFromStreams(channelId, handle, cachedStreams, ttl, blockEndTime);
-          // Preserve validation cooldown from cached status if it exists
-          if (cachedStatus && cachedStatus.validationCooldown) {
-            cacheData.validationCooldown = cachedStatus.validationCooldown;
-            cacheData.lastValidation = cachedStatus.lastValidation;
-          }
-          await this.cacheLiveStatus(channelId, cacheData);
-          return cacheData;
+          // Validation cooldown still active, just update metadata (TTL, blockEndTime) from current schedules
+          this.logger.debug(`[LIVE-STATUS-BG] Using cached video ID ${cachedStatus.videoId} for ${handle} (cooldown active, updating metadata)`);
+          // Update TTL and blockEndTime from current schedules, preserve cooldown
+          cachedStatus.ttl = ttl;
+          cachedStatus.blockEndTime = blockEndTime;
+          cachedStatus.lastUpdated = Date.now();
+          await this.cacheLiveStatus(channelId, cachedStatus);
+          return cachedStatus;
         }
       }
       
@@ -456,7 +449,10 @@ export class LiveStatusBackgroundService {
 
   /**
    * Check if cache should be updated
-   * Considers TTL - validation is done separately in updateChannelLiveStatus to avoid excessive API calls
+   * Considers TTL and program block changes - validation is done separately in updateChannelLiveStatus to avoid excessive API calls
+   * 
+   * IMPORTANT: Returns false (cache is valid) for slightly stale cache to prevent excessive async fetches
+   * The background cron will handle updates, and we don't want every request triggering fetches
    */
   private async shouldUpdateCache(cached: LiveStatusCache): Promise<boolean> {
     const now = Date.now();
@@ -467,12 +463,32 @@ export class LiveStatusBackgroundService {
       return true;
     }
     
+    // CRITICAL: Detect program block changes by checking if we're past the cached blockEndTime
+    // If blockEndTime is in the past, the program that was live when cache was created has ended
+    // This ensures cache refreshes when programs transition, even if TTL hasn't fully expired
+    const currentTimeInMinutes = this.convertTimeToMinutes(now);
+    if (cached.blockEndTime && currentTimeInMinutes >= cached.blockEndTime) {
+      this.logger.debug(`[LIVE-STATUS-BG] Cache blockEndTime (${cached.blockEndTime}) has passed (current: ${currentTimeInMinutes}), program ended - forcing refresh`);
+      return true;
+    }
+    
     // DO NOT validate here - it causes excessive API calls
     // Validation will happen in updateChannelLiveStatus when actually updating the cache
     // This prevents cascading API calls during the initial check phase
     
-    // Update when 80% of TTL has passed
-    return age > cached.ttl * 1000 * 0.8;
+    // IMPORTANT: Only mark as needing update when 90% of TTL has passed (was 80%)
+    // This gives more margin before triggering async fetches, relying on background cron for updates
+    // This reduces the window where optimized-schedules triggers unnecessary fetches
+    return age > cached.ttl * 1000 * 0.9;
+  }
+  
+  /**
+   * Convert current timestamp to minutes since midnight (Argentina timezone)
+   * Uses TimezoneUtil for consistency with schedule calculations
+   */
+  private convertTimeToMinutes(timestamp: number): number {
+    const timeInArgentina = TimezoneUtil.toArgentinaTime(new Date(timestamp));
+    return timeInArgentina.hour() * 60 + timeInArgentina.minute();
   }
 
   /**
