@@ -116,8 +116,13 @@ export class OptimizedSchedulesService {
           };
         } else if (isCurrentlyLive) {
           // Program is live by time but background cache says no live stream
-          // Mark as live but don't block on YouTube API calls
-          this.logger.debug(`[OPTIMIZED-SCHEDULES] Program "${schedule.program.name}" is live by time but cache says no stream. Marking as live without blocking API call.`);
+          // CRITICAL: Trust recent cache - if cache was updated recently (< 10 min) and says "not live",
+          // don't trigger expensive API calls. The background cron will handle updates.
+          const cacheAge = Date.now() - liveStatus.lastUpdated;
+          const cacheAgeMinutes = cacheAge / (60 * 1000);
+          const shouldTrustCache = cacheAgeMinutes < 10; // Trust cache if updated within last 10 minutes
+          
+          this.logger.debug(`[OPTIMIZED-SCHEDULES] Program "${schedule.program.name}" is live by time but cache (updated ${Math.round(cacheAgeMinutes)}min ago) says no stream.`);
           
           enrichedSchedule.program = {
             ...schedule.program,
@@ -127,11 +132,11 @@ export class OptimizedSchedulesService {
             stream_count: 0,
           };
           
-          // Trigger async background fetch (non-blocking) - with Redis-based deduplication
-          if (schedule.program.channel?.handle) {
+          // Only trigger async fetch if cache is stale OR we don't trust the recent "not live" status
+          if (!shouldTrustCache && schedule.program.channel?.handle) {
             const handle = schedule.program.channel.handle;
             const fetchLockKey = `async-fetch-triggered:${handle}`;
-            const fetchLockTTL = 300; // 5 minutes - matches cache TTL
+            const fetchLockTTL = 600; // 10 minutes - longer to prevent excessive triggering
             
             // Check lock BEFORE setImmediate to prevent race conditions
             const lockAcquired = await this.redisService.setNX(fetchLockKey, { timestamp: Date.now() }, fetchLockTTL);
@@ -139,7 +144,7 @@ export class OptimizedSchedulesService {
             if (lockAcquired) {
               setImmediate(async () => {
                 try {
-                  this.logger.debug(`[OPTIMIZED-SCHEDULES] Triggering async fetch for ${handle}...`);
+                  this.logger.debug(`[OPTIMIZED-SCHEDULES] Triggering async fetch for ${handle} (stale cache)...`);
                   await this.youtubeLiveService.getLiveStreamsMain(
                     channelId,
                     handle,
@@ -149,12 +154,14 @@ export class OptimizedSchedulesService {
                 } catch (error) {
                   this.logger.error(`[OPTIMIZED-SCHEDULES] Async fetch failed for ${channelId}:`, error.message);
                 }
-                // Note: We don't delete the lock - let it expire naturally after 5 minutes
+                // Note: We don't delete the lock - let it expire naturally after 10 minutes
                 // This prevents rapid re-fetching even if the API call completes quickly
               });
             } else {
               this.logger.debug(`[OPTIMIZED-SCHEDULES] Async fetch already triggered for ${handle}, skipping duplicate`);
             }
+          } else if (shouldTrustCache) {
+            this.logger.debug(`[OPTIMIZED-SCHEDULES] Trusting recent cache for ${schedule.program.channel?.handle} (${Math.round(cacheAgeMinutes)}min old), skipping fetch`);
           }
         } else {
           // Program is not currently live

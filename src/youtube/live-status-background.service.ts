@@ -177,11 +177,17 @@ export class LiveStatusBackgroundService {
       const streamsKey = `liveStreamsByChannel:${handle}`;
       const cachedStreams = await this.redisService.get<any>(streamsKey);
       
-      if (cachedStreams && cachedStreams.primaryVideoId) {
-        // liveStreamsByChannel exists and has data - use it as source of truth
-        // Check if liveStatusByHandle needs syncing by comparing videoId
+      if (cachedStreams) {
+        // liveStreamsByChannel exists (even if no streams) - use it as source of truth
+        // CRITICAL: Return data even when primaryVideoId is null (no live streams)
+        // This prevents unnecessary async fetches by telling the caller "we already checked"
+        const hasLiveStreams = cachedStreams.streams && cachedStreams.streams.length > 0 && cachedStreams.primaryVideoId;
+        
+        // Check if liveStatusByHandle needs syncing by comparing videoId and isLive status
         const cached = await this.getCachedLiveStatus(handle);
-        const needsSync = !cached || cached.videoId !== cachedStreams.primaryVideoId || cached.isLive !== (cachedStreams.streams && cachedStreams.streams.length > 0);
+        const needsSync = !cached || 
+                         cached.videoId !== (cachedStreams.primaryVideoId || null) || 
+                         cached.isLive !== hasLiveStreams;
         
         if (needsSync) {
           // Sync from liveStreamsByChannel to liveStatusByHandle
@@ -191,8 +197,8 @@ export class LiveStatusBackgroundService {
           const syncedCache: LiveStatusCache = {
             channelId,
             handle,
-            isLive: cachedStreams.streams && cachedStreams.streams.length > 0,
-            streamUrl: cachedStreams.streams && cachedStreams.streams.length > 0
+            isLive: hasLiveStreams,
+            streamUrl: hasLiveStreams
               ? `https://www.youtube.com/embed/${cachedStreams.primaryVideoId}?autoplay=1`
               : null,
             videoId: cachedStreams.primaryVideoId || null,
@@ -220,7 +226,9 @@ export class LiveStatusBackgroundService {
         if (cached && !(await this.shouldUpdateCache(cached))) {
           results.set(handle, cached);
         } else {
-          handlesNeedingUpdate.push(handle);
+          // CRITICAL: Don't add to handlesNeedingUpdate - we want to return empty result
+          // so enrichWithCachedLiveStatus can make an informed decision about fetching
+          // (it will check if program is actually live before triggering fetch)
         }
       }
     }
