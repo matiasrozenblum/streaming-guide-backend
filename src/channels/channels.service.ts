@@ -183,6 +183,10 @@ export class ChannelsService {
     // Check if handle is being updated
     const handleChanged = channelData.handle !== undefined && channelData.handle !== channel.handle;
     
+    // Capture old values BEFORE modifying channel object
+    const oldYoutubeChannelId = channel.youtube_channel_id;
+    const oldHandle = channel.handle;
+    
     Object.keys(channelData).forEach((key) => {
       if (channelData[key] !== undefined) {
         channel[key] = channelData[key];
@@ -212,39 +216,46 @@ export class ChannelsService {
     
     const updated = await this.channelsRepository.save(channel);
 
-    // Update YouTube channel ID if handle changed
+    // Handle cache invalidation for handle changes and/or YouTube channel ID changes
     if (handleChanged && updateChannelDto.handle) {
-      const oldYoutubeChannelId = channel.youtube_channel_id;
+      // If handle changed: invalidate old handle cache
+      if (oldHandle) {
+        await this.invalidateLiveStatusCaches(oldHandle);
+        console.log(`🗑️ Invalidated live status caches for old handle: ${oldHandle}`);
+      }
       
+      // Resolve new YouTube channel ID from new handle
       try {
         const info = await this.youtubeDiscovery.getChannelIdFromHandle(updateChannelDto.handle);
         if (info) {
-          const newYoutubeChannelId = info.channelId;
-          
           updated.youtube_channel_id = info.channelId;
           await this.channelsRepository.save(updated);
           console.log(`🔄 Updated YouTube channel ID for ${updated.name}: ${info.channelId}`);
           
-          // Invalidate old live status caches when YouTube channel ID changes
-          if (oldYoutubeChannelId && oldYoutubeChannelId !== newYoutubeChannelId) {
-            await this.invalidateLiveStatusCaches(oldYoutubeChannelId);
-            console.log(`🗑️ Invalidated live status caches for old YouTube channel ID: ${oldYoutubeChannelId}`);
+          // If YouTube channel ID also changed, invalidate new handle cache (in case it was already cached with wrong YouTube channel ID)
+          const youtubeChannelIdChanged = oldYoutubeChannelId && oldYoutubeChannelId !== info.channelId;
+          if (youtubeChannelIdChanged && updateChannelDto.handle) {
+            await this.invalidateLiveStatusCaches(updateChannelDto.handle);
+            console.log(`🗑️ Invalidated live status caches for new handle (YouTube channel ID changed): ${updateChannelDto.handle}`);
           }
         } else {
           console.log(`⚠️ Could not resolve YouTube channel ID for handle: ${updateChannelDto.handle}`);
-          // Still invalidate old cache even if new channel ID resolution fails
-          if (oldYoutubeChannelId) {
-            await this.invalidateLiveStatusCaches(oldYoutubeChannelId);
-            console.log(`🗑️ Invalidated live status caches for old YouTube channel ID: ${oldYoutubeChannelId}`);
-          }
         }
       } catch (error) {
         console.error(`❌ Error updating YouTube channel ID for ${updated.name}:`, error.message);
-        // Still invalidate old cache even if there's an error
-        if (oldYoutubeChannelId) {
-          await this.invalidateLiveStatusCaches(oldYoutubeChannelId);
-          console.log(`🗑️ Invalidated live status caches for old YouTube channel ID: ${oldYoutubeChannelId}`);
-        }
+      }
+    } else {
+      // Handle didn't change, but check if YouTube channel ID was manually updated
+      // (Note: This would be rare, as YouTube channel ID is usually derived from handle)
+      const youtubeChannelIdChanged = oldYoutubeChannelId && 
+                                      updated.youtube_channel_id && 
+                                      oldYoutubeChannelId !== updated.youtube_channel_id;
+      
+      if (youtubeChannelIdChanged && updated.handle) {
+        // YouTube channel ID changed but handle stayed the same - invalidate current handle cache
+        // since we were fetching for the wrong YouTube channel ID
+        await this.invalidateLiveStatusCaches(updated.handle);
+        console.log(`🗑️ Invalidated live status caches for handle (YouTube channel ID changed): ${updated.handle}`);
       }
     }
 
@@ -473,16 +484,23 @@ export class ChannelsService {
   }
 
   /**
-   * Invalidate live status caches for a specific YouTube channel ID
-   * Used when channel handle changes and YouTube channel ID changes
+   * Invalidate live status caches for a specific handle
+   * Used when channel handle changes
    */
-  private async invalidateLiveStatusCaches(youtubeChannelId: string): Promise<void> {
+  private async invalidateLiveStatusCaches(handle?: string): Promise<void> {
+    if (!handle) {
+      return; // Can't invalidate without handle
+    }
+    
     try {
-      // Invalidate unified live status cache (replaces both liveStreamsByChannel and liveStatus:background)
-      await this.redisService.del(`liveStatus:${youtubeChannelId}`);
-      console.log(`🗑️ Invalidated live status cache for YouTube channel ID: ${youtubeChannelId}`);
+      // Invalidate all handle-based cache keys (migration complete - all keys use handle format)
+      await this.redisService.del(`liveStatusByHandle:${handle}`);
+      await this.redisService.del(`liveStreamsByChannel:${handle}`);
+      await this.redisService.del(`videoIdNotFound:${handle}`);
+      await this.redisService.del(`notFoundAttempts:${handle}`);
+      console.log(`🗑️ Invalidated handle-based cache keys for: ${handle}`);
     } catch (error) {
-      console.error(`❌ Error invalidating live status cache for ${youtubeChannelId}:`, error.message);
+      console.error(`❌ Error invalidating live status cache for ${handle}:`, error.message);
     }
   }
 
