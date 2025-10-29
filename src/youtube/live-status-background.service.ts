@@ -336,22 +336,25 @@ export class LiveStatusBackgroundService {
       }
       
       if (cachedStatus && cachedStatus.videoId && !programBlockChanged) {
-        // We have cached status - check if we need to validate using cooldown
-        // Only validate if cooldown expired (to avoid excessive API calls)
-        const needsValidation = cachedStatus.validationCooldown && Date.now() > cachedStatus.validationCooldown;
+        // We have cached status - check if we need to validate using video age
+        // Only validate if video is >30 minutes old (to avoid excessive API calls)
+        // CRITICAL: Use video age (lastValidation) instead of validationCooldown timestamp
+        const videoAge = Date.now() - cachedStatus.lastValidation;
+        const videoAgeMinutes = videoAge / (60 * 1000);
+        const needsValidation = videoAgeMinutes > 30;
         
         if (needsValidation) {
-          // Validation cooldown expired, check if video is still live
+          // Validation needed - video is >30 minutes old, check if it's still live
           // Use videos API (cheaper than search) to validate
+          this.logger.debug(`[LIVE-STATUS-BG] Video ID ${cachedStatus.videoId} is ${Math.round(videoAgeMinutes)}min old, validating if still live for ${handle}`);
           const isStillLive = await this.youtubeLiveService.isVideoLive(cachedStatus.videoId);
           if (isStillLive) {
             // Video is still live, update cache with current schedules metadata
             this.logger.debug(`[LIVE-STATUS-BG] Video ID ${cachedStatus.videoId} still live for ${handle}`);
-            // Update TTL and blockEndTime from current schedules, preserve cooldown
+            // Update TTL and blockEndTime from current schedules, update lastValidation time
             cachedStatus.ttl = ttl;
             cachedStatus.blockEndTime = blockEndTime;
-            cachedStatus.validationCooldown = Date.now() + (30 * 60 * 1000); // Reset cooldown
-            cachedStatus.lastValidation = Date.now();
+            cachedStatus.lastValidation = Date.now(); // Reset validation time - won't validate again for 30 min
             cachedStatus.lastUpdated = Date.now();
             await this.cacheLiveStatus(channelId, cachedStatus);
             return cachedStatus;
@@ -373,8 +376,8 @@ export class LiveStatusBackgroundService {
             }
           }
         } else {
-          // Validation cooldown still active, just update metadata (TTL, blockEndTime) from current schedules
-          this.logger.debug(`[LIVE-STATUS-BG] Using cached video ID ${cachedStatus.videoId} for ${handle} (cooldown active, updating metadata)`);
+          // Validation not needed - video is fresh (<30 minutes old), just update metadata (TTL, blockEndTime) from current schedules
+          this.logger.debug(`[LIVE-STATUS-BG] Using cached video ID ${cachedStatus.videoId} for ${handle} (fresh video, ${Math.round(videoAgeMinutes)}min old, updating metadata)`);
           // Update TTL and blockEndTime from current schedules, preserve cooldown
           cachedStatus.ttl = ttl;
           cachedStatus.blockEndTime = blockEndTime;
@@ -463,13 +466,22 @@ export class LiveStatusBackgroundService {
       return true;
     }
     
+    // CRITICAL: Cache with blockEndTime=1440 means no program was live when cache was created
+    // This is suspicious if the channel now has live programs - force a refresh to check
+    if (cached.blockEndTime === 1440 && cached.isLive) {
+      this.logger.debug(`[LIVE-STATUS-BG] Suspicious cache: blockEndTime=1440 but isLive=true, forcing refresh`);
+      return true;
+    }
+    
     // CRITICAL: Detect program block changes by checking if we're past the cached blockEndTime
     // If blockEndTime is in the past, the program that was live when cache was created has ended
     // This ensures cache refreshes when programs transition, even if TTL hasn't fully expired
-    const currentTimeInMinutes = this.convertTimeToMinutes(now);
-    if (cached.blockEndTime && currentTimeInMinutes >= cached.blockEndTime) {
-      this.logger.debug(`[LIVE-STATUS-BG] Cache blockEndTime (${cached.blockEndTime}) has passed (current: ${currentTimeInMinutes}), program ended - forcing refresh`);
-      return true;
+    if (cached.blockEndTime && cached.blockEndTime !== 1440) {
+      const currentTimeInMinutes = this.convertTimeToMinutes(now);
+      if (currentTimeInMinutes >= cached.blockEndTime) {
+        this.logger.debug(`[LIVE-STATUS-BG] Cache blockEndTime (${cached.blockEndTime}) has passed (current: ${currentTimeInMinutes}), program ended - forcing refresh`);
+        return true;
+      }
     }
     
     // DO NOT validate here - it causes excessive API calls
