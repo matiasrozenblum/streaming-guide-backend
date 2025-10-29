@@ -66,7 +66,7 @@ describe('YoutubeLiveService', () => {
     });
 
     it('returns __SKIPPED__ if notFoundKey is set in redis', async () => {
-      redisService.get.mockImplementation(async (key: string) => key === 'videoIdNotFound:cid' ? '1' : null);
+      redisService.get.mockImplementation(async (key: string) => key === 'videoIdNotFound:handle' ? '1' : null);
       const result = await service.getLiveVideoId('cid', 'handle', 100, 'cron');
       expect(result).toBe('__SKIPPED__');
     });
@@ -74,7 +74,7 @@ describe('YoutubeLiveService', () => {
     it('returns cached primary videoId if it is live', async () => {
       const cachedStreams = { primaryVideoId: 'cachedId', streamCount: 1 };
       redisService.get.mockImplementation(async (key: string) => 
-        key === 'liveStreamsByChannel:cid' ? cachedStreams : null
+        key === 'liveStreamsByChannel:handle' ? cachedStreams : null
       );
       jest.spyOn(service as any, 'isVideoLive').mockResolvedValue(true);
       const result = await service.getLiveVideoId('cid', 'handle', 100, 'cron');
@@ -84,13 +84,13 @@ describe('YoutubeLiveService', () => {
     it('deletes cached streams if they are not live', async () => {
       const cachedStreams = { primaryVideoId: 'cachedId', streamCount: 1 };
       redisService.get.mockImplementation(async (key: string) => 
-        key === 'liveStreamsByChannel:cid' ? cachedStreams : null
+        key === 'liveStreamsByChannel:handle' ? cachedStreams : null
       );
       jest.spyOn(service as any, 'isVideoLive').mockResolvedValue(false);
       redisService.del.mockResolvedValue(undefined);
       jest.spyOn(axios, 'get').mockResolvedValue({ data: { items: [] } });
       const result = await service.getLiveVideoId('cid', 'handle', 100, 'cron');
-      expect(redisService.del).toHaveBeenCalledWith('liveStreamsByChannel:cid');
+      expect(redisService.del).toHaveBeenCalledWith('liveStreamsByChannel:handle');
       expect(result).toBe(null);
     });
 
@@ -99,10 +99,10 @@ describe('YoutubeLiveService', () => {
       jest.spyOn(axios, 'get').mockResolvedValue({ data: { items: [{ id: { videoId: 'vid123' } }] } });
       jest.spyOn(service as any, 'isVideoLive').mockResolvedValue(false);
       const result = await service.getLiveVideoId('cid', 'handle', 100, 'cron');
-      expect(redisService.set).toHaveBeenCalledWith('liveStreamsByChannel:cid', expect.any(Object), 100);
+      expect(redisService.set).toHaveBeenCalledWith('liveStreamsByChannel:handle', expect.any(Object), 100);
       // Should clear both not-found keys when video is found
-      expect(redisService.del).toHaveBeenCalledWith('videoIdNotFound:cid');
-      expect(redisService.del).toHaveBeenCalledWith('notFoundAttempts:cid');
+      expect(redisService.del).toHaveBeenCalledWith('videoIdNotFound:handle');
+      expect(redisService.del).toHaveBeenCalledWith('notFoundAttempts:handle');
       expect(result).toBe('vid123');
     });
 
@@ -111,8 +111,8 @@ describe('YoutubeLiveService', () => {
       jest.spyOn(axios, 'get').mockResolvedValue({ data: { items: [] } });
       const result = await service.getLiveVideoId('cid', 'handle', 100, 'cron');
       // Should set both the not-found key and attempt tracking
-      expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:cid', '1', 900);
-      expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:cid', expect.any(Object), expect.any(Number));
+      expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:handle', '1', 900);
+      expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:handle', expect.any(Object), expect.any(Number));
       expect(result).toBe(null);
     });
 
@@ -224,7 +224,7 @@ describe('YoutubeLiveService', () => {
     });
 
     it('returns __SKIPPED__ if notFoundKey is set in redis', async () => {
-      redisService.get.mockImplementation(async (key: string) => key === 'videoIdNotFound:cid' ? '1' : null);
+      redisService.get.mockImplementation(async (key: string) => key === 'videoIdNotFound:handle' ? '1' : null);
       const result = await service.getLiveStreamsMain('cid', 'handle', 100);
       expect(result).toBe('__SKIPPED__');
     });
@@ -240,7 +240,7 @@ describe('YoutubeLiveService', () => {
         streamCount: 2
       };
       redisService.get.mockImplementation(async (key: string) => 
-        key === 'liveStreamsByChannel:cid' ? cachedData : null
+        key === 'liveStreamsByChannel:handle' ? cachedData : null
       );
       jest.spyOn(service as any, 'isVideoLive').mockResolvedValue(true);
       
@@ -261,7 +261,7 @@ describe('YoutubeLiveService', () => {
         streamCount: 1
       };
       redisService.get.mockImplementation(async (key: string) => 
-        key === 'liveStreamsByChannel:cid' ? cachedData : null
+        key === 'liveStreamsByChannel:handle' ? cachedData : null
       );
       jest.spyOn(service as any, 'isVideoLive').mockResolvedValue(false);
       redisService.del.mockResolvedValue(undefined);
@@ -269,7 +269,7 @@ describe('YoutubeLiveService', () => {
       
       const result = await service.getLiveStreamsMain('cid', 'handle', 100);
       
-      expect(redisService.del).toHaveBeenCalledWith('liveStreamsByChannel:cid');
+      expect(redisService.del).toHaveBeenCalledWith('liveStreamsByChannel:handle');
       expect(result).toBe(null);
     });
 
@@ -308,7 +308,7 @@ describe('YoutubeLiveService', () => {
       const result = await service.getLiveStreamsMain('cid', 'handle', 100);
       
       expect(redisService.set).toHaveBeenCalledWith(
-        'liveStreamsByChannel:cid',
+        'liveStreamsByChannel:handle',
         expect.objectContaining({
           streams: expect.arrayContaining([
             expect.objectContaining({
@@ -364,7 +364,7 @@ describe('YoutubeLiveService', () => {
       
       const result = await service.getLiveStreamsMain('cid', 'handle', 100);
       
-      expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:cid', '1', 900);
+      expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:handle', '1', 900);
       expect(result).toBe(null);
     });
 
@@ -379,14 +379,14 @@ describe('YoutubeLiveService', () => {
 
     it('handles malformed cached streams gracefully', async () => {
       redisService.get.mockImplementation(async (key: string) => 
-        key === 'liveStreamsByChannel:cid' ? 'invalid-json' : null
+        key === 'liveStreamsByChannel:handle' ? 'invalid-json' : null
       );
       redisService.del.mockResolvedValue(undefined);
       jest.spyOn(axios, 'get').mockResolvedValue({ data: { items: [] } });
       
       const result = await service.getLiveStreamsMain('cid', 'handle', 100);
       
-      expect(redisService.del).toHaveBeenCalledWith('liveStreamsByChannel:cid');
+      expect(redisService.del).toHaveBeenCalledWith('liveStreamsByChannel:handle');
       expect(result).toBe(null);
     });
   });
@@ -409,12 +409,12 @@ describe('YoutubeLiveService', () => {
         redisService.get.mockResolvedValue(null);
         redisService.set.mockResolvedValue(undefined);
 
-        await (service as any).handleNotFoundEscalationMain('cid', 'handle', 'videoIdNotFound:cid');
+        await (service as any).handleNotFoundEscalationMain('cid', 'handle', 'videoIdNotFound:handle');
 
-        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:cid', expect.any(Object), expect.any(Number));
-        expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:cid', '1', 900);
+        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:handle', expect.any(Object), expect.any(Number));
+        expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:handle', '1', 900);
         
-        const trackingCall = redisService.set.mock.calls.find(call => call[0] === 'notFoundAttempts:cid');
+        const trackingCall = redisService.set.mock.calls.find(call => call[0] === 'notFoundAttempts:handle');
         expect(trackingCall).toBeDefined();
         const trackingData = trackingCall![1];
         expect(trackingData).toMatchObject({
@@ -435,12 +435,12 @@ describe('YoutubeLiveService', () => {
         redisService.get.mockResolvedValue(existingTracking);
         redisService.set.mockResolvedValue(undefined);
 
-        await (service as any).handleNotFoundEscalationMain('cid', 'handle', 'videoIdNotFound:cid');
+        await (service as any).handleNotFoundEscalationMain('cid', 'handle', 'videoIdNotFound:handle');
 
-        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:cid', expect.any(Object), expect.any(Number));
-        expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:cid', '1', 900);
+        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:handle', expect.any(Object), expect.any(Number));
+        expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:handle', '1', 900);
         
-        const trackingCall = redisService.set.mock.calls.find(call => call[0] === 'notFoundAttempts:cid');
+        const trackingCall = redisService.set.mock.calls.find(call => call[0] === 'notFoundAttempts:handle');
         expect(trackingCall).toBeDefined();
         const trackingData = trackingCall![1];
         expect(trackingData.attempts).toBe(2);
@@ -461,12 +461,12 @@ describe('YoutubeLiveService', () => {
         jest.spyOn(service as any, 'getCurrentProgramEndTime').mockResolvedValue(Date.now() + 3600000); // 1 hour from now
         jest.spyOn(service as any, 'sendEscalationEmail').mockResolvedValue(undefined);
 
-        await (service as any).handleNotFoundEscalationMain('cid', 'handle', 'videoIdNotFound:cid');
+        await (service as any).handleNotFoundEscalationMain('cid', 'handle', 'videoIdNotFound:handle');
 
-        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:cid', expect.any(Object), expect.any(Number));
-        expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:cid', '1', expect.any(Number));
+        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:handle', expect.any(Object), expect.any(Number));
+        expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:handle', '1', expect.any(Number));
         
-        const trackingCall = redisService.set.mock.calls.find(call => call[0] === 'notFoundAttempts:cid');
+        const trackingCall = redisService.set.mock.calls.find(call => call[0] === 'notFoundAttempts:handle');
         expect(trackingCall).toBeDefined();
         const trackingData = trackingCall![1];
         expect(trackingData.attempts).toBe(3);
@@ -488,9 +488,9 @@ describe('YoutubeLiveService', () => {
         
         jest.spyOn(service as any, 'getCurrentProgramEndTime').mockResolvedValue(null);
 
-        await (service as any).handleNotFoundEscalationMain('cid', 'handle', 'videoIdNotFound:cid');
+        await (service as any).handleNotFoundEscalationMain('cid', 'handle', 'videoIdNotFound:handle');
 
-        expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:cid', '1', 3600);
+        expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:handle', '1', 3600);
       });
 
       it('does not set not-found mark for back-to-back-fix cron on first attempt', async () => {
@@ -498,10 +498,10 @@ describe('YoutubeLiveService', () => {
         redisService.set.mockResolvedValue(undefined);
         jest.spyOn(service as any, 'getCurrentProgramEndTime').mockResolvedValue(Date.now() + 3600000);
 
-        await (service as any).handleNotFoundEscalationBackToBack('cid', 'handle', 'videoIdNotFound:cid');
+        await (service as any).handleNotFoundEscalationBackToBack('cid', 'handle', 'videoIdNotFound:handle');
 
-        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:cid', expect.any(Object), expect.any(Number));
-        expect(redisService.set).not.toHaveBeenCalledWith('videoIdNotFound:cid', '1', 900);
+        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:handle', expect.any(Object), expect.any(Number));
+        expect(redisService.set).not.toHaveBeenCalledWith('videoIdNotFound:handle', '1', 900);
       });
 
       it('does not renew not-found mark for back-to-back-fix cron on second attempt', async () => {
@@ -515,10 +515,10 @@ describe('YoutubeLiveService', () => {
         redisService.set.mockResolvedValue(undefined);
         jest.spyOn(service as any, 'getCurrentProgramEndTime').mockResolvedValue(Date.now() + 3600000);
 
-        await (service as any).handleNotFoundEscalationBackToBack('cid', 'handle', 'videoIdNotFound:cid');
+        await (service as any).handleNotFoundEscalationBackToBack('cid', 'handle', 'videoIdNotFound:handle');
 
-        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:cid', expect.any(Object), expect.any(Number));
-        expect(redisService.set).not.toHaveBeenCalledWith('videoIdNotFound:cid', '1', 900);
+        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:handle', expect.any(Object), expect.any(Number));
+        expect(redisService.set).not.toHaveBeenCalledWith('videoIdNotFound:handle', '1', 900);
       });
     });
 
@@ -665,7 +665,7 @@ describe('YoutubeLiveService', () => {
     describe('getBatchLiveStreams - Escalation Logic', () => {
       it('skips channels with active not-found flags', async () => {
         redisService.get.mockImplementation(async (key: string) => {
-          if (key === 'videoIdNotFound:cid') return '1';
+          if (key === 'videoIdNotFound:handle') return '1';
           return null;
         });
 
@@ -689,7 +689,7 @@ describe('YoutubeLiveService', () => {
         };
         
         redisService.get.mockImplementation(async (key: string) => {
-          if (key === 'notFoundAttempts:cid') return attemptTracking;
+          if (key === 'notFoundAttempts:handle') return attemptTracking;
           return null; // No active not-found flag (expired)
         });
         
@@ -706,15 +706,15 @@ describe('YoutubeLiveService', () => {
         );
 
         expect(result.get('cid')).toBe('__SKIPPED__');
-        expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:cid', '1', expect.any(Number));
-        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:cid', expect.any(Object), expect.any(Number));
+        expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:handle', '1', expect.any(Number));
+        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:handle', expect.any(Object), expect.any(Number));
         expect((service as any).sendEscalationEmail).toHaveBeenCalledWith('cid', 'handle');
       });
 
       it('ignores not-found flags for back-to-back-fix cron and increments attempt counter', async () => {
         redisService.get.mockImplementation(async (key: string) => {
-          if (key === 'videoIdNotFound:cid') return '1';
-          if (key === 'notFoundAttempts:cid') return { attempts: 1, firstAttempt: Date.now(), lastAttempt: Date.now(), escalated: false };
+          if (key === 'videoIdNotFound:handle') return '1';
+          if (key === 'notFoundAttempts:handle') return { attempts: 1, firstAttempt: Date.now(), lastAttempt: Date.now(), escalated: false };
           return null;
         });
         
@@ -731,14 +731,14 @@ describe('YoutubeLiveService', () => {
         expect(result.get('cid')).toBe(null); // Should attempt fetch, not skip
         
         // Should call incrementNotFoundAttempts which updates attempt counter without setting new not-found flags
-        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:cid', expect.any(Object), expect.any(Number));
+        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:handle', expect.any(Object), expect.any(Number));
         // Should NOT set videoIdNotFound since back-to-back-fix doesn't set new not-found flags
-        expect(redisService.set).not.toHaveBeenCalledWith('videoIdNotFound:cid', '1', 900);
+        expect(redisService.set).not.toHaveBeenCalledWith('videoIdNotFound:handle', '1', 900);
       });
 
       it('ignores not-found flags for manual cron', async () => {
         redisService.get.mockImplementation(async (key: string) => {
-          if (key === 'videoIdNotFound:cid') return '1';
+          if (key === 'videoIdNotFound:handle') return '1';
           return null;
         });
         
@@ -765,8 +765,8 @@ describe('YoutubeLiveService', () => {
         };
         
         redisService.get.mockImplementation(async (key: string) => {
-          if (key === 'videoIdNotFound:cid') return '1';
-          if (key === 'notFoundAttempts:cid') return JSON.stringify(attemptTracking);
+          if (key === 'videoIdNotFound:handle') return '1';
+          if (key === 'notFoundAttempts:handle') return JSON.stringify(attemptTracking);
           return null;
         });
 

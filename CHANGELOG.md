@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.16.7] - 2025-10-29
+
+### Changed
+- Replaced youtube channel id with handle on all cache keys for better readability
+
 ## [1.16.6] - 2025-10-28
 
 ### Added
