@@ -138,6 +138,9 @@ export class LiveStatusBackgroundService {
             // If video was published before this program started, it's stale
             if (videoAgeHours > 4 && startTimeInMinutes < currentTime) {
               this.logger.debug(`[LIVE-STATUS-BG] Stale video detected for ${channelInfo.handle}: published ${Math.round(videoAgeHours)}h ago, current program started at ${startTime}, forcing update`);
+              // CRITICAL: Invalidate cache before adding to update list so updateChannelLiveStatus will fetch fresh data
+              const statusCacheKey = `${this.CACHE_PREFIX}${channelInfo.handle}`;
+              await this.redisService.del(statusCacheKey);
               channelsToUpdate.push(channelId);
               continue;
             }
