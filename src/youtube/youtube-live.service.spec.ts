@@ -220,8 +220,25 @@ describe('YoutubeLiveService', () => {
       const channelId = 'test-channel';
       const handle = 'test-handle';
       
-      // Mock that there's a cached video ID
-      redisService.get.mockResolvedValue('cached-video-id');
+      // Mock that there's a cached video ID with unified cache structure
+      redisService.get.mockImplementation(async (key: string) => {
+        if (key === 'liveStatusByHandle:test-handle') {
+          return {
+            channelId: 'test-channel',
+            handle: 'test-handle',
+            isLive: true,
+            videoId: 'cached-video-id',
+            lastUpdated: Date.now(),
+            ttl: 100,
+            blockEndTime: null,
+            validationCooldown: Date.now() + 1800000,
+            lastValidation: Date.now(),
+            streams: [],
+            streamCount: 0
+          };
+        }
+        return null;
+      });
       
       // Mock that the video is no longer live by mocking the private method
       (service as any).isVideoLive = jest.fn().mockResolvedValue(false);
@@ -365,6 +382,12 @@ describe('YoutubeLiveService', () => {
           handle: 'handle',
           videoId: 'vid1',
           isLive: true,
+          streamUrl: 'https://www.youtube.com/embed/vid1?autoplay=1',
+          lastUpdated: expect.any(Number),
+          ttl: 100,
+          blockEndTime: null,
+          validationCooldown: expect.any(Number),
+          lastValidation: expect.any(Number),
           streams: expect.arrayContaining([
             expect.objectContaining({
               videoId: 'vid1',
@@ -383,7 +406,6 @@ describe('YoutubeLiveService', () => {
               channelTitle: 'Test Channel'
             })
           ]),
-          primaryVideoId: 'vid1',
           streamCount: 2
         }),
         100

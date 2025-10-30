@@ -170,7 +170,7 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
       const result = await service.getLiveStatusForChannels(handles);
 
       // Assert
-      expect(result.size).toBe(0); // No cached data when expired
+      expect(result.size).toBe(1); // Returns stale cache (<30 min old) to prevent async fetches
     });
   });
 
