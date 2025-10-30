@@ -125,7 +125,12 @@ export class LiveStatusBackgroundService {
         
         // Check if program changed by comparing cached video age to scheduled program duration
         // If video is older than the current program's start time, it's from a different program
-        if (cached.streams[0]?.publishedAt) {
+        // CRITICAL: Only check if we haven't checked in the last 30 minutes to prevent infinite loops
+        const lastStaleCheck = cached.lastValidation || 0;
+        const timeSinceLastCheck = Date.now() - lastStaleCheck;
+        const canCheckStale = timeSinceLastCheck > 30 * 60 * 1000; // 30 minutes
+        
+        if (cached.streams[0]?.publishedAt && canCheckStale) {
           const videoPublishedAt = new Date(cached.streams[0].publishedAt).getTime();
           const videoAge = Date.now() - videoPublishedAt;
           const videoAgeHours = videoAge / (3600 * 1000);
