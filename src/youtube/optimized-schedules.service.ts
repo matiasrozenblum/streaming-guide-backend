@@ -116,7 +116,7 @@ export class OptimizedSchedulesService {
           };
         } else if (isCurrentlyLive) {
           // Program is live by time but background cache says no live stream
-          // CRITICAL: Trust recent cache - if cache was updated recently and says "not live", 
+          // CRITICAL: Trust recent cache - if cache was updated recently (< 10 min) and says "not live",
           // don't trigger expensive API calls. The background cron will handle updates.
           const cacheAge = Date.now() - liveStatus.lastUpdated;
           const cacheAgeMinutes = cacheAge / (60 * 1000);
@@ -173,6 +173,8 @@ export class OptimizedSchedulesService {
             } else {
               this.logger.debug(`[OPTIMIZED-SCHEDULES] Async fetch already triggered for ${handle}, skipping duplicate`);
             }
+          } else if (shouldTrustCache) {
+            this.logger.debug(`[OPTIMIZED-SCHEDULES] Trusting recent cache for ${schedule.program.channel?.handle} (${Math.round(cacheAgeMinutes)}min old), skipping fetch`);
           }
         } else {
           // Program is not currently live

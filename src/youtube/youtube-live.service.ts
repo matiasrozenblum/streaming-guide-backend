@@ -1272,6 +1272,81 @@ export class YoutubeLiveService {
   }
 
   /**
+   * Sync liveStatusByHandle cache from liveStreamsByChannel data
+   * This ensures both cache keys stay in sync when streams are updated
+   */
+  private async syncLiveStatusCacheFromStreams(
+    channelId: string,
+    handle: string,
+    streamsResult: LiveStreamsResult,
+    ttl: number
+  ): Promise<void> {
+    try {
+      // Calculate blockEndTime by checking current schedules
+      // Default to end of day if we can't determine it (background service will correct it)
+      let blockEndTime = 24 * 60; // End of day in minutes
+      
+      try {
+        const currentDay = TimezoneUtil.currentDayOfWeek();
+        const currentTimeInMinutes = TimezoneUtil.currentTimeInMinutes();
+        
+        const schedules = await this.schedulesService.findAll({
+          dayOfWeek: currentDay,
+          liveStatus: false,
+          applyOverrides: true,
+        });
+        
+        const channelSchedules = schedules.filter(
+          s => s.program?.channel?.youtube_channel_id === channelId
+        );
+        
+        const liveSchedules = channelSchedules.filter(schedule => {
+          const startNum = this.convertTimeToMinutes(schedule.start_time);
+          const endNum = this.convertTimeToMinutes(schedule.end_time);
+          return currentTimeInMinutes >= startNum && currentTimeInMinutes < endNum;
+        });
+        
+        if (liveSchedules.length > 0) {
+          // Find the latest end time among live schedules
+          blockEndTime = Math.max(
+            ...liveSchedules.map(s => this.convertTimeToMinutes(s.end_time))
+          );
+        }
+      } catch (error) {
+        // If we can't calculate blockEndTime, use default (background service will fix it)
+        this.logger.debug(`[SYNC] Could not calculate blockEndTime for ${handle}, using default`);
+      }
+      
+      // Create LiveStatusCache object matching the structure expected by background service
+      const statusCache = {
+        channelId,
+        handle,
+        isLive: streamsResult.streams && streamsResult.streams.length > 0,
+        streamUrl: streamsResult.streams && streamsResult.streams.length > 0 
+          ? `https://www.youtube.com/embed/${streamsResult.primaryVideoId}?autoplay=1`
+          : null,
+        videoId: streamsResult.primaryVideoId || null,
+        lastUpdated: Date.now(),
+        ttl,
+        blockEndTime,
+        validationCooldown: Date.now() + (30 * 60 * 1000), // 30 min cooldown
+        lastValidation: Date.now(),
+        streams: streamsResult.streams || [],
+        streamCount: streamsResult.streamCount || 0,
+      };
+      
+      // Write to liveStatusByHandle cache
+      const statusCacheKey = `liveStatusByHandle:${handle}`;
+      await this.redisService.set(statusCacheKey, statusCache, ttl);
+      
+      this.logger.debug(`[SYNC] Synced liveStatusByHandle for ${handle} (isLive: ${statusCache.isLive})`);
+    } catch (error) {
+      // Log but don't throw - this is a sync operation, shouldn't break the main flow
+      this.logger.warn(`[SYNC] Failed to sync liveStatusByHandle for ${handle}:`, error.message);
+    }
+  }
+
+  /**
    * Convert time string to minutes
    */
   private convertTimeToMinutes(timeStr: string): number {

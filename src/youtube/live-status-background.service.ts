@@ -203,7 +203,6 @@ export class LiveStatusBackgroundService {
     const results = new Map<string, LiveStatusCache>();
     const handlesNeedingUpdate: string[] = [];
 
-    // Check cache first
     for (const handle of handles) {
       const cached = await this.getCachedLiveStatus(handle);
       if (cached) {
@@ -405,6 +404,7 @@ export class LiveStatusBackgroundService {
               // Program still scheduled, video might have rotated - fetch new one
               this.logger.debug(`[LIVE-STATUS-BG] Video ID ${cachedStatus.videoId} no longer live for ${handle}, but program still scheduled - fetching new one`);
               await this.redisService.del(statusCacheKey);
+              // Continue to fetch fresh data below
             } else {
               // Program ended, don't waste API quota - just mark as not live
               this.logger.debug(`[LIVE-STATUS-BG] Video ID ${cachedStatus.videoId} no longer live for ${handle}, and program ended - marking as not live`);
