@@ -10,7 +10,31 @@ import { SentryService } from '../sentry/sentry.service';
 import { TimezoneUtil } from '../utils/timezone.util';
 import { Channel } from '../channels/channels.entity';
 import { getCurrentBlockTTL } from '../utils/getBlockTTL.util';
-import { LiveStatusCache, LiveStream } from './interfaces/live-status-cache.interface';
+
+interface LiveStream {
+  videoId: string;
+  title: string;
+  description?: string;
+  thumbnailUrl?: string;
+  publishedAt?: string;
+}
+
+interface LiveStatusCache {
+  channelId: string;
+  handle: string;
+  isLive: boolean;
+  streamUrl: string | null;
+  videoId: string | null;
+  lastUpdated: number;
+  ttl: number;
+  // Block-aware fields for accurate timing
+  blockEndTime: number | null; // When the current block ends (in minutes), null if unknown
+  validationCooldown: number; // When we can validate again (timestamp)
+  lastValidation: number; // Last time we validated the video ID
+  // Stream details (unified cache - replaces liveStreamsByChannel)
+  streams: LiveStream[];
+  streamCount: number;
+}
 
 @Injectable()
 export class LiveStatusBackgroundService {
@@ -101,12 +125,7 @@ export class LiveStatusBackgroundService {
         
         // Check if program changed by comparing cached video age to scheduled program duration
         // If video is older than the current program's start time, it's from a different program
-        // CRITICAL: Only check if we haven't checked in the last 30 minutes to prevent infinite loops
-        const lastPublishedAtCheck = cached.lastPublishedAtCheck || 0;
-        const timeSinceLastCheck = Date.now() - lastPublishedAtCheck;
-        const canCheckPublishedAt = timeSinceLastCheck > 30 * 60 * 1000; // 30 minutes
-        
-        if (cached.streams[0]?.publishedAt && canCheckPublishedAt) {
+        if (cached.streams[0]?.publishedAt) {
           const videoPublishedAt = new Date(cached.streams[0].publishedAt).getTime();
           const videoAge = Date.now() - videoPublishedAt;
           const videoAgeHours = videoAge / (3600 * 1000);
@@ -398,61 +417,14 @@ export class LiveStatusBackgroundService {
             }
           }
         } else {
-          // Validation not needed - video is fresh (<30 minutes old)
-          // BUT: Check if video's publishedAt is old enough to indicate a potential rotation
-          // If video is >4 hours old and current program started more recently, force a refresh
-          // CRITICAL: Only check if we haven't checked in the last 30 minutes to prevent infinite loops
-          const lastPublishedAtCheck = cachedStatus.lastPublishedAtCheck || 0;
-          const timeSinceLastCheck = Date.now() - lastPublishedAtCheck;
-          const canCheckPublishedAt = timeSinceLastCheck > 30 * 60 * 1000; // 30 minutes
-          
-          if (liveSchedules.length > 0 && cachedStatus.streams[0]?.publishedAt && canCheckPublishedAt) {
-            const videoPublishedAt = new Date(cachedStatus.streams[0].publishedAt).getTime();
-            const videoAgeMs = Date.now() - videoPublishedAt;
-            const videoAgeHours = videoAgeMs / (3600 * 1000);
-            
-            const startTime = liveSchedules[0].start_time;
-            const [startHour, startMinute] = startTime.split(':').map(Number);
-            const startTimeInMinutes = startHour * 60 + startMinute;
-            
-            // If video is significantly older than program start, force validation
-            if (videoAgeHours > 4 && startTimeInMinutes < currentTime) {
-              this.logger.debug(`[LIVE-STATUS-BG] Video ${cachedStatus.videoId} is ${Math.round(videoAgeHours)}h old for ${handle} (program started at ${startTime}), forcing validation despite recent lastValidation`);
-              const isStillLive = await this.youtubeLiveService.isVideoLive(cachedStatus.videoId);
-              // CRITICAL: Mark that we've checked publishedAt to prevent infinite loop
-              cachedStatus.lastPublishedAtCheck = Date.now();
-              if (isStillLive) {
-                // Video still live, update metadata
-                cachedStatus.ttl = ttl;
-                cachedStatus.blockEndTime = blockEndTime;
-                cachedStatus.lastValidation = Date.now();
-                cachedStatus.lastUpdated = Date.now();
-                await this.cacheLiveStatus(channelId, cachedStatus);
-                return cachedStatus;
-              } else {
-                // Video rotated, fetch new one
-                this.logger.debug(`[LIVE-STATUS-BG] Video ${cachedStatus.videoId} no longer live for ${handle}, fetching new one`);
-                await this.redisService.del(statusCacheKey);
-                // Continue to fetch fresh data below
-              }
-            } else {
-              // Video age is fine, just update metadata
-              this.logger.debug(`[LIVE-STATUS-BG] Using cached video ID ${cachedStatus.videoId} for ${handle} (fresh video, ${Math.round(videoAgeMinutes)}min old, updating metadata)`);
-              cachedStatus.ttl = ttl;
-              cachedStatus.blockEndTime = blockEndTime;
-              cachedStatus.lastUpdated = Date.now();
-              await this.cacheLiveStatus(channelId, cachedStatus);
-              return cachedStatus;
-            }
-          } else {
-            // No publishedAt, no live schedules, or recently checked - just update metadata
-            this.logger.debug(`[LIVE-STATUS-BG] Using cached video ID ${cachedStatus.videoId} for ${handle} (fresh video, ${Math.round(videoAgeMinutes)}min old, updating metadata)`);
-            cachedStatus.ttl = ttl;
-            cachedStatus.blockEndTime = blockEndTime;
-            cachedStatus.lastUpdated = Date.now();
-            await this.cacheLiveStatus(channelId, cachedStatus);
-            return cachedStatus;
-          }
+          // Validation not needed - video is fresh (<30 minutes old), just update metadata (TTL, blockEndTime) from current schedules
+          this.logger.debug(`[LIVE-STATUS-BG] Using cached video ID ${cachedStatus.videoId} for ${handle} (fresh video, ${Math.round(videoAgeMinutes)}min old, updating metadata)`);
+          // Update TTL and blockEndTime from current schedules, preserve cooldown
+          cachedStatus.ttl = ttl;
+          cachedStatus.blockEndTime = blockEndTime;
+          cachedStatus.lastUpdated = Date.now();
+          await this.cacheLiveStatus(channelId, cachedStatus);
+          return cachedStatus;
         }
       }
       

@@ -24,7 +24,6 @@ export interface LiveStatusCache {
   blockEndTime: number | null; // When the current block ends (in minutes), null if unknown
   validationCooldown: number; // When we can validate again (timestamp)
   lastValidation: number; // Last time we validated the video ID
-  lastPublishedAtCheck?: number; // Last time we checked publishedAt for staleness (timestamp)
   // Stream details (unified with liveStreamsByChannel)
   streams: LiveStream[];
   streamCount: number;
