@@ -76,7 +76,7 @@ describe('LiveStatusBackgroundService Block End Time Calculation', () => {
     
     const blockEndTime = (service as any).calculateBlockEndTime(schedules, currentTime);
     
-    // Should return end of day (24:00) = 1440 minutes
-    expect(blockEndTime).toBe(24 * 60); // 1440 minutes
+    // Should return null when no program is currently running
+    expect(blockEndTime).toBe(null);
   });
 });
