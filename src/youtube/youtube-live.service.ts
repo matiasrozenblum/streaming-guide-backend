@@ -17,6 +17,7 @@ import { EmailService } from '../email/email.service';
 import { getCurrentBlockTTL } from '@/utils/getBlockTTL.util';
 import { TimezoneUtil } from '../utils/timezone.util';
 import { LiveStream, LiveStreamsResult } from './interfaces/live-stream.interface';
+import { LiveStatusCache, createLiveStatusCacheFromStreams, extractLiveStreamsResult } from './interfaces/live-status-cache.interface';
 
 const HolidaysClass = (DateHolidays as any).default ?? DateHolidays;
 
@@ -135,8 +136,8 @@ export class YoutubeLiveService {
       this.logger.warn(`⚠️ Error checking fetch config for ${handle}, allowing fetch:`, error.message);
     }
 
-    // Migration complete - only use new format
-    const streamsKey = `liveStreamsByChannel:${handle}`;
+    // Unified cache - use liveStatusByHandle (replaces liveStreamsByChannel)
+    const statusCacheKey = `liveStatusByHandle:${handle}`;
     const notFoundKey = `videoIdNotFound:${handle}`;
 
     // skip rápido si ya está marcado como no-found
@@ -145,22 +146,21 @@ export class YoutubeLiveService {
       return '__SKIPPED__';
     }
 
-    // cache-hit: reuse si sigue vivo
-    const cachedStreams = await this.redisService.get<any>(streamsKey);
-    if (cachedStreams) {
+    // cache-hit: reuse si sigue vivo (unified cache)
+    const cachedStatus = await this.redisService.get<LiveStatusCache>(statusCacheKey);
+    if (cachedStatus && cachedStatus.videoId) {
       try {
-        const streams = cachedStreams;
-        if (streams.primaryVideoId && (await this.isVideoLive(streams.primaryVideoId))) {
+        if (await this.isVideoLive(cachedStatus.videoId)) {
           this.logger.debug(`🔁 Reusing cached primary videoId for ${handle}`);
-          return streams.primaryVideoId;
+          return cachedStatus.videoId;
         }
-        // If cached streams are no longer live, clear the cache
-        await this.redisService.del(streamsKey);
-        this.logger.debug(`🗑️ Deleted cached streams for ${handle} (no longer live)`);
+        // If cached video is no longer live, clear the cache
+        await this.redisService.del(statusCacheKey);
+        this.logger.debug(`🗑️ Deleted cached status for ${handle} (no longer live)`);
       } catch (error) {
         // If parsing fails, clear the corrupted cache
-        await this.redisService.del(streamsKey);
-        this.logger.debug(`🗑️ Deleted corrupted cached streams for ${handle}`);
+        await this.redisService.del(statusCacheKey);
+        this.logger.debug(`🗑️ Deleted corrupted cached status for ${handle}`);
       }
     }
 
@@ -186,13 +186,15 @@ export class YoutubeLiveService {
         return null;
       }
 
-      // Migration complete - Cache as streams format for consistency
-      const streamsData = {
+      // Unified cache - write LiveStatusCache (replaces liveStreamsByChannel)
+      const streamsData: LiveStreamsResult = {
         streams: [{ videoId, title: '', description: '', thumbnailUrl: '', publishedAt: new Date().toISOString() }],
         primaryVideoId: videoId,
         streamCount: 1
       };
-      await this.redisService.set(streamsKey, streamsData, blockTTL);
+      const cacheData = createLiveStatusCacheFromStreams(channelId, handle, streamsData, blockTTL);
+      // Use cacheData.ttl to ensure Redis TTL matches the cache object's TTL field
+      await this.redisService.set(statusCacheKey, cacheData, cacheData.ttl);
       
       // Clear the "not-found" flag and attempt tracking since we found live streams
       await this.redisService.del(notFoundKey);
@@ -288,11 +290,11 @@ export class YoutubeLiveService {
       const handle = channelHandleMap?.get(channelId) || 'unknown';
       channelHandles.set(channelId, handle);
       
-      // Check cache for this channel
-      const liveKey = `liveStreamsByChannel:${handle}`;
+      // Unified cache - use liveStatusByHandle (replaces liveStreamsByChannel)
+      const statusCacheKey = `liveStatusByHandle:${handle}`;
       const notFoundKey = `videoIdNotFound:${handle}`;
       const attemptTrackingKey = `notFoundAttempts:${handle}`;
-      
+
       // Enhanced not-found logic with escalation detection
       const notFoundData = await this.redisService.get<string>(notFoundKey);
       const attemptData = await this.redisService.get<AttemptTracking>(attemptTrackingKey);
@@ -347,28 +349,23 @@ export class YoutubeLiveService {
         this.logger.debug(`Ignoring not-found flag for ${handle} (${channelId}) - checking anyway`);
       }
 
-      // Check cache
-      const cachedStreams = await this.redisService.get<any>(liveKey);
-      if (cachedStreams) {
+      // Check unified cache
+      const cachedStatus = await this.redisService.get<LiveStatusCache>(statusCacheKey);
+      if (cachedStatus) {
         try {
-          const parsedStreams: LiveStream[] = cachedStreams.streams;
           // Skip validation during bulk operations to improve performance for onDemand context
-          if (parsedStreams.length > 0 && (context === 'onDemand' || (await this.isVideoLive(parsedStreams[0].videoId)))) {
-            this.logger.debug(`Reusing cached streams for ${channelId} (${parsedStreams.length} streams)`);
-            results.set(channelId, {
-              streams: parsedStreams,
-              primaryVideoId: cachedStreams.primaryVideoId,
-              streamCount: cachedStreams.streamCount
-            });
+          if (cachedStatus.streams.length > 0 && (context === 'onDemand' || (await this.isVideoLive(cachedStatus.videoId!)))) {
+            this.logger.debug(`Reusing cached streams for ${channelId} (${cachedStatus.streamCount} streams)`);
+            results.set(channelId, extractLiveStreamsResult(cachedStatus));
             continue;
           } else {
             // If cached streams are invalid, delete them
-            await this.redisService.del(liveKey);
-            this.logger.debug(`Deleted cached streams for ${channelId} (no longer live)`);
+            await this.redisService.del(statusCacheKey);
+            this.logger.debug(`Deleted cached status for ${channelId} (no longer live)`);
           }
         } catch (error) {
-          this.logger.warn(`Failed to parse cached streams for ${channelId}:`, error);
-          await this.redisService.del(liveKey);
+          this.logger.warn(`Failed to parse cached status for ${channelId}:`, error);
+          await this.redisService.del(statusCacheKey);
         }
       }
       
@@ -464,11 +461,13 @@ export class YoutubeLiveService {
                 
                 results.set(channelId, liveStreamsResult);
                 
-                // Migration complete - Cache the result to new format only
-                const liveKey = `liveStreamsByChannel:${handle}`;
+                // Unified cache - write LiveStatusCache (replaces liveStreamsByChannel)
+                const statusCacheKey = `liveStatusByHandle:${handle}`;
                 const notFoundKey = `videoIdNotFound:${handle}`;
                 const blockTTL = channelTTLs.get(channelId)!;
-                await this.redisService.set(liveKey, liveStreamsResult, blockTTL);
+                const cacheData = createLiveStatusCacheFromStreams(channelId, handle, liveStreamsResult, blockTTL);
+                // Use cacheData.ttl to ensure Redis TTL matches the cache object's TTL field
+                await this.redisService.set(statusCacheKey, cacheData, cacheData.ttl);
                 
                 // Clear the "not-found" flag since we found live streams
                 await this.redisService.del(notFoundKey);
@@ -532,11 +531,13 @@ export class YoutubeLiveService {
             
             results.set(channelId, liveStreamsResult);
             
-            // Migration complete - Cache the result to new format only
-            const liveKey = `liveStreamsByChannel:${handle}`;
+            // Unified cache - write LiveStatusCache (replaces liveStreamsByChannel)
+            const statusCacheKey = `liveStatusByHandle:${handle}`;
             const notFoundKey = `videoIdNotFound:${handle}`;
             const blockTTL = channelTTLs.get(channelId)!;
-            await this.redisService.set(liveKey, liveStreamsResult, blockTTL);
+            const cacheData = createLiveStatusCacheFromStreams(channelId, handle, liveStreamsResult, blockTTL);
+            // Use cacheData.ttl to ensure Redis TTL matches the cache object's TTL field
+            await this.redisService.set(statusCacheKey, cacheData, cacheData.ttl);
             
             // Clear the "not-found" flag since we found live streams
             await this.redisService.del(notFoundKey);
@@ -600,9 +601,9 @@ export class YoutubeLiveService {
       return '__SKIPPED__';
     }
 
-    // Migration complete - only use new format
+    // Unified cache - use liveStatusByHandle (replaces liveStreamsByChannel)
     const notFoundKey = `videoIdNotFound:${handle}`;
-    const liveKey = `liveStreamsByChannel:${handle}`;
+    const statusCacheKey = `liveStatusByHandle:${handle}`;
 
     // skip rápido si ya está marcado como no-found (unless explicitly ignored)
     if (!ignoreNotFoundCache) {
@@ -612,35 +613,30 @@ export class YoutubeLiveService {
       }
     }
 
-    // cache-hit: reuse si sigue vivo
-    const cachedStreams = await this.redisService.get<any>(liveKey);
-    if (cachedStreams) {
+    // cache-hit: reuse si sigue vivo (unified cache)
+    const cachedStatus = await this.redisService.get<LiveStatusCache>(statusCacheKey);
+    if (cachedStatus) {
       try {
-        const parsedStreams: LiveStream[] = cachedStreams.streams;
         // Skip validation during bulk operations to improve performance
         // Validate that at least the primary stream is still live (skip for onDemand context)
-        if (parsedStreams.length > 0) {
+        if (cachedStatus.streams.length > 0 && cachedStatus.videoId) {
           const shouldValidate = context === 'cron' || context === 'program-start';
-          const isValid = shouldValidate ? (await this.isVideoLive(parsedStreams[0].videoId)) : true;
+          const isValid = shouldValidate ? (await this.isVideoLive(cachedStatus.videoId)) : true;
           
           if (isValid) {
-            this.logger.debug(`🔁 Reusing cached streams for ${handle} (${parsedStreams.length} streams)`);
-            return {
-              streams: parsedStreams,
-              primaryVideoId: cachedStreams.primaryVideoId,
-              streamCount: cachedStreams.streamCount
-            };
+            this.logger.debug(`🔁 Reusing cached streams for ${handle} (${cachedStatus.streamCount} streams)`);
+            return extractLiveStreamsResult(cachedStatus);
           } else {
-            this.logger.debug(`🔄 Cached video ${parsedStreams[0].videoId} no longer live for ${handle}, forcing refresh`);
+            this.logger.debug(`🔄 Cached video ${cachedStatus.videoId} no longer live for ${handle}, forcing refresh`);
             // Delete cache and continue to make fresh API call
-            await this.redisService.del(liveKey);
+            await this.redisService.del(statusCacheKey);
           }
         }
       } catch (error) {
-        this.logger.warn(`Failed to parse cached streams for ${handle}:`, error);
+        this.logger.warn(`Failed to parse cached status for ${handle}:`, error);
         // If parsing fails, delete the corrupted cache
-        await this.redisService.del(liveKey);
-        this.logger.debug(`🗑️ Deleted corrupted cached streams for ${handle}`);
+        await this.redisService.del(statusCacheKey);
+        this.logger.debug(`🗑️ Deleted corrupted cached status for ${handle}`);
       }
     }
 
@@ -708,8 +704,11 @@ export class YoutubeLiveService {
         streamCount: liveStreams.length
       };
 
-      // Migration complete - Cache the streams to new format
-      await this.redisService.set(liveKey, result, blockTTL);
+      // Unified cache - write LiveStatusCache (replaces liveStreamsByChannel)
+      const statusCacheKey = `liveStatusByHandle:${handle}`;
+      const cacheData = createLiveStatusCacheFromStreams(channelId, handle, result, blockTTL);
+      // Use cacheData.ttl to ensure Redis TTL matches the cache object's TTL field
+      await this.redisService.set(statusCacheKey, cacheData, cacheData.ttl);
       
       // Clear the "not-found" flag since we found live streams
       await this.redisService.del(notFoundKey);
@@ -1018,28 +1017,27 @@ export class YoutubeLiveService {
         this.logger.debug(`🔄 Forcing validation for ${handle} despite cooldown (program transition)`);
       }
 
-      // Migration complete - Check streams cache
-      const streamsKey = `liveStreamsByChannel:${handle}`;
-      const cachedStreams = await this.redisService.get<any>(streamsKey);
+      // Unified cache - Check liveStatusByHandle (replaces liveStreamsByChannel)
+      const statusCacheKey = `liveStatusByHandle:${handle}`;
+      const cachedStatus = await this.redisService.get<LiveStatusCache>(statusCacheKey);
       
-      if (!cachedStreams) {
+      if (!cachedStatus || !cachedStatus.videoId) {
         return; // No cached data to validate
       }
 
       // Check if cached streams are still live
       try {
-        const streams = cachedStreams;
-        if (streams.primaryVideoId && (await this.isVideoLive(streams.primaryVideoId))) {
-          this.logger.debug(`✅  ${handle}: ${streams.primaryVideoId}`);
+        if (cachedStatus.videoId && (await this.isVideoLive(cachedStatus.videoId))) {
+          this.logger.debug(`✅  ${handle}: ${cachedStatus.videoId}`);
           this.validationCooldowns.set(channelId, now); // Update cooldown
           return; // Still live, no action needed
         }
       } catch (error) {
-        this.logger.warn(`Failed to parse cached streams for ${handle}:`, error);
+        this.logger.warn(`Failed to validate cached status for ${handle}:`, error);
       }
 
       // Video ID/streams are no longer live, refresh them
-      const oldVideoId = cachedStreams.primaryVideoId;
+      const oldVideoId = cachedStatus.videoId;
       this.logger.debug(`🔄 Cached video ID no longer live for ${handle} (${oldVideoId}), refreshing...`);
       
       const schedules = await this.schedulesService.findByDay(dayjs().tz('America/Argentina/Buenos_Aires').format('dddd').toLowerCase());
@@ -1055,9 +1053,9 @@ export class YoutubeLiveService {
           this.logger.debug(`🆕 Refreshed streams for ${handle}: ${streamsResult.streamCount} streams, primary: ${streamsResult.primaryVideoId}`);
         }
       } else {
-        // Clear streams cache if no streams found
-        await this.redisService.del(streamsKey);
-        this.logger.debug(`🗑️ Cleared streams cache for ${handle} (no streams found)`);
+        // Clear status cache if no streams found
+        await this.redisService.del(statusCacheKey);
+        this.logger.debug(`🗑️ Cleared status cache for ${handle} (no streams found)`);
       }
 
       // Update cooldown after validation

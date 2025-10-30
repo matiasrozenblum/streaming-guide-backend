@@ -493,12 +493,12 @@ export class ChannelsService {
     }
     
     try {
-      // Invalidate all handle-based cache keys (migration complete - all keys use handle format)
+      // Invalidate unified cache and related keys
+      // Note: liveStreamsByChannel no longer exists (unified into liveStatusByHandle)
       await this.redisService.del(`liveStatusByHandle:${handle}`);
-      await this.redisService.del(`liveStreamsByChannel:${handle}`);
       await this.redisService.del(`videoIdNotFound:${handle}`);
       await this.redisService.del(`notFoundAttempts:${handle}`);
-      console.log(`🗑️ Invalidated handle-based cache keys for: ${handle}`);
+      console.log(`🗑️ Invalidated cache keys for: ${handle}`);
     } catch (error) {
       console.error(`❌ Error invalidating live status cache for ${handle}:`, error.message);
     }

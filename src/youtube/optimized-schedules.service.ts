@@ -116,8 +116,19 @@ export class OptimizedSchedulesService {
           };
         } else if (isCurrentlyLive) {
           // Program is live by time but background cache says no live stream
-          // Mark as live but don't block on YouTube API calls
-          this.logger.debug(`[OPTIMIZED-SCHEDULES] Program "${schedule.program.name}" is live by time but cache says no stream. Marking as live without blocking API call.`);
+          // CRITICAL: Trust recent cache - if cache was updated recently and says "not live", 
+          // don't trigger expensive API calls. The background cron will handle updates.
+          const cacheAge = Date.now() - liveStatus.lastUpdated;
+          const cacheAgeMinutes = cacheAge / (60 * 1000);
+          const shouldTrustCache = cacheAgeMinutes < 10; // Trust cache if updated within last 10 minutes
+          
+          if (shouldTrustCache) {
+            // Cache is recent and says not live - trust it, background cron will update if needed
+            this.logger.debug(`[OPTIMIZED-SCHEDULES] Program "${schedule.program.name}" is live by time but cache (updated ${Math.round(cacheAgeMinutes)}min ago) says no stream. Trusting cache, background cron will update.`);
+          } else {
+            // Cache is stale - trigger async fetch only if not already triggered
+            this.logger.debug(`[OPTIMIZED-SCHEDULES] Program "${schedule.program.name}" is live by time but cache is stale (${Math.round(cacheAgeMinutes)}min old). Triggering async fetch.`);
+          }
           
           enrichedSchedule.program = {
             ...schedule.program,
@@ -127,11 +138,11 @@ export class OptimizedSchedulesService {
             stream_count: 0,
           };
           
-          // Trigger async background fetch (non-blocking) - with Redis-based deduplication
-          if (schedule.program.channel?.handle) {
+          // Only trigger async fetch if cache is stale AND lock not already acquired
+          if (!shouldTrustCache && schedule.program.channel?.handle) {
             const handle = schedule.program.channel.handle;
             const fetchLockKey = `async-fetch-triggered:${handle}`;
-            const fetchLockTTL = 300; // 5 minutes - matches cache TTL
+            const fetchLockTTL = 600; // 10 minutes - longer to prevent excessive triggering
             
             // Check lock BEFORE setImmediate to prevent race conditions
             const lockAcquired = await this.redisService.setNX(fetchLockKey, { timestamp: Date.now() }, fetchLockTTL);
@@ -139,17 +150,24 @@ export class OptimizedSchedulesService {
             if (lockAcquired) {
               setImmediate(async () => {
                 try {
-                  this.logger.debug(`[OPTIMIZED-SCHEDULES] Triggering async fetch for ${handle}...`);
+                  this.logger.debug(`[OPTIMIZED-SCHEDULES] Triggering async fetch for ${handle} (stale cache)...`);
+                  // Use program-aware TTL instead of hardcoded 300
+                  const { getCurrentBlockTTL } = await import('../utils/getBlockTTL.util');
+                  const schedulesForTTL = schedules.filter(s => s.program.channel?.youtube_channel_id === channelId);
+                  const ttl = schedulesForTTL.length > 0 
+                    ? await getCurrentBlockTTL(channelId, schedulesForTTL, undefined)
+                    : 300; // Fallback to 5 min if no schedules
+                  
                   await this.youtubeLiveService.getLiveStreamsMain(
                     channelId,
                     handle,
-                    300 // 5 min TTL for on-demand fetches
+                    ttl
                   );
                   this.logger.debug(`[OPTIMIZED-SCHEDULES] Async fetch completed for ${handle}`);
                 } catch (error) {
                   this.logger.error(`[OPTIMIZED-SCHEDULES] Async fetch failed for ${channelId}:`, error.message);
                 }
-                // Note: We don't delete the lock - let it expire naturally after 5 minutes
+                // Note: We don't delete the lock - let it expire naturally
                 // This prevents rapid re-fetching even if the API call completes quickly
               });
             } else {
@@ -183,10 +201,11 @@ export class OptimizedSchedulesService {
         };
         
         // If program is live but no cache data exists, trigger async fetch to populate cache
+        // CRITICAL: Only trigger if lock not already acquired (deduplicate by channel, not by schedule)
         if (isCurrentlyLive && schedule.program.channel?.handle) {
           const handle = schedule.program.channel.handle;
           const fetchLockKey = `async-fetch-triggered:${handle}`;
-          const fetchLockTTL = 300; // 5 minutes - matches cache TTL
+          const fetchLockTTL = 600; // 10 minutes - longer to prevent excessive triggering
           
           // Check lock BEFORE setImmediate to prevent race conditions
           const lockAcquired = await this.redisService.setNX(fetchLockKey, { timestamp: Date.now() }, fetchLockTTL);
@@ -195,10 +214,17 @@ export class OptimizedSchedulesService {
             setImmediate(async () => {
               try {
                 this.logger.debug(`[OPTIMIZED-SCHEDULES] Triggering async fetch for ${handle} (no cache data)...`);
+                // Use program-aware TTL instead of hardcoded 300
+                const { getCurrentBlockTTL } = await import('../utils/getBlockTTL.util');
+                const schedulesForTTL = schedules.filter(s => s.program.channel?.youtube_channel_id === channelId);
+                const ttl = schedulesForTTL.length > 0 
+                  ? await getCurrentBlockTTL(channelId, schedulesForTTL, undefined)
+                  : 300; // Fallback to 5 min if no schedules
+                
                 await this.youtubeLiveService.getLiveStreamsMain(
                   channelId,
                   handle,
-                  300 // 5 min TTL for on-demand fetches
+                  ttl
                 );
                 this.logger.debug(`[OPTIMIZED-SCHEDULES] Async fetch completed for ${handle}`);
               } catch (error) {

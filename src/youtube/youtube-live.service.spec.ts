@@ -72,34 +72,67 @@ describe('YoutubeLiveService', () => {
     });
 
     it('returns cached primary videoId if it is live', async () => {
-      const cachedStreams = { primaryVideoId: 'cachedId', streamCount: 1 };
+      const cachedStatus = { 
+        channelId: 'cid', 
+        handle: 'handle', 
+        isLive: true, 
+        streamUrl: 'https://www.youtube.com/embed/cachedId?autoplay=1',
+        videoId: 'cachedId', 
+        streamCount: 1,
+        streams: [{ videoId: 'cachedId', title: '', description: '', publishedAt: '', thumbnailUrl: '' }],
+        lastUpdated: Date.now(),
+        ttl: 100,
+        blockEndTime: 1440,
+        validationCooldown: Date.now() + 1800000,
+        lastValidation: Date.now()
+      };
       redisService.get.mockImplementation(async (key: string) => 
-        key === 'liveStreamsByChannel:handle' ? cachedStreams : null
+        key === 'liveStatusByHandle:handle' ? cachedStatus : null
       );
       jest.spyOn(service as any, 'isVideoLive').mockResolvedValue(true);
       const result = await service.getLiveVideoId('cid', 'handle', 100, 'cron');
       expect(result).toBe('cachedId');
     });
 
-    it('deletes cached streams if they are not live', async () => {
-      const cachedStreams = { primaryVideoId: 'cachedId', streamCount: 1 };
+    it('deletes cached status if it is not live', async () => {
+      const cachedStatus = { 
+        channelId: 'cid', 
+        handle: 'handle', 
+        isLive: true, 
+        streamUrl: 'https://www.youtube.com/embed/cachedId?autoplay=1',
+        videoId: 'cachedId', 
+        streamCount: 1,
+        streams: [{ videoId: 'cachedId', title: '', description: '', publishedAt: '', thumbnailUrl: '' }],
+        lastUpdated: Date.now(),
+        ttl: 100,
+        blockEndTime: 1440,
+        validationCooldown: Date.now() + 1800000,
+        lastValidation: Date.now()
+      };
       redisService.get.mockImplementation(async (key: string) => 
-        key === 'liveStreamsByChannel:handle' ? cachedStreams : null
+        key === 'liveStatusByHandle:handle' ? cachedStatus : null
       );
       jest.spyOn(service as any, 'isVideoLive').mockResolvedValue(false);
       redisService.del.mockResolvedValue(undefined);
       jest.spyOn(axios, 'get').mockResolvedValue({ data: { items: [] } });
       const result = await service.getLiveVideoId('cid', 'handle', 100, 'cron');
-      expect(redisService.del).toHaveBeenCalledWith('liveStreamsByChannel:handle');
+      expect(redisService.del).toHaveBeenCalledWith('liveStatusByHandle:handle');
       expect(result).toBe(null);
     });
 
-    it('fetches from YouTube and caches streams', async () => {
+    it('fetches from YouTube and caches status', async () => {
       redisService.get.mockResolvedValue(null);
       jest.spyOn(axios, 'get').mockResolvedValue({ data: { items: [{ id: { videoId: 'vid123' } }] } });
       jest.spyOn(service as any, 'isVideoLive').mockResolvedValue(false);
       const result = await service.getLiveVideoId('cid', 'handle', 100, 'cron');
-      expect(redisService.set).toHaveBeenCalledWith('liveStreamsByChannel:handle', expect.any(Object), 100);
+      expect(redisService.set).toHaveBeenCalledWith('liveStatusByHandle:handle', expect.objectContaining({
+        channelId: 'cid',
+        handle: 'handle',
+        videoId: 'vid123',
+        isLive: true,
+        streams: expect.any(Array),
+        streamCount: 1
+      }), 100);
       // Should clear both not-found keys when video is found
       expect(redisService.del).toHaveBeenCalledWith('videoIdNotFound:handle');
       expect(redisService.del).toHaveBeenCalledWith('notFoundAttempts:handle');
@@ -187,8 +220,25 @@ describe('YoutubeLiveService', () => {
       const channelId = 'test-channel';
       const handle = 'test-handle';
       
-      // Mock that there's a cached video ID
-      redisService.get.mockResolvedValue('cached-video-id');
+      // Mock that there's a cached video ID with unified cache structure
+      redisService.get.mockImplementation(async (key: string) => {
+        if (key === 'liveStatusByHandle:test-handle') {
+          return {
+            channelId: 'test-channel',
+            handle: 'test-handle',
+            isLive: true,
+            videoId: 'cached-video-id',
+            lastUpdated: Date.now(),
+            ttl: 100,
+            blockEndTime: null,
+            validationCooldown: Date.now() + 1800000,
+            lastValidation: Date.now(),
+            streams: [],
+            streamCount: 0
+          };
+        }
+        return null;
+      });
       
       // Mock that the video is no longer live by mocking the private method
       (service as any).isVideoLive = jest.fn().mockResolvedValue(false);
@@ -234,13 +284,22 @@ describe('YoutubeLiveService', () => {
         { videoId: 'vid1', title: 'Stream 1', publishedAt: '2023-01-01', description: 'Desc 1' },
         { videoId: 'vid2', title: 'Stream 2', publishedAt: '2023-01-01', description: 'Desc 2' }
       ];
-      const cachedData = {
+      const cachedStatus = {
+        channelId: 'cid',
+        handle: 'handle',
+        isLive: true,
+        streamUrl: 'https://www.youtube.com/embed/vid1?autoplay=1',
+        videoId: 'vid1',
         streams: mockStreams,
-        primaryVideoId: 'vid1',
-        streamCount: 2
+        streamCount: 2,
+        lastUpdated: Date.now(),
+        ttl: 100,
+        blockEndTime: 1440,
+        validationCooldown: Date.now() + 1800000,
+        lastValidation: Date.now()
       };
       redisService.get.mockImplementation(async (key: string) => 
-        key === 'liveStreamsByChannel:handle' ? cachedData : null
+        key === 'liveStatusByHandle:handle' ? cachedStatus : null
       );
       jest.spyOn(service as any, 'isVideoLive').mockResolvedValue(true);
       
@@ -253,15 +312,24 @@ describe('YoutubeLiveService', () => {
       });
     });
 
-    it('deletes cached streams if they are not live', async () => {
+    it('deletes cached status if it is not live', async () => {
       const mockStreams = [{ videoId: 'vid1', title: 'Stream 1', publishedAt: '2023-01-01', description: 'Desc 1' }];
-      const cachedData = {
+      const cachedStatus = {
+        channelId: 'cid',
+        handle: 'handle',
+        isLive: true,
+        streamUrl: 'https://www.youtube.com/embed/vid1?autoplay=1',
+        videoId: 'vid1',
         streams: mockStreams,
-        primaryVideoId: 'vid1',
-        streamCount: 1
+        streamCount: 1,
+        lastUpdated: Date.now(),
+        ttl: 100,
+        blockEndTime: 1440,
+        validationCooldown: Date.now() + 1800000,
+        lastValidation: Date.now()
       };
       redisService.get.mockImplementation(async (key: string) => 
-        key === 'liveStreamsByChannel:handle' ? cachedData : null
+        key === 'liveStatusByHandle:handle' ? cachedStatus : null
       );
       jest.spyOn(service as any, 'isVideoLive').mockResolvedValue(false);
       redisService.del.mockResolvedValue(undefined);
@@ -269,7 +337,7 @@ describe('YoutubeLiveService', () => {
       
       const result = await service.getLiveStreamsMain('cid', 'handle', 100);
       
-      expect(redisService.del).toHaveBeenCalledWith('liveStreamsByChannel:handle');
+      expect(redisService.del).toHaveBeenCalledWith('liveStatusByHandle:handle');
       expect(result).toBe(null);
     });
 
@@ -308,8 +376,18 @@ describe('YoutubeLiveService', () => {
       const result = await service.getLiveStreamsMain('cid', 'handle', 100);
       
       expect(redisService.set).toHaveBeenCalledWith(
-        'liveStreamsByChannel:handle',
+        'liveStatusByHandle:handle',
         expect.objectContaining({
+          channelId: 'cid',
+          handle: 'handle',
+          videoId: 'vid1',
+          isLive: true,
+          streamUrl: 'https://www.youtube.com/embed/vid1?autoplay=1',
+          lastUpdated: expect.any(Number),
+          ttl: 100,
+          blockEndTime: null,
+          validationCooldown: expect.any(Number),
+          lastValidation: expect.any(Number),
           streams: expect.arrayContaining([
             expect.objectContaining({
               videoId: 'vid1',
@@ -328,7 +406,6 @@ describe('YoutubeLiveService', () => {
               channelTitle: 'Test Channel'
             })
           ]),
-          primaryVideoId: 'vid1',
           streamCount: 2
         }),
         100
@@ -377,16 +454,16 @@ describe('YoutubeLiveService', () => {
       expect(result).toBe(null);
     });
 
-    it('handles malformed cached streams gracefully', async () => {
+    it('handles malformed cached status gracefully', async () => {
       redisService.get.mockImplementation(async (key: string) => 
-        key === 'liveStreamsByChannel:handle' ? 'invalid-json' : null
+        key === 'liveStatusByHandle:handle' ? 'invalid-json' : null
       );
       redisService.del.mockResolvedValue(undefined);
       jest.spyOn(axios, 'get').mockResolvedValue({ data: { items: [] } });
       
       const result = await service.getLiveStreamsMain('cid', 'handle', 100);
       
-      expect(redisService.del).toHaveBeenCalledWith('liveStreamsByChannel:handle');
+      expect(redisService.del).toHaveBeenCalledWith('liveStatusByHandle:handle');
       expect(result).toBe(null);
     });
   });
