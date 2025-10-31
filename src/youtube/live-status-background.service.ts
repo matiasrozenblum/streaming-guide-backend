@@ -115,7 +115,17 @@ export class LiveStatusBackgroundService {
           continue;
         }
         
-        if (await this.shouldUpdateCache(cached)) {
+        // Find current program name for this channel
+        const currentSchedule = allSchedules.find(schedule => {
+          const scheduleChannelId = schedule.program?.channel?.youtube_channel_id;
+          if (scheduleChannelId !== channelId) return false;
+          const startNum = this.convertTimeToNumber(schedule.start_time);
+          const endNum = this.convertTimeToNumber(schedule.end_time);
+          return currentTime >= startNum && currentTime < endNum;
+        });
+        const currentProgramName = currentSchedule?.program?.name || '';
+        
+        if (await this.shouldUpdateCache(cached, currentProgramName)) {
           this.logger.debug(`[LIVE-STATUS-BG] Cache update needed for channel ${channelInfo.handle} (${channelId})`);
           channelsToUpdate.push(channelId);
         }
@@ -419,22 +429,27 @@ export class LiveStatusBackgroundService {
           
           if (titleSimilarity < 0.3) {
             // Title doesn't match well (<30%) - this might be a previous program's video, validate now
+            // CRITICAL: Validate first to see if the old video is still live
+            // If it's no longer live, we'll fetch and get the new one
+            // If it's still live, we'll keep it (don't fetch) since search would likely return the same video ID
             this.logger.debug(`[LIVE-STATUS-BG] Video title '${videoTitle}' doesn't match program '${programName}' (${Math.round(titleSimilarity * 100)}%), forcing validation despite cooldown`);
             const isStillLive = await this.youtubeLiveService.isVideoLive(cachedStatus.videoId);
             
-            if (isStillLive) {
-              // Update metadata and reset validation
+            if (!isStillLive) {
+              // Old video is no longer live - fetch new one
+              this.logger.debug(`[LIVE-STATUS-BG] Video ${cachedStatus.videoId} no longer live for ${handle} (title mismatch), fetching new one`);
+              await this.redisService.del(statusCacheKey);
+              // Continue to fetch fresh data below
+            } else {
+              // Old video is still live but title doesn't match
+              // CRITICAL: Don't fetch - search would likely return the same video ID anyway, which is costly
+              // Just update metadata (TTL, blockEndTime) and keep the cached video
+              this.logger.debug(`[LIVE-STATUS-BG] Video ${cachedStatus.videoId} still live for ${handle} but title doesn't match program. Keeping cached video (fetch would return same ID)`);
               cachedStatus.ttl = ttl;
               cachedStatus.blockEndTime = blockEndTime;
-              cachedStatus.lastValidation = Date.now();
               cachedStatus.lastUpdated = Date.now();
               await this.cacheLiveStatus(channelId, cachedStatus);
               return cachedStatus;
-            } else {
-              // Not live, fetch new one
-              this.logger.debug(`[LIVE-STATUS-BG] Video ${cachedStatus.videoId} no longer live, fetching new one`);
-              await this.redisService.del(statusCacheKey);
-              // Continue to fetch fresh data below
             }
           } else {
             // Title matches well - just update metadata (TTL, blockEndTime) from current schedules
@@ -513,18 +528,35 @@ export class LiveStatusBackgroundService {
 
   /**
    * Check if cache should be updated
-   * Considers TTL and program block changes - validation is done separately in updateChannelLiveStatus to avoid excessive API calls
+   * Considers TTL, program block changes, and title similarity with current program
+   * Validation is done separately in updateChannelLiveStatus to avoid excessive API calls
    * 
    * IMPORTANT: Returns false (cache is valid) for slightly stale cache to prevent excessive async fetches
    * The background cron will handle updates, and we don't want every request triggering fetches
+   * 
+   * @param cached The cached live status
+   * @param currentProgramName The name of the program currently scheduled (optional, for title comparison)
    */
-  private async shouldUpdateCache(cached: LiveStatusCache): Promise<boolean> {
+  private async shouldUpdateCache(cached: LiveStatusCache, currentProgramName?: string): Promise<boolean> {
     const now = Date.now();
     const age = now - cached.lastUpdated;
     
     // Always update if TTL has expired
     if (age > cached.ttl * 1000) {
       return true;
+    }
+    
+    // CRITICAL: Check title similarity if we have both cached video title and current program name
+    // If title doesn't match current program, force update to validate and potentially refresh
+    if (currentProgramName && cached.streams && cached.streams.length > 0 && cached.streams[0]?.title) {
+      const videoTitle = cached.streams[0].title;
+      const titleSimilarity = this.calculateTitleSimilarity(currentProgramName, videoTitle);
+      
+      if (titleSimilarity < 0.3) {
+        // Title doesn't match current program - force update to validate video status
+        this.logger.debug(`[LIVE-STATUS-BG] Title mismatch for ${cached.handle}: cached '${videoTitle}' vs program '${currentProgramName}' (${Math.round(titleSimilarity * 100)}%), forcing update`);
+        return true;
+      }
     }
     
     // CRITICAL: Enrichment needed - main cron created cache without blockEndTime
