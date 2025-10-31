@@ -347,7 +347,7 @@ export class LiveStatusBackgroundService {
           
           if (isStillLive) {
             // Video is still live but program changed - set 7-minute cooldown to catch rotation soon
-            this.logger.debug(`[LIVE-STATUS-BG] Video ${cachedStatus.videoId} still live after program transition, setting 7-minute validation cooldown`);
+            this.logger.debug(`[LIVE-STATUS-BG] Video ${cachedStatus.videoId} still live after program transition for ${handle}, setting 7-minute validation cooldown`);
             cachedStatus.ttl = ttl;
             cachedStatus.blockEndTime = blockEndTime;
             cachedStatus.lastValidation = Date.now();
@@ -357,7 +357,7 @@ export class LiveStatusBackgroundService {
             return cachedStatus;
           } else {
             // Video is no longer live - fetch new one
-            this.logger.debug(`[LIVE-STATUS-BG] Video ${cachedStatus.videoId} no longer live after program transition, fetching new one`);
+            this.logger.debug(`[LIVE-STATUS-BG] Video ${cachedStatus.videoId} no longer live after program transition for ${handle}, fetching new one`);
             await this.redisService.del(statusCacheKey);
             // Continue to fetch fresh data below
           }
