@@ -389,6 +389,255 @@ describe('SchedulesService', () => {
     });
   });
 
+  describe('findByChannel', () => {
+    it('should return schedules for a specific channel handle', async () => {
+      const testSchedules = [
+        {
+          id: 1,
+          day_of_week: 'monday',
+          start_time: '10:00',
+          end_time: '12:00',
+          program: {
+            id: 1,
+            name: 'Test Program',
+            channel: {
+              id: 1,
+              handle: 'luzutv',
+            },
+          },
+        },
+        {
+          id: 2,
+          day_of_week: 'tuesday',
+          start_time: '14:00',
+          end_time: '16:00',
+          program: {
+            id: 2,
+            name: 'Another Program',
+            channel: {
+              id: 2,
+              handle: 'otherchannel',
+            },
+          },
+        },
+        {
+          id: 3,
+          day_of_week: 'friday',
+          start_time: '10:00',
+          end_time: '12:30',
+          program: {
+            id: 3,
+            name: 'Luzu Program',
+            channel: {
+              id: 1,
+              handle: 'luzutv',
+            },
+          },
+        },
+      ] as any[];
+
+      jest.spyOn(service, 'findAll').mockResolvedValue(testSchedules);
+
+      const result = await service.findByChannel('luzutv');
+
+      expect(result).toHaveLength(2);
+      expect(result[0].program.channel.handle).toBe('luzutv');
+      expect(result[1].program.channel.handle).toBe('luzutv');
+    });
+
+    it('should filter by channel handle and day', async () => {
+      const allSchedules = [
+        {
+          id: 1,
+          day_of_week: 'monday',
+          start_time: '10:00',
+          end_time: '12:00',
+          program: {
+            id: 1,
+            name: 'Monday Program',
+            channel: {
+              id: 1,
+              handle: 'luzutv',
+            },
+          },
+        },
+        {
+          id: 2,
+          day_of_week: 'friday',
+          start_time: '10:00',
+          end_time: '12:30',
+          program: {
+            id: 2,
+            name: 'Friday Program',
+            channel: {
+              id: 1,
+              handle: 'luzutv',
+            },
+          },
+        },
+      ] as any[];
+
+      // Mock findAll to return filtered results based on dayOfWeek
+      jest.spyOn(service, 'findAll').mockImplementation(async (options: any) => {
+        if (options.dayOfWeek === 'friday') {
+          return allSchedules.filter(s => s.day_of_week === 'friday');
+        }
+        return allSchedules;
+      });
+
+      const result = await service.findByChannel('luzutv', 'friday');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].day_of_week).toBe('friday');
+      expect(result[0].program.channel.handle).toBe('luzutv');
+    });
+
+    it('should return empty array if no schedules match channel handle', async () => {
+      const testSchedules = [
+        {
+          id: 1,
+          day_of_week: 'monday',
+          program: {
+            channel: {
+              handle: 'otherchannel',
+            },
+          },
+        },
+      ] as any[];
+
+      jest.spyOn(service, 'findAll').mockResolvedValue(testSchedules);
+
+      const result = await service.findByChannel('luzutv');
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('should respect applyOverrides option', async () => {
+      const testSchedules = [] as any[];
+      jest.spyOn(service, 'findAll').mockResolvedValue(testSchedules);
+
+      await service.findByChannel('luzutv', undefined, { applyOverrides: false });
+
+      expect(service.findAll).toHaveBeenCalledWith(
+        expect.objectContaining({ applyOverrides: false })
+      );
+    });
+  });
+
+  describe('findByProgramName', () => {
+    it('should return schedules for a program by name (case-insensitive partial match)', async () => {
+      const testSchedules = [
+        {
+          id: 1,
+          day_of_week: 'monday',
+          start_time: '10:00',
+          end_time: '12:00',
+          program: {
+            id: 1,
+            name: 'Patria y Familia',
+          },
+        },
+        {
+          id: 2,
+          day_of_week: 'tuesday',
+          start_time: '14:00',
+          end_time: '16:00',
+          program: {
+            id: 2,
+            name: 'Other Program',
+          },
+        },
+        {
+          id: 3,
+          day_of_week: 'friday',
+          start_time: '10:00',
+          end_time: '12:30',
+          program: {
+            id: 3,
+            name: 'Patria y Familia Especial',
+          },
+        },
+      ] as any[];
+
+      jest.spyOn(service, 'findAll').mockResolvedValue(testSchedules);
+
+      const result = await service.findByProgramName('patria y familia');
+
+      expect(result).toHaveLength(2);
+      expect(result[0].program.name).toBe('Patria y Familia');
+      expect(result[1].program.name).toBe('Patria y Familia Especial');
+    });
+
+    it('should filter by program name and day', async () => {
+      const allSchedules = [
+        {
+          id: 1,
+          day_of_week: 'monday',
+          program: {
+            id: 1,
+            name: 'Patria y Familia',
+          },
+        },
+        {
+          id: 2,
+          day_of_week: 'friday',
+          program: {
+            id: 2,
+            name: 'Patria y Familia',
+          },
+        },
+      ] as any[];
+
+      // Mock findAll to return filtered results based on dayOfWeek
+      jest.spyOn(service, 'findAll').mockImplementation(async (options: any) => {
+        if (options.dayOfWeek === 'friday') {
+          return allSchedules.filter(s => s.day_of_week === 'friday');
+        }
+        return allSchedules;
+      });
+
+      const result = await service.findByProgramName('Patria y Familia', 'friday');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].day_of_week).toBe('friday');
+      expect(result[0].program.name).toBe('Patria y Familia');
+    });
+
+    it('should return empty array if no schedules match program name', async () => {
+      const testSchedules = [
+        {
+          id: 1,
+          program: {
+            name: 'Other Program',
+          },
+        },
+      ] as any[];
+
+      jest.spyOn(service, 'findAll').mockResolvedValue(testSchedules);
+
+      const result = await service.findByProgramName('Patria y Familia');
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('should respect liveStatus and applyOverrides options', async () => {
+      const testSchedules = [] as any[];
+      jest.spyOn(service, 'findAll').mockResolvedValue(testSchedules);
+
+      await service.findByProgramName('Test Program', undefined, {
+        liveStatus: true,
+        applyOverrides: false,
+      });
+
+      expect(service.findAll).toHaveBeenCalledWith(
+        expect.objectContaining({
+          liveStatus: true,
+          applyOverrides: false,
+        })
+      );
+    });
+  });
+
   describe('notifyAndRevalidate integration', () => {
     it('calls notifyAndRevalidate on create', async () => {
       const spy = jest.spyOn(notifyUtil, 'notifyAndRevalidate').mockResolvedValue(undefined as any);
