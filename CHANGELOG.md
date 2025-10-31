@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.17.0] - 2025-10-29
+
+### Changed
+- Unified liveStatus and liveStreams cache keys into one, merging the data structure.
+
 ## [1.16.7] - 2025-10-29
 
 ### Changed
