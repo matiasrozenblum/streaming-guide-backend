@@ -14,6 +14,7 @@ export class ConfigService {
   private readonly FETCH_ENABLED_PREFIX = 'config:fetch_enabled:';
   private readonly HOLIDAY_OVERRIDE_PREFIX = 'config:holiday_override:';
   private readonly HOLIDAY_CACHE_KEY = 'config:holiday_status';
+  private readonly TITLE_MATCH_DISABLED_PREFIX = 'config:title_match_disabled:';
   
   private cacheSeeded = false;
   
@@ -66,6 +67,7 @@ export class ConfigService {
       
       let fetchEnabledCount = 0;
       let holidayOverrideCount = 0;
+      let titleMatchDisabledCount = 0;
       
       for (const config of allConfigs) {
         const value = config.value === 'true';
@@ -77,10 +79,13 @@ export class ConfigService {
         } else if (config.key.startsWith('youtube.fetch_override_holiday.')) {
           await this.redisService.set(`${this.HOLIDAY_OVERRIDE_PREFIX}${config.key}`, value);
           holidayOverrideCount++;
+        } else if (config.key === 'youtube.title_match_disabled' || config.key.startsWith('youtube.title_match_disabled.')) {
+          await this.redisService.set(`${this.TITLE_MATCH_DISABLED_PREFIX}${config.key}`, value);
+          titleMatchDisabledCount++;
         }
       }
       
-      console.log(`[ConfigService] Redis cache seeded: ${fetchEnabledCount} fetch_enabled, ${holidayOverrideCount} holiday overrides`);
+      console.log(`[ConfigService] Redis cache seeded: ${fetchEnabledCount} fetch_enabled, ${holidayOverrideCount} holiday overrides, ${titleMatchDisabledCount} title_match_disabled`);
     } catch (error) {
       console.error('[ConfigService] Failed to seed Redis cache:', error.message);
     }
@@ -119,6 +124,8 @@ export class ConfigService {
       await this.redisService.set(`${this.FETCH_ENABLED_PREFIX}${key}`, boolValue);
     } else if (key.startsWith('youtube.fetch_override_holiday.')) {
       await this.redisService.set(`${this.HOLIDAY_OVERRIDE_PREFIX}${key}`, boolValue);
+    } else if (key === 'youtube.title_match_disabled' || key.startsWith('youtube.title_match_disabled.')) {
+      await this.redisService.set(`${this.TITLE_MATCH_DISABLED_PREFIX}${key}`, boolValue);
     }
     
     return result;
@@ -138,6 +145,8 @@ export class ConfigService {
       await this.redisService.del(`${this.FETCH_ENABLED_PREFIX}${key}`);
     } else if (key.startsWith('youtube.fetch_override_holiday.')) {
       await this.redisService.del(`${this.HOLIDAY_OVERRIDE_PREFIX}${key}`);
+    } else if (key === 'youtube.title_match_disabled' || key.startsWith('youtube.title_match_disabled.')) {
+      await this.redisService.del(`${this.TITLE_MATCH_DISABLED_PREFIX}${key}`);
     }
   }
 
@@ -214,5 +223,45 @@ export class ConfigService {
     const override = await this.getBoolean(overrideKey);
     await this.redisService.set(`${this.HOLIDAY_OVERRIDE_PREFIX}${overrideKey}`, override);
     return override;
+  }
+
+  /**
+   * Check if title matching should be disabled for a channel
+   * Some channels use a single unified live stream for all their programs
+   * and the video title won't match individual program names
+   * 
+   * @param handle Channel handle
+   * @returns true if title matching should be disabled, false otherwise
+   */
+  async isTitleMatchDisabled(handle: string): Promise<boolean> {
+    // Ensure cache is seeded before reading
+    await this.ensureCacheSeeded();
+    
+    const perChannelKey = `youtube.title_match_disabled.${handle}`;
+    
+    // Check Redis cache first
+    const cachedPerChannel = await this.redisService.get<boolean>(`${this.TITLE_MATCH_DISABLED_PREFIX}${perChannelKey}`);
+    if (cachedPerChannel !== null) {
+      return cachedPerChannel;
+    }
+    
+    // Fallback to global if not in cache
+    const cachedGlobal = await this.redisService.get<boolean>(`${this.TITLE_MATCH_DISABLED_PREFIX}youtube.title_match_disabled`);
+    if (cachedGlobal !== null) {
+      return cachedGlobal;
+    }
+    
+    // Cache miss - fetch from DB and warm cache
+    const perChannel = await this.get(perChannelKey);
+    if (perChannel != null) {
+      const value = perChannel === 'true';
+      await this.redisService.set(`${this.TITLE_MATCH_DISABLED_PREFIX}${perChannelKey}`, value);
+      return value;
+    }
+
+    const global = await this.get('youtube.title_match_disabled');
+    const value = global === 'true';
+    await this.redisService.set(`${this.TITLE_MATCH_DISABLED_PREFIX}youtube.title_match_disabled`, value);
+    return value;
   }
 }

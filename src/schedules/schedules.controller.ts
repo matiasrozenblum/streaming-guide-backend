@@ -36,6 +36,63 @@ export class SchedulesController {
     });
   }
 
+  // IMPORTANT: Specific routes must come before the catch-all :id route
+  // to avoid route conflicts in NestJS/Express
+
+  @Get('program/:programId')
+  @ApiOperation({ summary: 'Obtener horarios por programa (ID)' })
+  @ApiResponse({ status: 200, description: 'Lista de horarios del programa', type: [Schedule] })
+  findByProgram(@Param('programId') programId: string): Promise<Schedule[]> {
+    return this.schedulesService.findByProgram(programId);
+  }
+
+  @Get('program-name/:programName')
+  @ApiOperation({ summary: 'Obtener horarios por nombre de programa' })
+  @ApiQuery({ name: 'day', required: false, description: 'Día de la semana para filtrar (ej: monday, tuesday, etc.)' })
+  @ApiQuery({ name: 'live_status', required: false, description: 'Si es true, incluye estado de transmisión en vivo' })
+  @ApiQuery({ name: 'raw', required: false, description: 'Si es true, devuelve los horarios sin aplicar weekly overrides' })
+  @ApiResponse({ status: 200, description: 'Lista de horarios del programa', type: [Schedule] })
+  async findByProgramName(
+    @Param('programName') programName: string,
+    @Query('day') day?: string,
+    @Query('live_status') liveStatus?: string,
+    @Query('raw') raw?: string,
+  ): Promise<Schedule[]> {
+    const liveStatusBool = liveStatus === 'true';
+    const applyOverrides = raw !== 'true';
+    return this.schedulesService.findByProgramName(programName, day?.toLowerCase(), {
+      liveStatus: liveStatusBool,
+      applyOverrides,
+    });
+  }
+
+  @Get('day/:dayOfWeek')
+  @ApiOperation({ summary: 'Obtener horarios por día de la semana' })
+  @ApiResponse({ status: 200, description: 'Lista de horarios del día', type: [Schedule] })
+  findByDay(@Param('dayOfWeek') dayOfWeek: string): Promise<Schedule[]> {
+    return this.schedulesService.findByDay(dayOfWeek);
+  }
+
+  @Get('channel/:channelHandle')
+  @ApiOperation({ summary: 'Obtener horarios por canal (handle)' })
+  @ApiQuery({ name: 'day', required: false, description: 'Día de la semana para filtrar (ej: monday, tuesday, etc.)' })
+  @ApiQuery({ name: 'live_status', required: false, description: 'Si es true, incluye estado de transmisión en vivo' })
+  @ApiQuery({ name: 'raw', required: false, description: 'Si es true, devuelve los horarios sin aplicar weekly overrides' })
+  @ApiResponse({ status: 200, description: 'Lista de horarios del canal', type: [Schedule] })
+  async findByChannel(
+    @Param('channelHandle') channelHandle: string,
+    @Query('day') day?: string,
+    @Query('live_status') liveStatus?: string,
+    @Query('raw') raw?: string,
+  ): Promise<Schedule[]> {
+    const liveStatusBool = liveStatus === 'true';
+    const applyOverrides = raw !== 'true';
+    return this.schedulesService.findByChannel(channelHandle, day?.toLowerCase(), {
+      liveStatus: liveStatusBool,
+      applyOverrides,
+    });
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Obtener un horario por ID' })
   @ApiResponse({ status: 200, description: 'Horario encontrado', type: Schedule })
@@ -45,20 +102,6 @@ export class SchedulesController {
       throw new NotFoundException(`Schedule with ID ${id} not found`);
     }
     return schedule;
-  }
-
-  @Get('program/:programId')
-  @ApiOperation({ summary: 'Obtener horarios por programa' })
-  @ApiResponse({ status: 200, description: 'Lista de horarios del programa', type: [Schedule] })
-  findByProgram(@Param('programId') programId: string): Promise<Schedule[]> {
-    return this.schedulesService.findByProgram(programId);
-  }
-
-  @Get('day/:dayOfWeek')
-  @ApiOperation({ summary: 'Obtener horarios por día de la semana' })
-  @ApiResponse({ status: 200, description: 'Lista de horarios del día', type: [Schedule] })
-  findByDay(@Param('dayOfWeek') dayOfWeek: string): Promise<Schedule[]> {
-    return this.schedulesService.findByDay(dayOfWeek);
   }
 
   @Post()

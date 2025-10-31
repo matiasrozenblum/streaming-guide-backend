@@ -652,6 +652,67 @@ export class SchedulesService {
     return this.findAll({ dayOfWeek });
   }
 
+  /**
+   * Find schedules by channel handle, optionally filtered by day
+   * Includes weekly overrides and live status enrichment
+   * 
+   * @param channelHandle The channel handle (e.g., 'luzutv')
+   * @param dayOfWeek Optional day filter (e.g., 'friday')
+   * @param options Optional configuration (liveStatus, applyOverrides, etc.)
+   */
+  async findByChannel(
+    channelHandle: string,
+    dayOfWeek?: string,
+    options: { liveStatus?: boolean; applyOverrides?: boolean } = {}
+  ): Promise<any[]> {
+    const { liveStatus = false, applyOverrides = true } = options;
+    
+    // Get all schedules and filter by channel handle
+    // Use findAll to leverage caching and weekly overrides
+    const allSchedules = await this.findAll({
+      dayOfWeek, // Filter by day if provided (after overrides are applied)
+      applyOverrides,
+      liveStatus,
+    });
+
+    // Filter by channel handle
+    const channelSchedules = allSchedules.filter(
+      schedule => schedule.program?.channel?.handle === channelHandle
+    );
+
+    return channelSchedules;
+  }
+
+  /**
+   * Find schedules by program name
+   * 
+   * @param programName The program name (e.g., 'Patria y Familia')
+   * @param dayOfWeek Optional day filter
+   * @param options Optional configuration (liveStatus, applyOverrides, etc.)
+   */
+  async findByProgramName(
+    programName: string,
+    dayOfWeek?: string,
+    options: { liveStatus?: boolean; applyOverrides?: boolean } = {}
+  ): Promise<any[]> {
+    const { liveStatus = false, applyOverrides = true } = options;
+    
+    // Get all schedules
+    const allSchedules = await this.findAll({
+      dayOfWeek,
+      applyOverrides,
+      liveStatus,
+    });
+
+    // Filter by program name (case-insensitive partial match)
+    const programSchedules = allSchedules.filter(
+      schedule => 
+        schedule.program?.name?.toLowerCase().includes(programName.toLowerCase())
+    );
+
+    return programSchedules;
+  }
+
   async create(dto: CreateScheduleDto): Promise<Schedule> {
     const program = await this.programsRepository.findOne({ where: { id: +dto.programId } });
     if (!program) throw new NotFoundException(`Program with ID ${dto.programId} not found`);

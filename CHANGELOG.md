@@ -17,6 +17,13 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.18.0] - 2025-10-29
+
+### Added
+- Added title matching validation for programs and stored video ids
+- Added config to enable or disable title matching by channel
+- Added schedule endpoints by channel, program and day
+
 ## [1.17.0] - 2025-10-29
 
 ### Changed
