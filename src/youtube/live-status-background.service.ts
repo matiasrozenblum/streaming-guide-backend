@@ -338,9 +338,35 @@ export class LiveStatusBackgroundService {
         cachedStatus.blockEndTime !== blockEndTime;
         
       if (programBlockChanged) {
-        this.logger.debug(`[LIVE-STATUS-BG] Program block changed for ${handle}: blockEndTime ${cachedStatus.blockEndTime} → ${blockEndTime}, invalidating cache`);
-        await this.redisService.del(statusCacheKey);
-        // Continue to fetch fresh data below
+        this.logger.debug(`[LIVE-STATUS-BG] Program block changed for ${handle}: blockEndTime ${cachedStatus.blockEndTime} → ${blockEndTime}`);
+        
+        // Check if cached video ID is still live
+        if (cachedStatus.videoId) {
+          this.logger.debug(`[LIVE-STATUS-BG] Checking if cached video ${cachedStatus.videoId} is still live after program transition`);
+          const isStillLive = await this.youtubeLiveService.isVideoLive(cachedStatus.videoId);
+          
+          if (isStillLive) {
+            // Video is still live but program changed - set 7-minute cooldown to catch rotation soon
+            this.logger.debug(`[LIVE-STATUS-BG] Video ${cachedStatus.videoId} still live after program transition for ${handle}, setting 7-minute validation cooldown`);
+            cachedStatus.ttl = ttl;
+            cachedStatus.blockEndTime = blockEndTime;
+            cachedStatus.lastValidation = Date.now();
+            cachedStatus.validationCooldown = Date.now() + (7 * 60 * 1000); // 7 minutes
+            cachedStatus.lastUpdated = Date.now();
+            await this.cacheLiveStatus(channelId, cachedStatus);
+            return cachedStatus;
+          } else {
+            // Video is no longer live - fetch new one
+            this.logger.debug(`[LIVE-STATUS-BG] Video ${cachedStatus.videoId} no longer live after program transition for ${handle}, fetching new one`);
+            await this.redisService.del(statusCacheKey);
+            // Continue to fetch fresh data below
+          }
+        } else {
+          // No cached video ID - invalidate and fetch
+          this.logger.debug(`[LIVE-STATUS-BG] No cached video ID after program transition, invalidating cache`);
+          await this.redisService.del(statusCacheKey);
+          // Continue to fetch fresh data below
+        }
       }
       
       if (cachedStatus && cachedStatus.videoId && !programBlockChanged) {
