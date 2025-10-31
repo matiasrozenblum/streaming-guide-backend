@@ -125,7 +125,17 @@ export class LiveStatusBackgroundService {
         });
         const currentProgramName = currentSchedule?.program?.name || '';
         
-        if (await this.shouldUpdateCache(cached, currentProgramName)) {
+        // Check if title matching is disabled for this channel
+        // Some channels use a single unified live stream for all programs
+        let shouldCheckTitle = true;
+        try {
+          shouldCheckTitle = !(await this.configService.isTitleMatchDisabled(channelInfo.handle));
+        } catch (error) {
+          // If we can't check the config, assume title matching is enabled
+          this.logger.debug(`[LIVE-STATUS-BG] Error checking title match config for ${channelInfo.handle}, assuming enabled`);
+        }
+        
+        if (await this.shouldUpdateCache(cached, shouldCheckTitle ? currentProgramName : undefined)) {
           this.logger.debug(`[LIVE-STATUS-BG] Cache update needed for channel ${channelInfo.handle} (${channelId})`);
           channelsToUpdate.push(channelId);
         }

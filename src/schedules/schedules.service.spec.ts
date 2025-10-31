@@ -446,7 +446,7 @@ describe('SchedulesService', () => {
     });
 
     it('should filter by channel handle and day', async () => {
-      const testSchedules = [
+      const allSchedules = [
         {
           id: 1,
           day_of_week: 'monday',
@@ -477,7 +477,13 @@ describe('SchedulesService', () => {
         },
       ] as any[];
 
-      jest.spyOn(service, 'findAll').mockResolvedValue(testSchedules);
+      // Mock findAll to return filtered results based on dayOfWeek
+      jest.spyOn(service, 'findAll').mockImplementation(async (options: any) => {
+        if (options.dayOfWeek === 'friday') {
+          return allSchedules.filter(s => s.day_of_week === 'friday');
+        }
+        return allSchedules;
+      });
 
       const result = await service.findByChannel('luzutv', 'friday');
 
@@ -563,7 +569,7 @@ describe('SchedulesService', () => {
     });
 
     it('should filter by program name and day', async () => {
-      const testSchedules = [
+      const allSchedules = [
         {
           id: 1,
           day_of_week: 'monday',
@@ -582,7 +588,13 @@ describe('SchedulesService', () => {
         },
       ] as any[];
 
-      jest.spyOn(service, 'findAll').mockResolvedValue(testSchedules);
+      // Mock findAll to return filtered results based on dayOfWeek
+      jest.spyOn(service, 'findAll').mockImplementation(async (options: any) => {
+        if (options.dayOfWeek === 'friday') {
+          return allSchedules.filter(s => s.day_of_week === 'friday');
+        }
+        return allSchedules;
+      });
 
       const result = await service.findByProgramName('Patria y Familia', 'friday');
 
