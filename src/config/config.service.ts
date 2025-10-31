@@ -67,6 +67,7 @@ export class ConfigService {
       
       let fetchEnabledCount = 0;
       let holidayOverrideCount = 0;
+      let titleMatchDisabledCount = 0;
       
       for (const config of allConfigs) {
         const value = config.value === 'true';
@@ -78,10 +79,13 @@ export class ConfigService {
         } else if (config.key.startsWith('youtube.fetch_override_holiday.')) {
           await this.redisService.set(`${this.HOLIDAY_OVERRIDE_PREFIX}${config.key}`, value);
           holidayOverrideCount++;
+        } else if (config.key === 'youtube.title_match_disabled' || config.key.startsWith('youtube.title_match_disabled.')) {
+          await this.redisService.set(`${this.TITLE_MATCH_DISABLED_PREFIX}${config.key}`, value);
+          titleMatchDisabledCount++;
         }
       }
       
-      console.log(`[ConfigService] Redis cache seeded: ${fetchEnabledCount} fetch_enabled, ${holidayOverrideCount} holiday overrides`);
+      console.log(`[ConfigService] Redis cache seeded: ${fetchEnabledCount} fetch_enabled, ${holidayOverrideCount} holiday overrides, ${titleMatchDisabledCount} title_match_disabled`);
     } catch (error) {
       console.error('[ConfigService] Failed to seed Redis cache:', error.message);
     }
@@ -120,6 +124,8 @@ export class ConfigService {
       await this.redisService.set(`${this.FETCH_ENABLED_PREFIX}${key}`, boolValue);
     } else if (key.startsWith('youtube.fetch_override_holiday.')) {
       await this.redisService.set(`${this.HOLIDAY_OVERRIDE_PREFIX}${key}`, boolValue);
+    } else if (key === 'youtube.title_match_disabled' || key.startsWith('youtube.title_match_disabled.')) {
+      await this.redisService.set(`${this.TITLE_MATCH_DISABLED_PREFIX}${key}`, boolValue);
     }
     
     return result;
@@ -139,6 +145,8 @@ export class ConfigService {
       await this.redisService.del(`${this.FETCH_ENABLED_PREFIX}${key}`);
     } else if (key.startsWith('youtube.fetch_override_holiday.')) {
       await this.redisService.del(`${this.HOLIDAY_OVERRIDE_PREFIX}${key}`);
+    } else if (key === 'youtube.title_match_disabled' || key.startsWith('youtube.title_match_disabled.')) {
+      await this.redisService.del(`${this.TITLE_MATCH_DISABLED_PREFIX}${key}`);
     }
   }
 
