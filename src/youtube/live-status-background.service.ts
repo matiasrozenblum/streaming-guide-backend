@@ -115,43 +115,6 @@ export class LiveStatusBackgroundService {
           continue;
         }
         
-        // Check if program changed by comparing current schedules to cached program
-        const currentSchedules = allSchedules.filter(s => s.program?.channel?.youtube_channel_id === channelId);
-        const liveSchedules = currentSchedules.filter(s => {
-          const startNum = this.convertTimeToNumber(s.start_time);
-          const endNum = this.convertTimeToNumber(s.end_time);
-          return currentTime >= startNum && currentTime < endNum;
-        });
-        
-        // Check if program changed by comparing cached video age to scheduled program duration
-        // If video is older than the current program's start time, it's from a different program
-        // CRITICAL: Only check if we haven't checked in the last 30 minutes to prevent infinite loops
-        const lastStaleCheck = cached.lastValidation || 0;
-        const timeSinceLastCheck = Date.now() - lastStaleCheck;
-        const canCheckStale = timeSinceLastCheck > 30 * 60 * 1000; // 30 minutes
-        
-        if (cached.streams[0]?.publishedAt && canCheckStale) {
-          const videoPublishedAt = new Date(cached.streams[0].publishedAt).getTime();
-          const videoAge = Date.now() - videoPublishedAt;
-          const videoAgeHours = videoAge / (3600 * 1000);
-          
-          if (liveSchedules.length > 0) {
-            const startTime = liveSchedules[0].start_time;
-            const [startHour, startMinute] = startTime.split(':').map(Number);
-            const startTimeInMinutes = startHour * 60 + startMinute;
-            
-            // If video was published before this program started, it's stale
-            if (videoAgeHours > 4 && startTimeInMinutes < currentTime) {
-              this.logger.debug(`[LIVE-STATUS-BG] Stale video detected for ${channelInfo.handle}: published ${Math.round(videoAgeHours)}h ago, current program started at ${startTime}, forcing update`);
-              // CRITICAL: Invalidate cache before adding to update list so updateChannelLiveStatus will fetch fresh data
-              const statusCacheKey = `${this.CACHE_PREFIX}${channelInfo.handle}`;
-              await this.redisService.del(statusCacheKey);
-              channelsToUpdate.push(channelId);
-              continue;
-            }
-          }
-        }
-        
         if (await this.shouldUpdateCache(cached)) {
           this.logger.debug(`[LIVE-STATUS-BG] Cache update needed for channel ${channelInfo.handle} (${channelId})`);
           channelsToUpdate.push(channelId);
