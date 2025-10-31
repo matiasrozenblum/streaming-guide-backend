@@ -730,8 +730,9 @@ export class LiveStatusBackgroundService {
    * Strategy 3: Weighted average that favors containment
    */
   private calculateTitleSimilarity(programName: string, videoTitle: string): number {
-    const programLower = programName.toLowerCase().trim();
-    const videoLower = videoTitle.toLowerCase().trim();
+    // Normalize accents and convert to lowercase for comparison
+    const programLower = this.normalizeText(programName.toLowerCase().trim());
+    const videoLower = this.normalizeText(videoTitle.toLowerCase().trim());
     
     // Strategy 1: Direct containment check
     // If video title contains the full program name, it's a strong match
@@ -758,5 +759,15 @@ export class LiveStatusBackgroundService {
     const jaccard = intersection.size / union.size;
     
     return jaccard;
+  }
+
+  /**
+   * Normalize text by removing accents and special characters
+   * This helps match titles with/without accents (e.g., "triángulo" vs "triangulo")
+   */
+  private normalizeText(text: string): string {
+    return text
+      .normalize('NFD') // Decompose accented characters
+      .replace(/[\u0300-\u036f]/g, ''); // Remove accent marks
   }
 }
