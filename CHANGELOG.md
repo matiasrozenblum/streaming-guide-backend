@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.18.1] - 2025-11-01
+
+### Changed
+- Programs escalated to not-found (after 3 failed attempts) now have is_live set to false, preventing the LIVE badge from appearing in the UI
+
 ## [1.18.0] - 2025-10-29
 
 ### Added

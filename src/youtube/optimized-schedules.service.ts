@@ -86,6 +86,16 @@ export class OptimizedSchedulesService {
       }
     }
 
+    // Fetch attempt tracking data for all channels to check for not-found escalation
+    const attemptTrackingMap = new Map<string, any>();
+    for (const handle of handles) {
+      const attemptTrackingKey = `notFoundAttempts:${handle}`;
+      const attemptTracking = await this.redisService.get<any>(attemptTrackingKey);
+      if (attemptTracking) {
+        attemptTrackingMap.set(handle, attemptTracking);
+      }
+    }
+
     // Enrich schedules with cached live status
     const enriched: any[] = [];
     const currentDay = require('../utils/timezone.util').TimezoneUtil.currentDayOfWeek();
@@ -94,6 +104,11 @@ export class OptimizedSchedulesService {
     for (const schedule of schedules) {
       const enrichedSchedule = { ...schedule };
       const channelId = schedule.program.channel?.youtube_channel_id;
+      const handle = schedule.program.channel?.handle;
+      
+      // Check if this channel has been marked as not-found due to escalation
+      const attemptTracking = handle ? attemptTrackingMap.get(handle) : null;
+      const isEscalated = attemptTracking?.escalated === true;
       
       if (channelId && liveStatusMap.has(channelId)) {
         const liveStatus = liveStatusMap.get(channelId)!;
@@ -105,7 +120,17 @@ export class OptimizedSchedulesService {
                                currentTime >= startNum &&
                                currentTime < endNum;
 
-        if (isCurrentlyLive && liveStatus.isLive) {
+        // CRITICAL: If escalated to not-found, set is_live to false regardless of cache status
+        if (isEscalated && isCurrentlyLive) {
+          this.logger.debug(`[OPTIMIZED-SCHEDULES] Program "${schedule.program.name}" on ${handle} has been escalated to not-found, setting is_live to false`);
+          enrichedSchedule.program = {
+            ...schedule.program,
+            is_live: false,
+            stream_url: schedule.program.stream_url || schedule.program.youtube_url,
+            live_streams: [],
+            stream_count: 0,
+          };
+        } else if (isCurrentlyLive && liveStatus.isLive) {
           // Program is live and has live stream - use unified cache data
           enrichedSchedule.program = {
             ...schedule.program,
@@ -194,17 +219,30 @@ export class OptimizedSchedulesService {
                                currentTime >= startNum &&
                                currentTime < endNum;
 
-        enrichedSchedule.program = {
-          ...schedule.program,
-          is_live: isCurrentlyLive,
-          stream_url: schedule.program.stream_url || schedule.program.youtube_url,
-          live_streams: [],
-          stream_count: 0,
-        };
+        // CRITICAL: If escalated to not-found, set is_live to false even if program is in its scheduled time
+        if (isEscalated && isCurrentlyLive) {
+          this.logger.debug(`[OPTIMIZED-SCHEDULES] Program "${schedule.program.name}" on ${handle} has been escalated to not-found (no cache), setting is_live to false`);
+          enrichedSchedule.program = {
+            ...schedule.program,
+            is_live: false,
+            stream_url: schedule.program.stream_url || schedule.program.youtube_url,
+            live_streams: [],
+            stream_count: 0,
+          };
+        } else {
+          enrichedSchedule.program = {
+            ...schedule.program,
+            is_live: isCurrentlyLive,
+            stream_url: schedule.program.stream_url || schedule.program.youtube_url,
+            live_streams: [],
+            stream_count: 0,
+          };
+        }
         
         // If program is live but no cache data exists, trigger async fetch to populate cache
         // CRITICAL: Only trigger if lock not already acquired (deduplicate by channel, not by schedule)
-        if (isCurrentlyLive && schedule.program.channel?.handle) {
+        // AND not escalated
+        if (isCurrentlyLive && schedule.program.channel?.handle && !isEscalated) {
           const handle = schedule.program.channel.handle;
           const fetchLockKey = `async-fetch-triggered:${handle}`;
           const fetchLockTTL = 600; // 10 minutes - longer to prevent excessive triggering
