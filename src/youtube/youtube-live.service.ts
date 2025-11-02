@@ -595,12 +595,6 @@ export class YoutubeLiveService {
       this.logger.warn(`⚠️ Error checking fetch config for ${handle}, allowing fetch:`, error.message);
     }
 
-    // Deduplication: Check if a fetch is already in progress for this channel
-    if (this.inFlightFetches.has(channelId)) {
-      this.logger.debug(`⏳ [getLiveStreams] Fetch already in progress for ${handle} (${channelId}), skipping duplicate`);
-      return '__SKIPPED__';
-    }
-
     // Unified cache - use liveStatusByHandle (replaces liveStreamsByChannel)
     const notFoundKey = `videoIdNotFound:${handle}`;
     const statusCacheKey = `liveStatusByHandle:${handle}`;
@@ -640,7 +634,17 @@ export class YoutubeLiveService {
       }
     }
 
-    // Mark channel as in-flight before making YouTube API call
+    // Distributed lock per channel to prevent concurrent fetches across replicas
+    const channelLockKey = `fetching:${channelId}`;
+    const channelLockTTL = 60; // 60 seconds should be enough for API call + processing
+    
+    const channelLockAcquired = await this.redisService.setNX(channelLockKey, { timestamp: Date.now() }, channelLockTTL);
+    if (!channelLockAcquired) {
+      this.logger.debug(`⏳ [getLiveStreams] Fetch already in progress for ${handle} (${channelId}), skipping duplicate`);
+      return '__SKIPPED__';
+    }
+    
+    // Mark channel as in-flight (in-memory for same-replica deduplication)
     this.inFlightFetches.add(channelId);
     
     // fetch from YouTube
@@ -676,10 +680,14 @@ export class YoutubeLiveService {
         liveBroadcastContent: item.snippet.liveBroadcastContent, // Add this for validation
       }));
 
+      this.logger.debug(`🔍 [getLiveStreams] Found ${allStreams.length} streams from search API for ${handle}. liveBroadcastContent from search: ${allStreams.map(s => `${s.videoId}:${s.liveBroadcastContent}`).join(', ')}`);
+
       // Filter out scheduled streams - only keep actually live streams
       const liveStreams: LiveStream[] = [];
       for (const stream of allStreams) {
+        this.logger.debug(`🔍 [getLiveStreams] Checking if ${stream.videoId} (${stream.title}) is actually live for ${handle}`);
         const isActuallyLive = await this.isVideoLive(stream.videoId);
+        this.logger.debug(`🔍 [getLiveStreams] isVideoLive(${stream.videoId}) returned: ${isActuallyLive}`);
         if (isActuallyLive) {
           liveStreams.push(stream);
           this.logger.debug(`✅ [getLiveStreams] Confirmed live stream for ${handle}: ${stream.videoId} - ${stream.title}`);
@@ -843,6 +851,17 @@ export class YoutubeLiveService {
   private async fetchLiveVideoIdsInternal(cronType: 'main' | 'back-to-back-fix' | 'manual', cronLabel: string) {
     const currentTime = TimezoneUtil.currentTimeString();
     
+    // Distributed lock to prevent multiple replicas from running simultaneously
+    const lockKey = `cron:${cronType}:lock`;
+    const lockTTL = 120; // 2 minutes - should be enough for the cron to complete
+    
+    const acquired = await this.redisService.setNX(lockKey, { timestamp: Date.now() }, lockTTL);
+    
+    if (!acquired) {
+      this.logger.debug(`${cronLabel} - Skipping (another replica already running)`);
+      return;
+    }
+    
     this.logger.debug(`${cronLabel} started at ${currentTime}`);
     
     const today = TimezoneUtil.currentDayOfWeek();
@@ -861,6 +880,7 @@ export class YoutubeLiveService {
   
     // 2) Filter only schedules that are "on-air" right now (time-based, not YouTube live status)
     // CRITICAL: Only process schedules that have actual programs (not ghost schedules)
+    const currentNum = TimezoneUtil.currentTimeInMinutes();
     const liveNow = visibleSchedules.filter(s => {
       // Must have a valid program with a name
       if (!s.program || !s.program.name || s.program.name.trim() === '') {
@@ -872,8 +892,10 @@ export class YoutubeLiveService {
         return false;
       }
       
-      // Must be marked as live by the enrichment logic
-      return s.program.is_live;
+      // Check if schedule is currently live based on time (time-based, not YouTube live status)
+      const startNum = this.convertTimeToMinutes(s.start_time);
+      const endNum = this.convertTimeToMinutes(s.end_time);
+      return s.day_of_week === today && currentNum >= startNum && currentNum < endNum;
     });
   
     // 3) Deduplicás canales de esos schedules
