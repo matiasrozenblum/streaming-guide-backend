@@ -30,6 +30,8 @@ describe('OptimizedSchedulesService', () => {
           program: {
             id: 1,
             name: 'Test Program',
+            stream_url: 'https://www.youtube.com/watch?v=fallback-video',
+            youtube_url: 'https://www.youtube.com/watch?v=fallback-video',
             channel: {
               id: 1,
               name: 'Test Channel',
@@ -122,5 +124,102 @@ describe('OptimizedSchedulesService', () => {
     // Check that live status was applied (10:30 is within 10:00-12:00 range)
     expect(result[0].program.is_live).toBe(true);
     expect(result[0].program.stream_url).toBe('https://www.youtube.com/embed/test-video?autoplay=1');
+  });
+
+  it('should set is_live to false when program is escalated to not-found', async () => {
+    // Mock Redis to return escalated attempt tracking
+    const mockRedisService = {
+      get: jest.fn().mockResolvedValue({
+        attempts: 3,
+        firstAttempt: Date.now() - 30000,
+        lastAttempt: Date.now() - 10000,
+        escalated: true,
+        programEndTime: Date.now() + 3600000,
+      }),
+      set: jest.fn(),
+      del: jest.fn(),
+      delByPattern: jest.fn(),
+    };
+
+    // Recreate the module with the new Redis mock
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        OptimizedSchedulesService,
+        { provide: SchedulesService, useValue: mockSchedulesService },
+        { provide: WeeklyOverridesService, useValue: { 
+          applyWeeklyOverrides: jest.fn().mockImplementation((schedules) => Promise.resolve(schedules)),
+          getWeekStartDate: jest.fn().mockReturnValue('2024-01-01')
+        } },
+        { provide: LiveStatusBackgroundService, useValue: mockLiveStatusBackgroundService },
+        { provide: YoutubeLiveService, useValue: {} },
+        { provide: RedisService, useValue: mockRedisService },
+      ],
+    }).compile();
+
+    service = module.get<OptimizedSchedulesService>(OptimizedSchedulesService);
+
+    // Get schedules with live status
+    const result = await service.getSchedulesWithOptimizedLiveStatus({
+      liveStatus: true,
+    });
+
+    expect(result).toHaveLength(1);
+    // Even though the program is currently scheduled (10:30 within 10:00-12:00),
+    // it should be marked as not live due to escalation
+    expect(result[0].program.is_live).toBe(false);
+    expect(result[0].program.stream_url).toBeTruthy(); // Should have fallback stream URL
+    expect(result[0].program.live_streams).toEqual([]);
+    expect(result[0].program.stream_count).toBe(0);
+  });
+
+  it('should set is_live to false when escalated even without live status cache', async () => {
+    // Mock Redis to return escalated attempt tracking
+    const mockRedisService = {
+      get: jest.fn().mockResolvedValue({
+        attempts: 3,
+        firstAttempt: Date.now() - 30000,
+        lastAttempt: Date.now() - 10000,
+        escalated: true,
+        programEndTime: Date.now() + 3600000,
+      }),
+      set: jest.fn(),
+      del: jest.fn(),
+      delByPattern: jest.fn(),
+    };
+
+    // Mock background service to return empty cache
+    const mockLiveStatusBackgroundServiceNoCache = {
+      getLiveStatusForChannels: jest.fn().mockResolvedValue(new Map()),
+    };
+
+    // Recreate the module with the new mocks
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        OptimizedSchedulesService,
+        { provide: SchedulesService, useValue: mockSchedulesService },
+        { provide: WeeklyOverridesService, useValue: { 
+          applyWeeklyOverrides: jest.fn().mockImplementation((schedules) => Promise.resolve(schedules)),
+          getWeekStartDate: jest.fn().mockReturnValue('2024-01-01')
+        } },
+        { provide: LiveStatusBackgroundService, useValue: mockLiveStatusBackgroundServiceNoCache },
+        { provide: YoutubeLiveService, useValue: {} },
+        { provide: RedisService, useValue: mockRedisService },
+      ],
+    }).compile();
+
+    service = module.get<OptimizedSchedulesService>(OptimizedSchedulesService);
+
+    // Get schedules with live status
+    const result = await service.getSchedulesWithOptimizedLiveStatus({
+      liveStatus: true,
+    });
+
+    expect(result).toHaveLength(1);
+    // Even though the program is currently scheduled (10:30 within 10:00-12:00) and no cache exists,
+    // it should be marked as not live due to escalation
+    expect(result[0].program.is_live).toBe(false);
+    expect(result[0].program.stream_url).toBeTruthy(); // Should have fallback stream URL
+    expect(result[0].program.live_streams).toEqual([]);
+    expect(result[0].program.stream_count).toBe(0);
   });
 });
