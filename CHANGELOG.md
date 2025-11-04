@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.19.0] - 2025-11-04
+
+### Changed
+- Changed the different emails sender address to user hola/noreply/notifications@laguiadelstreaming.com
+
 ## [1.18.2] - 2025-11-04
 
 ### Fixed

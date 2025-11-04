@@ -27,6 +27,10 @@ describe('EmailService', () => {
         if (key === 'SENDGRID_API_KEY') {
           return null; // No SendGrid API key, so it will fall back to SMTP
         }
+        // Return undefined for email sender keys so defaults are used
+        if (key.startsWith('EMAIL_SENDER_') || key === 'EMAIL_ADMIN') {
+          return undefined;
+        }
         return 'test-value';
       }),
     } as any;
@@ -105,6 +109,7 @@ describe('EmailService', () => {
       await service.sendOtpCode('test@example.com', '123456', 5);
       
       expect(mockMailerService.sendMail).toHaveBeenCalledWith({
+        from: expect.stringContaining('noreply@laguiadelstreaming.com'),
         to: 'test@example.com',
         subject: 'Tu código de acceso • La Guía del Streaming',
         html: expect.stringContaining('123456'),
@@ -157,6 +162,7 @@ describe('EmailService', () => {
       });
       
       expect(mockMailerService.sendMail).toHaveBeenCalledWith({
+        from: expect.stringContaining('notifications@laguiadelstreaming.com'),
         to: 'admin@example.com',
         subject: 'Weekly Report',
         text: 'Report content',
@@ -209,6 +215,7 @@ describe('EmailService', () => {
       });
       
       expect(mockMailerService.sendMail).toHaveBeenCalledWith({
+        from: expect.stringContaining('hola@laguiadelstreaming.com'),
         to: 'test@example.com',
         subject: 'Test Subject',
         html: '<h1>Test Content</h1>',
@@ -228,6 +235,7 @@ describe('EmailService', () => {
       });
       
       expect(mockMailerService.sendMail).toHaveBeenCalledWith({
+        from: expect.stringContaining('hola@laguiadelstreaming.com'),
         to: 'test@example.com',
         subject: 'Test Subject',
         html: '<h1>Test Content</h1><p>This is a paragraph.</p>',
@@ -241,6 +249,10 @@ describe('EmailService', () => {
         get: jest.fn().mockImplementation((key: string) => {
           if (key === 'SENDGRID_API_KEY') {
             return 'test-sendgrid-key';
+          }
+          // Return undefined for email sender keys so defaults are used
+          if (key.startsWith('EMAIL_SENDER_') || key === 'EMAIL_ADMIN') {
+            return undefined;
           }
           return 'test-value';
         }),
@@ -269,6 +281,10 @@ describe('EmailService', () => {
           if (key === 'SENDGRID_API_KEY') {
             return 'test-sendgrid-key';
           }
+          // Return undefined for email sender keys so defaults are used
+          if (key.startsWith('EMAIL_SENDER_') || key === 'EMAIL_ADMIN') {
+            return undefined;
+          }
           return 'test-value';
         }),
       } as any;
@@ -290,6 +306,7 @@ describe('EmailService', () => {
       expect(sendViaSendGridSpy).toHaveBeenCalledWith('test@example.com', 'Test Subject', '<h1>Test Content</h1>', 'general');
       expect(consoleErrorSpy).toHaveBeenCalledWith('❌ SendGrid failed, falling back to SMTP:', expect.any(Error));
       expect(mockMailerService.sendMail).toHaveBeenCalledWith({
+        from: expect.stringContaining('hola@laguiadelstreaming.com'),
         to: 'test@example.com',
         subject: 'Test Subject',
         html: '<h1>Test Content</h1>',

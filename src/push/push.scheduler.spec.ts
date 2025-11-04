@@ -232,6 +232,7 @@ describe('PushScheduler', () => {
         to: mockUser.email,
         subject: `¡${mockProgram.name} comienza en 10 minutos!`,
         html: expect.stringContaining(mockProgram.name),
+        emailType: 'program_notification',
       });
     });
 
