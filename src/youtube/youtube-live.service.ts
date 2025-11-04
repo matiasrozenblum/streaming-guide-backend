@@ -1119,8 +1119,7 @@ export class YoutubeLiveService {
   private async handleNotFoundEscalationMain(
     channelId: string, 
     handle: string, 
-    notFoundKey: string,
-    cronType?: 'main' | 'back-to-back-fix' | 'manual'
+    notFoundKey: string
   ): Promise<void> {
     const attemptTrackingKey = `notFoundAttempts:${handle}`;
     const existing = await this.redisService.get<AttemptTracking>(attemptTrackingKey);
@@ -1381,7 +1380,7 @@ export class YoutubeLiveService {
    */
   private async sendEscalationEmail(channelId: string, handle: string): Promise<void> {
     // Only send emails in production environment
-    if (process.env.NODE_ENV !== 'production') {
+    if (process.env.NODE_ENV !== 'asd') {
       this.logger.debug(`📧 [${process.env.NODE_ENV || 'development'}] Escalation email skipped for ${handle} (not production environment)`);
       return;
     }
