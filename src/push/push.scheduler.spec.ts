@@ -106,6 +106,7 @@ describe('PushScheduler', () => {
   };
 
   const mockEmailService = {
+    sendEmail: jest.fn(),
     mailerService: {
       sendMail: jest.fn(),
     },
@@ -223,11 +224,11 @@ describe('PushScheduler', () => {
       const schedulesService = module.get(SchedulesService);
       jest.spyOn(schedulesService, 'findAll').mockResolvedValue([mockSchedule]);
       mockUserSubscriptionRepository.find.mockResolvedValue([emailSubscription]);
-      mockEmailService.mailerService.sendMail.mockResolvedValue(undefined);
+      mockEmailService.sendEmail.mockResolvedValue(undefined);
 
       await scheduler.handleNotificationsCron();
 
-      expect(mockEmailService.mailerService.sendMail).toHaveBeenCalledWith({
+      expect(mockEmailService.sendEmail).toHaveBeenCalledWith({
         to: mockUser.email,
         subject: `¡${mockProgram.name} comienza en 10 minutos!`,
         html: expect.stringContaining(mockProgram.name),
@@ -244,12 +245,12 @@ describe('PushScheduler', () => {
       jest.spyOn(schedulesService, 'findAll').mockResolvedValue([mockSchedule]);
       mockUserSubscriptionRepository.find.mockResolvedValue([bothSubscription]);
       mockPushService.sendNotification.mockResolvedValue(undefined);
-      mockEmailService.mailerService.sendMail.mockResolvedValue(undefined);
+      mockEmailService.sendEmail.mockResolvedValue(undefined);
 
       await scheduler.handleNotificationsCron();
 
       expect(mockPushService.sendNotification).toHaveBeenCalled();
-      expect(mockEmailService.mailerService.sendMail).toHaveBeenCalled();
+      expect(mockEmailService.sendEmail).toHaveBeenCalled();
     });
 
     it('should handle multiple schedules for different programs', async () => {
@@ -416,7 +417,7 @@ describe('PushScheduler', () => {
       const schedulesService = module.get(SchedulesService);
       jest.spyOn(schedulesService, 'findAll').mockResolvedValue([mockSchedule]);
       mockUserSubscriptionRepository.find.mockResolvedValue([emailSubscription]);
-      mockEmailService.mailerService.sendMail.mockRejectedValue(new Error('Email failed'));
+      mockEmailService.sendEmail.mockRejectedValue(new Error('Email failed'));
 
       await scheduler.handleNotificationsCron();
 
@@ -502,7 +503,7 @@ describe('PushScheduler', () => {
       const schedulesService = module.get(SchedulesService);
       jest.spyOn(schedulesService, 'findAll').mockResolvedValue([mockSchedule]);
       mockUserSubscriptionRepository.find.mockResolvedValue([emailSubscription]);
-      mockEmailService.mailerService.sendMail.mockResolvedValue(undefined);
+      mockEmailService.sendEmail.mockResolvedValue(undefined);
 
       await scheduler.handleNotificationsCron();
 
