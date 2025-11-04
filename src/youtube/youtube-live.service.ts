@@ -1380,7 +1380,7 @@ export class YoutubeLiveService {
    */
   private async sendEscalationEmail(channelId: string, handle: string): Promise<void> {
     // Only send emails in production environment
-    if (process.env.NODE_ENV !== 'asd') {
+    if (process.env.NODE_ENV !== 'production') {
       this.logger.debug(`📧 [${process.env.NODE_ENV || 'development'}] Escalation email skipped for ${handle} (not production environment)`);
       return;
     }
