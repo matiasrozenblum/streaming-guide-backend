@@ -1120,7 +1120,6 @@ export class YoutubeLiveService {
     channelId: string, 
     handle: string, 
     notFoundKey: string,
-    cronType?: 'main' | 'back-to-back-fix' | 'manual'
   ): Promise<void> {
     const attemptTrackingKey = `notFoundAttempts:${handle}`;
     const existing = await this.redisService.get<AttemptTracking>(attemptTrackingKey);
