@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.18.2] - 2025-11-04
+
+### Fixed
+- Fixed dockerfile for scrapers regarding chromium install
+
 ## [1.18.1] - 2025-11-02
 
 ### Changed
