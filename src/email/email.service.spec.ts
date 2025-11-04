@@ -59,7 +59,8 @@ describe('EmailService', () => {
       await service.sendProposedChangesReport(mockChanges);
       
       expect(mockMailerService.sendMail).toHaveBeenCalledWith({
-        to: 'laguiadelstreaming@gmail.com',
+        from: expect.stringContaining('notifications@laguiadelstreaming.com'),
+        to: 'admin@laguiadelstreaming.com',
         subject: '📋 Nuevos cambios detectados en la programación',
         html: expect.stringContaining('Cambios propuestos'),
       });
@@ -88,7 +89,7 @@ describe('EmailService', () => {
           error_type: 'send_failure',
           error_message: 'SMTP connection failed',
           email_type: 'proposed_changes_report',
-          recipient: 'laguiadelstreaming@gmail.com',
+          recipient: 'admin@laguiadelstreaming.com',
         })
       );
       expect(mockSentryService.setTag).toHaveBeenCalledWith('service', 'email');
