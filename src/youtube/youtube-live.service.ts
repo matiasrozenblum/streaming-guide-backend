@@ -1119,8 +1119,7 @@ export class YoutubeLiveService {
   private async handleNotFoundEscalationMain(
     channelId: string, 
     handle: string, 
-    notFoundKey: string,
-    cronType?: 'main' | 'back-to-back-fix' | 'manual'
+    notFoundKey: string
   ): Promise<void> {
     const attemptTrackingKey = `notFoundAttempts:${handle}`;
     const existing = await this.redisService.get<AttemptTracking>(attemptTrackingKey);
