@@ -146,12 +146,39 @@ export class EmailService {
       textContent = 'Tu código de acceso para La Guía del Streaming. Este código expirará en 5 minutos. Si no solicitaste este código, puedes ignorar este mensaje.';
       categories = ['otp', 'authentication'];
       customArgs = { 'source': 'password_recovery', 'app': 'streaming_guide' };
+    } else if (emailType === 'program_notification') {
+      textContent = `Notificación de programa: ${subject}`;
+      categories = ['notifications', 'program_alerts'];
+      customArgs = { 'source': 'program_notification', 'app': 'streaming_guide' };
     } else if (emailType === 'proposed_changes_report') {
       textContent = 'Nuevos cambios detectados en la programación. Revisa el contenido HTML para más detalles.';
       categories = ['reports', 'programming_changes'];
       customArgs = { 'source': 'programming_changes', 'app': 'streaming_guide' };
     }
+    
     const senderEmail = this.getSenderEmail(emailType);
+    
+    // Configure headers based on email type
+    // Program notifications should be treated as transactional (Primary inbox) not bulk
+    const isTransactional = emailType === 'program_notification' || emailType === 'otp_code';
+    const baseHeaders = {
+      'X-Mailer': 'La Guía del Streaming',
+      'X-Priority': '1',
+      'X-MSMail-Priority': 'High',
+      'X-Auto-Response-Suppress': 'All',
+    };
+    
+    // Only add Precedence: bulk for non-transactional emails
+    const headers = isTransactional 
+      ? baseHeaders
+      : { ...baseHeaders, 'Precedence': 'bulk' };
+    
+    // Add List-Unsubscribe for better deliverability (even for transactional emails)
+    if (emailType === 'program_notification') {
+      headers['List-Unsubscribe'] = '<https://laguiadelstreaming.com/subscriptions>, <mailto:hola@laguiadelstreaming.com?subject=Unsubscribe>';
+      headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
+    }
+    
     const msg = {
       to,
       from: {
@@ -165,13 +192,7 @@ export class EmailService {
       // Add tracking and categorization
       categories,
       // Add custom headers for better deliverability
-      headers: {
-        'X-Mailer': 'La Guía del Streaming',
-        'X-Priority': '1',
-        'X-MSMail-Priority': 'High',
-        'X-Auto-Response-Suppress': 'All',
-        'Precedence': 'bulk'
-      },
+      headers,
       // Add reply-to for better deliverability (use general contact for replies)
       replyTo: emailType === 'otp_code' ? this.getSenderEmail('general') : senderEmail,
       // Add custom args for tracking
