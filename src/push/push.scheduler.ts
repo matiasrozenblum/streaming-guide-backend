@@ -145,7 +145,7 @@ export class PushScheduler {
               program.description,
             );
             
-            await this.emailService['mailerService'].sendMail({
+            await this.emailService.sendEmail({
               to: user.email,
               subject: `¡${program.name} comienza en 10 minutos!`,
               html: emailHtml,

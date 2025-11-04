@@ -29,6 +29,7 @@ describe('YoutubeLiveService', () => {
       set: jest.fn(),
       del: jest.fn(),
       incr: jest.fn(),
+      setNX: jest.fn().mockResolvedValue(true), // Default: always acquire lock
     } as any;
     sentryService = {
       captureMessage: jest.fn(),
@@ -36,6 +37,11 @@ describe('YoutubeLiveService', () => {
       setTag: jest.fn(),
       addBreadcrumb: jest.fn(),
     } as any;
+    
+    // Mock TimezoneUtil methods
+    jest.spyOn(require('@/utils/timezone.util').TimezoneUtil, 'currentDayOfWeek').mockReturnValue('monday');
+    jest.spyOn(require('@/utils/timezone.util').TimezoneUtil, 'currentTimeInMinutes').mockReturnValue(8 * 60 + 30); // 08:30
+    jest.spyOn(require('@/utils/timezone.util').TimezoneUtil, 'currentTimeString').mockReturnValue('08:30:00');
     const mockChannelsRepository = {
       find: jest.fn(),
       save: jest.fn(),
@@ -168,7 +174,7 @@ describe('YoutubeLiveService', () => {
     it('calls getLiveStreams for channels with schedule', async () => {
       const schedules = [
         { program: { channel: { youtube_channel_id: 'cid1', handle: 'h1', is_visible: true }, is_live: true, name: 'Test Program 1' }, start_time: '08:00', end_time: '10:00', day_of_week: 'monday' },
-        { program: { channel: { youtube_channel_id: 'cid2', handle: 'h2', is_visible: true }, is_live: true, name: 'Test Program 2' }, start_time: '10:00', end_time: '12:00', day_of_week: 'monday' },
+        { program: { channel: { youtube_channel_id: 'cid2', handle: 'h2', is_visible: true }, is_live: true, name: 'Test Program 2' }, start_time: '08:00', end_time: '12:00', day_of_week: 'monday' },
       ];
       schedulesService.findAll.mockResolvedValue(schedules as any);
       
@@ -611,7 +617,7 @@ describe('YoutubeLiveService', () => {
         schedulesService.findAll.mockResolvedValue(mockSchedules as any);
         
         // Mock TimezoneUtil methods directly
-        jest.spyOn(require('@/utils/timezone.util').TimezoneUtil, 'currentDayOfWeek').mockReturnValue(2); // Tuesday
+        jest.spyOn(require('@/utils/timezone.util').TimezoneUtil, 'currentDayOfWeek').mockReturnValue('tuesday'); // Tuesday
         jest.spyOn(require('@/utils/timezone.util').TimezoneUtil, 'currentTimeInMinutes').mockReturnValue(15 * 60); // 15:00
         jest.spyOn(require('@/utils/timezone.util').TimezoneUtil, 'todayAtTime').mockImplementation((time: string) => {
           const [hours, minutes] = time.split(':').map(Number);
@@ -628,18 +634,6 @@ describe('YoutubeLiveService', () => {
 
       it('returns null when no current program is found', async () => {
         schedulesService.findAll.mockResolvedValue([]);
-        
-        const mockTimezoneUtil = {
-          currentDayOfWeek: () => 2,
-          currentTimeInMinutes: () => 15 * 60,
-          todayAtTime: (time: string) => {
-            const [hours, minutes] = time.split(':').map(Number);
-            const date = new Date();
-            date.setHours(hours, minutes, 0, 0);
-            return { valueOf: () => date.getTime() };
-          }
-        };
-        jest.doMock('@/utils/timezone.util', () => ({ TimezoneUtil: mockTimezoneUtil }));
 
         const result = await (service as any).getCurrentProgramEndTime('cid');
 
@@ -682,7 +676,7 @@ describe('YoutubeLiveService', () => {
         schedulesService.findAll.mockResolvedValue(mockSchedules as any);
         
         // Mock TimezoneUtil methods directly
-        jest.spyOn(require('@/utils/timezone.util').TimezoneUtil, 'currentDayOfWeek').mockReturnValue(2); // Tuesday
+        jest.spyOn(require('@/utils/timezone.util').TimezoneUtil, 'currentDayOfWeek').mockReturnValue('tuesday'); // Tuesday
         jest.spyOn(require('@/utils/timezone.util').TimezoneUtil, 'currentTimeInMinutes').mockReturnValue(15 * 60); // 15:00 (900 minutes)
 
         await (service as any).sendEscalationEmail('cid', 'test_handle');
