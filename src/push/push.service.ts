@@ -26,7 +26,7 @@ export class PushService {
     if (vapidPublicKey && vapidPrivateKey && vapidPublicKey.length > 0 && vapidPrivateKey.length > 0) {
       try {
         webPush.setVapidDetails(
-          'mailto:laguiadelstreaming@gmail.com',
+          'mailto:hola@laguiadelstreaming.com',
           vapidPublicKey,
           vapidPrivateKey,
         );

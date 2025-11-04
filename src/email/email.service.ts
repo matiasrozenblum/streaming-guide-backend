@@ -13,6 +13,26 @@ export class EmailService {
     private readonly configService: ConfigService,
   ) {}
 
+  /**
+   * Get the appropriate sender email based on email type
+   */
+  private getSenderEmail(emailType: string = 'general'): string {
+    // Use environment variables if set, otherwise use defaults
+    switch (emailType) {
+      case 'otp_code':
+        return this.configService.get('EMAIL_SENDER_NOREPLY') || 'noreply@laguiadelstreaming.com';
+      case 'program_notification':
+      case 'proposed_changes_report':
+      case 'report_with_attachment':
+      case 'admin_alert':
+      case 'escalation':
+        return this.configService.get('EMAIL_SENDER_NOTIFICATIONS') || 'notifications@laguiadelstreaming.com';
+      case 'general':
+      default:
+        return this.configService.get('EMAIL_SENDER_GENERAL') || 'hola@laguiadelstreaming.com';
+    }
+  }
+
   async sendProposedChangesReport(changes: ProposedChange[]) {
     if (changes.length === 0) {
       console.log('No hay cambios para reportar por email.');
@@ -20,7 +40,7 @@ export class EmailService {
     }
 
     const htmlContent = buildProposedChangesReportHtml(changes);
-    const to = 'laguiadelstreaming@gmail.com';
+    const to = this.configService.get('EMAIL_ADMIN') || 'admin@laguiadelstreaming.com';
     const subject = '📋 Nuevos cambios detectados en la programación';
 
     // Try SendGrid first if configured, fallback to SMTP
@@ -40,6 +60,7 @@ export class EmailService {
     // Fallback to SMTP
     try {
       await this.mailerService.sendMail({
+        from: `"La Guía del Streaming" <${this.getSenderEmail('proposed_changes_report')}>`,
         to,
         subject,
         html: htmlContent,
@@ -85,6 +106,7 @@ export class EmailService {
     // Fallback to SMTP
     try {
       await this.mailerService.sendMail({
+        from: `"La Guía del Streaming" <${this.getSenderEmail('otp_code')}>`,
         to,
         subject: 'Tu código de acceso • La Guía del Streaming',
         html,
@@ -124,15 +146,43 @@ export class EmailService {
       textContent = 'Tu código de acceso para La Guía del Streaming. Este código expirará en 5 minutos. Si no solicitaste este código, puedes ignorar este mensaje.';
       categories = ['otp', 'authentication'];
       customArgs = { 'source': 'password_recovery', 'app': 'streaming_guide' };
+    } else if (emailType === 'program_notification') {
+      textContent = `Notificación de programa: ${subject}`;
+      categories = ['notifications', 'program_alerts'];
+      customArgs = { 'source': 'program_notification', 'app': 'streaming_guide' };
     } else if (emailType === 'proposed_changes_report') {
       textContent = 'Nuevos cambios detectados en la programación. Revisa el contenido HTML para más detalles.';
       categories = ['reports', 'programming_changes'];
       customArgs = { 'source': 'programming_changes', 'app': 'streaming_guide' };
     }
+    
+    const senderEmail = this.getSenderEmail(emailType);
+    
+    // Configure headers based on email type
+    // Program notifications should be treated as transactional (Primary inbox) not bulk
+    const isTransactional = emailType === 'program_notification' || emailType === 'otp_code';
+    const baseHeaders = {
+      'X-Mailer': 'La Guía del Streaming',
+      'X-Priority': '1',
+      'X-MSMail-Priority': 'High',
+      'X-Auto-Response-Suppress': 'All',
+    };
+    
+    // Only add Precedence: bulk for non-transactional emails
+    const headers = isTransactional 
+      ? baseHeaders
+      : { ...baseHeaders, 'Precedence': 'bulk' };
+    
+    // Add List-Unsubscribe for better deliverability (even for transactional emails)
+    if (emailType === 'program_notification') {
+      headers['List-Unsubscribe'] = '<https://laguiadelstreaming.com/subscriptions>, <mailto:hola@laguiadelstreaming.com?subject=Unsubscribe>';
+      headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
+    }
+    
     const msg = {
       to,
       from: {
-        email: this.configService.get('SMTP_USER'),
+        email: senderEmail,
         name: 'La Guía del Streaming'
       },
       subject,
@@ -142,15 +192,9 @@ export class EmailService {
       // Add tracking and categorization
       categories,
       // Add custom headers for better deliverability
-      headers: {
-        'X-Mailer': 'La Guía del Streaming',
-        'X-Priority': '1',
-        'X-MSMail-Priority': 'High',
-        'X-Auto-Response-Suppress': 'All',
-        'Precedence': 'bulk'
-      },
-      // Add reply-to for better deliverability
-      replyTo: this.configService.get('SMTP_USER'),
+      headers,
+      // Add reply-to for better deliverability (use general contact for replies)
+      replyTo: emailType === 'otp_code' ? this.getSenderEmail('general') : senderEmail,
       // Add custom args for tracking
       customArgs
     };
@@ -180,10 +224,11 @@ export class EmailService {
       customArgs = { 'source': 'reports', 'app': 'streaming_guide' };
     }
     
+    const senderEmail = this.getSenderEmail(emailType);
     const msg = {
       to,
       from: {
-        email: this.configService.get('SMTP_USER'),
+        email: senderEmail,
         name: 'La Guía del Streaming'
       },
       subject,
@@ -201,7 +246,7 @@ export class EmailService {
         'Precedence': 'bulk'
       },
       // Add reply-to for better deliverability
-      replyTo: this.configService.get('SMTP_USER'),
+      replyTo: senderEmail,
       // Add custom args for tracking
       customArgs
     };
@@ -273,6 +318,7 @@ export class EmailService {
     // Fallback to SMTP
     try {
       await this.mailerService.sendMail({
+        from: `"La Guía del Streaming" <${this.getSenderEmail('report_with_attachment')}>`,
         to,
         subject,
         text,
@@ -330,15 +376,15 @@ export class EmailService {
   /**
    * Generic method to send emails
    */
-  async sendEmail(params: { to: string; subject: string; html: string; text?: string }) {
-    const { to, subject, html, text } = params;
+  async sendEmail(params: { to: string; subject: string; html: string; text?: string; emailType?: string }) {
+    const { to, subject, html, text, emailType = 'general' } = params;
     
     // Try SendGrid first if configured, fallback to SMTP
     const sendGridApiKey = this.configService.get('SENDGRID_API_KEY');
     
     if (sendGridApiKey) {
       try {
-        await this.sendViaSendGrid(to, subject, html, 'general');
+        await this.sendViaSendGrid(to, subject, html, emailType);
         console.log(`Email enviado a ${to} via SendGrid`);
         return;
       } catch (error) {
@@ -350,6 +396,7 @@ export class EmailService {
     // Fallback to SMTP
     try {
       await this.mailerService.sendMail({
+        from: `"La Guía del Streaming" <${this.getSenderEmail(emailType)}>`,
         to,
         subject,
         html,

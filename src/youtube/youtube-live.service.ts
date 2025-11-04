@@ -1441,6 +1441,7 @@ export class YoutubeLiveService {
         to: 'admin@laguiadelstreaming.com',
         subject,
         html: htmlContent,
+        emailType: 'admin_alert',
       });
 
       this.logger.debug(`📧 Email de escalación enviado para ${programName} (${channelName})`);
