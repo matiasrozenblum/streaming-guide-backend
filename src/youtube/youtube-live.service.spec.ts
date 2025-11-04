@@ -685,6 +685,7 @@ describe('YoutubeLiveService', () => {
           to: 'admin@laguiadelstreaming.com',
           subject: '🚨 Programa marcado como no encontrado - Test Program',
           html: expect.stringContaining('Test Program'),
+          emailType: 'admin_alert',
         });
         
         process.env.NODE_ENV = originalEnv;

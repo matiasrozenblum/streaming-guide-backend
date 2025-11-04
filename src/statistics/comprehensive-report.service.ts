@@ -71,7 +71,7 @@ export class ComprehensiveReportService {
         contentType: format === 'csv' ? 'text/csv' : 'application/pdf' 
       };
     } else if (action === ReportAction.EMAIL) {
-      const recipient = toEmail || 'laguiadelstreaming@gmail.com';
+      const recipient = toEmail || 'admin@laguiadelstreaming.com';
       await this.emailService.sendReportWithAttachment({
         to: recipient,
         subject: `Reporte del Canal ${channel.name}: ${filename}`,
@@ -115,7 +115,7 @@ export class ComprehensiveReportService {
       to: reportTo,
       channelId,
       action,
-      toEmail: 'laguiadelstreaming@gmail.com',
+      toEmail: 'admin@laguiadelstreaming.com',
     };
 
     const file = await this.reportsProxyService.generateReport(reportParams);
@@ -129,7 +129,7 @@ export class ComprehensiveReportService {
       };
     } else if (action === ReportAction.EMAIL) {
       await this.emailService.sendReportWithAttachment({
-        to: 'laguiadelstreaming@gmail.com',
+        to: 'admin@laguiadelstreaming.com',
         subject: `Reporte ${period} automático: ${filename}`,
         text: `Adjuntamos el reporte ${period} automático (${filename}).`,
         html: `<p>Adjuntamos el reporte <b>${period}</b> automático (<b>${filename}</b>).</p>`,

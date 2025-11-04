@@ -230,7 +230,7 @@ export class StatisticsController {
         data: file.toString('base64')
       };
     } else if (action === 'email') {
-      const recipient = toEmail || 'laguiadelstreaming@gmail.com';
+      const recipient = toEmail || 'admin@laguiadelstreaming.com';
       await this.emailService.sendReportWithAttachment({
         to: recipient,
         subject: `Reporte solicitado: ${filename}`,

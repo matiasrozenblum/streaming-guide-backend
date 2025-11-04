@@ -149,6 +149,7 @@ export class PushScheduler {
               to: user.email,
               subject: `¡${program.name} comienza en 10 minutos!`,
               html: emailHtml,
+              emailType: 'program_notification',
             });
             
             this.logger.log(`✅ Email notification enviado a usuario ${user.email} para "${title}"`);

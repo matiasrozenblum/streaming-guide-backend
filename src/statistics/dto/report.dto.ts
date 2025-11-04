@@ -122,5 +122,5 @@ export class AutomaticReportDto {
   channelId?: number;
 
   @IsString()
-  toEmail: string = 'laguiadelstreaming@gmail.com';
+  toEmail: string = 'admin@laguiadelstreaming.com';
 } 
