@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.19.1] - 2025-11-04
+
+### Fixed
+- Now back-to-back cron respects not-found escalation and reads not-found mark
+
 ## [1.19.0] - 2025-11-04
 
 ### Changed
