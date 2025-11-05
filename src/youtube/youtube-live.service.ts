@@ -342,10 +342,27 @@ export class YoutubeLiveService {
         }
       }
       
-      // For back-to-back cron and manual execution, log when we're ignoring not-found flag
-      if (notFoundData && (cronType === 'back-to-back-fix' || cronType === 'manual')) {
+      // For back-to-back cron: only ignore not-found flag if escalation hasn't been sent yet
+      if (notFoundData && cronType === 'back-to-back-fix') {
         const handle = channelHandleMap?.get(channelId) || 'unknown';
-        const executionType = cronType === 'back-to-back-fix' ? 'Back-to-back' : 'Manual';
+        
+        // If escalation was already sent, respect the not-found mark and skip
+        if (attemptData) {
+          const tracking: AttemptTracking = attemptData;
+          if (tracking.escalated && tracking.programEndTime && Date.now() < tracking.programEndTime) {
+            this.logger.debug(`Respecting not-found flag for ${handle} (${channelId}) - escalation already sent`);
+            results.set(channelId, '__SKIPPED__');
+            continue;
+          }
+        }
+        
+        // Escalation hasn't been sent yet, so it's okay to ignore the not-found flag
+        this.logger.debug(`Ignoring not-found flag for ${handle} (${channelId}) - checking anyway (escalation not sent yet)`);
+      }
+      
+      // For manual execution, log when we're ignoring not-found flag
+      if (notFoundData && cronType === 'manual') {
+        const handle = channelHandleMap?.get(channelId) || 'unknown';
         this.logger.debug(`Ignoring not-found flag for ${handle} (${channelId}) - checking anyway`);
       }
 
