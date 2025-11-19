@@ -32,6 +32,7 @@ type ChannelWithSchedules = {
     id: number;
     name: string;
     logo_url: string | null;
+    handle?: string | null;
     stream_count?: number;
     categories?: Array<{
       id: number;
@@ -427,6 +428,7 @@ export class ChannelsService {
           logo_url: channel.logo_url,
           background_color: channel.background_color,
           show_only_when_scheduled: channel.show_only_when_scheduled,
+          handle: channel.handle,
           categories: channel.categories,
         },
       schedules: (schedulesGroupedByChannelId[channel.id] || []).map((schedule) => ({
