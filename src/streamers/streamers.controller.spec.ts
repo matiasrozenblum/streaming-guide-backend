@@ -28,6 +28,7 @@ describe('StreamersController', () => {
   const mockStreamersService = {
     findAll: jest.fn().mockResolvedValue([mockStreamer]),
     findAllVisible: jest.fn().mockResolvedValue([mockStreamer]),
+    findAllVisibleWithLiveStatus: jest.fn().mockResolvedValue([{ ...mockStreamer, is_live: false }]),
     findOne: jest.fn().mockResolvedValue(mockStreamer),
     create: jest.fn().mockResolvedValue(mockStreamer),
     update: jest.fn().mockResolvedValue(mockStreamer),
@@ -62,10 +63,10 @@ describe('StreamersController', () => {
   });
 
   describe('findAllVisible', () => {
-    it('should return an array of visible streamers', async () => {
+    it('should return an array of visible streamers with live status', async () => {
       const result = await controller.findAllVisible();
-      expect(result).toEqual([mockStreamer]);
-      expect(service.findAllVisible).toHaveBeenCalled();
+      expect(result).toEqual([{ ...mockStreamer, is_live: false }]);
+      expect(service.findAllVisibleWithLiveStatus).toHaveBeenCalled();
     });
   });
 

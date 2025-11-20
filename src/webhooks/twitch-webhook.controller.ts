@@ -1,0 +1,214 @@
+import { Controller, Post, Get, Req, Res, Logger, Headers, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import { Request, Response } from 'express';
+import { StreamerLiveStatusService } from '../streamers/streamer-live-status.service';
+import { StreamersService } from '../streamers/streamers.service';
+import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
+import { RedisService } from '../redis/redis.service';
+import { extractTwitchUsername } from '../streamers/utils/extract-streamer-username';
+import * as crypto from 'crypto';
+
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
+const REVALIDATE_SECRET = process.env.REVALIDATE_SECRET || 'changeme';
+const TWITCH_WEBHOOK_SECRET = process.env.TWITCH_WEBHOOK_SECRET || '';
+
+interface TwitchEventSubNotification {
+  subscription: {
+    id: string;
+    status: string;
+    type: string;
+    version: string;
+  };
+  event?: {
+    broadcaster_user_id: string;
+    broadcaster_user_login: string;
+    broadcaster_user_name: string;
+    type: string;
+    started_at?: string;
+    ended_at?: string;
+  };
+  challenge?: string;
+}
+
+@Controller('webhooks/twitch')
+export class TwitchWebhookController {
+  private readonly logger = new Logger(TwitchWebhookController.name);
+  private notifyUtil: NotifyAndRevalidateUtil;
+
+  constructor(
+    private readonly streamerLiveStatusService: StreamerLiveStatusService,
+    private readonly streamersService: StreamersService,
+    private readonly redisService: RedisService,
+  ) {
+    this.notifyUtil = new NotifyAndRevalidateUtil(
+      this.redisService,
+      FRONTEND_URL,
+      REVALIDATE_SECRET
+    );
+  }
+
+  /**
+   * Handle EventSub webhook verification (GET request with challenge)
+   */
+  @Get()
+  @HttpCode(HttpStatus.OK)
+  async verifyWebhook(@Req() req: Request, @Res() res: Response) {
+    const mode = req.query['hub.mode'] as string;
+    const challenge = req.query['hub.challenge'] as string;
+    const topic = req.query['hub.topic'] as string;
+
+    this.logger.log(`🔔 Twitch webhook verification request: mode=${mode}, topic=${topic}`);
+
+    if (mode === 'subscribe' && challenge) {
+      // Return challenge to verify webhook
+      this.logger.log(`✅ Twitch webhook verified, returning challenge`);
+      return res.status(200).send(challenge);
+    }
+
+    return res.status(400).send('Invalid verification request');
+  }
+
+  /**
+   * Handle EventSub webhook notifications (POST request with events)
+   */
+  @Post()
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async handleWebhook(
+    @Headers('twitch-eventsub-message-signature') signature: string,
+    @Headers('twitch-eventsub-message-id') messageId: string,
+    @Headers('twitch-eventsub-message-timestamp') timestamp: string,
+    @Body() body: TwitchEventSubNotification,
+    @Req() req: Request,
+  ) {
+    // Get raw body for signature verification
+    const rawBody = (req as any).rawBody || JSON.stringify(body);
+    
+    // Verify webhook signature
+    if (!this.verifySignature(signature, messageId, timestamp, rawBody)) {
+      this.logger.warn('❌ Invalid Twitch webhook signature');
+      throw new Error('Invalid signature');
+    }
+
+    const notification = body;
+
+    // Handle subscription verification
+    if (notification.subscription.status === 'webhook_callback_verification') {
+      const challenge = notification.challenge;
+      if (challenge) {
+        this.logger.log(`✅ Twitch webhook callback verified`);
+        return challenge;
+      }
+    }
+
+    // Handle revocation
+    if (notification.subscription.status === 'notification') {
+      this.logger.warn(`⚠️ Twitch subscription revoked: ${notification.subscription.id}`);
+      return;
+    }
+
+    // Handle actual events
+    if (notification.event && notification.subscription.status === 'enabled') {
+      await this.handleEvent(notification);
+    }
+
+    return;
+  }
+
+  /**
+   * Verify Twitch EventSub webhook signature
+   */
+  private verifySignature(
+    signature: string,
+    messageId: string,
+    timestamp: string,
+    rawBody: string
+  ): boolean {
+    if (!TWITCH_WEBHOOK_SECRET) {
+      this.logger.warn('⚠️ TWITCH_WEBHOOK_SECRET not configured, skipping signature verification');
+      return true; // Allow in development
+    }
+
+    if (!signature || !messageId || !timestamp) {
+      return false;
+    }
+
+    // Reconstruct the message (Twitch uses messageId + timestamp + rawBody)
+    const message = messageId + timestamp + rawBody;
+
+    // Calculate expected signature
+    const hmac = crypto.createHmac('sha256', TWITCH_WEBHOOK_SECRET);
+    hmac.update(message);
+    const expectedSignature = 'sha256=' + hmac.digest('hex');
+
+    // Compare signatures (constant-time comparison)
+    try {
+      return crypto.timingSafeEqual(
+        Buffer.from(signature),
+        Buffer.from(expectedSignature)
+      );
+    } catch (error) {
+      this.logger.warn('❌ Error comparing signatures:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Handle Twitch EventSub events
+   */
+  private async handleEvent(notification: TwitchEventSubNotification): Promise<void> {
+    const event = notification.event;
+    if (!event) return;
+
+    const username = event.broadcaster_user_login;
+    const eventType = notification.subscription.type;
+
+    this.logger.log(`📡 Twitch webhook event: ${eventType} for ${username}`);
+
+    // Find streamer by Twitch username
+    const streamers = await this.streamersService.findAll();
+    const streamer = streamers.find(s => {
+      const twitchService = s.services.find(service => service.service === 'twitch');
+      if (!twitchService) return false;
+      const streamerUsername = twitchService.username || extractTwitchUsername(twitchService.url);
+      return streamerUsername?.toLowerCase() === username.toLowerCase();
+    });
+
+    if (!streamer) {
+      this.logger.warn(`⚠️ Streamer not found for Twitch username: ${username}`);
+      return;
+    }
+
+    // Determine if live based on event type
+    let isLive = false;
+    if (eventType === 'stream.online') {
+      isLive = true;
+    } else if (eventType === 'stream.offline') {
+      isLive = false;
+    }
+
+    // Update live status
+    await this.streamerLiveStatusService.updateLiveStatus(
+      streamer.id,
+      'twitch',
+      isLive,
+      username
+    );
+
+    // Notify frontend via SSE
+    const eventTypeName = isLive ? 'streamer_went_live' : 'streamer_went_offline';
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: eventTypeName,
+      entity: 'streamer',
+      entityId: streamer.id,
+      payload: {
+        streamerId: streamer.id,
+        streamerName: streamer.name,
+        service: 'twitch',
+        isLive,
+      },
+      revalidatePaths: ['/streamers'],
+    });
+
+    this.logger.log(`✅ Updated live status for streamer ${streamer.id} (${streamer.name}): isLive=${isLive}`);
+  }
+}
+

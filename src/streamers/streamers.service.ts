@@ -8,6 +8,9 @@ import { RedisService } from '@/redis/redis.service';
 import { Category } from '../categories/categories.entity';
 import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
 import { ConfigService } from '@/config/config.service';
+import { StreamerLiveStatusService } from './streamer-live-status.service';
+import { WebhookSubscriptionService } from '../webhooks/webhook-subscription.service';
+import { extractTwitchUsername, extractKickUsername } from './utils/extract-streamer-username';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
 const REVALIDATE_SECRET = process.env.REVALIDATE_SECRET || 'changeme';
@@ -25,6 +28,8 @@ export class StreamersService {
     private readonly categoriesRepository: Repository<Category>,
     private readonly redisService: RedisService,
     private readonly configService: ConfigService,
+    private readonly streamerLiveStatusService: StreamerLiveStatusService,
+    private readonly webhookSubscriptionService: WebhookSubscriptionService,
   ) {
     this.notifyUtil = new NotifyAndRevalidateUtil(
       this.redisService,
@@ -64,6 +69,26 @@ export class StreamersService {
     return streamers;
   }
 
+  /**
+   * Get visible streamers with live status included
+   */
+  async findAllVisibleWithLiveStatus(): Promise<Array<Streamer & { is_live?: boolean }>> {
+    const streamers = await this.findAllVisible();
+    const streamerIds = streamers.map(s => s.id);
+    
+    // Get live statuses for all streamers
+    const liveStatuses = await this.streamerLiveStatusService.getLiveStatuses(streamerIds);
+    
+    // Merge live status into streamers
+    return streamers.map(streamer => {
+      const liveStatus = liveStatuses.get(streamer.id);
+      return {
+        ...streamer,
+        is_live: liveStatus?.isLive || false,
+      };
+    });
+  }
+
   async findOne(id: number): Promise<Streamer> {
     const streamer = await this.streamersRepository.findOne({ 
       where: { id },
@@ -97,6 +122,12 @@ export class StreamersService {
     }
     
     const saved = await this.streamersRepository.save(streamer);
+
+    // Initialize live status cache
+    await this.streamerLiveStatusService.initializeCache(saved.id, saved.services);
+
+    // Subscribe to webhooks for Twitch and Kick services
+    await this.subscribeToWebhooks(saved);
 
     // Notify and revalidate
     await this.notifyUtil.notifyAndRevalidate({
@@ -137,6 +168,12 @@ export class StreamersService {
 
     const saved = await this.streamersRepository.save(streamer);
 
+    // Update live status cache if services changed
+    await this.streamerLiveStatusService.initializeCache(saved.id, saved.services);
+
+    // Re-subscribe to webhooks (in case services changed)
+    await this.subscribeToWebhooks(saved);
+
     // Notify and revalidate
     await this.notifyUtil.notifyAndRevalidate({
       eventType: 'streamer_updated',
@@ -151,6 +188,12 @@ export class StreamersService {
 
   async remove(id: number): Promise<void> {
     const streamer = await this.findOne(id);
+    
+    // Unsubscribe from webhooks
+    await this.unsubscribeFromWebhooks(streamer);
+    
+    // Clear live status cache
+    await this.streamerLiveStatusService.clearLiveStatus(id);
     
     // Clear cache
     try {
@@ -169,6 +212,54 @@ export class StreamersService {
       payload: { streamerId: id },
       revalidatePaths: ['/streamers'],
     });
+  }
+
+  /**
+   * Subscribe to webhooks for streamer's services
+   */
+  private async subscribeToWebhooks(streamer: Streamer): Promise<void> {
+    for (const service of streamer.services) {
+      if (service.service === 'twitch') {
+        const username = service.username || extractTwitchUsername(service.url);
+        if (username) {
+          // Subscribe to both online and offline events
+          await this.webhookSubscriptionService.subscribeToTwitchEventSub(username, 'stream.online');
+          await this.webhookSubscriptionService.subscribeToTwitchEventSub(username, 'stream.offline');
+        }
+      } else if (service.service === 'kick') {
+        const username = service.username || extractKickUsername(service.url);
+        if (username) {
+          await this.webhookSubscriptionService.subscribeToKickWebhook(username);
+        }
+      }
+    }
+  }
+
+  /**
+   * Unsubscribe from webhooks for streamer's services
+   */
+  private async unsubscribeFromWebhooks(streamer: Streamer): Promise<void> {
+    const subscriptions = await this.webhookSubscriptionService.getSubscriptionsForStreamer(
+      streamer.id,
+      streamer.services
+    );
+
+    // Unsubscribe from Twitch
+    for (const subscriptionId of subscriptions.twitch) {
+      await this.webhookSubscriptionService.unsubscribeFromTwitchEventSub(subscriptionId);
+    }
+
+    // Unsubscribe from Kick
+    for (const subscriptionId of subscriptions.kick) {
+      if (subscriptionId !== 'pending') {
+        // Only unsubscribe if it's a real subscription ID
+        const username = streamer.services.find(s => s.service === 'kick')?.username || 
+                        extractKickUsername(streamer.services.find(s => s.service === 'kick')?.url || '');
+        if (username) {
+          await this.webhookSubscriptionService.unsubscribeFromKickWebhook(username);
+        }
+      }
+    }
   }
 }
 
