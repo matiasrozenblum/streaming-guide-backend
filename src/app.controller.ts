@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Inject, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Inject, UseGuards, Query } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Channel } from './channels/channels.entity';
@@ -16,6 +16,7 @@ import { AppService } from './app.service';
 import { SentryService } from './sentry/sentry.service';
 import { ResourceMonitorService } from './services/resource-monitor.service';
 import { ConnectionPoolMonitorService } from './services/connection-pool-monitor.service';
+import { TimezoneUtil } from './utils/timezone.util';
 
 const HolidaysClass = (DateHolidays as any).default ?? DateHolidays;
 
@@ -515,8 +516,33 @@ export class AppController {
   }
   
   @Get('holiday')
-  isHoliday() {
-    const today = new Date();
-    return { holiday: !!this.hd.isHoliday(today) };
+  isHoliday(@Query('date') date?: string) {
+    let checkDate: Date;
+    
+    if (date) {
+      // Parse date string (expects YYYY-MM-DD format) in Argentina timezone
+      const dateInArgentina = TimezoneUtil.toArgentinaTime(date + 'T00:00:00');
+      checkDate = dateInArgentina.toDate();
+      if (isNaN(checkDate.getTime())) {
+        return { error: 'Invalid date format. Use YYYY-MM-DD' };
+      }
+    } else {
+      // Default to today in Argentina timezone
+      checkDate = TimezoneUtil.now().toDate();
+    }
+    
+    const holidays = this.hd.isHoliday(checkDate);
+    const isHoliday = !!holidays;
+    
+    // Return detailed information
+    return {
+      date: TimezoneUtil.toArgentinaTime(checkDate).format('YYYY-MM-DD'),
+      isHoliday,
+      holidays: isHoliday ? holidays.map((h: any) => ({
+        name: h.name,
+        type: h.type,
+        date: h.date,
+      })) : [],
+    };
   }
 }
