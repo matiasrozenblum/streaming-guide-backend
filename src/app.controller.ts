@@ -518,17 +518,22 @@ export class AppController {
   @Get('holiday')
   isHoliday(@Query('date') date?: string) {
     let checkDate: Date;
+    let dateString: string;
     
     if (date) {
-      // Parse date string (expects YYYY-MM-DD format) in Argentina timezone
-      const dateInArgentina = TimezoneUtil.toArgentinaTime(date + 'T00:00:00');
-      checkDate = dateInArgentina.toDate();
-      if (isNaN(checkDate.getTime())) {
+      // Parse date string (expects YYYY-MM-DD format) as a date in Argentina timezone
+      // Use dayjs to parse the date string directly in Argentina timezone
+      const dateInArgentina = TimezoneUtil.toArgentinaTime(date).startOf('day');
+      if (!dateInArgentina.isValid()) {
         return { error: 'Invalid date format. Use YYYY-MM-DD' };
       }
+      checkDate = dateInArgentina.toDate();
+      dateString = dateInArgentina.format('YYYY-MM-DD');
     } else {
       // Default to today in Argentina timezone
-      checkDate = TimezoneUtil.now().toDate();
+      const now = TimezoneUtil.now();
+      checkDate = now.toDate();
+      dateString = now.format('YYYY-MM-DD');
     }
     
     const holidays = this.hd.isHoliday(checkDate);
@@ -536,7 +541,7 @@ export class AppController {
     
     // Return detailed information
     return {
-      date: TimezoneUtil.toArgentinaTime(checkDate).format('YYYY-MM-DD'),
+      date: dateString,
       isHoliday,
       holidays: isHoliday ? holidays.map((h: any) => ({
         name: h.name,
