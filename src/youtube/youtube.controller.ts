@@ -38,15 +38,17 @@ export class YoutubeController {
       // Set up polling for live status changes
       const interval = setInterval(async () => {
         try {
-          // Check for recent live notifications (last 30 seconds)
-          const thirtySecondsAgo = Date.now() - 30000;
+          // Check for recent live notifications (last 60 seconds to give more time)
+          const sixtySecondsAgo = Date.now() - 60000;
           const keys = await this.redisService.client.keys('live_notification:*');
+          
+          this.logger.debug(`🔍 [SSE] Checking ${keys.length} notification keys`);
           
           for (const key of keys) {
             const parts = key.split(':');
             const timestamp = parseInt(parts[parts.length - 1]);
             
-            if (timestamp > thirtySecondsAgo) {
+            if (timestamp > sixtySecondsAgo) {
               const notificationString = await this.redisService.get(key);
               if (notificationString && typeof notificationString === 'string') {
                 try {
@@ -63,12 +65,12 @@ export class YoutubeController {
                     this.logger.debug('📡 Notification not sent before, proceeding to send...');
                     this.sentNotifications.add(notificationId);
                     
-                    this.logger.debug('📡 Sending SSE event to frontend:', notification);
+                    this.logger.log('📡 Sending SSE event to frontend:', JSON.stringify(notification));
                     subscriber.next({
                       data: JSON.stringify(notification),
                       type: 'message',
                     } as MessageEvent);
-                    this.logger.debug('📡 SSE event sent successfully');
+                    this.logger.log('📡 SSE event sent successfully');
                     
                     // Clean up the notification from Redis after sending
                     await this.redisService.del(key);
@@ -84,12 +86,15 @@ export class YoutubeController {
                   this.logger.error('Error parsing notification:', error);
                 }
               }
+            } else {
+              // Clean up old notifications
+              await this.redisService.del(key);
             }
           }
         } catch (error) {
           this.logger.error('Error in live events SSE:', error);
         }
-      }, 5000); // Check every 5 seconds
+      }, 2000); // Check every 2 seconds (faster polling)
 
       // Cleanup on disconnect
       return () => {
