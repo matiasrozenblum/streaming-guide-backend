@@ -27,13 +27,11 @@ export class NotifyAndRevalidateUtil {
       timestamp,
     };
     const notificationKey = `live_notification:${options.entity}:${options.entityId}:${timestamp}`;
-    console.log(`[NotifyAndRevalidate] Storing notification in Redis: ${notificationKey}`, JSON.stringify(notification));
     await this.redisService.set(
       notificationKey,
       JSON.stringify(notification),
       300 // 5 minutes TTL
     );
-    console.log(`[NotifyAndRevalidate] ✅ Notification stored in Redis: ${notificationKey}`);
 
     // 2. Call Next.js revalidation endpoint for each path
     if (options.revalidatePaths && options.revalidatePaths.length > 0) {
