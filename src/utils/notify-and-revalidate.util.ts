@@ -18,18 +18,22 @@ export class NotifyAndRevalidateUtil {
 
   async notifyAndRevalidate(options: NotifyAndRevalidateOptions) {
     // 1. Broadcast SSE event
+    const timestamp = Date.now();
     const notification = {
       type: options.eventType,
       entity: options.entity,
       entityId: options.entityId,
       payload: options.payload || {},
-      timestamp: Date.now(),
+      timestamp,
     };
+    const notificationKey = `live_notification:${options.entity}:${options.entityId}:${timestamp}`;
+    console.log(`[NotifyAndRevalidate] Storing notification in Redis: ${notificationKey}`, JSON.stringify(notification));
     await this.redisService.set(
-      `live_notification:${options.entity}:${options.entityId}:${Date.now()}`,
+      notificationKey,
       JSON.stringify(notification),
       300 // 5 minutes TTL
     );
+    console.log(`[NotifyAndRevalidate] ✅ Notification stored in Redis: ${notificationKey}`);
 
     // 2. Call Next.js revalidation endpoint for each path
     if (options.revalidatePaths && options.revalidatePaths.length > 0) {
