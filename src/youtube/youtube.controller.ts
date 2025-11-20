@@ -42,18 +42,20 @@ export class YoutubeController {
           const sixtySecondsAgo = Date.now() - 60000;
           const keys = await this.redisService.client.keys('live_notification:*');
           
-          this.logger.debug(`🔍 [SSE] Checking ${keys.length} notification keys`);
-          
           for (const key of keys) {
             const parts = key.split(':');
             const timestamp = parseInt(parts[parts.length - 1]);
+            
+            if (isNaN(timestamp)) {
+              this.logger.warn(`Invalid timestamp in notification key: ${key}`);
+              continue;
+            }
             
             if (timestamp > sixtySecondsAgo) {
               const notificationString = await this.redisService.get(key);
               if (notificationString && typeof notificationString === 'string') {
                 try {
                   const notification = JSON.parse(notificationString) as LiveNotification;
-                  this.logger.debug('🔔 Processing SSE notification:', notification.type, notification.entity || notification.channelId);
                   
                   // Create a unique identifier for this notification
                   const notificationId = notification.channelId 
@@ -62,15 +64,12 @@ export class YoutubeController {
                   
                   // Only send if we haven't sent this notification before
                   if (!this.sentNotifications.has(notificationId)) {
-                    this.logger.debug('📡 Notification not sent before, proceeding to send...');
                     this.sentNotifications.add(notificationId);
                     
-                    this.logger.log('📡 Sending SSE event to frontend:', JSON.stringify(notification));
                     subscriber.next({
                       data: JSON.stringify(notification),
                       type: 'message',
                     } as MessageEvent);
-                    this.logger.log('📡 SSE event sent successfully');
                     
                     // Clean up the notification from Redis after sending
                     await this.redisService.del(key);
@@ -79,8 +78,6 @@ export class YoutubeController {
                     setTimeout(() => {
                       this.sentNotifications.delete(notificationId);
                     }, 60000);
-                  } else {
-                    this.logger.debug('📡 Notification already sent, skipping:', notificationId);
                   }
                 } catch (error) {
                   this.logger.error('Error parsing notification:', error);
@@ -92,9 +89,9 @@ export class YoutubeController {
             }
           }
         } catch (error) {
-          this.logger.error('Error in live events SSE:', error);
+          this.logger.error('Error in live events SSE polling:', error);
         }
-      }, 2000); // Check every 2 seconds (faster polling)
+      }, 2000); // Check every 2 seconds
 
       // Cleanup on disconnect
       return () => {
