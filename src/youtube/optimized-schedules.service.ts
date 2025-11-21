@@ -4,6 +4,7 @@ import { WeeklyOverridesService } from '../schedules/weekly-overrides.service';
 import { LiveStatusBackgroundService } from './live-status-background.service';
 import { YoutubeLiveService } from './youtube-live.service';
 import { RedisService } from '../redis/redis.service';
+import { ConfigService } from '../config/config.service';
 
 @Injectable()
 export class OptimizedSchedulesService {
@@ -15,6 +16,7 @@ export class OptimizedSchedulesService {
     private readonly liveStatusBackgroundService: LiveStatusBackgroundService,
     private readonly youtubeLiveService: YoutubeLiveService,
     private readonly redisService: RedisService,
+    private readonly configService: ConfigService,
   ) {}
 
   /**
@@ -96,6 +98,19 @@ export class OptimizedSchedulesService {
       }
     }
 
+    // Check canFetchLive for all handles (respects holiday overrides)
+    const canFetchLiveMap = new Map<string, boolean>();
+    for (const handle of handles) {
+      try {
+        const canFetch = await this.configService.canFetchLive(handle);
+        canFetchLiveMap.set(handle, canFetch);
+      } catch (error) {
+        // If we can't check the config, assume fetching is enabled
+        this.logger.debug(`[OPTIMIZED-SCHEDULES] Error checking canFetchLive for ${handle}, assuming enabled`);
+        canFetchLiveMap.set(handle, true);
+      }
+    }
+
     // Enrich schedules with cached live status
     const enriched: any[] = [];
     const currentDay = require('../utils/timezone.util').TimezoneUtil.currentDayOfWeek();
@@ -109,6 +124,9 @@ export class OptimizedSchedulesService {
       // Check if this channel has been marked as not-found due to escalation
       const attemptTracking = handle ? attemptTrackingMap.get(handle) : null;
       const isEscalated = attemptTracking?.escalated === true;
+      
+      // Get canFetchLive status for this handle (defaults to true if not found)
+      const canFetchLive = handle ? (canFetchLiveMap.get(handle) ?? true) : true;
       
       if (channelId && liveStatusMap.has(channelId)) {
         const liveStatus = liveStatusMap.get(channelId)!;
@@ -130,8 +148,9 @@ export class OptimizedSchedulesService {
             live_streams: [],
             stream_count: 0,
           };
-        } else if (isCurrentlyLive && liveStatus.isLive) {
+        } else if (isCurrentlyLive && liveStatus.isLive && canFetchLive) {
           // Program is live and has live stream - use unified cache data
+          // CRITICAL: Only set is_live to true if canFetchLive is true (respects holiday overrides)
           enrichedSchedule.program = {
             ...schedule.program,
             is_live: true,
@@ -139,8 +158,19 @@ export class OptimizedSchedulesService {
             live_streams: liveStatus.streams || [],
             stream_count: liveStatus.streamCount || 0,
           };
+        } else if (isCurrentlyLive && !canFetchLive) {
+          // Program is in scheduled time but fetch is disabled (e.g., holiday override)
+          this.logger.debug(`[OPTIMIZED-SCHEDULES] Program "${schedule.program.name}" on ${handle} is in scheduled time but canFetchLive is false, setting is_live to false`);
+          enrichedSchedule.program = {
+            ...schedule.program,
+            is_live: false,
+            stream_url: schedule.program.stream_url || schedule.program.youtube_url,
+            live_streams: [],
+            stream_count: 0,
+          };
         } else if (isCurrentlyLive) {
           // Program is live by time but background cache says no live stream
+          // At this point, canFetchLive is guaranteed to be true (otherwise condition 3 would have matched)
           // CRITICAL: Trust recent cache - if cache was updated recently (< 10 min) and says "not live",
           // don't trigger expensive API calls. The background cron will handle updates.
           const cacheAge = Date.now() - liveStatus.lastUpdated;
@@ -229,10 +259,20 @@ export class OptimizedSchedulesService {
             live_streams: [],
             stream_count: 0,
           };
+        } else if (isCurrentlyLive && !canFetchLive) {
+          // Program is in scheduled time but fetch is disabled (e.g., holiday override)
+          this.logger.debug(`[OPTIMIZED-SCHEDULES] Program "${schedule.program.name}" on ${handle} is in scheduled time but canFetchLive is false (no cache), setting is_live to false`);
+          enrichedSchedule.program = {
+            ...schedule.program,
+            is_live: false,
+            stream_url: schedule.program.stream_url || schedule.program.youtube_url,
+            live_streams: [],
+            stream_count: 0,
+          };
         } else {
           enrichedSchedule.program = {
             ...schedule.program,
-            is_live: isCurrentlyLive,
+            is_live: isCurrentlyLive && canFetchLive,
             stream_url: schedule.program.stream_url || schedule.program.youtube_url,
             live_streams: [],
             stream_count: 0,
@@ -241,8 +281,8 @@ export class OptimizedSchedulesService {
         
         // If program is live but no cache data exists, trigger async fetch to populate cache
         // CRITICAL: Only trigger if lock not already acquired (deduplicate by channel, not by schedule)
-        // AND not escalated
-        if (isCurrentlyLive && schedule.program.channel?.handle && !isEscalated) {
+        // AND not escalated AND canFetchLive is true
+        if (isCurrentlyLive && schedule.program.channel?.handle && !isEscalated && canFetchLive) {
           const handle = schedule.program.channel.handle;
           const fetchLockKey = `async-fetch-triggered:${handle}`;
           const fetchLockTTL = 600; // 10 minutes - longer to prevent excessive triggering
