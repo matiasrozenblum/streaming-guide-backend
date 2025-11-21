@@ -161,11 +161,15 @@ export class WebhookSubscriptionService {
 
       // Subscribe to livestream status events
       // According to Kick docs, use POST /api/v2/event-subscriptions
+      const webhookUrl = `${webhookBaseUrl}/webhooks/kick`;
+      this.logger.log(`🔔 Subscribing to Kick webhook for ${kickUsername} (user ID: ${channelUserId}) at ${webhookUrl}`);
+      
       const subscriptionResponse = await axios.post(
         'https://kick.com/api/v2/event-subscriptions',
         {
           event: 'livestream.status.updated', // Event type for live status changes
           user_id: channelUserId,
+          webhook_url: webhookUrl, // CRITICAL: Kick needs this to know where to send webhooks
         },
         {
           headers: {
@@ -189,9 +193,17 @@ export class WebhookSubscriptionService {
       }
 
       this.logger.warn(`⚠️ Kick subscription response missing subscription ID`);
+      this.logger.warn(`⚠️ Response data:`, JSON.stringify(subscriptionResponse.data, null, 2));
       return null;
     } catch (error: any) {
-      this.logger.error(`❌ Error subscribing to Kick event: ${error.message}`, error.response?.data);
+      this.logger.error(`❌ Error subscribing to Kick event for ${kickUsername}:`, {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        url: error.config?.url,
+        payload: error.config?.data,
+      });
       return null;
     }
   }
