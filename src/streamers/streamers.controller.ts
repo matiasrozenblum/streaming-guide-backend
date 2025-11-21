@@ -62,5 +62,14 @@ export class StreamersController {
   remove(@Param('id') id: number): Promise<void> {
     return this.streamersService.remove(id);
   }
+
+  @Post(':id/resubscribe-webhooks')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Re-subscribe to webhooks for a streamer (useful for fixing broken subscriptions)' })
+  @ApiResponse({ status: 200, description: 'Webhooks re-subscribed successfully' })
+  async resubscribeWebhooks(@Param('id') id: number): Promise<{ success: boolean; message: string }> {
+    return this.streamersService.resubscribeWebhooks(id);
+  }
 }
 

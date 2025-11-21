@@ -148,20 +148,90 @@ describe('WebhookSubscriptionService', () => {
 
   describe('subscribeToKickWebhook', () => {
     it('should store subscription info in Redis', async () => {
+      const mockUserId = 12345;
+      const mockSubscriptionId = 'kick-sub-789';
+      
       mockConfigService.get
-        .mockReturnValueOnce('api-key')
+        .mockReturnValueOnce('client-id') // KICK_CLIENT_ID
+        .mockReturnValueOnce('client-secret') // KICK_CLIENT_SECRET
+        .mockReturnValueOnce('access-token') // KICK_APP_ACCESS_TOKEN
+        .mockReturnValueOnce('https://example.com'); // WEBHOOK_BASE_URL
+
+      // Mock axios.get for fetching user ID from Kick API
+      mockedAxios.get.mockResolvedValueOnce({
+        data: {
+          id: mockUserId,
+          user: { id: mockUserId },
+        },
+      });
+
+      // Mock axios.post for creating subscription
+      mockedAxios.post.mockResolvedValueOnce({
+        data: {
+          id: mockSubscriptionId,
+        },
+      });
+
+      const result = await service.subscribeToKickWebhook('testuser');
+
+      expect(result).toBe(mockSubscriptionId);
+      expect(mockedAxios.get).toHaveBeenCalledWith(
+        'https://kick.com/api/v2/channels/testuser',
+        expect.objectContaining({
+          headers: {
+            'Authorization': 'Bearer access-token',
+          },
+        })
+      );
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        'https://kick.com/api/v2/event-subscriptions',
+        {
+          event: 'livestream.status.updated',
+          user_id: mockUserId,
+          webhook_url: 'https://example.com/webhooks/kick',
+        },
+        expect.objectContaining({
+          headers: {
+            'Authorization': 'Bearer access-token',
+            'Content-Type': 'application/json',
+          },
+        })
+      );
+      expect(mockRedisService.set).toHaveBeenCalledWith(
+        'webhook:subscription:kick:testuser',
+        expect.objectContaining({
+          subscriptionId: mockSubscriptionId,
+          username: 'testuser',
+          userId: mockUserId,
+        }),
+        86400 * 365
+      );
+    });
+
+    it('should return null if app access token is missing', async () => {
+      mockConfigService.get
+        .mockReturnValueOnce('client-id')
+        .mockReturnValueOnce('client-secret')
+        .mockReturnValueOnce(null) // KICK_APP_ACCESS_TOKEN missing
         .mockReturnValueOnce('https://example.com');
 
       const result = await service.subscribeToKickWebhook('testuser');
 
-      expect(result).toBe('pending');
-      expect(mockRedisService.set).toHaveBeenCalledWith(
-        'webhook:subscription:kick:testuser',
-        expect.objectContaining({
-          username: 'testuser',
-        }),
-        86400 * 365
-      );
+      expect(result).toBeNull();
+      expect(mockedAxios.post).not.toHaveBeenCalled();
+    });
+
+    it('should return null if webhook base URL is missing', async () => {
+      mockConfigService.get
+        .mockReturnValueOnce('client-id')
+        .mockReturnValueOnce('client-secret')
+        .mockReturnValueOnce('access-token')
+        .mockReturnValueOnce(null); // WEBHOOK_BASE_URL missing
+
+      const result = await service.subscribeToKickWebhook('testuser');
+
+      expect(result).toBeNull();
+      expect(mockedAxios.post).not.toHaveBeenCalled();
     });
   });
 

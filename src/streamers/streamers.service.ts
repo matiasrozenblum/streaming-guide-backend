@@ -261,5 +261,24 @@ export class StreamersService {
       }
     }
   }
+
+  /**
+   * Re-subscribe to webhooks for a streamer
+   * Useful for fixing broken subscriptions or updating webhook URLs
+   */
+  async resubscribeWebhooks(streamerId: number): Promise<{ success: boolean; message: string }> {
+    const streamer = await this.findOne(streamerId);
+    
+    // Unsubscribe from old webhooks first
+    await this.unsubscribeFromWebhooks(streamer);
+    
+    // Re-subscribe to webhooks
+    await this.subscribeToWebhooks(streamer);
+    
+    return {
+      success: true,
+      message: `Successfully re-subscribed to webhooks for streamer ${streamer.name}`,
+    };
+  }
 }
 
