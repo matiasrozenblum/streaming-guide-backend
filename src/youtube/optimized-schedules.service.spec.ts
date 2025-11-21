@@ -5,6 +5,7 @@ import { WeeklyOverridesService } from '../schedules/weekly-overrides.service';
 import { LiveStatusBackgroundService } from './live-status-background.service';
 import { YoutubeLiveService } from './youtube-live.service';
 import { RedisService } from '../redis/redis.service';
+import { ConfigService } from '../config/config.service';
 
 // Mock TimezoneUtil
 jest.mock('../utils/timezone.util', () => ({
@@ -73,6 +74,10 @@ describe('OptimizedSchedulesService', () => {
       }),
     };
 
+    const mockConfigService = {
+      canFetchLive: jest.fn().mockResolvedValue(true),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OptimizedSchedulesService,
@@ -84,6 +89,7 @@ describe('OptimizedSchedulesService', () => {
         { provide: LiveStatusBackgroundService, useValue: mockLiveStatusBackgroundService },
         { provide: YoutubeLiveService, useValue: mockYoutubeLiveService },
         { provide: RedisService, useValue: mockRedisService },
+        { provide: ConfigService, useValue: mockConfigService },
       ],
     }).compile();
 
@@ -141,6 +147,10 @@ describe('OptimizedSchedulesService', () => {
       delByPattern: jest.fn(),
     };
 
+    const mockConfigService = {
+      canFetchLive: jest.fn().mockResolvedValue(true),
+    };
+
     // Recreate the module with the new Redis mock
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -153,6 +163,7 @@ describe('OptimizedSchedulesService', () => {
         { provide: LiveStatusBackgroundService, useValue: mockLiveStatusBackgroundService },
         { provide: YoutubeLiveService, useValue: {} },
         { provide: RedisService, useValue: mockRedisService },
+        { provide: ConfigService, useValue: mockConfigService },
       ],
     }).compile();
 
@@ -192,6 +203,10 @@ describe('OptimizedSchedulesService', () => {
       getLiveStatusForChannels: jest.fn().mockResolvedValue(new Map()),
     };
 
+    const mockConfigService = {
+      canFetchLive: jest.fn().mockResolvedValue(true),
+    };
+
     // Recreate the module with the new mocks
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -204,6 +219,7 @@ describe('OptimizedSchedulesService', () => {
         { provide: LiveStatusBackgroundService, useValue: mockLiveStatusBackgroundServiceNoCache },
         { provide: YoutubeLiveService, useValue: {} },
         { provide: RedisService, useValue: mockRedisService },
+        { provide: ConfigService, useValue: mockConfigService },
       ],
     }).compile();
 
