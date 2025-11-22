@@ -166,9 +166,17 @@ describe('WebhookSubscriptionService', () => {
       });
 
       // Mock axios.post for creating subscription
+      // Kick API response format: { data: [{ name, version, subscription_id }], message }
       mockedAxios.post.mockResolvedValueOnce({
         data: {
-          id: mockSubscriptionId,
+          data: [
+            {
+              name: 'livestream.status.updated',
+              version: 1,
+              subscription_id: mockSubscriptionId,
+            },
+          ],
+          message: 'Subscription created',
         },
       });
 
@@ -185,17 +193,24 @@ describe('WebhookSubscriptionService', () => {
           },
         })
       );
+      // Updated to use correct endpoint and payload format
       expect(mockedAxios.post).toHaveBeenCalledWith(
-        'https://kick.com/api/v2/event-subscriptions',
+        'https://api.kick.com/public/v1/events/subscriptions',
         {
-          event: 'livestream.status.updated',
-          user_id: mockUserId,
-          webhook_url: 'https://example.com/webhooks/kick',
+          broadcaster_user_id: mockUserId,
+          events: [
+            {
+              name: 'livestream.status.updated',
+              version: 1,
+            },
+          ],
+          method: 'webhook',
         },
         expect.objectContaining({
           headers: {
             'Authorization': 'Bearer access-token',
             'Content-Type': 'application/json',
+            'Accept': '*/*',
           },
         })
       );
