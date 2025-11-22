@@ -149,7 +149,13 @@ describe('TwitchWebhookController', () => {
         'twitch-eventsub-message-signature': 'sha256=test',
         'twitch-eventsub-message-id': 'msg-123',
         'twitch-eventsub-message-timestamp': Date.now().toString(),
+        'twitch-eventsub-message-type': 'notification',
       };
+
+      const res = {
+        status: jest.fn().mockReturnThis(),
+        send: jest.fn(),
+      } as any;
 
       // Mock signature verification to pass (in real scenario, this would verify)
       jest.spyOn(controller as any, 'verifySignature').mockReturnValue(true);
@@ -158,9 +164,13 @@ describe('TwitchWebhookController', () => {
         headers['twitch-eventsub-message-signature'],
         headers['twitch-eventsub-message-id'],
         headers['twitch-eventsub-message-timestamp'],
+        headers['twitch-eventsub-message-type'],
         notification,
-        req
+        req,
+        res
       );
+
+      expect(res.status).toHaveBeenCalledWith(204);
 
       expect(streamerLiveStatusService.updateLiveStatus).toHaveBeenCalledWith(
         1,
@@ -196,7 +206,13 @@ describe('TwitchWebhookController', () => {
         'twitch-eventsub-message-signature': 'sha256=test',
         'twitch-eventsub-message-id': 'msg-123',
         'twitch-eventsub-message-timestamp': Date.now().toString(),
+        'twitch-eventsub-message-type': 'notification',
       };
+
+      const res = {
+        status: jest.fn().mockReturnThis(),
+        send: jest.fn(),
+      } as any;
 
       jest.spyOn(controller as any, 'verifySignature').mockReturnValue(true);
 
@@ -204,9 +220,13 @@ describe('TwitchWebhookController', () => {
         headers['twitch-eventsub-message-signature'],
         headers['twitch-eventsub-message-id'],
         headers['twitch-eventsub-message-timestamp'],
+        headers['twitch-eventsub-message-type'],
         notification,
-        req
+        req,
+        res
       );
+
+      expect(res.status).toHaveBeenCalledWith(204);
 
       expect(streamerLiveStatusService.updateLiveStatus).toHaveBeenCalledWith(
         1,
@@ -236,19 +256,30 @@ describe('TwitchWebhookController', () => {
         'twitch-eventsub-message-signature': 'sha256=test',
         'twitch-eventsub-message-id': 'msg-123',
         'twitch-eventsub-message-timestamp': Date.now().toString(),
+        'twitch-eventsub-message-type': 'webhook_callback_verification',
       };
+
+      const res = {
+        status: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(),
+        send: jest.fn(),
+      } as any;
 
       jest.spyOn(controller as any, 'verifySignature').mockReturnValue(true);
 
-      const result = await controller.handleWebhook(
+      await controller.handleWebhook(
         headers['twitch-eventsub-message-signature'],
         headers['twitch-eventsub-message-id'],
         headers['twitch-eventsub-message-timestamp'],
+        headers['twitch-eventsub-message-type'],
         notification,
-        req
+        req,
+        res
       );
 
-      expect(result).toBe('verification-challenge-123');
+      expect(res.set).toHaveBeenCalledWith('Content-Type', 'text/plain');
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.send).toHaveBeenCalledWith('verification-challenge-123');
       expect(streamerLiveStatusService.updateLiveStatus).not.toHaveBeenCalled();
     });
   });
