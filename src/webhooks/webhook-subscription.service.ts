@@ -199,42 +199,71 @@ export class WebhookSubscriptionService {
       }
 
       // Subscribe to livestream status events
-      // According to Kick docs, use POST /api/v2/event-subscriptions
+      // According to Kick API docs: https://docs.kick.com/events/subscribe-to-events
+      // Endpoint: POST https://api.kick.com/public/v1/events/subscriptions
+      // Webhook URL is configured in dashboard, not sent in API request
       const webhookUrl = `${webhookBaseUrl}/webhooks/kick`;
-      this.logger.log(`🔔 Subscribing to Kick webhook for ${kickUsername} (user ID: ${channelUserId}) at ${webhookUrl}`);
+      this.logger.log(`🔔 Subscribing to Kick webhook for ${kickUsername} (user ID: ${channelUserId})`);
       this.logger.log(`🔑 Using app access token: ${appAccessToken ? appAccessToken.substring(0, 10) + '...' : 'MISSING'}`);
+      this.logger.log(`📡 Webhook URL (configured in dashboard): ${webhookUrl}`);
       
+      // Kick API format: { broadcaster_user_id, events: [{ name, version }], method: "webhook" }
+      // Note: webhook_url is NOT in the request - it's configured in the dashboard
+      // According to Kick docs, available events include:
+      // - "chat.message.sent" (example from docs)
+      // - "follow.created", "subscription.created", etc.
+      // For livestream status, we need to check available events from webhook payloads docs
+      // Common pattern might be "livestream.started", "livestream.ended", or similar
+      // If event name is wrong, API will return error with available events
       const subscriptionPayload = {
-        event: 'livestream.status.updated', // Event type for live status changes
-        user_id: channelUserId,
-        webhook_url: webhookUrl, // CRITICAL: Kick needs this to know where to send webhooks
+        broadcaster_user_id: channelUserId,
+        events: [
+          {
+            name: 'livestream.started', // Event name - will need to verify from Kick docs
+            version: 1,
+          },
+        ],
+        method: 'webhook',
       };
       
       this.logger.log(`📤 Subscription payload:`, JSON.stringify(subscriptionPayload, null, 2));
       
+      // Correct endpoint: https://api.kick.com/public/v1/events/subscriptions
       const subscriptionResponse = await axios.post(
-        'https://kick.com/api/v2/event-subscriptions',
+        'https://api.kick.com/public/v1/events/subscriptions',
         subscriptionPayload,
         {
           headers: {
             'Authorization': `Bearer ${appAccessToken}`,
             'Content-Type': 'application/json',
-            'User-Agent': 'StreamingGuide/1.0',
+            'Accept': '*/*',
           },
         }
       );
 
-      const subscriptionId = subscriptionResponse.data?.id || subscriptionResponse.data?.subscription_id;
-      if (subscriptionId) {
-        // Store subscription ID in Redis
-        const key = `${this.SUBSCRIPTION_PREFIX}kick:${kickUsername}`;
-        await this.redisService.set(
-          key,
-          { subscriptionId, username: kickUsername, userId: channelUserId },
-          86400 * 365 // 1 year
-        );
-        this.logger.log(`✅ Subscribed to Kick event for ${kickUsername} (user ID: ${channelUserId}, subscription: ${subscriptionId})`);
-        return subscriptionId;
+      // Kick API response format: { data: [{ name, version, subscription_id, error? }], message }
+      // Response is an array of results, one per event
+      const responseData = subscriptionResponse.data?.data;
+      if (responseData && Array.isArray(responseData) && responseData.length > 0) {
+        const firstResult = responseData[0];
+        
+        if (firstResult.error) {
+          this.logger.error(`❌ Kick subscription error: ${firstResult.error}`);
+          return null;
+        }
+        
+        const subscriptionId = firstResult.subscription_id;
+        if (subscriptionId) {
+          // Store subscription ID in Redis
+          const key = `${this.SUBSCRIPTION_PREFIX}kick:${kickUsername}`;
+          await this.redisService.set(
+            key,
+            { subscriptionId, username: kickUsername, userId: channelUserId },
+            86400 * 365 // 1 year
+          );
+          this.logger.log(`✅ Subscribed to Kick event for ${kickUsername} (user ID: ${channelUserId}, subscription: ${subscriptionId})`);
+          return subscriptionId;
+        }
       }
 
       this.logger.warn(`⚠️ Kick subscription response missing subscription ID`);
@@ -277,12 +306,16 @@ export class WebhookSubscriptionService {
       }
 
       // Delete subscription via Kick API
-      // According to Kick docs, use DELETE /api/v2/event-subscriptions/{subscription_id}
+      // According to Kick docs: DELETE https://api.kick.com/public/v1/events/subscriptions?id={subscription_id}
       await axios.delete(
-        `https://kick.com/api/v2/event-subscriptions/${subscription.subscriptionId}`,
+        `https://api.kick.com/public/v1/events/subscriptions`,
         {
+          params: {
+            id: [subscription.subscriptionId], // Array of subscription IDs
+          },
           headers: {
             'Authorization': `Bearer ${appAccessToken}`,
+            'Accept': '*/*',
           },
         }
       );

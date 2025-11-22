@@ -104,7 +104,15 @@ describe('KickWebhookController', () => {
 
       jest.spyOn(controller as any, 'verifySignature').mockReturnValue(true);
 
-      const result = await controller.handleWebhook('sha256=test', payload, req);
+      const result = await controller.handleWebhook(
+        'test-signature',
+        'test-message-id',
+        '2025-11-22T01:00:00Z',
+        'livestream.started',
+        'test-subscription-id',
+        payload,
+        req
+      );
 
       expect(result).toEqual({ success: true });
       expect(streamerLiveStatusService.updateLiveStatus).toHaveBeenCalledWith(
@@ -135,7 +143,15 @@ describe('KickWebhookController', () => {
 
       jest.spyOn(controller as any, 'verifySignature').mockReturnValue(true);
 
-      const result = await controller.handleWebhook('sha256=test', payload, req);
+      const result = await controller.handleWebhook(
+        'test-signature',
+        'test-message-id',
+        '2025-11-22T01:00:00Z',
+        'livestream.ended',
+        'test-subscription-id',
+        payload,
+        req
+      );
 
       expect(result).toEqual({ success: true });
       expect(streamerLiveStatusService.updateLiveStatus).toHaveBeenCalledWith(
@@ -165,7 +181,15 @@ describe('KickWebhookController', () => {
 
       jest.spyOn(controller as any, 'verifySignature').mockReturnValue(true);
 
-      const result = await controller.handleWebhook('sha256=test', payload, req);
+      const result = await controller.handleWebhook(
+        'test-signature',
+        'test-message-id',
+        '2025-11-22T01:00:00Z',
+        'livestream.started',
+        'test-subscription-id',
+        payload,
+        req
+      );
 
       expect(result).toEqual({ success: false, error: 'Streamer not found' });
       expect(streamerLiveStatusService.updateLiveStatus).not.toHaveBeenCalled();
@@ -183,7 +207,15 @@ describe('KickWebhookController', () => {
 
       jest.spyOn(controller as any, 'verifySignature').mockReturnValue(true);
 
-      const result = await controller.handleWebhook('sha256=test', payload, req);
+      const result = await controller.handleWebhook(
+        'test-signature',
+        'test-message-id',
+        '2025-11-22T01:00:00Z',
+        'livestream.started',
+        'test-subscription-id',
+        payload,
+        req
+      );
 
       expect(result).toEqual({ success: false, error: 'Invalid payload' });
       expect(streamerLiveStatusService.updateLiveStatus).not.toHaveBeenCalled();
