@@ -55,7 +55,7 @@ describe('StreamerLiveStatusService', () => {
             }),
           ]),
         }),
-        3600
+        604800
       );
     });
 
@@ -72,7 +72,7 @@ describe('StreamerLiveStatusService', () => {
           },
         ],
         lastUpdated: Date.now() - 1000,
-        ttl: 3600,
+        ttl: 604800,
       };
 
       mockRedisService.get.mockResolvedValue(existingCache);
@@ -91,7 +91,7 @@ describe('StreamerLiveStatusService', () => {
             }),
           ]),
         }),
-        3600
+        604800
       );
     });
 
@@ -108,7 +108,7 @@ describe('StreamerLiveStatusService', () => {
           },
         ],
         lastUpdated: Date.now() - 1000,
-        ttl: 3600,
+        ttl: 604800,
       };
 
       mockRedisService.get.mockResolvedValue(existingCache);
@@ -124,7 +124,7 @@ describe('StreamerLiveStatusService', () => {
           ]),
           isLive: true, // Should be true if any service is live
         }),
-        3600
+        604800
       );
     });
   });
@@ -143,7 +143,7 @@ describe('StreamerLiveStatusService', () => {
           },
         ],
         lastUpdated: Date.now(),
-        ttl: 3600,
+        ttl: 604800,
       };
 
       mockRedisService.get.mockResolvedValue(cache);
@@ -170,7 +170,7 @@ describe('StreamerLiveStatusService', () => {
         isLive: true,
         services: [],
         lastUpdated: Date.now(),
-        ttl: 3600,
+        ttl: 604800,
       };
 
       const cache2: StreamerLiveStatusCache = {
@@ -178,7 +178,7 @@ describe('StreamerLiveStatusService', () => {
         isLive: false,
         services: [],
         lastUpdated: Date.now(),
-        ttl: 3600,
+        ttl: 604800,
       };
 
       mockRedisService.get
@@ -220,7 +220,7 @@ describe('StreamerLiveStatusService', () => {
             expect.objectContaining({ service: 'kick', isLive: false }),
           ]),
         }),
-        3600
+        604800
       );
     });
   });
