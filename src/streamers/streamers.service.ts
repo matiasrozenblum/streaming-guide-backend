@@ -294,5 +294,81 @@ export class StreamersService {
       message: `Successfully re-subscribed to webhooks for streamer ${streamer.name}`,
     };
   }
+
+  /**
+   * Get webhook subscription status for a streamer
+   * Checks both Redis cache and Twitch/Kick APIs to verify subscriptions are active
+   */
+  async getWebhookStatus(streamerId: number): Promise<{
+    streamer: { id: number; name: string };
+    twitch: Array<{ username: string; eventType: string; subscriptionId: string; status: string; fromApi: boolean }>;
+    kick: Array<{ username: string; subscriptionId: string; status: string; fromApi: boolean }>;
+  }> {
+    const streamer = await this.findOne(streamerId);
+    const status = {
+      streamer: { id: streamer.id, name: streamer.name },
+      twitch: [] as Array<{ username: string; eventType: string; subscriptionId: string; status: string; fromApi: boolean }>,
+      kick: [] as Array<{ username: string; subscriptionId: string; status: string; fromApi: boolean }>,
+    };
+
+    // Get subscriptions from Redis
+    const redisSubscriptions = await this.webhookSubscriptionService.getSubscriptionsForStreamer(
+      streamerId,
+      streamer.services
+    );
+
+    // For Twitch: Check status from API
+    for (const service of streamer.services) {
+      if (service.service === 'twitch') {
+        const username = service.username || extractTwitchUsername(service.url);
+        if (username) {
+          // Get subscriptions from Twitch API
+          const apiSubscriptions = await this.webhookSubscriptionService.getTwitchEventSubSubscriptions();
+          
+          // Check for both online and offline subscriptions
+          for (const eventType of ['stream.online', 'stream.offline'] as const) {
+            const redisKey = `webhook:subscription:twitch:${username}:${eventType}`;
+            const redisSub = await this.redisService.get(redisKey) as any;
+            const subscriptionId = redisSub?.subscriptionId;
+            
+            if (subscriptionId) {
+              // Find matching subscription in API response
+              const apiSub = apiSubscriptions.find(
+                (s: any) => s.id === subscriptionId && s.type === eventType
+              );
+              
+              status.twitch.push({
+                username,
+                eventType,
+                subscriptionId,
+                status: apiSub?.status || 'unknown',
+                fromApi: !!apiSub,
+              });
+            }
+          }
+        }
+      } else if (service.service === 'kick') {
+        const username = service.username || extractKickUsername(service.url);
+        if (username) {
+          const redisKey = `webhook:subscription:kick:${username}`;
+          const redisSub = await this.redisService.get(redisKey) as any;
+          const subscriptionId = redisSub?.subscriptionId;
+          
+          if (subscriptionId) {
+            // Kick doesn't have a public API to check subscription status
+            // So we just report what we have in Redis
+            status.kick.push({
+              username,
+              subscriptionId,
+              status: 'unknown', // Kick API doesn't provide status endpoint
+              fromApi: false,
+            });
+          }
+        }
+      }
+    }
+
+    return status;
+  }
 }
 

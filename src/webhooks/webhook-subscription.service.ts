@@ -92,6 +92,42 @@ export class WebhookSubscriptionService {
   }
 
   /**
+   * Get Twitch EventSub subscriptions
+   * According to Twitch API: https://dev.twitch.tv/docs/api/reference#get-eventsub-subscriptions
+   */
+  async getTwitchEventSubSubscriptions(
+    status?: string,
+    subscriptionId?: string
+  ): Promise<any[]> {
+    const clientId = this.configService.get<string>('TWITCH_CLIENT_ID');
+    const accessToken = this.configService.get<string>('TWITCH_APP_ACCESS_TOKEN');
+
+    if (!clientId || !accessToken) {
+      this.logger.warn('⚠️ Twitch credentials not configured');
+      return [];
+    }
+
+    try {
+      const params: any = {};
+      if (status) params.status = status;
+      if (subscriptionId) params.id = subscriptionId;
+
+      const response = await axios.get(this.TWITCH_EVENTSUB_URL, {
+        params,
+        headers: {
+          'Client-ID': clientId,
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      return response.data.data || [];
+    } catch (error: any) {
+      this.logger.error(`❌ Error getting Twitch EventSub subscriptions: ${error.message}`, error.response?.data);
+      return [];
+    }
+  }
+
+  /**
    * Unsubscribe from Twitch EventSub webhook
    */
   async unsubscribeFromTwitchEventSub(subscriptionId: string): Promise<boolean> {

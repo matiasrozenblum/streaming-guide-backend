@@ -7,7 +7,9 @@ import { StreamerService } from './streamers.entity';
 export class StreamerLiveStatusService {
   private readonly logger = new Logger(StreamerLiveStatusService.name);
   private readonly CACHE_PREFIX = 'streamer:live-status:';
-  private readonly DEFAULT_TTL = 3600; // 1 hour
+  // TTL: 7 days (604800 seconds) - cache persists until webhook updates it
+  // This is a safety net in case webhooks fail; normally webhooks will update/clear the cache
+  private readonly DEFAULT_TTL = 604800; // 7 days
 
   constructor(private readonly redisService: RedisService) {}
 
@@ -53,7 +55,7 @@ export class StreamerLiveStatusService {
         isLive: overallIsLive,
         services: existing.services,
         lastUpdated: now,
-        ttl: existing.ttl,
+        ttl: this.DEFAULT_TTL, // Refresh TTL on webhook update to ensure cache persists
       };
     } else {
       // Create new cache entry
@@ -119,28 +121,69 @@ export class StreamerLiveStatusService {
   /**
    * Initialize cache for a streamer based on their services
    * Called when streamer is created/updated
+   * Preserves existing live status if cache already exists
    */
   async initializeCache(streamerId: number, services: StreamerService[]): Promise<void> {
     const cacheKey = `${this.CACHE_PREFIX}${streamerId}`;
+    const existing = await this.redisService.get<StreamerLiveStatusCache>(cacheKey);
     const now = Date.now();
 
-    const serviceStatuses: StreamerServiceStatus[] = services.map(service => ({
-      service: service.service,
-      isLive: false, // Initially offline
-      lastUpdated: now,
-      username: service.username,
-    }));
+    // If cache exists, preserve existing live status for services that still exist
+    if (existing) {
+      const updatedServices: StreamerServiceStatus[] = services.map(service => {
+        // Find existing status for this service
+        const existingService = existing.services.find(s => s.service === service.service);
+        
+        if (existingService) {
+          // Preserve existing live status
+          return {
+            ...existingService,
+            username: service.username || existingService.username, // Update username if changed
+          };
+        } else {
+          // New service, initialize as offline
+          return {
+            service: service.service,
+            isLive: false,
+            lastUpdated: now,
+            username: service.username,
+          };
+        }
+      });
 
-    const cache: StreamerLiveStatusCache = {
-      streamerId,
-      isLive: false,
-      services: serviceStatuses,
-      lastUpdated: now,
-      ttl: this.DEFAULT_TTL,
-    };
+      // Recalculate overall isLive
+      const overallIsLive = updatedServices.some(s => s.isLive);
 
-    await this.redisService.set(cacheKey, cache, cache.ttl);
-    this.logger.debug(`📝 Initialized live status cache for streamer ${streamerId}`);
+      const updatedCache: StreamerLiveStatusCache = {
+        streamerId,
+        isLive: overallIsLive,
+        services: updatedServices,
+        lastUpdated: existing.lastUpdated, // Preserve original lastUpdated
+        ttl: this.DEFAULT_TTL, // Use new TTL to ensure cache persists
+      };
+
+      await this.redisService.set(cacheKey, updatedCache, updatedCache.ttl);
+      this.logger.debug(`📝 Updated live status cache for streamer ${streamerId} (preserved existing status)`);
+    } else {
+      // No existing cache, initialize as offline
+      const serviceStatuses: StreamerServiceStatus[] = services.map(service => ({
+        service: service.service,
+        isLive: false, // Initially offline
+        lastUpdated: now,
+        username: service.username,
+      }));
+
+      const cache: StreamerLiveStatusCache = {
+        streamerId,
+        isLive: false,
+        services: serviceStatuses,
+        lastUpdated: now,
+        ttl: this.DEFAULT_TTL,
+      };
+
+      await this.redisService.set(cacheKey, cache, cache.ttl);
+      this.logger.debug(`📝 Initialized live status cache for streamer ${streamerId}`);
+    }
   }
 }
 
