@@ -82,27 +82,27 @@ export class TwitchWebhookController {
     @Req() req: Request,
     @Res() res: Response,
   ) {
-    // Get raw body for signature verification
-    const rawBody = (req as any).rawBody || JSON.stringify(body);
-    
-    // IMPORTANT: Verify signature FIRST for ALL requests (including verification)
-    // According to Twitch docs: "Before handling any message, you must make sure that Twitch sent it"
-    if (!this.verifySignature(signature, messageId, timestamp, rawBody)) {
-      this.logger.warn('❌ Invalid Twitch webhook signature');
-      return res.status(403).send('Invalid signature');
-    }
-
     const notification = body;
 
     // Check message type from header (not from subscription.status)
     // According to docs: Twitch-Eventsub-Message-Type header contains the notification type
     const normalizedMessageType = messageType?.toLowerCase();
 
-    // Handle webhook_callback_verification
+    // Handle webhook_callback_verification FIRST (before signature verification)
     // According to docs: https://dev.twitch.tv/docs/eventsub/handling-webhook-events/#responding-to-a-challenge-request
+    // Verification requests are signed, but we handle them first to return the challenge immediately
     if (normalizedMessageType === 'webhook_callback_verification') {
       const challenge = notification.challenge;
       if (challenge) {
+        // Get raw body for signature verification
+        const rawBody = (req as any).rawBody || JSON.stringify(body);
+        
+        // Verify signature for verification requests too (Twitch signs them)
+        if (!this.verifySignature(signature, messageId, timestamp, rawBody)) {
+          this.logger.warn('❌ Invalid Twitch webhook signature for verification request');
+          return res.status(403).send('Invalid signature');
+        }
+        
         this.logger.log(`✅ Twitch webhook callback verification received, returning challenge: ${challenge.substring(0, 20)}...`);
         // Response must contain the raw challenge string only
         // Set Content-Type to text/plain and return 200
@@ -111,6 +111,14 @@ export class TwitchWebhookController {
         this.logger.warn('⚠️ Verification request missing challenge');
         return res.status(400).send('Missing challenge');
       }
+    }
+
+    // For all other requests (notifications, revocations), verify signature
+    // According to Twitch docs: "Before handling any message, you must make sure that Twitch sent it"
+    const rawBody = (req as any).rawBody || JSON.stringify(body);
+    if (!this.verifySignature(signature, messageId, timestamp, rawBody)) {
+      this.logger.warn('❌ Invalid Twitch webhook signature');
+      return res.status(403).send('Invalid signature');
     }
 
     // Handle revocation
