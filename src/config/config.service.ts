@@ -220,7 +220,10 @@ export class ConfigService {
     }
     
     // Cache miss - fetch from DB
-    const override = await this.getBoolean(overrideKey);
+    // If config doesn't exist, default to true (enabled on holidays)
+    // If config exists, use its value (true = enabled, false = disabled)
+    const overrideValue = await this.get(overrideKey);
+    const override = overrideValue === null ? true : overrideValue === 'true';
     await this.redisService.set(`${this.HOLIDAY_OVERRIDE_PREFIX}${overrideKey}`, override);
     return override;
   }
