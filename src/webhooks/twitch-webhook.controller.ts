@@ -69,48 +69,69 @@ export class TwitchWebhookController {
 
   /**
    * Handle EventSub webhook notifications (POST request with events)
+   * According to Twitch docs: https://dev.twitch.tv/docs/eventsub/handling-webhook-events
+   * IMPORTANT: Verify signature FIRST before handling any message type
    */
   @Post()
-  @HttpCode(HttpStatus.NO_CONTENT)
   async handleWebhook(
     @Headers('twitch-eventsub-message-signature') signature: string,
     @Headers('twitch-eventsub-message-id') messageId: string,
     @Headers('twitch-eventsub-message-timestamp') timestamp: string,
+    @Headers('twitch-eventsub-message-type') messageType: string,
     @Body() body: TwitchEventSubNotification,
     @Req() req: Request,
+    @Res() res: Response,
   ) {
     // Get raw body for signature verification
     const rawBody = (req as any).rawBody || JSON.stringify(body);
     
-    // Verify webhook signature
+    // IMPORTANT: Verify signature FIRST for ALL requests (including verification)
+    // According to Twitch docs: "Before handling any message, you must make sure that Twitch sent it"
     if (!this.verifySignature(signature, messageId, timestamp, rawBody)) {
       this.logger.warn('❌ Invalid Twitch webhook signature');
-      throw new Error('Invalid signature');
+      return res.status(403).send('Invalid signature');
     }
 
     const notification = body;
 
-    // Handle subscription verification
-    if (notification.subscription.status === 'webhook_callback_verification') {
+    // Check message type from header (not from subscription.status)
+    // According to docs: Twitch-Eventsub-Message-Type header contains the notification type
+    const normalizedMessageType = messageType?.toLowerCase();
+
+    // Handle webhook_callback_verification
+    // According to docs: https://dev.twitch.tv/docs/eventsub/handling-webhook-events/#responding-to-a-challenge-request
+    if (normalizedMessageType === 'webhook_callback_verification') {
       const challenge = notification.challenge;
       if (challenge) {
-        this.logger.log(`✅ Twitch webhook callback verified`);
-        return challenge;
+        this.logger.log(`✅ Twitch webhook callback verification received, returning challenge: ${challenge.substring(0, 20)}...`);
+        // Response must contain the raw challenge string only
+        // Set Content-Type to text/plain and return 200
+        return res.set('Content-Type', 'text/plain').status(200).send(challenge);
+      } else {
+        this.logger.warn('⚠️ Verification request missing challenge');
+        return res.status(400).send('Missing challenge');
       }
     }
 
     // Handle revocation
-    if (notification.subscription.status === 'notification') {
-      this.logger.warn(`⚠️ Twitch subscription revoked: ${notification.subscription.id}`);
-      return;
+    if (normalizedMessageType === 'revocation') {
+      this.logger.warn(`⚠️ Twitch subscription revoked: ${notification.subscription.id}, reason: ${notification.subscription.status}`);
+      // Must return 2XX status code for revocation
+      return res.status(204).send();
     }
 
-    // Handle actual events
-    if (notification.event && notification.subscription.status === 'enabled') {
-      await this.handleEvent(notification);
+    // Handle notification (actual events)
+    if (normalizedMessageType === 'notification' && notification.subscription.status === 'enabled') {
+      if (notification.event) {
+        await this.handleEvent(notification);
+      }
+      // Return 204 No Content for successful event processing
+      return res.status(204).send();
     }
 
-    return;
+    // Unknown message type - return 204 anyway
+    this.logger.warn(`⚠️ Unknown message type: ${messageType}`);
+    return res.status(204).send();
   }
 
   /**
