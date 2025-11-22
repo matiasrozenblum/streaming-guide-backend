@@ -1,5 +1,5 @@
-import { Controller, Post, Headers, Body, Logger, HttpCode, HttpStatus, Req } from '@nestjs/common';
-import { Request } from 'express';
+import { Controller, Post, Get, Headers, Body, Logger, HttpCode, HttpStatus, Req, Res, Query } from '@nestjs/common';
+import { Request, Response } from 'express';
 import { StreamerLiveStatusService } from '../streamers/streamer-live-status.service';
 import { StreamersService } from '../streamers/streamers.service';
 import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
@@ -65,6 +65,30 @@ export class KickWebhookController {
       FRONTEND_URL,
       REVALIDATE_SECRET
     );
+  }
+
+  /**
+   * Handle Kick webhook verification (GET request)
+   * Kick may send a verification request to verify the webhook URL is accessible
+   */
+  @Get()
+  @HttpCode(HttpStatus.OK)
+  async verifyWebhook(
+    @Query('challenge') challenge: string,
+    @Query('token') token: string,
+    @Res() res: Response,
+  ) {
+    this.logger.log(`🔔 Kick webhook verification request: challenge=${challenge ? 'present' : 'missing'}, token=${token ? 'present' : 'missing'}`);
+    
+    // If challenge is provided, return it to verify webhook (similar to Twitch)
+    if (challenge) {
+      this.logger.log(`✅ Kick webhook verified, returning challenge`);
+      return res.status(200).send(challenge);
+    }
+    
+    // If no challenge, just return 200 to confirm endpoint is accessible
+    this.logger.log(`✅ Kick webhook endpoint is accessible`);
+    return res.status(200).json({ status: 'ok', message: 'Webhook endpoint is accessible' });
   }
 
   /**
