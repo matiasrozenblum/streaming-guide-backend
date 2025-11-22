@@ -12,7 +12,7 @@ const REVALIDATE_SECRET = process.env.REVALIDATE_SECRET || 'changeme';
 // Kick uses public key verification - fetch from their Public Key API endpoint
 // Note: This endpoint may require authentication or may not be publicly available
 // If it fails, signature verification will be skipped in non-production environments
-const KICK_PUBLIC_KEY_URL = 'https://kick.com/api/v2/public-key';
+const KICK_PUBLIC_KEY_URL = 'https://api.kick.com/public/v1/public-key';
 
 /**
  * Kick webhook payload structure
@@ -97,23 +97,30 @@ export class KickWebhookController {
   @Post()
   @HttpCode(HttpStatus.OK)
   async handleWebhook(
-    @Headers('kick-signature') signature: string,
-    @Body() body: KickWebhookPayload,
+    @Headers('kick-event-signature') signature: string,
+    @Headers('kick-event-message-id') messageId: string,
+    @Headers('kick-event-message-timestamp') timestamp: string,
+    @Headers('kick-event-type') eventType: string,
+    @Headers('kick-event-subscription-id') subscriptionId: string,
+    @Body() body: any,
     @Req() req: Request,
   ) {
     // Log incoming webhook request immediately
     this.logger.log(`📥 Received Kick webhook request: ${JSON.stringify({
-      event: body.event || body.data?.is_live !== undefined ? 'livestream.status.updated' : 'unknown',
+      eventType,
+      messageId,
+      subscriptionId,
       hasSignature: !!signature,
       hasBody: !!body,
-      broadcaster: body.data?.broadcaster?.username || body.broadcaster?.username || 'unknown',
     })}`);
     
     // Get raw body for signature verification
+    // According to Kick docs: signature = messageId + "." + timestamp + "." + body
     const rawBody = (req as any).rawBody || JSON.stringify(body);
     
     // Verify webhook signature using public key
-    const isValid = await this.verifySignature(signature, rawBody);
+    // Kick uses: signature = SHA256(messageId + "." + timestamp + "." + body)
+    const isValid = await this.verifySignature(signature, messageId, timestamp, rawBody);
     if (!isValid) {
       this.logger.warn('❌ Invalid Kick webhook signature');
       throw new Error('Invalid signature');
@@ -204,9 +211,25 @@ export class KickWebhookController {
         return null;
       }
 
-      const data = await response.json();
-      // Kick returns public key in their API format - adjust based on actual response structure
-      const publicKey = data.public_key || data.publicKey || data.key;
+      // Kick returns public key as PEM string directly or in response body
+      const publicKeyText = await response.text();
+      let publicKey = publicKeyText.trim();
+      
+      // If response is JSON, extract the key
+      if (publicKey.startsWith('{')) {
+        try {
+          const data = JSON.parse(publicKey);
+          publicKey = data.public_key || data.publicKey || data.key || publicKeyText;
+        } catch {
+          // Not JSON, use as-is
+        }
+      }
+      
+      // Ensure it's in PEM format
+      if (!publicKey.includes('BEGIN PUBLIC KEY')) {
+        // If it's just the key content, wrap it in PEM headers
+        publicKey = `-----BEGIN PUBLIC KEY-----\n${publicKey}\n-----END PUBLIC KEY-----`;
+      }
       
       if (publicKey) {
         this.kickPublicKey = publicKey;
@@ -225,20 +248,29 @@ export class KickWebhookController {
 
   /**
    * Verify Kick webhook signature using public key
-   * According to Kick docs: https://docs.kick.com/events/webhooks
-   * Kick uses public key cryptography to sign webhook payloads
+   * According to Kick docs: https://docs.kick.com/events/webhook-security
+   * Signature = SHA256(messageId + "." + timestamp + "." + body) signed with RSA private key
    */
-  private async verifySignature(signature: string, rawBody: string): Promise<boolean> {
-    if (!signature) {
-      this.logger.warn('⚠️ No signature provided in webhook request');
-      return false;
+  private async verifySignature(
+    signature: string,
+    messageId: string,
+    timestamp: string,
+    rawBody: string
+  ): Promise<boolean> {
+    if (!signature || !messageId || !timestamp) {
+      this.logger.warn('⚠️ Missing required headers for signature verification');
+      // In non-production, allow without verification
+      const allowWithoutVerification = process.env.NODE_ENV !== 'production';
+      if (allowWithoutVerification) {
+        this.logger.debug('⚠️ Skipping signature verification (missing headers, non-production mode)');
+      }
+      return allowWithoutVerification;
     }
 
     // Get Kick's public key
-    const publicKey = await this.getKickPublicKey();
-    if (!publicKey) {
+    const publicKeyPEM = await this.getKickPublicKey();
+    if (!publicKeyPEM) {
       // In non-production, allow without verification if public key fetch fails
-      // This is acceptable for development/staging - webhook will still function
       const allowWithoutVerification = process.env.NODE_ENV !== 'production';
       if (allowWithoutVerification) {
         this.logger.debug('⚠️ Skipping signature verification (non-production mode)');
@@ -249,56 +281,31 @@ export class KickWebhookController {
     }
 
     try {
-      // Kick likely uses Ed25519 or RSA signatures
-      // The signature format may be: "t=<timestamp>,v1=<signature>" or similar
-      // Adjust based on actual Kick webhook signature format
+      // According to Kick docs: signature = SHA256(messageId + "." + timestamp + "." + body)
+      const messageToVerify = `${messageId}.${timestamp}.${rawBody}`;
       
-      // Parse signature header (format may vary - adjust based on Kick's actual format)
-      // Common formats: "t=timestamp,v1=signature" or just the signature
-      const signatureParts = signature.split(',');
-      let actualSignature = signature;
+      // Decode base64 signature
+      const signatureBuffer = Buffer.from(signature, 'base64');
       
-      if (signatureParts.length > 1) {
-        // Extract signature from "v1=..." format
-        const v1Part = signatureParts.find(part => part.startsWith('v1='));
-        if (v1Part) {
-          actualSignature = v1Part.split('=')[1];
-        }
+      // Parse RSA public key from PEM
+      const publicKey = crypto.createPublicKey(publicKeyPEM);
+      
+      // Verify signature using RSA with SHA256
+      const verify = crypto.createVerify('SHA256');
+      verify.update(messageToVerify);
+      verify.end();
+      
+      const isValid = verify.verify(publicKey, signatureBuffer);
+      
+      if (!isValid) {
+        this.logger.warn('❌ Signature verification failed');
       }
-
-      // Try Ed25519 verification first (common for modern webhook systems)
-      try {
-        const verify = crypto.createVerify('SHA256');
-        verify.update(rawBody);
-        verify.end();
-        
-        // Try Ed25519
-        const isValid = verify.verify(publicKey, Buffer.from(actualSignature, 'base64'));
-        if (isValid) {
-          return true;
-        }
-      } catch (edError) {
-        // If Ed25519 fails, try RSA
-        try {
-          const verify = crypto.createVerify('SHA256');
-          verify.update(rawBody);
-          verify.end();
-          const isValid = verify.verify(publicKey, Buffer.from(actualSignature, 'base64'));
-          if (isValid) {
-            return true;
-          }
-        } catch (rsaError) {
-          this.logger.warn('❌ Signature verification failed with both Ed25519 and RSA:', {
-            edError: edError.message,
-            rsaError: rsaError.message,
-          });
-        }
-      }
-
-      return false;
+      
+      return isValid;
     } catch (error) {
       this.logger.error('❌ Error verifying signature:', error);
-      return false;
+      // In non-production, allow on error
+      return process.env.NODE_ENV !== 'production';
     }
   }
 }
