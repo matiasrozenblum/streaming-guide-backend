@@ -218,6 +218,17 @@ export class StreamersService {
    * Subscribe to webhooks for streamer's services
    */
   private async subscribeToWebhooks(streamer: Streamer): Promise<void> {
+    console.log(`🔔 Starting webhook subscription for streamer ${streamer.id} (${streamer.name})`);
+    const kickServices = streamer.services.filter(s => s.service === 'kick');
+    const twitchServices = streamer.services.filter(s => s.service === 'twitch');
+    
+    if (kickServices.length > 0) {
+      console.log(`   Found ${kickServices.length} Kick service(s)`);
+    }
+    if (twitchServices.length > 0) {
+      console.log(`   Found ${twitchServices.length} Twitch service(s)`);
+    }
+    
     for (const service of streamer.services) {
       if (service.service === 'twitch') {
         const username = service.username || extractTwitchUsername(service.url);
@@ -229,10 +240,13 @@ export class StreamersService {
       } else if (service.service === 'kick') {
         const username = service.username || extractKickUsername(service.url);
         if (username) {
-          await this.webhookSubscriptionService.subscribeToKickWebhook(username);
+          // Use userId from service if available, otherwise fetch from API
+          await this.webhookSubscriptionService.subscribeToKickWebhook(username, service.userId);
         }
       }
     }
+    
+    console.log(`✅ Completed webhook subscription for streamer ${streamer.id}`);
   }
 
   /**

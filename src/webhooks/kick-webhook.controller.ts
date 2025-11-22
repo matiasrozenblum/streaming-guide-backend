@@ -77,6 +77,14 @@ export class KickWebhookController {
     @Body() body: KickWebhookPayload,
     @Req() req: Request,
   ) {
+    // Log incoming webhook request immediately
+    this.logger.log(`📥 Received Kick webhook request: ${JSON.stringify({
+      event: body.event || body.data?.is_live !== undefined ? 'livestream.status.updated' : 'unknown',
+      hasSignature: !!signature,
+      hasBody: !!body,
+      broadcaster: body.data?.broadcaster?.username || body.broadcaster?.username || 'unknown',
+    })}`);
+    
     // Get raw body for signature verification
     const rawBody = (req as any).rawBody || JSON.stringify(body);
     

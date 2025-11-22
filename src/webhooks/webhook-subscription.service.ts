@@ -142,21 +142,60 @@ export class WebhookSubscriptionService {
       // If userId not provided, fetch it from Kick API using username
       let channelUserId = userId;
       if (!channelUserId) {
-        // Fetch user ID from Kick API
-        const userResponse = await axios.get(
-          `https://kick.com/api/v2/channels/${kickUsername}`,
-          {
-            headers: {
-              'Authorization': `Bearer ${appAccessToken}`,
-            },
+        // Try public endpoint first (no auth required)
+        // Kick's channels endpoint is typically public
+        let userResponse;
+        try {
+          this.logger.log(`🔍 Fetching user ID for ${kickUsername} from public endpoint...`);
+          userResponse = await axios.get(
+            `https://kick.com/api/v2/channels/${kickUsername}`,
+            {
+              headers: {
+                'User-Agent': 'StreamingGuide/1.0',
+                'Accept': 'application/json',
+              },
+            }
+          );
+          this.logger.log(`✅ Successfully fetched user ID from public endpoint`);
+        } catch (publicError: any) {
+          // If public endpoint fails, try with authentication
+          if (publicError.response?.status === 403 || publicError.response?.status === 401) {
+            this.logger.log(`⚠️ Public endpoint blocked, trying with authentication...`);
+            try {
+              userResponse = await axios.get(
+                `https://kick.com/api/v2/channels/${kickUsername}`,
+                {
+                  headers: {
+                    'Authorization': `Bearer ${appAccessToken}`,
+                    'User-Agent': 'StreamingGuide/1.0',
+                    'Accept': 'application/json',
+                  },
+                }
+              );
+              this.logger.log(`✅ Successfully fetched user ID with authentication`);
+            } catch (authError: any) {
+              this.logger.error(`❌ Failed to fetch user ID with authentication:`, {
+                status: authError.response?.status,
+                statusText: authError.response?.statusText,
+                data: authError.response?.data,
+              });
+              throw authError;
+            }
+          } else {
+            throw publicError;
           }
-        );
+        }
 
-        channelUserId = userResponse.data?.user?.id || userResponse.data?.id;
+        // Kick API returns user_id at top level, not nested under user
+        // Response structure: { id: channelId, user_id: userId, ... }
+        channelUserId = userResponse.data?.user_id || userResponse.data?.user?.id || userResponse.data?.id;
         if (!channelUserId) {
           this.logger.warn(`⚠️ Could not find user ID for Kick username: ${kickUsername}`);
+          this.logger.warn(`⚠️ Response data:`, JSON.stringify(userResponse.data, null, 2));
           return null;
         }
+        
+        this.logger.log(`✅ Found user ID ${channelUserId} for ${kickUsername}`);
       }
 
       // Subscribe to livestream status events
