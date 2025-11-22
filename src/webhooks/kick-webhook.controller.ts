@@ -221,7 +221,9 @@ export class KickWebhookController {
         return null;
       }
 
-      // Kick returns public key as PEM string directly or in response body
+      // Kick returns public key as PEM string directly
+      // According to Kick docs: https://docs.kick.com/events/webhook-security
+      // The endpoint returns the key in PEM format
       const publicKeyText = await response.text();
       let publicKey = publicKeyText.trim();
       
@@ -230,16 +232,43 @@ export class KickWebhookController {
         try {
           const data = JSON.parse(publicKey);
           publicKey = data.public_key || data.publicKey || data.key || publicKeyText;
+          publicKey = publicKey.trim();
         } catch {
           // Not JSON, use as-is
         }
       }
       
-      // Ensure it's in PEM format
-      if (!publicKey.includes('BEGIN PUBLIC KEY')) {
-        // If it's just the key content, wrap it in PEM headers
-        publicKey = `-----BEGIN PUBLIC KEY-----\n${publicKey}\n-----END PUBLIC KEY-----`;
+      // Normalize line breaks - ensure consistent \n line breaks
+      // Some APIs might return with \r\n or just \r
+      publicKey = publicKey.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      
+      // Ensure proper PEM format with correct line breaks
+      // PEM format requires exactly 64 characters per line (except the last line)
+      if (publicKey.includes('BEGIN PUBLIC KEY')) {
+        // Key is already in PEM format, but we need to ensure proper formatting
+        // Extract the base64 content between headers
+        const match = publicKey.match(/-----BEGIN PUBLIC KEY-----\s*([\s\S]*?)\s*-----END PUBLIC KEY-----/);
+        if (match && match[1]) {
+          // Clean up the base64 content (remove all whitespace)
+          const base64Content = match[1].replace(/\s/g, '');
+          // Reconstruct with proper PEM formatting (64 chars per line)
+          const lines: string[] = [];
+          for (let i = 0; i < base64Content.length; i += 64) {
+            lines.push(base64Content.substring(i, i + 64));
+          }
+          publicKey = `-----BEGIN PUBLIC KEY-----\n${lines.join('\n')}\n-----END PUBLIC KEY-----`;
+        }
+      } else {
+        // Key is not in PEM format, wrap it
+        const cleanKey = publicKey.replace(/\s/g, '');
+        const lines: string[] = [];
+        for (let i = 0; i < cleanKey.length; i += 64) {
+          lines.push(cleanKey.substring(i, i + 64));
+        }
+        publicKey = `-----BEGIN PUBLIC KEY-----\n${lines.join('\n')}\n-----END PUBLIC KEY-----`;
       }
+      
+      this.logger.debug(`🔑 Processed public key (length: ${publicKey.length}, has headers: ${publicKey.includes('BEGIN')})`);
       
       if (publicKey) {
         this.kickPublicKey = publicKey;
@@ -304,7 +333,30 @@ export class KickWebhookController {
       const signatureBuffer = Buffer.from(signature, 'base64');
       
       // Parse RSA public key from PEM
-      const publicKey = crypto.createPublicKey(publicKeyPEM);
+      // Try different key formats in case Kick uses a different format
+      let publicKey;
+      try {
+        publicKey = crypto.createPublicKey({
+          key: publicKeyPEM,
+          format: 'pem',
+          type: 'spki',
+        });
+      } catch (pemError) {
+        // If PEM format fails, try as raw key or different format
+        this.logger.warn('⚠️ Failed to parse public key as PEM, trying alternative formats');
+        try {
+          // Try without explicit format/type
+          publicKey = crypto.createPublicKey(publicKeyPEM);
+        } catch (altError) {
+          // If that also fails, try treating it as a raw key
+          this.logger.error('❌ Failed to parse Kick public key in any format:', {
+            pemError: pemError instanceof Error ? pemError.message : pemError,
+            altError: altError instanceof Error ? altError.message : altError,
+            keyPreview: publicKeyPEM.substring(0, 100) + '...',
+          });
+          throw altError;
+        }
+      }
       
       // Verify signature using RSA with SHA256
       const verify = crypto.createVerify('SHA256');
@@ -315,13 +367,23 @@ export class KickWebhookController {
       
       if (!isValid) {
         this.logger.warn('❌ Signature verification failed');
+      } else {
+        this.logger.debug('✅ Signature verification succeeded');
       }
       
       return isValid;
     } catch (error) {
-      this.logger.error('❌ Error verifying signature:', error);
-      // In non-production, allow on error
-      return process.env.NODE_ENV !== 'production';
+      this.logger.error('❌ Error verifying signature:', {
+        error: error instanceof Error ? error.message : error,
+        code: error instanceof Error && 'code' in error ? (error as any).code : undefined,
+        opensslError: error instanceof Error && 'opensslErrorStack' in error ? (error as any).opensslErrorStack : undefined,
+      });
+      // In non-production, allow on error (webhook still processes)
+      const allowOnError = process.env.NODE_ENV !== 'production';
+      if (allowOnError) {
+        this.logger.warn('⚠️ Allowing webhook despite signature verification error (non-production mode)');
+      }
+      return allowOnError;
     }
   }
 }
