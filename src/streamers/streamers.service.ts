@@ -144,6 +144,9 @@ export class StreamersService {
   async update(id: number, updateStreamerDto: UpdateStreamerDto): Promise<Streamer> {
     const streamer = await this.findOne(id);
     
+    // Store old services to compare later
+    const oldServices = JSON.parse(JSON.stringify(streamer.services));
+    
     const { category_ids, ...streamerData } = updateStreamerDto;
     
     // Update streamer fields
@@ -168,11 +171,23 @@ export class StreamersService {
 
     const saved = await this.streamersRepository.save(streamer);
 
-    // Update live status cache if services changed
-    await this.streamerLiveStatusService.initializeCache(saved.id, saved.services);
-
-    // Re-subscribe to webhooks (in case services changed)
-    await this.subscribeToWebhooks(saved);
+    // Check if services changed (username, service type, or service added/removed)
+    const servicesChanged = JSON.stringify(oldServices) !== JSON.stringify(saved.services);
+    
+    if (servicesChanged) {
+      // Unsubscribe from old webhooks first (to avoid orphaned subscriptions)
+      const oldStreamer = { ...streamer, services: oldServices };
+      await this.unsubscribeFromWebhooks(oldStreamer);
+      
+      // Update live status cache with new services
+      await this.streamerLiveStatusService.initializeCache(saved.id, saved.services);
+      
+      // Subscribe to new webhooks
+      await this.subscribeToWebhooks(saved);
+    } else {
+      // Services didn't change, just update cache if needed
+      await this.streamerLiveStatusService.initializeCache(saved.id, saved.services);
+    }
 
     // Notify and revalidate
     await this.notifyUtil.notifyAndRevalidate({
