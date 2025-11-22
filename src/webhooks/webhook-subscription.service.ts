@@ -209,17 +209,14 @@ export class WebhookSubscriptionService {
       
       // Kick API format: { broadcaster_user_id, events: [{ name, version }], method: "webhook" }
       // Note: webhook_url is NOT in the request - it's configured in the dashboard
-      // According to Kick docs, available events include:
-      // - "chat.message.sent" (example from docs)
-      // - "follow.created", "subscription.created", etc.
-      // For livestream status, we need to check available events from webhook payloads docs
-      // Common pattern might be "livestream.started", "livestream.ended", or similar
-      // If event name is wrong, API will return error with available events
+      // According to Kick docs: https://docs.kick.com/events/event-types
+      // Event name: "livestream.status.updated" - fires when stream starts OR ends
+      // Payload includes is_live: true (started) or is_live: false (ended)
       const subscriptionPayload = {
         broadcaster_user_id: channelUserId,
         events: [
           {
-            name: 'livestream.started', // Event name - will need to verify from Kick docs
+            name: 'livestream.status.updated', // Correct event name from Kick docs
             version: 1,
           },
         ],

@@ -17,9 +17,30 @@ const KICK_PUBLIC_KEY_URL = 'https://api.kick.com/public/v1/public-key';
 /**
  * Kick webhook payload structure
  * Based on Kick Events API: https://docs.kick.com/events/webhook-payloads
+ * 
+ * Current format (as of 2025): Top-level fields
+ * - broadcaster: Object with user info (user_id, username, channel_slug, etc.)
+ * - is_live: Boolean indicating if stream is live
+ * - title: Stream title
+ * - started_at: ISO timestamp when stream started
+ * - ended_at: ISO timestamp when stream ended (null if still live)
+ * 
+ * The code also supports nested format (data.broadcaster, data.is_live) for compatibility
  */
 interface KickWebhookPayload {
-  event?: string; // Event type, e.g., "livestream.status.updated"
+  // Current format: top-level fields
+  broadcaster?: {
+    user_id: number;
+    username: string;
+    is_verified: boolean;
+    profile_picture: string;
+    channel_slug: string;
+  };
+  is_live?: boolean;
+  title?: string;
+  started_at?: string;
+  ended_at?: string;
+  // Nested format support (for compatibility)
   data?: {
     broadcaster?: {
       user_id: number;
@@ -33,18 +54,7 @@ interface KickWebhookPayload {
     started_at?: string;
     ended_at?: string;
   };
-  // Legacy format support (if Kick sends direct fields)
-  broadcaster?: {
-    user_id: number;
-    username: string;
-    is_verified: boolean;
-    profile_picture: string;
-    channel_slug: string;
-  };
-  is_live?: boolean;
-  title?: string;
-  started_at?: string;
-  ended_at?: string;
+  event?: string; // Event type, e.g., "livestream.status.updated"
 }
 
 @Controller('webhooks/kick')
