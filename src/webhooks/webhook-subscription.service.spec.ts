@@ -157,11 +157,11 @@ describe('WebhookSubscriptionService', () => {
         .mockReturnValueOnce('access-token') // KICK_APP_ACCESS_TOKEN
         .mockReturnValueOnce('https://example.com'); // WEBHOOK_BASE_URL
 
-      // Mock axios.get for fetching user ID from Kick API
+      // Mock axios.get for fetching user ID from Kick API (public endpoint first)
       mockedAxios.get.mockResolvedValueOnce({
         data: {
-          id: mockUserId,
-          user: { id: mockUserId },
+          id: 123, // channel ID
+          user_id: mockUserId, // user ID (top level, as Kick API returns)
         },
       });
 
@@ -175,11 +175,13 @@ describe('WebhookSubscriptionService', () => {
       const result = await service.subscribeToKickWebhook('testuser');
 
       expect(result).toBe(mockSubscriptionId);
+      // Now expects public endpoint call first (no Authorization header)
       expect(mockedAxios.get).toHaveBeenCalledWith(
         'https://kick.com/api/v2/channels/testuser',
         expect.objectContaining({
           headers: {
-            'Authorization': 'Bearer access-token',
+            'User-Agent': 'StreamingGuide/1.0',
+            'Accept': 'application/json',
           },
         })
       );

@@ -5,6 +5,7 @@ export interface StreamerService {
   service: 'twitch' | 'kick' | 'youtube';
   url: string;
   username?: string;
+  userId?: number; // Optional: Store platform user ID (e.g., Kick user_id) to avoid API lookups
 }
 
 @Entity()
