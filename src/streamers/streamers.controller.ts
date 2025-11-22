@@ -71,5 +71,14 @@ export class StreamersController {
   async resubscribeWebhooks(@Param('id') id: number): Promise<{ success: boolean; message: string }> {
     return this.streamersService.resubscribeWebhooks(id);
   }
+
+  @Get(':id/webhook-status')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get webhook subscription status for a streamer (checks Twitch/Kick APIs)' })
+  @ApiResponse({ status: 200, description: 'Webhook subscription status' })
+  async getWebhookStatus(@Param('id') id: number): Promise<any> {
+    return this.streamersService.getWebhookStatus(id);
+  }
 }
 
