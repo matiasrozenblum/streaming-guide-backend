@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { RedisService } from '../redis/redis.service';
+import { TokenRefreshService } from './token-refresh.service';
 
 @Injectable()
 export class WebhookSubscriptionService {
@@ -12,6 +13,7 @@ export class WebhookSubscriptionService {
   constructor(
     private readonly redisService: RedisService,
     private readonly configService: ConfigService,
+    private readonly tokenRefreshService: TokenRefreshService,
   ) {}
 
   /**
@@ -24,7 +26,8 @@ export class WebhookSubscriptionService {
     const clientId = this.configService.get<string>('TWITCH_CLIENT_ID');
     const clientSecret = this.configService.get<string>('TWITCH_CLIENT_SECRET');
     const webhookBaseUrl = this.configService.get<string>('WEBHOOK_BASE_URL') || process.env.WEBHOOK_BASE_URL;
-    const accessToken = this.configService.get<string>('TWITCH_APP_ACCESS_TOKEN');
+    // Use token refresh service to get token (checks Redis cache first, falls back to env)
+    const accessToken = await this.tokenRefreshService.getTwitchAccessToken();
 
     if (!clientId || !clientSecret || !webhookBaseUrl) {
       this.logger.warn('⚠️ Twitch credentials or webhook URL not configured');
@@ -100,7 +103,8 @@ export class WebhookSubscriptionService {
     subscriptionId?: string
   ): Promise<any[]> {
     const clientId = this.configService.get<string>('TWITCH_CLIENT_ID');
-    const accessToken = this.configService.get<string>('TWITCH_APP_ACCESS_TOKEN');
+    // Use token refresh service to get token (checks Redis cache first, falls back to env)
+    const accessToken = await this.tokenRefreshService.getTwitchAccessToken();
 
     if (!clientId || !accessToken) {
       this.logger.warn('⚠️ Twitch credentials not configured');
@@ -132,7 +136,8 @@ export class WebhookSubscriptionService {
    */
   async unsubscribeFromTwitchEventSub(subscriptionId: string): Promise<boolean> {
     const clientId = this.configService.get<string>('TWITCH_CLIENT_ID');
-    const accessToken = this.configService.get<string>('TWITCH_APP_ACCESS_TOKEN');
+    // Use token refresh service to get token (checks Redis cache first, falls back to env)
+    const accessToken = await this.tokenRefreshService.getTwitchAccessToken();
 
     if (!clientId || !accessToken) {
       this.logger.warn('⚠️ Twitch credentials not configured');
@@ -166,7 +171,8 @@ export class WebhookSubscriptionService {
   async subscribeToKickWebhook(kickUsername: string, userId?: number): Promise<string | null> {
     const clientId = this.configService.get<string>('KICK_CLIENT_ID');
     const clientSecret = this.configService.get<string>('KICK_CLIENT_SECRET');
-    const appAccessToken = this.configService.get<string>('KICK_APP_ACCESS_TOKEN');
+    // Use token refresh service to get token (checks Redis cache first, falls back to env)
+    const appAccessToken = await this.tokenRefreshService.getKickAccessToken();
     const webhookBaseUrl = this.configService.get<string>('WEBHOOK_BASE_URL') || process.env.WEBHOOK_BASE_URL;
 
     if (!appAccessToken || !webhookBaseUrl) {
@@ -320,7 +326,8 @@ export class WebhookSubscriptionService {
    * According to Kick docs: https://docs.kick.com/events/subscribe-to-events
    */
   async unsubscribeFromKickWebhook(kickUsername: string): Promise<boolean> {
-    const appAccessToken = this.configService.get<string>('KICK_APP_ACCESS_TOKEN');
+    // Use token refresh service to get token (checks Redis cache first, falls back to env)
+    const appAccessToken = await this.tokenRefreshService.getKickAccessToken();
 
     if (!appAccessToken) {
       this.logger.warn('⚠️ Kick app access token not configured');
