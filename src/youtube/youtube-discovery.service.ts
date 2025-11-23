@@ -19,6 +19,7 @@ export class YoutubeDiscoveryService {
         type: 'channel',
         key: this.apiKey,
         maxResults: 1,
+        regionCode: 'AR',
       },
     });
 

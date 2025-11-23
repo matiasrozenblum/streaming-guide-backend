@@ -681,6 +681,7 @@ export class YoutubeLiveService {
           type: 'video',
           key: this.apiKey,
           maxResults: 5, // YouTube API limitation: maxResults should be 1-5 for eventType=live
+          regionCode: 'AR',
         },
       });
       

@@ -60,9 +60,7 @@ pids
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # Scripts y binarios temporales
-scripts/*.tmp
-scripts/*.log
-scripts/*.sh~
+scripts/
 
 # YouTube API analysis (local debugging/analysis only)
 youtube-api-analysis/
@@ -70,3 +68,4 @@ logs.*.json
 
 # Otros
 coverage/
+docs/

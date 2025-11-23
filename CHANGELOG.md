@@ -17,6 +17,13 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.20.0] - 2025-11-23
+
+### Added
+- Added streamers CRUD logic
+- Added streamers cache
+- Added kick and twitch webhook and token integration with automatic refresh
+
 ## [1.19.1] - 2025-11-04
 
 ### Fixed
