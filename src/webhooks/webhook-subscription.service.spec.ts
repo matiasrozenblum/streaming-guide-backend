@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { WebhookSubscriptionService } from './webhook-subscription.service';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from '../redis/redis.service';
+import { TokenRefreshService } from './token-refresh.service';
 import axios from 'axios';
 
 jest.mock('axios');
@@ -22,6 +23,11 @@ describe('WebhookSubscriptionService', () => {
     del: jest.fn(),
   };
 
+  const mockTokenRefreshService = {
+    getTwitchAccessToken: jest.fn(),
+    getKickAccessToken: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -33,6 +39,10 @@ describe('WebhookSubscriptionService', () => {
         {
           provide: RedisService,
           useValue: mockRedisService,
+        },
+        {
+          provide: TokenRefreshService,
+          useValue: mockTokenRefreshService,
         },
       ],
     }).compile();
@@ -47,6 +57,8 @@ describe('WebhookSubscriptionService', () => {
     mockedAxios.get.mockClear();
     mockedAxios.post.mockClear();
     mockedAxios.delete.mockClear();
+    mockTokenRefreshService.getTwitchAccessToken.mockClear();
+    mockTokenRefreshService.getKickAccessToken.mockClear();
   });
 
   it('should be defined', () => {
@@ -58,8 +70,8 @@ describe('WebhookSubscriptionService', () => {
       mockConfigService.get
         .mockReturnValueOnce('client-id')
         .mockReturnValueOnce('client-secret')
-        .mockReturnValueOnce('https://example.com')
-        .mockReturnValueOnce('access-token');
+        .mockReturnValueOnce('https://example.com');
+      mockTokenRefreshService.getTwitchAccessToken.mockResolvedValue('access-token');
 
       mockedAxios.get.mockResolvedValue({
         data: {
@@ -89,6 +101,7 @@ describe('WebhookSubscriptionService', () => {
 
     it('should return null when credentials are missing', async () => {
       mockConfigService.get.mockReturnValue(null);
+      mockTokenRefreshService.getTwitchAccessToken.mockResolvedValue(null);
 
       const result = await service.subscribeToTwitchEventSub('testuser', 'stream.online');
 
@@ -100,8 +113,8 @@ describe('WebhookSubscriptionService', () => {
       mockConfigService.get
         .mockReturnValueOnce('client-id')
         .mockReturnValueOnce('client-secret')
-        .mockReturnValueOnce('https://example.com')
-        .mockReturnValueOnce('access-token');
+        .mockReturnValueOnce('https://example.com');
+      mockTokenRefreshService.getTwitchAccessToken.mockResolvedValue('access-token');
 
       mockedAxios.get.mockResolvedValue({
         data: { data: [] },
@@ -116,9 +129,8 @@ describe('WebhookSubscriptionService', () => {
 
   describe('unsubscribeFromTwitchEventSub', () => {
     it('should unsubscribe from Twitch EventSub', async () => {
-      mockConfigService.get
-        .mockReturnValueOnce('client-id')
-        .mockReturnValueOnce('access-token');
+      mockConfigService.get.mockReturnValueOnce('client-id');
+      mockTokenRefreshService.getTwitchAccessToken.mockResolvedValue('access-token');
 
       mockedAxios.delete.mockResolvedValue({ status: 204 });
 
@@ -138,6 +150,7 @@ describe('WebhookSubscriptionService', () => {
 
     it('should return false when credentials are missing', async () => {
       mockConfigService.get.mockReturnValue(null);
+      mockTokenRefreshService.getTwitchAccessToken.mockResolvedValue(null);
 
       const result = await service.unsubscribeFromTwitchEventSub('sub-123');
 
@@ -154,8 +167,8 @@ describe('WebhookSubscriptionService', () => {
       mockConfigService.get
         .mockReturnValueOnce('client-id') // KICK_CLIENT_ID
         .mockReturnValueOnce('client-secret') // KICK_CLIENT_SECRET
-        .mockReturnValueOnce('access-token') // KICK_APP_ACCESS_TOKEN
         .mockReturnValueOnce('https://example.com'); // WEBHOOK_BASE_URL
+      mockTokenRefreshService.getKickAccessToken.mockResolvedValue('access-token');
 
       // Mock axios.get for fetching user ID from Kick API (public endpoint first)
       mockedAxios.get.mockResolvedValueOnce({
@@ -229,8 +242,8 @@ describe('WebhookSubscriptionService', () => {
       mockConfigService.get
         .mockReturnValueOnce('client-id')
         .mockReturnValueOnce('client-secret')
-        .mockReturnValueOnce(null) // KICK_APP_ACCESS_TOKEN missing
         .mockReturnValueOnce('https://example.com');
+      mockTokenRefreshService.getKickAccessToken.mockResolvedValue(null);
 
       const result = await service.subscribeToKickWebhook('testuser');
 
@@ -242,8 +255,8 @@ describe('WebhookSubscriptionService', () => {
       mockConfigService.get
         .mockReturnValueOnce('client-id')
         .mockReturnValueOnce('client-secret')
-        .mockReturnValueOnce('access-token')
         .mockReturnValueOnce(null); // WEBHOOK_BASE_URL missing
+      mockTokenRefreshService.getKickAccessToken.mockResolvedValue('access-token');
 
       const result = await service.subscribeToKickWebhook('testuser');
 
