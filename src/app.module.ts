@@ -29,6 +29,8 @@ import { UsersModule } from './users/users.module';
 import { StatisticsModule } from './statistics/statistics.module';
 import { SentryModule } from './sentry/sentry.module';
 import { CategoriesModule } from './categories/categories.module';
+import { StreamersModule } from './streamers/streamers.module';
+import { WebhooksModule } from './webhooks/webhooks.module';
 import { RedisModule } from './redis/redis.module';
 import { ResourceMonitorService } from './services/resource-monitor.service';
 import { ConnectionPoolMonitorService } from './services/connection-pool-monitor.service';
@@ -101,6 +103,8 @@ import { PerformanceInterceptor } from './interceptors/performance.interceptor';
     StatisticsModule,
     SentryModule,
     CategoriesModule,
+    StreamersModule,
+    WebhooksModule,
     RedisModule,
   ],
   controllers: [AppController],
