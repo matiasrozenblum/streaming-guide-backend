@@ -295,4 +295,38 @@ describe('ChannelsService - Channel Handle Change Detection', () => {
       expect(redisService.del).not.toHaveBeenCalledWith('liveStatus:OLD_YOUTUBE_ID_123');
     });
   });
+
+  describe('clearChannelCache', () => {
+    it('should clear all cache entries for a channel handle', async () => {
+      // Arrange
+      const handle = '@testhandle';
+      jest.spyOn(redisService, 'del').mockResolvedValue(undefined);
+
+      // Act
+      const result = await service.clearChannelCache(handle);
+
+      // Assert
+      expect(redisService.del).toHaveBeenCalledWith('liveStatusByHandle:@testhandle');
+      expect(redisService.del).toHaveBeenCalledWith('videoIdNotFound:@testhandle');
+      expect(redisService.del).toHaveBeenCalledWith('notFoundAttempts:@testhandle');
+      expect(redisService.del).toHaveBeenCalledTimes(3);
+      expect(result.cleared).toEqual(['liveStatusByHandle', 'videoIdNotFound', 'notFoundAttempts']);
+    });
+
+    it('should throw error if handle is empty', async () => {
+      // Act & Assert
+      await expect(service.clearChannelCache('')).rejects.toThrow('Handle is required to clear cache');
+      expect(redisService.del).not.toHaveBeenCalled();
+    });
+
+    it('should handle Redis errors gracefully', async () => {
+      // Arrange
+      const handle = '@testhandle';
+      jest.spyOn(redisService, 'del').mockRejectedValue(new Error('Redis connection error'));
+
+      // Act & Assert
+      await expect(service.clearChannelCache(handle)).rejects.toThrow('Redis connection error');
+      expect(redisService.del).toHaveBeenCalled();
+    });
+  });
 });

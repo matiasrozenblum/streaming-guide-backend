@@ -544,4 +544,34 @@ export class ChannelsService {
     }
   }
 
+  /**
+   * Clear cache entries for a specific channel by handle
+   * Public method for manual cache clearing
+   */
+  async clearChannelCache(handle: string): Promise<{ cleared: string[] }> {
+    if (!handle) {
+      throw new Error('Handle is required to clear cache');
+    }
+
+    const cleared: string[] = [];
+    
+    try {
+      // Clear all channel-related cache entries
+      await this.redisService.del(`liveStatusByHandle:${handle}`);
+      cleared.push('liveStatusByHandle');
+      
+      await this.redisService.del(`videoIdNotFound:${handle}`);
+      cleared.push('videoIdNotFound');
+      
+      await this.redisService.del(`notFoundAttempts:${handle}`);
+      cleared.push('notFoundAttempts');
+      
+      console.log(`🗑️ Manually cleared cache keys for: ${handle}`);
+      return { cleared };
+    } catch (error) {
+      console.error(`❌ Error clearing cache for ${handle}:`, error.message);
+      throw error;
+    }
+  }
+
 }
