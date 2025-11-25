@@ -34,6 +34,7 @@ describe('ChannelsController', () => {
     getChannelsWithSchedules: jest.fn().mockResolvedValue([]),
     getTodaySchedules: jest.fn().mockResolvedValue([]),
     getWeekSchedules: jest.fn().mockResolvedValue([]),
+    clearChannelCache: jest.fn().mockResolvedValue({ cleared: ['liveStatusByHandle', 'videoIdNotFound', 'notFoundAttempts'] }),
   };
 
   beforeEach(async () => {
@@ -49,6 +50,7 @@ describe('ChannelsController', () => {
 
     controller = module.get<ChannelsController>(ChannelsController);
     service = module.get<ChannelsService>(ChannelsService);
+    jest.clearAllMocks();
   });
 
   it('should be defined', () => {
@@ -189,6 +191,38 @@ describe('ChannelsController', () => {
       
       expect(result).toEqual([]);
       expect(service.getWeekSchedules).toHaveBeenCalledWith('device789', false, undefined);
+    });
+  });
+
+  describe('clearCache', () => {
+    it('should clear cache for a channel with handle', async () => {
+      const result = await controller.clearCache(1);
+      
+      expect(result).toEqual({
+        message: 'Cache cleared successfully',
+        cleared: ['liveStatusByHandle', 'videoIdNotFound', 'notFoundAttempts'],
+      });
+      expect(service.findOne).toHaveBeenCalledWith(1);
+      expect(service.clearChannelCache).toHaveBeenCalledWith('test');
+    });
+
+    it('should throw error if channel does not have handle', async () => {
+      const channelWithoutHandle = { ...mockChannel, handle: null };
+      jest.spyOn(service, 'findOne').mockResolvedValueOnce(channelWithoutHandle as any);
+      jest.spyOn(service, 'clearChannelCache');
+      
+      await expect(controller.clearCache(1)).rejects.toThrow('Channel does not have a handle');
+      expect(service.findOne).toHaveBeenCalledWith(1);
+      expect(service.clearChannelCache).not.toHaveBeenCalled();
+    });
+
+    it('should throw error if channel not found', async () => {
+      jest.spyOn(service, 'findOne').mockRejectedValueOnce(new NotFoundException('Channel not found'));
+      jest.spyOn(service, 'clearChannelCache');
+      
+      await expect(controller.clearCache(999)).rejects.toThrow('Channel not found');
+      expect(service.findOne).toHaveBeenCalledWith(999);
+      expect(service.clearChannelCache).not.toHaveBeenCalled();
     });
   });
 });
