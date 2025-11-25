@@ -43,4 +43,14 @@ export class CreateChannelDto {
   @IsNumber({}, { each: true })
   @IsOptional()
   category_ids?: number[];
+
+  @ApiProperty({ description: 'Whether YouTube fetching is enabled for this channel', default: true, required: false })
+  @IsBoolean()
+  @IsOptional()
+  youtube_fetch_enabled?: boolean;
+
+  @ApiProperty({ description: 'Whether YouTube fetching is enabled on holidays for this channel', default: true, required: false })
+  @IsBoolean()
+  @IsOptional()
+  youtube_fetch_override_holiday?: boolean;
 }

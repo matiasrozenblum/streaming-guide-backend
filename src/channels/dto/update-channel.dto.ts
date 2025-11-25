@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsUrl, ValidateIf, IsBoolean, IsArray, IsNumber } from 'class-validator';
+import { IsString, IsOptional, IsUrl, ValidateIf, IsBoolean, IsArray, IsNumber, IsNotEmpty } from 'class-validator';
 
 export class UpdateChannelDto {
   @ApiProperty({ required: false })
@@ -44,4 +44,14 @@ export class UpdateChannelDto {
   @IsNumber({}, { each: true })
   @IsOptional()
   category_ids?: number[];
+
+  @ApiProperty({ description: 'Whether YouTube fetching is enabled for this channel' })
+  @IsBoolean()
+  @IsNotEmpty()
+  youtube_fetch_enabled: boolean;
+
+  @ApiProperty({ description: 'Whether YouTube fetching is enabled on holidays for this channel' })
+  @IsBoolean()
+  @IsNotEmpty()
+  youtube_fetch_override_holiday: boolean;
 } 

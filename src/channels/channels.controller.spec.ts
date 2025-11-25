@@ -78,6 +78,8 @@ describe('ChannelsController', () => {
         handle: 'new-stream',
         logo_url: 'https://test.com/new-logo.png',
         description: 'New Description',
+        youtube_fetch_enabled: true,
+        youtube_fetch_override_holiday: true,
       };
 
       const result = await controller.create(createDto);
@@ -91,6 +93,8 @@ describe('ChannelsController', () => {
       const updateDto: UpdateChannelDto = {
         name: 'Updated Channel',
         description: 'Updated Description',
+        youtube_fetch_enabled: true,
+        youtube_fetch_override_holiday: true,
       };
 
       const result = await controller.update(1, updateDto);
@@ -101,6 +105,8 @@ describe('ChannelsController', () => {
     it('should handle partial updates', async () => {
       const updateDto: UpdateChannelDto = {
         name: 'Updated Channel',
+        youtube_fetch_enabled: true,
+        youtube_fetch_override_holiday: true,
       };
 
       const result = await controller.update(1, updateDto);
