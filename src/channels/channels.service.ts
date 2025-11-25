@@ -132,7 +132,7 @@ export class ChannelsService {
   
     const newOrder = lastChannel ? (lastChannel.order || 0) + 1 : 1;
   
-    const { category_ids, ...channelData } = createChannelDto;
+    const { category_ids, youtube_fetch_enabled, youtube_fetch_override_holiday, ...channelData } = createChannelDto;
     
     const channel = this.channelsRepository.create({
       ...channelData,
@@ -164,6 +164,18 @@ export class ChannelsService {
       await this.channelsRepository.save(saved);
     }
 
+    // Create YouTube fetch configs for the channel
+    if (saved.handle) {
+      await this.configService.set(
+        `youtube.fetch_enabled.${saved.handle}`,
+        (youtube_fetch_enabled ?? true).toString()
+      );
+      await this.configService.set(
+        `youtube.fetch_override_holiday.${saved.handle}`,
+        (youtube_fetch_override_holiday ?? true).toString()
+      );
+    }
+
     // Notify and revalidate
     await this.notifyUtil.notifyAndRevalidate({
       eventType: 'channel_created',
@@ -179,7 +191,7 @@ export class ChannelsService {
   async update(id: number, updateChannelDto: UpdateChannelDto): Promise<Channel> {
     const channel = await this.findOne(id);
     
-    const { category_ids, ...channelData } = updateChannelDto;
+    const { category_ids, youtube_fetch_enabled, youtube_fetch_override_holiday, ...channelData } = updateChannelDto;
     
     // Check if handle is being updated
     const handleChanged = channelData.handle !== undefined && channelData.handle !== channel.handle;
@@ -216,6 +228,32 @@ export class ChannelsService {
     setImmediate(() => this.schedulesService.warmSchedulesCache());
     
     const updated = await this.channelsRepository.save(channel);
+
+    // Handle YouTube fetch configs update
+    if (updated.handle) {
+      // If handle changed, delete old configs and create new ones with new handle
+      if (handleChanged && oldHandle) {
+        // Delete old configs
+        try {
+          await this.configService.remove(`youtube.fetch_enabled.${oldHandle}`);
+          await this.configService.remove(`youtube.fetch_override_holiday.${oldHandle}`);
+        } catch (error) {
+          // Config might not exist, ignore error
+          console.log(`⚠️ Could not remove old configs for handle: ${oldHandle}`);
+        }
+      }
+      
+      // Update configs with provided values (always required in UpdateChannelDto)
+      // Use updated.handle which already contains the new handle if it changed
+      await this.configService.set(
+        `youtube.fetch_enabled.${updated.handle}`,
+        youtube_fetch_enabled.toString()
+      );
+      await this.configService.set(
+        `youtube.fetch_override_holiday.${updated.handle}`,
+        youtube_fetch_override_holiday.toString()
+      );
+    }
 
     // Handle cache invalidation for handle changes and/or YouTube channel ID changes
     if (handleChanged && updateChannelDto.handle) {

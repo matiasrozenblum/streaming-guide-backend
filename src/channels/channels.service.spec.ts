@@ -40,6 +40,8 @@ describe('ChannelsService - Channel Handle Change Detection', () => {
   const mockUpdateDto = {
     handle: '@newhandle',
     name: 'Updated Channel',
+    youtube_fetch_enabled: true,
+    youtube_fetch_override_holiday: true,
   };
 
   beforeEach(async () => {
@@ -133,6 +135,8 @@ describe('ChannelsService - Channel Handle Change Detection', () => {
           provide: ConfigService,
           useValue: {
             canFetchLive: jest.fn().mockReturnValue(true),
+            set: jest.fn().mockResolvedValue(undefined),
+            remove: jest.fn().mockResolvedValue(undefined),
           },
         },
         {
@@ -192,6 +196,8 @@ describe('ChannelsService - Channel Handle Change Detection', () => {
       const mockUpdateDtoNoHandleChange = {
         name: 'Updated Channel Name',
         description: 'Updated description',
+        youtube_fetch_enabled: true,
+        youtube_fetch_override_holiday: true,
       };
 
       jest.spyOn(channelsRepository, 'findOne').mockResolvedValue(mockChannel as any);
