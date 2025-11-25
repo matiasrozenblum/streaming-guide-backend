@@ -98,4 +98,18 @@ export class ChannelsController {
     await this.channelsService.reorder(body.ids);
     return { message: 'Channels reordered successfully' };
   }
+
+  @Post(':id/clear-cache')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Clear cache entries for a channel' })
+  @ApiResponse({ status: 200, description: 'Cache cleared successfully' })
+  async clearCache(@Param('id') id: number) {
+    const channel = await this.channelsService.findOne(id);
+    if (!channel.handle) {
+      throw new Error('Channel does not have a handle');
+    }
+    const result = await this.channelsService.clearChannelCache(channel.handle);
+    return { message: 'Cache cleared successfully', ...result };
+  }
 }
