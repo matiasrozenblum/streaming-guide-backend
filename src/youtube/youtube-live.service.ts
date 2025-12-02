@@ -615,6 +615,14 @@ export class YoutubeLiveService {
     // Unified cache - use liveStatusByHandle (replaces liveStreamsByChannel)
     const notFoundKey = `videoIdNotFound:${handle}`;
     const statusCacheKey = `liveStatusByHandle:${handle}`;
+    const attemptTrackingKey = `notFoundAttempts:${handle}`;
+
+    // Check if program is already escalated - if so, skip fetch entirely
+    const attemptData = await this.redisService.get<AttemptTracking>(attemptTrackingKey);
+    if (attemptData && attemptData.escalated && attemptData.programEndTime && Date.now() < attemptData.programEndTime) {
+      this.logger.debug(`🚫 Skipping ${handle}, already escalated to not-found until program end`);
+      return '__SKIPPED__';
+    }
 
     // skip rápido si ya está marcado como no-found (unless explicitly ignored)
     if (!ignoreNotFoundCache) {
@@ -1164,6 +1172,23 @@ export class YoutubeLiveService {
     }
 
     const tracking: AttemptTracking = existing;
+    
+    // If already escalated, just update TTL and skip escalation logic
+    if (tracking.escalated) {
+      this.logger.debug(`🚫 [Main] Program ${handle} already escalated, skipping escalation (attempts: ${tracking.attempts})`);
+      // Update tracking TTL to ensure it persists until program end
+      const programEndTime = await this.getCurrentProgramEndTime(channelId);
+      const ttlUntilProgramEnd = programEndTime ? Math.max(programEndTime - Date.now(), 60) : 86400; // Min 1 minute, fallback to 24h
+      await this.redisService.set(attemptTrackingKey, tracking, Math.floor(ttlUntilProgramEnd / 1000));
+      // Also ensure not-found mark is set with correct TTL
+      if (tracking.programEndTime) {
+        const ttlUntilProgramEndForNotFound = Math.max(tracking.programEndTime - Date.now(), 60);
+        await this.redisService.set(notFoundKey, '1', Math.floor(ttlUntilProgramEndForNotFound / 1000));
+        await this.redisService.set(`videoIdNotFound:${handle}`, '1', Math.floor(ttlUntilProgramEndForNotFound / 1000));
+      }
+      return;
+    }
+    
     tracking.attempts++;
     tracking.lastAttempt = Date.now();
 
@@ -1183,13 +1208,16 @@ export class YoutubeLiveService {
         
         this.logger.debug(`🚫 [ESCALATED] No live video for ${handle} after 3 attempts, marking not-found until program end (${new Date(programEndTime).toLocaleTimeString()})`);
         
-        // Send email notification
+        // Send email notification (only once, when first escalating)
         await this.sendEscalationEmail(channelId, handle);
       } else {
         // Fallback to 1 hour - both formats
+        tracking.escalated = true; // Mark as escalated even in fallback case
         await this.redisService.set(notFoundKey, '1', 3600);
         await this.redisService.set(`videoIdNotFound:${handle}`, '1', 3600);
         this.logger.debug(`🚫 [Fallback] No live video for ${handle}, marking not-found for 1 hour (couldn't determine program end)`);
+        // Send email notification (only once, when first escalating)
+        await this.sendEscalationEmail(channelId, handle);
       }
     } else {
       // Second attempt - extend not-found mark for main cron and manual execution - both formats
@@ -1234,6 +1262,17 @@ export class YoutubeLiveService {
     }
 
     const tracking: AttemptTracking = existing;
+    
+    // If already escalated, just update TTL and skip escalation logic
+    if (tracking.escalated) {
+      this.logger.debug(`🚫 [Back-to-back] Program ${handle} already escalated, skipping escalation (attempts: ${tracking.attempts})`);
+      // Update tracking TTL to ensure it persists until program end
+      const programEndTime = await this.getCurrentProgramEndTime(channelId);
+      const ttlUntilProgramEnd = programEndTime ? Math.max(programEndTime - Date.now(), 60) : 86400; // Min 1 minute, fallback to 24h
+      await this.redisService.set(attemptTrackingKey, tracking, Math.floor(ttlUntilProgramEnd / 1000));
+      return;
+    }
+    
     tracking.attempts++;
     tracking.lastAttempt = Date.now();
 
@@ -1253,13 +1292,16 @@ export class YoutubeLiveService {
         
         this.logger.debug(`🚫 [ESCALATED] No live video for ${handle} after 3 attempts, marking not-found until program end (${new Date(programEndTime).toLocaleTimeString()})`);
         
-        // Send email notification
+        // Send email notification (only once, when first escalating)
         await this.sendEscalationEmail(channelId, handle);
       } else {
         // Fallback to 1 hour - both formats
+        tracking.escalated = true; // Mark as escalated even in fallback case
         await this.redisService.set(notFoundKey, '1', 3600);
         await this.redisService.set(`videoIdNotFound:${handle}`, '1', 3600);
         this.logger.debug(`🚫 [Fallback] No live video for ${handle}, marking not-found for 1 hour (couldn't determine program end)`);
+        // Send email notification (only once, when first escalating)
+        await this.sendEscalationEmail(channelId, handle);
       }
     } else {
       // Second attempt - only increment attempts, no not-found mark renewal
