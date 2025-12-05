@@ -10,6 +10,9 @@ import {
   HttpCode,
   HttpStatus,
   Put,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -17,7 +20,10 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiParam,
+  ApiConsumes,
+  ApiBody,
 } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { BannersService } from './banners.service';
 import { CreateBannerDto } from './dto/create-banner.dto';
 import { UpdateBannerDto } from './dto/update-banner.dto';
@@ -26,11 +32,15 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { Banner } from './banners.entity';
+import { SupabaseStorageService } from './supabase-storage.service';
 
 @ApiTags('banners')
 @Controller('banners')
 export class BannersController {
-  constructor(private readonly bannersService: BannersService) {}
+  constructor(
+    private readonly bannersService: BannersService,
+    private readonly supabaseStorageService: SupabaseStorageService,
+  ) {}
 
   @Get('active')
   @ApiOperation({ 
@@ -179,5 +189,50 @@ export class BannersController {
   @ApiResponse({ status: 403, description: 'Forbidden' })
   async reorder(@Body() reorderDto: ReorderBannersDto): Promise<Banner[]> {
     return this.bannersService.reorder(reorderDto);
+  }
+
+  @Post('upload')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiBearerAuth()
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ 
+    summary: 'Upload banner image',
+    description: 'Uploads an image file to Supabase Storage and returns the public URL (admin only)'
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'Image uploaded successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        url: {
+          type: 'string',
+          description: 'Public URL of the uploaded image',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Bad request (invalid file type or size)' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  async uploadImage(@UploadedFile() file: Express.Multer.File): Promise<{ url: string }> {
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+
+    const url = await this.supabaseStorageService.uploadImage(file);
+    return { url };
   }
 }
