@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BannersController } from './banners.controller';
 import { BannersService } from './banners.service';
+import { SupabaseStorageService } from './supabase-storage.service';
 import { Banner, LinkType, BannerType } from './banners.entity';
 
 describe('BannersController', () => {
@@ -18,6 +19,8 @@ describe('BannersController', () => {
     start_date: null,
     end_date: null,
     display_order: 1,
+    is_fixed: false,
+    priority: 0,
     banner_type: BannerType.NEWS,
     created_at: new Date(),
     updated_at: new Date(),
@@ -34,6 +37,10 @@ describe('BannersController', () => {
     getStats: jest.fn(),
   };
 
+  const mockSupabaseStorageService = {
+    uploadImage: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [BannersController],
@@ -41,6 +48,10 @@ describe('BannersController', () => {
         {
           provide: BannersService,
           useValue: mockBannersService,
+        },
+        {
+          provide: SupabaseStorageService,
+          useValue: mockSupabaseStorageService,
         },
       ],
     }).compile();
@@ -158,6 +169,35 @@ describe('BannersController', () => {
 
       expect(result).toEqual(expectedStats);
       expect(service.getStats).toHaveBeenCalled();
+    });
+  });
+
+  describe('uploadImage', () => {
+    it('should upload an image and return URL', async () => {
+      const mockFile = {
+        fieldname: 'file',
+        originalname: 'test.jpg',
+        encoding: '7bit',
+        mimetype: 'image/jpeg',
+        size: 1024,
+        buffer: Buffer.from('test'),
+        destination: '',
+        filename: '',
+        path: '',
+        stream: null as any,
+      } as any;
+
+      const expectedUrl = 'https://example.com/uploaded-image.jpg';
+      mockSupabaseStorageService.uploadImage.mockResolvedValue(expectedUrl);
+
+      const result = await controller.uploadImage(mockFile);
+
+      expect(result).toEqual({ url: expectedUrl });
+      expect(mockSupabaseStorageService.uploadImage).toHaveBeenCalledWith(mockFile);
+    });
+
+    it('should throw BadRequestException if no file provided', async () => {
+      await expect(controller.uploadImage(null as any)).rejects.toThrow();
     });
   });
 });
