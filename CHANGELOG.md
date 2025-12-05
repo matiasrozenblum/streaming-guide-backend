@@ -17,6 +17,17 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.21.0] - 2025-12-03
+
+### Added
+- Added banner logic
+
+### Changed
+- Now only reporting alerts to Sentry on productive environments
+
+### Fixed
+- Fixed not-found escalation logic in back-to-back cron
+
 ## [1.20.1] - 2025-11-25
 
 ### Added
