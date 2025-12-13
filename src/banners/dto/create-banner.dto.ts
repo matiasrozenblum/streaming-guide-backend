@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum, IsBoolean, IsDateString, IsInt, IsUrl, ValidateIf } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsBoolean, IsDateString, IsInt, IsUrl, ValidateIf, Validate } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { LinkType, BannerType } from '../banners.entity';
 
@@ -40,13 +40,15 @@ export class CreateBannerDto {
   @IsBoolean()
   is_enabled?: boolean;
 
-  @ApiPropertyOptional({ description: 'Banner start date (ISO string)' })
+  @ApiPropertyOptional({ description: 'Banner start date (ISO string). Required for timed banners, ignored for fixed banners.' })
   @IsOptional()
+  @ValidateIf((o) => !o.is_fixed)
   @IsDateString()
   start_date?: string;
 
-  @ApiPropertyOptional({ description: 'Banner end date (ISO string)' })
+  @ApiPropertyOptional({ description: 'Banner end date (ISO string). Required for timed banners, ignored for fixed banners.' })
   @IsOptional()
+  @ValidateIf((o) => !o.is_fixed)
   @IsDateString()
   end_date?: string;
 
@@ -57,6 +59,22 @@ export class CreateBannerDto {
   @IsOptional()
   @IsInt()
   display_order?: number;
+
+  @ApiPropertyOptional({ 
+    description: 'Whether this is a fixed banner (always active, no date restrictions)',
+    default: false
+  })
+  @IsOptional()
+  @IsBoolean()
+  is_fixed?: boolean;
+
+  @ApiPropertyOptional({ 
+    description: 'Priority for ordering (lower numbers appear first). Timed banners always appear before fixed banners.',
+    default: 0
+  })
+  @IsOptional()
+  @IsInt()
+  priority?: number;
 
   @ApiPropertyOptional({ 
     description: 'Banner type',
