@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsUrl, IsBoolean, IsArray, IsNumber, ValidateNested, IsEnum } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsUrl, IsBoolean, IsArray, IsNumber, ValidateNested, IsEnum, ValidateIf } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
@@ -13,15 +13,17 @@ export class StreamerServiceDto {
   @IsEnum(StreamingService)
   service: StreamingService;
 
-  @ApiProperty({ description: 'URL to the streamer\'s channel on this service' })
+  @ApiProperty({ description: 'URL to the streamer\'s channel on this service. For Twitch/Kick, this is auto-generated from username if not provided. Required for YouTube.', required: false })
+  @ValidateIf((o) => o.service === StreamingService.YOUTUBE || (o.service !== StreamingService.YOUTUBE && !o.username))
   @IsString()
   @IsNotEmpty()
   @IsUrl()
-  url: string;
+  url?: string;
 
-  @ApiProperty({ description: 'Username on this service (optional)', required: false })
+  @ApiProperty({ description: 'Username on this service. Required for Twitch/Kick (URL will be auto-generated), optional for YouTube', required: false })
+  @ValidateIf((o) => (o.service === StreamingService.TWITCH || o.service === StreamingService.KICK) && !o.url)
   @IsString()
-  @IsOptional()
+  @IsNotEmpty()
   username?: string;
 }
 
