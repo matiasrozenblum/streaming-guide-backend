@@ -11,6 +11,7 @@ import { ConfigService } from '@/config/config.service';
 import { StreamerLiveStatusService } from './streamer-live-status.service';
 import { WebhookSubscriptionService } from '../webhooks/webhook-subscription.service';
 import { extractTwitchUsername, extractKickUsername } from './utils/extract-streamer-username';
+import { generateServiceUrl } from './utils/generate-service-url';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
 const REVALIDATE_SECRET = process.env.REVALIDATE_SECRET || 'changeme';
@@ -103,8 +104,32 @@ export class StreamersService {
   async create(createStreamerDto: CreateStreamerDto): Promise<Streamer> {
     const { category_ids, ...streamerData } = createStreamerDto;
     
+    // Auto-generate URLs for Twitch/Kick services if username is provided but URL is not
+    const processedServices = streamerData.services.map(service => {
+      if ((service.service === 'twitch' || service.service === 'kick') && service.username && !service.url) {
+        return {
+          ...service,
+          url: generateServiceUrl(service.service, service.username),
+        };
+      }
+      // If URL is provided but no username, extract username from URL (backward compatibility)
+      if ((service.service === 'twitch' || service.service === 'kick') && service.url && !service.username) {
+        const extractedUsername = service.service === 'twitch' 
+          ? extractTwitchUsername(service.url)
+          : extractKickUsername(service.url);
+        if (extractedUsername) {
+          return {
+            ...service,
+            username: extractedUsername,
+          };
+        }
+      }
+      return service;
+    });
+    
     const streamer = this.streamersRepository.create({
       ...streamerData,
+      services: processedServices,
       is_visible: streamerData.is_visible ?? true,
     });
 
@@ -148,6 +173,32 @@ export class StreamersService {
     const oldServices = JSON.parse(JSON.stringify(streamer.services));
     
     const { category_ids, ...streamerData } = updateStreamerDto;
+    
+    // Auto-generate URLs for Twitch/Kick services if username is provided but URL is not
+    if (streamerData.services) {
+      const processedServices = streamerData.services.map(service => {
+        if ((service.service === 'twitch' || service.service === 'kick') && service.username && !service.url) {
+          return {
+            ...service,
+            url: generateServiceUrl(service.service, service.username),
+          };
+        }
+        // If URL is provided but no username, extract username from URL (backward compatibility)
+        if ((service.service === 'twitch' || service.service === 'kick') && service.url && !service.username) {
+          const extractedUsername = service.service === 'twitch' 
+            ? extractTwitchUsername(service.url)
+            : extractKickUsername(service.url);
+          if (extractedUsername) {
+            return {
+              ...service,
+              username: extractedUsername,
+            };
+          }
+        }
+        return service;
+      });
+      streamerData.services = processedServices;
+    }
     
     // Update streamer fields
     Object.assign(streamer, streamerData);
