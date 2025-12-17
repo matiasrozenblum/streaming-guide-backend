@@ -8,6 +8,7 @@ import { Category } from '../categories/categories.entity';
 import { RedisModule } from '../redis/redis.module';
 import { ConfigModule } from '../config/config.module';
 import { WebhooksModule } from '../webhooks/webhooks.module';
+import { SupabaseStorageService } from '../banners/supabase-storage.service';
 
 @Module({
   imports: [
@@ -17,7 +18,7 @@ import { WebhooksModule } from '../webhooks/webhooks.module';
     forwardRef(() => WebhooksModule),
   ],
   controllers: [StreamersController],
-  providers: [StreamersService, StreamerLiveStatusService],
+  providers: [StreamersService, StreamerLiveStatusService, SupabaseStorageService],
   exports: [StreamersService, StreamerLiveStatusService],
 })
 export class StreamersModule {}
