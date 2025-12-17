@@ -1,15 +1,22 @@
-import { Controller, Get, Post, Body, Param, Delete, Patch, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Patch, UseGuards, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
 import { StreamersService } from './streamers.service';
 import { CreateStreamerDto } from './dto/create-streamer.dto';
 import { UpdateStreamerDto } from './dto/update-streamer.dto';
 import { Streamer } from './streamers.entity';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { SupabaseStorageService } from '../banners/supabase-storage.service';
 
 @ApiTags('streamers')
 @Controller('streamers')
 export class StreamersController {
-  constructor(private readonly streamersService: StreamersService) {}
+  constructor(
+    private readonly streamersService: StreamersService,
+    private readonly supabaseStorageService: SupabaseStorageService,
+  ) {}
 
   @Get()
   @UseGuards(JwtAuthGuard)
@@ -61,6 +68,50 @@ export class StreamersController {
   @ApiResponse({ status: 204, description: 'Streamer eliminado' })
   remove(@Param('id') id: number): Promise<void> {
     return this.streamersService.remove(id);
+  }
+
+  @Post('upload')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiBearerAuth()
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({
+    summary: 'Upload streamer logo',
+    description: 'Uploads an image file to Supabase Storage (streamers bucket) and returns the public URL (admin only)',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Image uploaded successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        url: {
+          type: 'string',
+          description: 'Public URL of the uploaded image',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Bad request (invalid file type or size)' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  async uploadLogo(@UploadedFile() file: Express.Multer.File): Promise<{ url: string }> {
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+
+    const url = await this.supabaseStorageService.uploadImage(file, 'streamers');
+    return { url };
   }
 
   @Post(':id/resubscribe-webhooks')
