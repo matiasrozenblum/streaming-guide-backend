@@ -17,7 +17,7 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
-## [1.21.0] - 2025-12-31
+## [1.21.1] - 2025-12-31
 
 ### Added
 - Added is_visible field for program entities
