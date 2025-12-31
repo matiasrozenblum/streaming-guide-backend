@@ -62,6 +62,7 @@ type ChannelWithSchedules = {
       channel_stream_count?: number;
       panelists: { id: string; name: string }[];
       style_override: string | null;
+        is_visible: boolean;
     };
   }>;
 };
@@ -427,6 +428,9 @@ export class ChannelsService {
       }
     }
 
+    // Filter out schedules for invisible programs
+    allSchedules = (allSchedules || []).filter(s => s?.program?.is_visible !== false);
+
     // Group schedules by channel
     const groupStart = Date.now();
     const schedulesGroupedByChannelId = allSchedules.reduce((acc, schedule) => {
@@ -492,6 +496,7 @@ export class ChannelsService {
             name: p.name,
           })) || [],
           style_override: schedule.program.style_override,
+          is_visible: schedule.program.is_visible ?? true,
         },
       })),
       };

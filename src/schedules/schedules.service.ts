@@ -790,6 +790,55 @@ export class SchedulesService {
     return false;
   }
 
+  /**
+   * Delete all schedules for a given program
+   */
+  async removeByProgram(programId: number): Promise<{ deletedCount: number }> {
+    // Load schedules for program to collect IDs
+    const schedules = await this.schedulesRepository.find({
+      where: { program: { id: programId } },
+      relations: ['program'],
+    });
+    const scheduleIds = schedules.map(s => s.id);
+
+    // Delete related weekly overrides first
+    try {
+      await this.weeklyOverridesService.deleteOverridesForProgram(programId, scheduleIds);
+    } catch (error) {
+      this.logger.warn(`Failed deleting weekly overrides for program ${programId}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    // Delete schedules
+    let deletedCount = 0;
+    if (scheduleIds.length > 0) {
+      const result = await this.schedulesRepository
+        .createQueryBuilder()
+        .delete()
+        .from('schedule')
+        .where('program_id = :programId', { programId })
+        .execute();
+      deletedCount = result.affected || 0;
+    }
+
+    // Clear unified cache
+    await this.redisService.del('schedules:week:complete');
+    await this.redisService.delByPattern('schedules:all:*');
+
+    // Warm cache asynchronously (non-blocking)
+    setImmediate(() => this.warmSchedulesCache());
+
+    // Notify and revalidate
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: 'schedules_bulk_deleted',
+      entity: 'program',
+      entityId: programId,
+      payload: { deletedCount },
+      revalidatePaths: ['/'],
+    });
+
+    return { deletedCount };
+  }
+
   async createBulk(dto: CreateBulkSchedulesDto): Promise<Schedule[]> {
     const program = await this.programsRepository.findOne({ where: { id: +dto.programId } });
     if (!program) {

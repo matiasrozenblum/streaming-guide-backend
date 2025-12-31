@@ -131,6 +131,7 @@ describe('SchedulesService', () => {
     youtube_url: 'https://youtube.com/test',
     is_live: false,
     stream_url: '',
+    is_visible: true,
     channel: mockChannel,
     panelists: [],
     schedules: [],
@@ -694,6 +695,7 @@ describe('SchedulesService', () => {
             youtube_url: 'https://youtube.com/program-a',
             is_live: false,
             stream_url: '',
+            is_visible: true,
             channel: {
               id: 1,
               name: 'Test Channel',
@@ -720,6 +722,7 @@ describe('SchedulesService', () => {
             youtube_url: 'https://youtube.com/program-b',
             is_live: false,
             stream_url: '',
+            is_visible: true,
             channel: {
               id: 1,
               name: 'Test Channel',
@@ -799,6 +802,7 @@ describe('SchedulesService', () => {
             is_live: false,
             stream_url: '',
             style_override: null,
+            is_visible: true,
             channel: {
               id: 1,
               name: 'Vorterix',
