@@ -39,4 +39,7 @@ export class Program {
 
   @Column({ type: 'varchar', nullable: true })
   style_override: string | null;
+
+  @Column({ type: 'boolean', default: true })
+  is_visible: boolean;
 }

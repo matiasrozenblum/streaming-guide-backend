@@ -142,4 +142,11 @@ export class SchedulesController {
     }
     return result;
   }
+
+  @Delete('program/:programId')
+  @ApiOperation({ summary: 'Eliminar todos los horarios de un programa' })
+  @ApiResponse({ status: 200, description: 'Horarios eliminados para el programa' })
+  async removeByProgram(@Param('programId') programId: string): Promise<{ deletedCount: number }> {
+    return this.schedulesService.removeByProgram(Number(programId));
+  }
 }
