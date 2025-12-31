@@ -815,7 +815,7 @@ export class SchedulesService {
         .createQueryBuilder()
         .delete()
         .from('schedule')
-        .where('programId = :programId', { programId })
+        .where('program_id = :programId', { programId })
         .execute();
       deletedCount = result.affected || 0;
     }
