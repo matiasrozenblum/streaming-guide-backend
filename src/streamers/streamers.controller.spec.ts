@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { StreamersController } from './streamers.controller';
 import { StreamersService } from './streamers.service';
+import { SupabaseStorageService } from '../banners/supabase-storage.service';
 import { CreateStreamerDto, StreamingService } from './dto/create-streamer.dto';
 import { UpdateStreamerDto } from './dto/update-streamer.dto';
 import { Streamer } from './streamers.entity';
@@ -35,6 +36,10 @@ describe('StreamersController', () => {
     remove: jest.fn().mockResolvedValue(undefined),
   };
 
+  const mockSupabaseStorageService = {
+    uploadImage: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [StreamersController],
@@ -42,6 +47,10 @@ describe('StreamersController', () => {
         {
           provide: StreamersService,
           useValue: mockStreamersService,
+        },
+        {
+          provide: SupabaseStorageService,
+          useValue: mockSupabaseStorageService,
         },
       ],
     }).compile();
