@@ -612,6 +612,37 @@ export class YoutubeLiveService {
       this.logger.warn(`⚠️ Error checking fetch config for ${handle}, allowing fetch:`, error.message);
     }
 
+    // Visibility guard: skip entirely if channel or current program is not visible
+    try {
+      const channel = await this.channelsRepository.findOne({ where: { youtube_channel_id: channelId } });
+      if (channel && channel.is_visible === false) {
+        this.logger.debug(`🚫 Skipping ${handle} (${channelId}) - channel marked as not visible`);
+        return '__SKIPPED__';
+      }
+      // Check current program visibility for this channel
+      const currentDay = TimezoneUtil.currentDayOfWeek();
+      const currentTimeInMinutes = TimezoneUtil.currentTimeInMinutes();
+      const schedules = await this.schedulesService.findAll({
+        dayOfWeek: currentDay,
+        liveStatus: false,
+        applyOverrides: true,
+      });
+      const currentProgram = schedules.find(s => {
+        const chId = s.program?.channel?.youtube_channel_id;
+        if (chId !== channelId) return false;
+        const startNum = this.convertTimeToMinutes(s.start_time);
+        const endNum = this.convertTimeToMinutes(s.end_time);
+        return currentTimeInMinutes >= startNum && currentTimeInMinutes < endNum;
+      });
+      if (currentProgram?.program?.is_visible === false) {
+        this.logger.debug(`🚫 Skipping ${handle} (${channelId}) - current program marked as not visible`);
+        return '__SKIPPED__';
+      }
+    } catch (visErr) {
+      // Non-fatal: if visibility check fails, proceed as before
+      this.logger.warn(`⚠️ Visibility check failed for ${handle} (${channelId}): ${visErr instanceof Error ? visErr.message : visErr}`);
+    }
+
     // Unified cache - use liveStatusByHandle (replaces liveStreamsByChannel)
     const notFoundKey = `videoIdNotFound:${handle}`;
     const statusCacheKey = `liveStatusByHandle:${handle}`;
@@ -901,8 +932,8 @@ export class YoutubeLiveService {
     });
     const schedules = rawSchedules; // findAll already includes enrichment
     
-    // Filter out schedules from non-visible channels
-    const visibleSchedules = schedules.filter(s => s.program.channel?.is_visible === true);
+    // Filter out schedules from non-visible channels or programs
+    const visibleSchedules = schedules.filter(s => s.program.channel?.is_visible === true && s.program?.is_visible === true);
   
     // 2) Filter only schedules that are "on-air" right now (time-based, not YouTube live status)
     // CRITICAL: Only process schedules that have actual programs (not ghost schedules)
@@ -1147,6 +1178,35 @@ export class YoutubeLiveService {
     handle: string, 
     notFoundKey: string
   ): Promise<void> {
+    // Visibility guard: do not escalate for non-visible channel/program
+    try {
+      const channel = await this.channelsRepository.findOne({ where: { youtube_channel_id: channelId } });
+      if (channel && channel.is_visible === false) {
+        this.logger.debug(`🚫 [Main] Skipping escalation for ${handle} - channel not visible`);
+        return;
+      }
+      const currentDay = TimezoneUtil.currentDayOfWeek();
+      const currentTimeInMinutes = TimezoneUtil.currentTimeInMinutes();
+      const schedules = await this.schedulesService.findAll({
+        dayOfWeek: currentDay,
+        liveStatus: false,
+        applyOverrides: true,
+      });
+      const currentProgram = schedules.find(s => {
+        const chId = s.program?.channel?.youtube_channel_id;
+        if (chId !== channelId) return false;
+        const startNum = this.convertTimeToMinutes(s.start_time);
+        const endNum = this.convertTimeToMinutes(s.end_time);
+        return currentTimeInMinutes >= startNum && currentTimeInMinutes < endNum;
+      });
+      if (currentProgram?.program?.is_visible === false) {
+        this.logger.debug(`🚫 [Main] Skipping escalation for ${handle} - program not visible`);
+        return;
+      }
+    } catch (visErr) {
+      this.logger.warn(`⚠️ [Main] Visibility check failed for ${handle}: ${visErr instanceof Error ? visErr.message : visErr}`);
+    }
+
     const attemptTrackingKey = `notFoundAttempts:${handle}`;
     const existing = await this.redisService.get<AttemptTracking>(attemptTrackingKey);
     
@@ -1240,6 +1300,35 @@ export class YoutubeLiveService {
     handle: string, 
     notFoundKey: string
   ): Promise<void> {
+    // Visibility guard: do not escalate for non-visible channel/program
+    try {
+      const channel = await this.channelsRepository.findOne({ where: { youtube_channel_id: channelId } });
+      if (channel && channel.is_visible === false) {
+        this.logger.debug(`🚫 [Back-to-back] Skipping escalation for ${handle} - channel not visible`);
+        return;
+      }
+      const currentDay = TimezoneUtil.currentDayOfWeek();
+      const currentTimeInMinutes = TimezoneUtil.currentTimeInMinutes();
+      const schedules = await this.schedulesService.findAll({
+        dayOfWeek: currentDay,
+        liveStatus: false,
+        applyOverrides: true,
+      });
+      const currentProgram = schedules.find(s => {
+        const chId = s.program?.channel?.youtube_channel_id;
+        if (chId !== channelId) return false;
+        const startNum = this.convertTimeToMinutes(s.start_time);
+        const endNum = this.convertTimeToMinutes(s.end_time);
+        return currentTimeInMinutes >= startNum && currentTimeInMinutes < endNum;
+      });
+      if (currentProgram?.program?.is_visible === false) {
+        this.logger.debug(`🚫 [Back-to-back] Skipping escalation for ${handle} - program not visible`);
+        return;
+      }
+    } catch (visErr) {
+      this.logger.warn(`⚠️ [Back-to-back] Visibility check failed for ${handle}: ${visErr instanceof Error ? visErr.message : visErr}`);
+    }
+
     const attemptTrackingKey = `notFoundAttempts:${handle}`;
     const existing = await this.redisService.get<AttemptTracking>(attemptTrackingKey);
     
@@ -1457,6 +1546,12 @@ export class YoutubeLiveService {
         return;
       }
 
+      // Skip email if channel is not visible
+      if (channel.is_visible === false) {
+        this.logger.debug(`📧 Skipping escalation email for ${handle} - channel not visible`);
+        return;
+      }
+
       const currentDay = TimezoneUtil.currentDayOfWeek();
       const currentTimeInMinutes = TimezoneUtil.currentTimeInMinutes();
       
@@ -1475,6 +1570,12 @@ export class YoutubeLiveService {
         const endMinutes = this.convertTimeToMinutes(schedule.end_time);
         return startMinutes <= currentTimeInMinutes && endMinutes > currentTimeInMinutes;
       });
+
+      // Skip email if current program is not visible
+      if (currentProgram?.program?.is_visible === false) {
+        this.logger.debug(`📧 Skipping escalation email for ${handle} - program not visible`);
+        return;
+      }
 
       const programName = currentProgram?.program?.name || 'Programa desconocido';
       const channelName = channel.name;
