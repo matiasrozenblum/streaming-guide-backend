@@ -52,6 +52,12 @@ export class Banner {
   @Column({ type: 'int', default: 0 })
   display_order: number;
 
+  @Column({ type: 'boolean', default: false })
+  is_fixed: boolean;
+
+  @Column({ type: 'int', default: 0 })
+  priority: number;
+
   @Column({
     type: 'enum',
     enum: BannerType,
