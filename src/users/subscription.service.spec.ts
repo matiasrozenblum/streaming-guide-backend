@@ -54,6 +54,7 @@ describe('SubscriptionService', () => {
     youtube_url: 'https://youtube.com/test',
     stream_url: '',
     is_live: false,
+    is_visible: true,
     channel: mockChannel,
     panelists: [],
     schedules: [],
