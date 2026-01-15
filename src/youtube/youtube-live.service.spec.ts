@@ -691,6 +691,63 @@ describe('YoutubeLiveService', () => {
         process.env.NODE_ENV = originalEnv;
       });
 
+      it('skips email when channel is not visible', async () => {
+        const originalEnv = process.env.NODE_ENV;
+        process.env.NODE_ENV = 'production';
+        
+        const mockChannel = {
+          name: 'Hidden Channel',
+          programs: [],
+          is_visible: false,
+        };
+        const mockChannelsRepository = {
+          findOne: jest.fn().mockResolvedValue(mockChannel)
+        } as any;
+        service = new YoutubeLiveService(configService, schedulesService, redisService, sentryService, mockEmailService, mockChannelsRepository);
+
+        schedulesService.findAll.mockResolvedValue([]);
+        
+        await (service as any).sendEscalationEmail('cid', 'hidden_handle');
+        expect(mockEmailService.sendEmail).not.toHaveBeenCalled();
+        
+        process.env.NODE_ENV = originalEnv;
+      });
+
+      it('skips email when current program is not visible', async () => {
+        const originalEnv = process.env.NODE_ENV;
+        process.env.NODE_ENV = 'production';
+        
+        const mockChannel = {
+          name: 'Visible Channel',
+          programs: [],
+          is_visible: true,
+        };
+        const mockChannelsRepository = {
+          findOne: jest.fn().mockResolvedValue(mockChannel)
+        } as any;
+        service = new YoutubeLiveService(configService, schedulesService, redisService, sentryService, mockEmailService, mockChannelsRepository);
+
+        const mockSchedules = [
+          {
+            program: { 
+              channel: { youtube_channel_id: 'cid' },
+              name: 'Hidden Program',
+              is_visible: false,
+            },
+            start_time: '14:00',
+            end_time: '16:00'
+          }
+        ];
+        schedulesService.findAll.mockResolvedValue(mockSchedules as any);
+        jest.spyOn(require('@/utils/timezone.util').TimezoneUtil, 'currentDayOfWeek').mockReturnValue('tuesday');
+        jest.spyOn(require('@/utils/timezone.util').TimezoneUtil, 'currentTimeInMinutes').mockReturnValue(15 * 60);
+        
+        await (service as any).sendEscalationEmail('cid', 'handle');
+        expect(mockEmailService.sendEmail).not.toHaveBeenCalled();
+        
+        process.env.NODE_ENV = originalEnv;
+      });
+
       it('handles missing channel gracefully', async () => {
         const mockChannelsRepository = {
           findOne: jest.fn().mockResolvedValue(null)
@@ -887,6 +944,43 @@ describe('YoutubeLiveService', () => {
         expect(mockEmailService.sendEmail).toHaveBeenCalled();
         
         process.env.NODE_ENV = originalEnv;
+      });
+    });
+
+    describe('visibility guards in getLiveStreamsMain', () => {
+      it('returns __SKIPPED__ when channel is not visible', async () => {
+        const mockChannelsRepository = {
+          findOne: jest.fn().mockResolvedValue({ is_visible: false })
+        } as any;
+        service = new YoutubeLiveService(configService, schedulesService, redisService, sentryService, mockEmailService, mockChannelsRepository);
+        schedulesService.findAll.mockResolvedValue([]);
+        const result = await service.getLiveStreamsMain('cid', 'handle', 300);
+        expect(result).toBe('__SKIPPED__');
+      });
+
+      it('returns __SKIPPED__ when current program is not visible', async () => {
+        const mockChannelsRepository = {
+          findOne: jest.fn().mockResolvedValue({ is_visible: true })
+        } as any;
+        service = new YoutubeLiveService(configService, schedulesService, redisService, sentryService, mockEmailService, mockChannelsRepository);
+        const mockSchedules = [
+          {
+            program: { 
+              channel: { youtube_channel_id: 'cid', handle: 'handle', is_visible: true },
+              name: 'Hidden Program',
+              is_visible: false,
+            },
+            start_time: '14:00',
+            end_time: '16:00',
+            day_of_week: 'tuesday',
+          }
+        ];
+        schedulesService.findAll.mockResolvedValue(mockSchedules as any);
+        jest.spyOn(require('@/utils/timezone.util').TimezoneUtil, 'currentDayOfWeek').mockReturnValue('tuesday');
+        jest.spyOn(require('@/utils/timezone.util').TimezoneUtil, 'currentTimeInMinutes').mockReturnValue(15 * 60);
+        
+        const result = await service.getLiveStreamsMain('cid', 'handle', 300);
+        expect(result).toBe('__SKIPPED__');
       });
     });
   });

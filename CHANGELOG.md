@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.21.3] - 2025-01-15
+
+### Fixed
+- Now filtering invisible programs and channels before attempting youtube fetch and escalating not found
+
 ## [1.21.2] - 2025-01-14
 
 ### Added
