@@ -932,8 +932,11 @@ export class YoutubeLiveService {
     });
     const schedules = rawSchedules; // findAll already includes enrichment
     
-    // Filter out schedules from non-visible channels or programs
-    const visibleSchedules = schedules.filter(s => s.program.channel?.is_visible === true && s.program?.is_visible === true);
+    // Filter out schedules from explicitly non-visible channels or programs
+    // Treat undefined as visible (matches DB default true)
+    const visibleSchedules = schedules.filter(
+      s => (s.program.channel?.is_visible !== false) && (s.program?.is_visible !== false)
+    );
   
     // 2) Filter only schedules that are "on-air" right now (time-based, not YouTube live status)
     // CRITICAL: Only process schedules that have actual programs (not ghost schedules)

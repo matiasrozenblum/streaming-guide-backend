@@ -120,8 +120,9 @@ export class OptimizedSchedulesService {
       const enrichedSchedule = { ...schedule };
       const channelId = schedule.program.channel?.youtube_channel_id;
       const handle = schedule.program.channel?.handle;
-      const isChannelVisible = schedule.program.channel?.is_visible === true;
-      const isProgramVisible = schedule.program?.is_visible === true;
+      // Treat undefined as visible (default true in DB)
+      const isChannelVisible = schedule.program.channel?.is_visible !== false;
+      const isProgramVisible = schedule.program?.is_visible !== false;
       
       // Hard guard: if not visible, never attempt live fetches and mark as not live
       if (!isChannelVisible || !isProgramVisible) {
