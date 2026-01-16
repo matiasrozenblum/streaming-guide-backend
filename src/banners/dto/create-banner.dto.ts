@@ -12,10 +12,22 @@ export class CreateBannerDto {
   @IsString()
   description?: string;
 
-  @ApiProperty({ description: 'Banner image URL' })
+  @ApiProperty({ description: 'Legacy banner image URL (fallback)' })
   @IsString()
   @IsUrl()
   image_url: string;
+
+  @ApiPropertyOptional({ description: 'Desktop image URL (recommended 1920x400)' })
+  @IsOptional()
+  @IsString()
+  @IsUrl()
+  image_url_desktop?: string;
+
+  @ApiPropertyOptional({ description: 'Mobile image URL (recommended 1200x400)' })
+  @IsOptional()
+  @IsString()
+  @IsUrl()
+  image_url_mobile?: string;
 
   @ApiPropertyOptional({ 
     description: 'Link type',

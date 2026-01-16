@@ -120,6 +120,22 @@ export class OptimizedSchedulesService {
       const enrichedSchedule = { ...schedule };
       const channelId = schedule.program.channel?.youtube_channel_id;
       const handle = schedule.program.channel?.handle;
+      // Treat undefined as visible (default true in DB)
+      const isChannelVisible = schedule.program.channel?.is_visible !== false;
+      const isProgramVisible = schedule.program?.is_visible !== false;
+      
+      // Hard guard: if not visible, never attempt live fetches and mark as not live
+      if (!isChannelVisible || !isProgramVisible) {
+        enrichedSchedule.program = {
+          ...schedule.program,
+          is_live: false,
+          stream_url: schedule.program.stream_url || schedule.program.youtube_url,
+          live_streams: [],
+          stream_count: 0,
+        };
+        enriched.push(enrichedSchedule);
+        continue;
+      }
       
       // Check if this channel has been marked as not-found due to escalation
       const attemptTracking = handle ? attemptTrackingMap.get(handle) : null;
@@ -193,8 +209,8 @@ export class OptimizedSchedulesService {
             stream_count: 0,
           };
           
-          // Only trigger async fetch if cache is stale AND lock not already acquired
-          if (!shouldTrustCache && schedule.program.channel?.handle) {
+          // Only trigger async fetch if cache is stale AND lock not already acquired AND still visible
+          if (!shouldTrustCache && schedule.program.channel?.handle && isChannelVisible && isProgramVisible) {
             const handle = schedule.program.channel.handle;
             const fetchLockKey = `async-fetch-triggered:${handle}`;
             const fetchLockTTL = 600; // 10 minutes - longer to prevent excessive triggering
@@ -281,8 +297,8 @@ export class OptimizedSchedulesService {
         
         // If program is live but no cache data exists, trigger async fetch to populate cache
         // CRITICAL: Only trigger if lock not already acquired (deduplicate by channel, not by schedule)
-        // AND not escalated AND canFetchLive is true
-        if (isCurrentlyLive && schedule.program.channel?.handle && !isEscalated && canFetchLive) {
+        // AND not escalated AND canFetchLive is true AND visible
+        if (isCurrentlyLive && schedule.program.channel?.handle && !isEscalated && canFetchLive && isChannelVisible && isProgramVisible) {
           const handle = schedule.program.channel.handle;
           const fetchLockKey = `async-fetch-triggered:${handle}`;
           const fetchLockTTL = 600; // 10 minutes - longer to prevent excessive triggering
