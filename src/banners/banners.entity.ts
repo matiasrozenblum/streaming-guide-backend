@@ -27,8 +27,16 @@ export class Banner {
   @Column({ type: 'text', nullable: true })
   description: string | null;
 
+  // Legacy single image URL kept for backward compatibility and as fallback
   @Column({ type: 'text' })
   image_url: string;
+
+  // New: device-specific images
+  @Column({ type: 'text', nullable: true })
+  image_url_desktop: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  image_url_mobile: string | null;
 
   @Column({
     type: 'enum',
