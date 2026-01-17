@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.21.4] - 2025-01-17
+
+### Changed
+- Now we have two images for banners, web and mobile
+
 ## [1.21.3] - 2025-01-15
 
 ### Fixed
