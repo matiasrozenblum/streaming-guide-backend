@@ -43,7 +43,7 @@ export class StreamersService {
     return this.streamersRepository.find({
       relations: ['categories'],
       order: {
-        id: 'ASC',
+        order: 'ASC',
       },
     });
   }
@@ -60,7 +60,7 @@ export class StreamersService {
       where: { is_visible: true },
       relations: ['categories'],
       order: {
-        id: 'ASC',
+        order: 'ASC',
       },
     });
 
@@ -127,10 +127,19 @@ export class StreamersService {
       return service;
     });
     
+    // Determine next order (append to end)
+    const lastStreamer = await this.streamersRepository
+      .createQueryBuilder('streamer')
+      .where('streamer.order IS NOT NULL')
+      .orderBy('streamer.order', 'DESC')
+      .getOne();
+    const newOrder = lastStreamer ? ((lastStreamer.order as number) || 0) + 1 : 1;
+
     const streamer = this.streamersRepository.create({
       ...streamerData,
       services: processedServices,
       is_visible: streamerData.is_visible ?? true,
+      order: newOrder,
     });
 
     // Load categories if provided
@@ -164,6 +173,31 @@ export class StreamersService {
     });
 
     return saved;
+  }
+
+  async reorder(streamerIds: number[]): Promise<void> {
+    // Update order in a transaction
+    await this.streamersRepository.manager.transaction(async (manager) => {
+      for (let i = 0; i < streamerIds.length; i++) {
+        await manager.update(Streamer, streamerIds[i], { order: i + 1 });
+      }
+    });
+
+    // Clear cache
+    try {
+      await this.redisService.del(this.CACHE_KEY);
+    } catch (error) {
+      console.error('❌ Error clearing streamers cache:', (error as any).message);
+    }
+
+    // Notify and revalidate
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: 'streamers_reordered',
+      entity: 'streamer',
+      entityId: 'all',
+      payload: { streamerIds },
+      revalidatePaths: ['/streamers'],
+    });
   }
 
   async update(id: number, updateStreamerDto: UpdateStreamerDto): Promise<Streamer> {

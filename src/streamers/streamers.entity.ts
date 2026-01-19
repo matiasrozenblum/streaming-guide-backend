@@ -9,7 +9,7 @@ export interface StreamerService {
 }
 
 @Entity()
-@Index(['is_visible']) // Index for filtering visible streamers
+@Index(['is_visible', 'order']) // Composite index for filtering visible streamers and ordering
 export class Streamer {
   @PrimaryGeneratedColumn()
   id: number;
@@ -25,6 +25,9 @@ export class Streamer {
 
   @Column({ type: 'json', default: '[]' })
   services: StreamerService[];
+
+  @Column({ type: 'int', nullable: true })
+  order: number | null;
 
   @ManyToMany(() => Category)
   @JoinTable({

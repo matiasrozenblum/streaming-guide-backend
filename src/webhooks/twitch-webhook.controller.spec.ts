@@ -23,6 +23,7 @@ describe('TwitchWebhookController', () => {
     name: 'Test Streamer',
     logo_url: 'https://test.com/logo.png',
     is_visible: true,
+    order: 1,
     services: [
       {
         service: 'twitch',

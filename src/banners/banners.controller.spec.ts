@@ -13,6 +13,8 @@ describe('BannersController', () => {
     title: 'Test Banner',
     description: 'Test Description',
     image_url: 'https://example.com/image.jpg',
+    image_url_desktop: null,
+    image_url_mobile: null,
     link_type: LinkType.INTERNAL,
     link_url: '/test',
     is_enabled: true,
