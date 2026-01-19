@@ -70,6 +70,16 @@ export class StreamersController {
     return this.streamersService.remove(id);
   }
 
+  @Post('reorder')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Reordenar streamers' })
+  @ApiResponse({ status: 200, description: 'Streamers reordenados' })
+  async reorder(@Body() body: { ids: number[] }) {
+    await this.streamersService.reorder(body.ids);
+    return { message: 'Streamers reordered successfully' };
+  }
+
   @Post('upload')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
