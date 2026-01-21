@@ -17,6 +17,17 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.21.5] - 2025-01-21
+
+### Added
+- Added order for streamers
+
+### Changed
+- Made streamers and channels list draggable for reordering in backoffice
+
+### Fixed
+- Fixed SSE events being deleted when backoffice detected them
+
 ## [1.21.4] - 2025-01-17
 
 ### Changed
