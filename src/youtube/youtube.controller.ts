@@ -62,7 +62,7 @@ export class YoutubeController {
                     ? `${notification.type}:${notification.channelId}:${notification.timestamp}`
                     : `${notification.type}:${notification.entity}:${notification.entityId}:${notification.timestamp}`;
                   
-                  // Only send if we haven't sent this notification before
+                  // Only send if we haven't sent this notification before (per-connection)
                   if (!this.sentNotifications.has(notificationId)) {
                     this.sentNotifications.add(notificationId);
                     
@@ -71,8 +71,10 @@ export class YoutubeController {
                       type: 'message',
                     } as MessageEvent);
                     
-                    // Clean up the notification from Redis after sending
-                    await this.redisService.del(key);
+                    // IMPORTANT: Do NOT delete the Redis key here.
+                    // We want ALL connected clients to receive the notification.
+                    // Each connection tracks what it has already sent via sentNotifications.
+                    // Old notifications are cleaned up below (timestamp check) or by TTL.
                     
                     // Clean up the tracking set after 1 minute to prevent memory leaks
                     setTimeout(() => {
