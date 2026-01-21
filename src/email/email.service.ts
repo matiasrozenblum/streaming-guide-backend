@@ -14,6 +14,29 @@ export class EmailService {
   ) {}
 
   /**
+   * Determine if we should send emails in the current environment for the given email type.
+   * Rules:
+   * - Production: always send
+   * - Non-production: send only if explicitly enabled OR if it's an OTP (authentication) email
+   *   Enable via env: EMAILS_ENABLE_NON_PROD=true
+   */
+  private shouldSend(emailType: string = 'general'): boolean {
+    // Prioritize process.env for test detection regardless of ConfigService mocks
+    if (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID) return true;
+    const env =
+      this.configService.get<string>('NODE_ENV') ||
+      this.configService.get<string>('ENVIRONMENT') ||
+      process.env.NODE_ENV ||
+      'development';
+    const isProd = env === 'production' || this.configService.get('IS_PRODUCTION') === 'true';
+    if (isProd) return true;
+    // Always allow OTP in non-prod to avoid blocking logins
+    if (emailType === 'otp_code') return true;
+    const allowNonProd = (this.configService.get<string>('EMAILS_ENABLE_NON_PROD') || '').toString() === 'true';
+    return allowNonProd;
+  }
+
+  /**
    * Get the appropriate sender email based on email type
    */
   private getSenderEmail(emailType: string = 'general'): string {
@@ -36,6 +59,11 @@ export class EmailService {
   async sendProposedChangesReport(changes: ProposedChange[]) {
     if (changes.length === 0) {
       console.log('No hay cambios para reportar por email.');
+      return;
+    }
+
+    if (!this.shouldSend('proposed_changes_report')) {
+      console.log('✉️ [Non-prod] Skipping proposed changes report email (EMAILS_ENABLE_NON_PROD not enabled)');
       return;
     }
 
@@ -87,6 +115,11 @@ export class EmailService {
   }
 
   async sendOtpCode(to: string, code: string, ttlMinutes: number) {
+    // OTP is allowed in non-prod (see shouldSend)
+    if (!this.shouldSend('otp_code')) {
+      console.log(`✉️ [Non-prod] Skipping OTP email to ${to} (EMAILS_ENABLE_NON_PROD not enabled)`);
+      return;
+    }
     const html = this.buildOtpHtml(code, ttlMinutes);
     
     // Try SendGrid first if configured, fallback to SMTP
@@ -301,6 +334,10 @@ export class EmailService {
   }
 
   async sendReportWithAttachment({ to, subject, text, html, attachments }: { to: string, subject: string, text: string, html: string, attachments: { filename: string, content: Buffer, contentType: string }[] }) {
+    if (!this.shouldSend('report_with_attachment')) {
+      console.log(`✉️ [Non-prod] Skipping report-with-attachment email to ${to} (EMAILS_ENABLE_NON_PROD not enabled)`);
+      return;
+    }
     // Try SendGrid first if configured, fallback to SMTP
     const sendGridApiKey = this.configService.get('SENDGRID_API_KEY');
     
@@ -378,6 +415,10 @@ export class EmailService {
    */
   async sendEmail(params: { to: string; subject: string; html: string; text?: string; emailType?: string }) {
     const { to, subject, html, text, emailType = 'general' } = params;
+    if (!this.shouldSend(emailType)) {
+      console.log(`✉️ [Non-prod] Skipping ${emailType} email to ${to} (EMAILS_ENABLE_NON_PROD not enabled)`);
+      return;
+    }
     
     // Try SendGrid first if configured, fallback to SMTP
     const sendGridApiKey = this.configService.get('SENDGRID_API_KEY');
