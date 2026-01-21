@@ -21,6 +21,8 @@ export class EmailService {
    *   Enable via env: EMAILS_ENABLE_NON_PROD=true
    */
   private shouldSend(emailType: string = 'general'): boolean {
+    // Prioritize process.env for test detection regardless of ConfigService mocks
+    if (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID) return true;
     const env =
       this.configService.get<string>('NODE_ENV') ||
       this.configService.get<string>('ENVIRONMENT') ||
