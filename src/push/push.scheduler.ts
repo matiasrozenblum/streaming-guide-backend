@@ -121,7 +121,7 @@ export class PushScheduler {
 
                     await this.pushService.sendNotification(pushSub, {
                       title: `${title} en ${channelName}`,
-                      body: `📺 Comienza a las ${timeString}. ¡En 10 minutos!`,
+                      body: `Comienza en 10 minutos!`,
                       data: {
                         programId: program.id,
                         channelHandle: program.channel?.handle
