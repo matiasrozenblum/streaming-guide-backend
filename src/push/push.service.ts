@@ -121,10 +121,12 @@ export class PushService {
         });
       } catch (error) {
         if (!entity.endpoint) {
-          console.error('❌ CRITICAL: Attempting to send Native Push with EMPTY or NULL endpoint!', JSON.stringify(entity));
+          console.error('❌ CRITICAL: Attempting to send Native Push with EMPTY or NULL endpoint! DELETING SUBSCRIPTION.', JSON.stringify(entity));
+          await this.repo.delete({ id: entity.id });
+          return;
         }
-        if (error.code === 'messaging/registration-token-not-registered') {
-          console.warn('⚠️ Token invalid, deleting subscription:', entity.endpoint);
+        if (error.code === 'messaging/registration-token-not-registered' || error.code === 'messaging/invalid-payload') {
+          console.warn(`⚠️ Token invalid (${error.code}), deleting subscription:`, entity.endpoint);
           await this.repo.delete({ id: entity.id });
         }
         throw error;
