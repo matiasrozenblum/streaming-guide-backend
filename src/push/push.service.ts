@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as webPush from 'web-push';
+import * as admin from 'firebase-admin';
 import { PushSubscriptionEntity } from './push-subscription.entity';
 import { CreatePushSubscriptionDto } from './dto/create-push-subscription.dto';
 import { NotificationsService } from '@/notifications/notifications.service';
@@ -22,7 +23,7 @@ export class PushService {
     // TODO: Set proper VAPID environment variables
     const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
     const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
-    
+
     if (vapidPublicKey && vapidPrivateKey && vapidPublicKey.length > 0 && vapidPrivateKey.length > 0) {
       try {
         webPush.setVapidDetails(
@@ -36,6 +37,36 @@ export class PushService {
       }
     } else {
       console.warn('⚠️ VAPID keys not configured - push notifications will not work');
+    }
+
+    // Initialize Firebase Admin for Native Push
+    if (!admin.apps.length) {
+      try {
+        const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+        const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+
+        if (serviceAccountJson) {
+          // 1. Try initializing from JSON content (Env Var) - Best for Railway/Heroku
+          admin.initializeApp({
+            credential: admin.credential.cert(JSON.parse(serviceAccountJson)),
+          });
+          console.log('✅ Firebase Admin initialized from FIREBASE_SERVICE_ACCOUNT_JSON');
+        } else if (serviceAccountPath) {
+          // 2. Try initializing from File Path (Local Dev)
+          if (require('fs').existsSync(serviceAccountPath)) {
+            admin.initializeApp({
+              credential: admin.credential.cert(require(serviceAccountPath)),
+            });
+            console.log('✅ Firebase Admin initialized from GOOGLE_APPLICATION_CREDENTIALS file');
+          } else {
+            console.warn(`⚠️ Credentials file not found at: ${serviceAccountPath}`);
+          }
+        } else {
+          console.warn('⚠️ No Firebase credentials found (checked FIREBASE_SERVICE_ACCOUNT_JSON and GOOGLE_APPLICATION_CREDENTIALS) - native push will not work');
+        }
+      } catch (error) {
+        console.warn('⚠️ Failed to initialize Firebase Admin:', error.message);
+      }
     }
   }
 
@@ -53,7 +84,7 @@ export class PushService {
     }
 
     // 1) Si ya existe la misma subscripción, devolvemos la existente
-    const existing = await this.repo.findOne({ 
+    const existing = await this.repo.findOne({
       where: { device: { id: device.id }, endpoint },
       relations: ['device'],
     });
@@ -65,14 +96,37 @@ export class PushService {
     const sub = this.repo.create({
       device,
       endpoint,
-      p256dh: subscription.keys.p256dh,
-      auth: subscription.keys.auth,
+      p256dh: subscription.keys?.p256dh || null,
+      auth: subscription.keys?.auth || null,
     });
     return this.repo.save(sub);
   }
 
   async sendNotification(entity: PushSubscriptionEntity, payload: any) {
-    console.log('🔥 Sending push notification to device', entity.device?.deviceId || 'unknown');
+    if (!entity.p256dh || !entity.auth) {
+      // Native Push (Firebase)
+      console.log('🔥 Sending NATIVE push notification to device', entity.device?.deviceId || 'unknown');
+      try {
+        await admin.messaging().send({
+          token: entity.endpoint, // Endpoint stores the FCM token for native
+          notification: {
+            title: payload.title,
+            body: payload.body,
+          },
+          data: payload.data || {},
+        });
+      } catch (error) {
+        if (error.code === 'messaging/registration-token-not-registered') {
+          console.warn('⚠️ Token invalid, deleting subscription:', entity.endpoint);
+          await this.repo.delete({ id: entity.id });
+        }
+        throw error;
+      }
+      return;
+    }
+
+    // Web Push
+    console.log('🔥 Sending WEB push notification to device', entity.device?.deviceId || 'unknown');
     const pushSub = {
       endpoint: entity.endpoint,
       keys: { p256dh: entity.p256dh, auth: entity.auth },
