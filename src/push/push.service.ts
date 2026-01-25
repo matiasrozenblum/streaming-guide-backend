@@ -74,6 +74,10 @@ export class PushService {
     const { deviceId, subscription } = dto;
     const endpoint = subscription.endpoint;
 
+    if (!endpoint || endpoint.trim() === '') {
+      throw new Error('Endpoint cannot be empty');
+    }
+
     // Find the device by deviceId
     const device = await this.deviceRepository.findOne({
       where: { deviceId },
