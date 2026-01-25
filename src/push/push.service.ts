@@ -116,6 +116,9 @@ export class PushService {
           data: payload.data || {},
         });
       } catch (error) {
+        if (!entity.endpoint) {
+          console.error('❌ CRITICAL: Attempting to send Native Push with EMPTY or NULL endpoint!', JSON.stringify(entity));
+        }
         if (error.code === 'messaging/registration-token-not-registered') {
           console.warn('⚠️ Token invalid, deleting subscription:', entity.endpoint);
           await this.repo.delete({ id: entity.id });
