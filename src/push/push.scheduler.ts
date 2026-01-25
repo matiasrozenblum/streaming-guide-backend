@@ -123,8 +123,8 @@ export class PushScheduler {
                       title: `${title} en ${channelName}`,
                       body: `Comienza en 10 minutos!`,
                       data: {
-                        programId: program.id,
-                        channelHandle: program.channel?.handle
+                        programId: String(program.id),
+                        channelHandle: program.channel?.handle || ''
                       },
                       options: {
                         icon: '/img/logo-192x192.png',
