@@ -69,3 +69,6 @@ logs.*.json
 # Otros
 coverage/
 docs/
+
+# Secrets
+backend-firebase-key.json

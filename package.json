@@ -46,6 +46,7 @@
     "class-validator": "^0.14.1",
     "date-holidays": "^3.24.2",
     "dayjs": "^1.11.9",
+    "firebase-admin": "^13.6.0",
     "ioredis": "^5.6.1",
     "node-cron": "^3.0.3",
     "passport": "^0.7.0",

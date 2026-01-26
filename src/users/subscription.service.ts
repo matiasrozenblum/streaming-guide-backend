@@ -6,6 +6,8 @@ import { User } from './users.entity';
 import { Program } from '../programs/programs.entity';
 import { Device } from '../users/device.entity';
 import { PushSubscriptionEntity } from '../push/push-subscription.entity';
+import { DeviceService } from './device.service';
+import { v4 as uuidv4 } from 'uuid';
 
 export interface CreateSubscriptionDto {
   programId: number;
@@ -33,7 +35,8 @@ export class SubscriptionService {
     private pushSubscriptionRepository: Repository<PushSubscriptionEntity>,
     @InjectRepository(User)
     private userRepository: Repository<User>,
-  ) {}
+    private deviceService: DeviceService,
+  ) { }
 
   async createSubscription(user: User, dto: CreateSubscriptionDto): Promise<UserSubscription> {
     const { programId, notificationMethod, endpoint, p256dh, auth } = dto;
@@ -78,19 +81,26 @@ export class SubscriptionService {
     p256dh: string,
     auth: string
   ): Promise<void> {
-    const device = await this.deviceRepository.findOne({
+    let device = await this.deviceRepository.findOne({
       where: { user: { id: user.id } },
       relations: ['pushSubscriptions'],
     });
 
+    // If no device exists, create one on-demand
     if (!device) {
-      console.warn(`No device found for user ${user.id} to create push subscription`);
-      return;
+      console.log(`📱 [SubscriptionService] No device found for user ${user.id}, creating one on-demand`);
+      const generatedDeviceId = uuidv4();
+      device = await this.deviceService.findOrCreateDevice(
+        user,
+        'Auto-created during push subscription', // userAgent placeholder
+        generatedDeviceId,
+      );
+      console.log(`✅ [SubscriptionService] Device created on-demand: ${device.deviceId}`);
     }
 
-    // Check if a push subscription already exists for this device
+    // Check if a push subscription already exists for this device with the same endpoint
     const existingPushSubscription = await this.pushSubscriptionRepository.findOne({
-      where: { device: { id: device.id } },
+      where: { device: { id: device.id }, endpoint },
     });
 
     if (!existingPushSubscription) {
@@ -102,6 +112,15 @@ export class SubscriptionService {
         auth,
       });
       await this.pushSubscriptionRepository.save(pushSubscription);
+      console.log(`✅ [SubscriptionService] Push subscription created for device ${device.deviceId}`);
+    } else {
+      // Update existing push subscription with new keys if they differ
+      if (existingPushSubscription.p256dh !== p256dh || existingPushSubscription.auth !== auth) {
+        existingPushSubscription.p256dh = p256dh;
+        existingPushSubscription.auth = auth;
+        await this.pushSubscriptionRepository.save(existingPushSubscription);
+        console.log(`🔄 [SubscriptionService] Push subscription updated for device ${device.deviceId}`);
+      }
     }
   }
 
@@ -130,7 +149,7 @@ export class SubscriptionService {
     if (dto.notificationMethod !== undefined) {
       subscription.notificationMethod = dto.notificationMethod;
     }
-    
+
     if (dto.isActive !== undefined) {
       subscription.isActive = dto.isActive;
     }
@@ -178,7 +197,7 @@ export class SubscriptionService {
     }
 
     if (notificationMethod !== NotificationMethod.EMAIL) {
-        throw new BadRequestException('Admin can only create subscriptions with "email" notification method.');
+      throw new BadRequestException('Admin can only create subscriptions with "email" notification method.');
     }
 
     let subscription = await this.subscriptionRepository.findOne({
@@ -212,7 +231,7 @@ export class SubscriptionService {
     if (dto.notificationMethod !== undefined) {
       subscription.notificationMethod = dto.notificationMethod;
     }
-    
+
     if (dto.isActive !== undefined) {
       subscription.isActive = dto.isActive;
     }
