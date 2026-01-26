@@ -167,6 +167,10 @@ describe('SchedulesService', () => {
     // Debug: Log the mock query builder
     console.log('Mock query builder created:', Object.keys(mockQueryBuilder));
 
+    const mockManager = {
+      createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SchedulesService,
@@ -179,12 +183,14 @@ describe('SchedulesService', () => {
             delete: jest.fn(),
             create: jest.fn(),
             createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
+            manager: mockManager,
           },
         },
         {
           provide: getRepositoryToken(Program),
           useValue: {
             findOne: jest.fn(),
+            createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
           },
         },
         {

@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, FindOneOptions, FindManyOptions, FindOptionsWhere } from 'typeorm';
 import { Schedule } from './schedules.entity';
 import { Program } from '../programs/programs.entity';
+import { Channel } from '../channels/channels.entity';
 import { CreateScheduleDto, CreateBulkSchedulesDto } from './dto/create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { YoutubeLiveService } from '../youtube/youtube-live.service';
@@ -91,15 +92,15 @@ export class SchedulesService {
     let lockAcquired = false;
     
     if (!skipCache) {
-      // Try to acquire lock (10 second TTL)
-      lockAcquired = await this.redisService.setNX(lockKey, '1', 10);
+      // Try to acquire lock (20 second TTL) - Increased to handle potentially slow DB queries
+      lockAcquired = await this.redisService.setNX(lockKey, '1', 20);
       
       if (!lockAcquired) {
         // Another request is fetching - wait and retry from cache
         this.logger.debug(`Lock held by another request, waiting for cache...`);
         
-        // Wait up to 8 seconds for the other request to populate cache
-        for (let i = 0; i < 80; i++) {
+        // Wait up to 15 seconds for the other request to populate cache
+        for (let i = 0; i < 150; i++) {
           await new Promise(r => setTimeout(r, 100));
           schedules = await this.redisService.get<Schedule[]>(cacheKey);
           if (schedules) {
@@ -113,7 +114,7 @@ export class SchedulesService {
         }
         
         // Timeout waiting for cache - log warning and proceed to fetch
-        this.logger.warn(`Lock timeout after 8s, proceeding to fetch`);
+        this.logger.warn(`Lock timeout after 15s, proceeding to fetch`);
       }
     }
 
@@ -147,23 +148,73 @@ export class SchedulesService {
   private async fetchSchedulesFromDatabase(dayOfWeek?: string, relations?: string[]): Promise<Schedule[]> {
     const dbStart = Date.now();
     
-    // Optimized query structure - selective panelists join to prevent data explosion
-    // CRITICAL: This preserves ALL data - channel, program, panelists, categories
+    // 1. Fetch core Schedule + Program + Channel data
+    // Avoids Cartesian product of Categories * Panelists
     const queryBuilder = this.schedulesRepository
       .createQueryBuilder('schedule')
       .leftJoinAndSelect('schedule.program', 'program')
       .leftJoinAndSelect('program.channel', 'channel')
-      .leftJoinAndSelect('channel.categories', 'categories') // Preserve categories
-      .leftJoin('program.panelists', 'panelists')
-      .addSelect(['panelists.id', 'panelists.name']) // Only select id and name to prevent data explosion
-      .orderBy('schedule.start_time', 'ASC')
-      .addOrderBy('panelists.id', 'ASC');
+      .orderBy('schedule.start_time', 'ASC');
     
     if (dayOfWeek) {
       queryBuilder.where('schedule.day_of_week = :dayOfWeek', { dayOfWeek });
     }
     
     const schedules = await queryBuilder.getMany();
+
+    if (schedules.length > 0) {
+      try {
+        // 2. Fetch Categories for Channels (to avoid Cartesian product)
+        const channelIds = [...new Set(schedules.map(s => s.program?.channel?.id).filter(id => !!id))];
+        if (channelIds.length > 0) {
+          const channelsWithCategories = await this.schedulesRepository.manager
+            .createQueryBuilder(Channel, 'channel')
+            .leftJoinAndSelect('channel.categories', 'category')
+            .where('channel.id IN (:...ids)', { ids: channelIds })
+            .getMany();
+
+          const channelMap = new Map(channelsWithCategories.map(c => [c.id, c]));
+
+          // Attach categories back to schedules
+          for (const schedule of schedules) {
+            if (schedule.program?.channel?.id) {
+              const fullChannel = channelMap.get(schedule.program.channel.id);
+              if (fullChannel) {
+                schedule.program.channel.categories = fullChannel.categories;
+              }
+            }
+          }
+        }
+
+        // 3. Fetch Panelists for Programs (to avoid Cartesian product)
+        const programIds = [...new Set(schedules.map(s => s.program?.id).filter(id => !!id))];
+        if (programIds.length > 0) {
+          const programsWithPanelists = await this.programsRepository
+            .createQueryBuilder('program')
+            .leftJoin('program.panelists', 'panelist')
+            .addSelect(['program.id', 'panelist.id', 'panelist.name']) // Select minimal data
+            .where('program.id IN (:...ids)', { ids: programIds })
+            .orderBy('panelist.id', 'ASC')
+            .getMany();
+
+          const programMap = new Map(programsWithPanelists.map(p => [p.id, p]));
+
+          // Attach panelists back to schedules
+          for (const schedule of schedules) {
+            if (schedule.program?.id) {
+              const fullProgram = programMap.get(schedule.program.id);
+              if (fullProgram) {
+                schedule.program.panelists = fullProgram.panelists;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        this.logger.error('Error fetching related data (categories/panelists):', err);
+        // Continue with partially populated schedules rather than failing completely
+      }
+    }
+
     const dbQueryTime = Date.now() - dbStart;
     this.logger.debug(`DB query: ${schedules.length} schedules (${dbQueryTime}ms)`);
     
