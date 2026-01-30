@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { StreamerLiveStatusService } from './streamer-live-status.service';
 import { RedisService } from '../redis/redis.service';
 import { StreamerLiveStatusCache } from './interfaces/streamer-live-status-cache.interface';
@@ -13,6 +14,10 @@ describe('StreamerLiveStatusService', () => {
     del: jest.fn(),
   };
 
+  const mockConfigService = {
+    get: jest.fn().mockReturnValue('mock-kick-token'),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -20,6 +25,10 @@ describe('StreamerLiveStatusService', () => {
         {
           provide: RedisService,
           useValue: mockRedisService,
+        },
+        {
+          provide: ConfigService,
+          useValue: mockConfigService,
         },
       ],
     }).compile();
