@@ -12,10 +12,12 @@ export class CreateBannerDto {
   @IsString()
   description?: string;
 
-  @ApiProperty({ description: 'Legacy banner image URL (fallback)' })
+  @ApiPropertyOptional({ description: 'Legacy banner image URL (fallback). Can be empty if device-specific URLs are provided.' })
+  @IsOptional()
   @IsString()
+  @ValidateIf((o) => o.image_url && o.image_url.length > 0)
   @IsUrl()
-  image_url: string;
+  image_url?: string;
 
   @ApiPropertyOptional({ description: 'Desktop image URL (recommended 1920x400)' })
   @IsOptional()
@@ -29,7 +31,7 @@ export class CreateBannerDto {
   @IsUrl()
   image_url_mobile?: string;
 
-  @ApiPropertyOptional({ 
+  @ApiPropertyOptional({
     description: 'Link type',
     enum: LinkType,
     default: LinkType.NONE
@@ -44,7 +46,7 @@ export class CreateBannerDto {
   @ValidateIf((o) => o.link_type && o.link_type !== LinkType.NONE)
   link_url?: string;
 
-  @ApiPropertyOptional({ 
+  @ApiPropertyOptional({
     description: 'Whether the banner is enabled',
     default: true
   })
@@ -64,7 +66,7 @@ export class CreateBannerDto {
   @IsDateString()
   end_date?: string;
 
-  @ApiPropertyOptional({ 
+  @ApiPropertyOptional({
     description: 'Display order (lower numbers appear first)',
     default: 0
   })
@@ -72,7 +74,7 @@ export class CreateBannerDto {
   @IsInt()
   display_order?: number;
 
-  @ApiPropertyOptional({ 
+  @ApiPropertyOptional({
     description: 'Whether this is a fixed banner (always active, no date restrictions)',
     default: false
   })
@@ -80,7 +82,7 @@ export class CreateBannerDto {
   @IsBoolean()
   is_fixed?: boolean;
 
-  @ApiPropertyOptional({ 
+  @ApiPropertyOptional({
     description: 'Priority for ordering (lower numbers appear first). Timed banners always appear before fixed banners.',
     default: 0
   })
@@ -88,7 +90,7 @@ export class CreateBannerDto {
   @IsInt()
   priority?: number;
 
-  @ApiPropertyOptional({ 
+  @ApiPropertyOptional({
     description: 'Banner type',
     enum: BannerType,
     default: BannerType.NEWS
