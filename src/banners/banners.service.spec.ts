@@ -4,6 +4,7 @@ import { Repository, QueryFailedError } from 'typeorm';
 import { BannersService } from './banners.service';
 import { Banner, LinkType, BannerType } from './banners.entity';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { RedisService } from '../redis/redis.service';
 
 describe('BannersService', () => {
   let service: BannersService;
@@ -19,6 +20,13 @@ describe('BannersService', () => {
     findByIds: jest.fn(),
     update: jest.fn(),
     createQueryBuilder: jest.fn(),
+  };
+
+  const mockRedisService = {
+    get: jest.fn(),
+    set: jest.fn(),
+    del: jest.fn(),
+    keys: jest.fn(),
   };
 
   const mockBanner: Banner = {
@@ -42,12 +50,22 @@ describe('BannersService', () => {
   };
 
   beforeEach(async () => {
+    // Mock global fetch for revalidation calls
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      text: jest.fn().mockResolvedValue('{}'),
+    });
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BannersService,
         {
           provide: getRepositoryToken(Banner),
           useValue: mockRepository,
+        },
+        {
+          provide: RedisService,
+          useValue: mockRedisService,
         },
       ],
     }).compile();

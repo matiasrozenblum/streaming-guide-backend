@@ -17,7 +17,12 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
-## [1.21.5] - 2025-01-21
+## [1.21.6] - 2026-01-28
+
+### Changed
+- Fixed banner loading after a long time without refreshing
+
+## [1.21.5] - 2026-01-21
 
 ### Added
 - Added order for streamers
@@ -28,17 +33,17 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ### Fixed
 - Fixed SSE events being deleted when backoffice detected them
 
-## [1.21.4] - 2025-01-17
+## [1.21.4] - 2026-01-17
 
 ### Changed
 - Now we have two images for banners, web and mobile
 
-## [1.21.3] - 2025-01-15
+## [1.21.3] - 2026-01-15
 
 ### Fixed
 - Now filtering invisible programs and channels before attempting youtube fetch and escalating not found
 
-## [1.21.2] - 2025-01-14
+## [1.21.2] - 2026-01-14
 
 ### Added
 - Added upload banner logic
