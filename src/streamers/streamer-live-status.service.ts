@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { RedisService } from '@/redis/redis.service';
 import { StreamerLiveStatusCache, StreamerServiceStatus } from './interfaces/streamer-live-status-cache.interface';
 import { StreamerService } from './streamers.entity';
@@ -11,7 +12,10 @@ export class StreamerLiveStatusService {
   // This is a safety net in case webhooks fail; normally webhooks will update/clear the cache
   private readonly DEFAULT_TTL = 604800; // 7 days
 
-  constructor(private readonly redisService: RedisService) { }
+  constructor(
+    private readonly redisService: RedisService,
+    private readonly configService: ConfigService,
+  ) { }
 
   /**
    * Update live status for a specific streamer and service
@@ -129,21 +133,56 @@ export class StreamerLiveStatusService {
     try {
       this.logger.log(`🔄 Syncing live status from Kick API for streamer ${streamerId} (${username})`);
 
-      // Call Kick's public channels API
-      const response = await fetch(`https://kick.com/api/v2/channels/${username}`, {
-        headers: {
-          'User-Agent': 'StreamingGuide/1.0',
-          'Accept': 'application/json',
-        },
-      });
+      // Try public API first, then fallback to authenticated if 403
+      let data: any;
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        this.logger.warn(`⚠️ Failed to fetch Kick channel data for ${username}: ${response.status} - ${errorText}`);
-        return { success: false, isLive: false, error: `Kick API returned ${response.status}` };
+      try {
+        // Call Kick's public channels API
+        const response = await fetch(`https://kick.com/api/v2/channels/${username}`, {
+          headers: {
+            'User-Agent': 'StreamingGuide/1.0',
+            'Accept': 'application/json',
+          },
+        });
+
+        if (response.status === 403 || response.status === 401) {
+          // Try with authentication
+          throw new Error('Public API blocked, trying authenticated');
+        }
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          this.logger.warn(`⚠️ Failed to fetch Kick channel data for ${username}: ${response.status} - ${errorText}`);
+          return { success: false, isLive: false, error: `Kick API returned ${response.status}` };
+        }
+
+        data = await response.json();
+      } catch (publicError) {
+        // Try with Kick app access token
+        const appAccessToken = this.configService.get<string>('KICK_APP_ACCESS_TOKEN');
+        if (!appAccessToken) {
+          this.logger.warn('⚠️ No KICK_APP_ACCESS_TOKEN configured, cannot retry with authentication');
+          return { success: false, isLive: false, error: 'Kick API returned 403 and no access token configured' };
+        }
+
+        this.logger.log('🔑 Retrying Kick API with authentication...');
+        const authResponse = await fetch(`https://kick.com/api/v2/channels/${username}`, {
+          headers: {
+            'Authorization': `Bearer ${appAccessToken}`,
+            'User-Agent': 'StreamingGuide/1.0',
+            'Accept': 'application/json',
+          },
+        });
+
+        if (!authResponse.ok) {
+          const errorText = await authResponse.text();
+          this.logger.warn(`⚠️ Authenticated request also failed for ${username}: ${authResponse.status} - ${errorText}`);
+          return { success: false, isLive: false, error: `Kick API returned ${authResponse.status}` };
+        }
+
+        data = await authResponse.json();
+        this.logger.log('✅ Successfully fetched Kick data with authentication');
       }
-
-      const data = await response.json();
 
       // Kick API returns livestream object when live, or livestream.is_live boolean
       // The API structure: { livestream: { is_live: boolean } } or { livestream: null }
