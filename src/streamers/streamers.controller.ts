@@ -16,7 +16,7 @@ export class StreamersController {
   constructor(
     private readonly streamersService: StreamersService,
     private readonly supabaseStorageService: SupabaseStorageService,
-  ) {}
+  ) { }
 
   @Get()
   @UseGuards(JwtAuthGuard)
@@ -140,6 +140,15 @@ export class StreamersController {
   @ApiResponse({ status: 200, description: 'Webhook subscription status' })
   async getWebhookStatus(@Param('id') id: number): Promise<any> {
     return this.streamersService.getWebhookStatus(id);
+  }
+
+  @Post(':id/sync-live-status')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Sync live status from Kick/Twitch APIs (useful when webhooks miss events)' })
+  @ApiResponse({ status: 200, description: 'Live status synced successfully' })
+  async syncLiveStatus(@Param('id') id: number): Promise<any> {
+    return this.streamersService.syncLiveStatus(id);
   }
 }
 
