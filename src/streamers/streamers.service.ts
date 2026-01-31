@@ -72,6 +72,7 @@ export class StreamersService {
 
   /**
    * Get visible streamers with live status included
+   * Live streamers are shown first, maintaining their relative order within each group
    */
   async findAllVisibleWithLiveStatus(): Promise<Array<Streamer & { is_live?: boolean }>> {
     const streamers = await this.findAllVisible();
@@ -81,13 +82,19 @@ export class StreamersService {
     const liveStatuses = await this.streamerLiveStatusService.getLiveStatuses(streamerIds);
 
     // Merge live status into streamers
-    return streamers.map(streamer => {
+    const streamersWithStatus = streamers.map(streamer => {
       const liveStatus = liveStatuses.get(streamer.id);
       return {
         ...streamer,
         is_live: liveStatus?.isLive || false,
       };
     });
+
+    // Sort: live streamers first, then offline, maintaining relative order within each group
+    const liveStreamers = streamersWithStatus.filter(s => s.is_live);
+    const offlineStreamers = streamersWithStatus.filter(s => !s.is_live);
+
+    return [...liveStreamers, ...offlineStreamers];
   }
 
   async findOne(id: number): Promise<Streamer> {

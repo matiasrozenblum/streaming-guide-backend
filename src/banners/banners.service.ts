@@ -150,9 +150,12 @@ export class BannersService {
    * Create a new banner
    */
   async create(createBannerDto: CreateBannerDto): Promise<Banner> {
+    this.logger.log(`Creating banner with data: ${JSON.stringify(createBannerDto)}`);
+
     // Validate link_url is provided when link_type is not 'none'
     if (createBannerDto.link_type && createBannerDto.link_type !== 'none') {
       if (!createBannerDto.link_url) {
+        this.logger.error('Validation failed: link_url is required when link_type is not "none"');
         throw new BadRequestException('link_url is required when link_type is not "none"');
       }
     }
@@ -169,12 +172,14 @@ export class BannersService {
         const endDate = new Date(createBannerDto.end_date);
 
         if (startDate >= endDate) {
+          this.logger.error(`Validation failed: start_date (${startDate}) must be before end_date (${endDate})`);
           throw new BadRequestException('start_date must be before end_date');
         }
       }
 
       // Timed banners require both start and end dates
       if (!createBannerDto.start_date || !createBannerDto.end_date) {
+        this.logger.error(`Validation failed: start_date and end_date are required for timed banners. Got start_date=${createBannerDto.start_date}, end_date=${createBannerDto.end_date}, is_fixed=${createBannerDto.is_fixed}`);
         throw new BadRequestException('start_date and end_date are required for timed banners');
       }
     }
