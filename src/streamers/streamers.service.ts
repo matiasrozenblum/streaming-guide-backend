@@ -524,5 +524,43 @@ export class StreamersService {
       results,
     };
   }
+
+  /**
+   * Verify and renew Kick webhook subscriptions for a streamer
+   */
+  async verifyKickSubscription(streamerId: number): Promise<{
+    streamer: { id: number; name: string };
+    services: Array<{
+      username: string;
+      wasActive: boolean;
+      renewed: boolean;
+      subscriptionId: string | null;
+      error?: string;
+    }>;
+  }> {
+    const streamer = await this.findOne(streamerId);
+    const results: Array<{
+      username: string;
+      wasActive: boolean;
+      renewed: boolean;
+      subscriptionId: string | null;
+      error?: string;
+    }> = [];
+
+    for (const service of streamer.services) {
+      if (service.service === 'kick') {
+        const username = service.username || extractKickUsername(service.url);
+        if (username) {
+          const result = await this.webhookSubscriptionService.verifyAndRenewKickSubscription(username);
+          results.push({ username, ...result });
+        }
+      }
+    }
+
+    return {
+      streamer: { id: streamer.id, name: streamer.name },
+      services: results,
+    };
+  }
 }
 
