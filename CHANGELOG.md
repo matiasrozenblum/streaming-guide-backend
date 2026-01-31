@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.21.8] - 2026-01-31
+
+### Added
+- Added order for streamers
+
 ## [1.21.7] - 2026-01-30
 
 ### Added
