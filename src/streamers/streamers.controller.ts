@@ -150,5 +150,14 @@ export class StreamersController {
   async syncLiveStatus(@Param('id') id: number): Promise<any> {
     return this.streamersService.syncLiveStatus(id);
   }
+
+  @Post(':id/verify-kick-subscription')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Verify and renew Kick webhook subscription if inactive' })
+  @ApiResponse({ status: 200, description: 'Kick subscription verification result' })
+  async verifyKickSubscription(@Param('id') id: number): Promise<any> {
+    return this.streamersService.verifyKickSubscription(id);
+  }
 }
 

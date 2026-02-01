@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { RedisService } from '../redis/redis.service';
@@ -14,7 +15,7 @@ export class WebhookSubscriptionService {
     private readonly redisService: RedisService,
     private readonly configService: ConfigService,
     private readonly tokenRefreshService: TokenRefreshService,
-  ) {}
+  ) { }
 
   /**
    * Subscribe to Twitch EventSub webhook for a streamer
@@ -164,6 +165,47 @@ export class WebhookSubscriptionService {
   }
 
   /**
+   * Get Kick webhook subscriptions
+   * According to Kick docs: https://docs.kick.com/events/subscribe-to-events
+   * GET /public/v1/events/subscriptions - Lists all active subscriptions
+   * Optional query param: broadcaster_user_id to filter by specific channel
+   */
+  async getKickSubscriptions(broadcasterUserId?: number): Promise<any[]> {
+    const appAccessToken = await this.tokenRefreshService.getKickAccessToken();
+
+    if (!appAccessToken) {
+      this.logger.warn('⚠️ Kick app access token not configured');
+      return [];
+    }
+
+    try {
+      const url = broadcasterUserId
+        ? `https://api.kick.com/public/v1/events/subscriptions?broadcaster_user_id=${broadcasterUserId}`
+        : 'https://api.kick.com/public/v1/events/subscriptions';
+
+      this.logger.log(`📋 Fetching Kick subscriptions${broadcasterUserId ? ` for broadcaster ${broadcasterUserId}` : ''}...`);
+
+      const response = await axios.get(url, {
+        headers: {
+          'Authorization': `Bearer ${appAccessToken}`,
+          'Accept': 'application/json',
+        },
+      });
+
+      const subscriptions = response.data?.data || [];
+      this.logger.log(`✅ Found ${subscriptions.length} Kick subscriptions`);
+      return subscriptions;
+    } catch (error: any) {
+      this.logger.error('❌ Error fetching Kick subscriptions:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+      });
+      return [];
+    }
+  }
+
+  /**
    * Subscribe to Kick webhook for a streamer
    * According to Kick docs: https://docs.kick.com/events/subscribe-to-events
    * Uses app access token to subscribe to events for a specific channel
@@ -236,7 +278,7 @@ export class WebhookSubscriptionService {
           this.logger.warn(`⚠️ Response data:`, JSON.stringify(userResponse.data, null, 2));
           return null;
         }
-        
+
         this.logger.log(`✅ Found user ID ${channelUserId} for ${kickUsername}`);
       }
 
@@ -248,7 +290,7 @@ export class WebhookSubscriptionService {
       this.logger.log(`🔔 Subscribing to Kick webhook for ${kickUsername} (user ID: ${channelUserId})`);
       this.logger.log(`🔑 Using app access token: ${appAccessToken ? appAccessToken.substring(0, 10) + '...' : 'MISSING'}`);
       this.logger.log(`📡 Webhook URL (configured in dashboard): ${webhookUrl}`);
-      
+
       // Kick API format: { broadcaster_user_id, events: [{ name, version }], method: "webhook" }
       // Note: webhook_url is NOT in the request - it's configured in the dashboard
       // According to Kick docs: https://docs.kick.com/events/event-types
@@ -264,9 +306,9 @@ export class WebhookSubscriptionService {
         ],
         method: 'webhook',
       };
-      
+
       this.logger.log(`📤 Subscription payload:`, JSON.stringify(subscriptionPayload, null, 2));
-      
+
       // Correct endpoint: https://api.kick.com/public/v1/events/subscriptions
       const subscriptionResponse = await axios.post(
         'https://api.kick.com/public/v1/events/subscriptions',
@@ -285,12 +327,12 @@ export class WebhookSubscriptionService {
       const responseData = subscriptionResponse.data?.data;
       if (responseData && Array.isArray(responseData) && responseData.length > 0) {
         const firstResult = responseData[0];
-        
+
         if (firstResult.error) {
           this.logger.error(`❌ Kick subscription error: ${firstResult.error}`);
           return null;
         }
-        
+
         const subscriptionId = firstResult.subscription_id;
         if (subscriptionId) {
           // Store subscription ID in Redis
@@ -338,7 +380,7 @@ export class WebhookSubscriptionService {
       // Get subscription ID from Redis
       const key = `${this.SUBSCRIPTION_PREFIX}kick:${kickUsername}`;
       const subscription = await this.redisService.get(key) as any;
-      
+
       if (!subscription || !subscription.subscriptionId) {
         this.logger.warn(`⚠️ No subscription found for Kick username: ${kickUsername}`);
         await this.redisService.del(key);
@@ -410,6 +452,84 @@ export class WebhookSubscriptionService {
     return subscriptions;
   }
 
+  /**
+   * Verify if Kick subscription is active and renew if needed
+   * This checks with Kick's API if the subscription actually exists
+   * and re-subscribes if it doesn't
+   */
+  async verifyAndRenewKickSubscription(kickUsername: string, userId?: number): Promise<{
+    wasActive: boolean;
+    renewed: boolean;
+    subscriptionId: string | null;
+    error?: string;
+  }> {
+    this.logger.log(`🔍 Verifying Kick subscription for ${kickUsername}...`);
+
+    // First, get the user ID if not provided
+    let channelUserId = userId;
+    if (!channelUserId) {
+      const clientId = this.configService.get<string>('KICK_CLIENT_ID');
+      const appAccessToken = await this.tokenRefreshService.getKickAccessToken();
+
+      if (!appAccessToken) {
+        return { wasActive: false, renewed: false, subscriptionId: null, error: 'No access token' };
+      }
+
+      try {
+        const userResponse = await axios.get(
+          `https://kick.com/api/v2/channels/${kickUsername}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${appAccessToken}`,
+              'User-Agent': 'StreamingGuide/1.0',
+              'Accept': 'application/json',
+            },
+          }
+        );
+        channelUserId = userResponse.data?.user_id || userResponse.data?.user?.id || userResponse.data?.id;
+      } catch (error: any) {
+        this.logger.error(`❌ Failed to fetch user ID for ${kickUsername}:`, error.message);
+        return { wasActive: false, renewed: false, subscriptionId: null, error: `Failed to fetch user ID: ${error.message}` };
+      }
+    }
+
+    if (!channelUserId) {
+      return { wasActive: false, renewed: false, subscriptionId: null, error: 'Could not determine user ID' };
+    }
+
+    // Get active subscriptions from Kick's API
+    const activeSubscriptions = await this.getKickSubscriptions(channelUserId);
+
+    // Check if there's an active livestream.status.updated subscription
+    const hasActiveSubscription = activeSubscriptions.some(
+      sub => sub.event === 'livestream.status.updated' && sub.broadcaster_user_id === channelUserId
+    );
+
+    if (hasActiveSubscription) {
+      this.logger.log(`✅ Kick subscription for ${kickUsername} is active`);
+      const existingSub = activeSubscriptions.find(sub => sub.event === 'livestream.status.updated');
+      return { wasActive: true, renewed: false, subscriptionId: existingSub?.subscription_id || null };
+    }
+
+    // Subscription not active - need to renew
+    this.logger.warn(`⚠️ Kick subscription for ${kickUsername} is NOT active - renewing...`);
+
+    // Clear old Redis entry
+    const key = `${this.SUBSCRIPTION_PREFIX}kick:${kickUsername}`;
+    await this.redisService.del(key);
+
+    // Re-subscribe
+    const newSubscriptionId = await this.subscribeToKickWebhook(kickUsername, channelUserId);
+
+    if (newSubscriptionId) {
+      this.logger.log(`✅ Successfully renewed Kick subscription for ${kickUsername}: ${newSubscriptionId}`);
+      return { wasActive: false, renewed: true, subscriptionId: newSubscriptionId };
+    } else {
+      this.logger.error(`❌ Failed to renew Kick subscription for ${kickUsername}`);
+      return { wasActive: false, renewed: false, subscriptionId: null, error: 'Failed to create new subscription' };
+    }
+  }
+
   private extractTwitchUsername(url: string): string | null {
     const match = url.match(/(?:twitch\.tv\/)([^/?]+)/);
     if (match && match[1] && match[1] !== 'videos' && match[1] !== 'directory') {
@@ -424,6 +544,78 @@ export class WebhookSubscriptionService {
       return match[1];
     }
     return null;
+  }
+
+  /**
+   * Cron job to automatically verify and renew expired Kick subscriptions
+   * Runs every 4 hours to ensure webhooks stay active
+   */
+  @Cron(CronExpression.EVERY_4_HOURS)
+  async renewExpiredKickSubscriptions(): Promise<void> {
+    this.logger.log('🔄 Starting automatic Kick subscription renewal check...');
+
+    try {
+      // Get all Kick subscription keys from Redis
+      const keys = await this.redisService.client.keys(`${this.SUBSCRIPTION_PREFIX}kick:*`);
+
+      if (keys.length === 0) {
+        this.logger.log('ℹ️ No Kick subscriptions found in Redis');
+        return;
+      }
+
+      this.logger.log(`📋 Found ${keys.length} Kick subscriptions to verify`);
+
+      let renewed = 0;
+      let active = 0;
+      let failed = 0;
+
+      for (const key of keys) {
+        try {
+          // Extract username from key: webhook:subscription:kick:username
+          const username = key.replace(`${this.SUBSCRIPTION_PREFIX}kick:`, '');
+
+          // Get stored data
+          const storedData = await this.redisService.get(key) as any;
+          const userId = storedData?.userId;
+
+          if (!userId) {
+            this.logger.warn(`⚠️ No userId stored for ${username}, skipping verification`);
+            continue;
+          }
+
+          // Check with Kick API
+          const apiSubscriptions = await this.getKickSubscriptions(userId);
+          const hasActiveSubscription = apiSubscriptions.some(
+            sub => sub.event === 'livestream.status.updated'
+          );
+
+          if (hasActiveSubscription) {
+            active++;
+          } else {
+            // Subscription is not active - renew it
+            this.logger.warn(`⚠️ Subscription for ${username} is NOT active - renewing...`);
+            const newSubId = await this.subscribeToKickWebhook(username, userId);
+            if (newSubId) {
+              renewed++;
+              this.logger.log(`✅ Renewed subscription for ${username}: ${newSubId}`);
+            } else {
+              failed++;
+              this.logger.error(`❌ Failed to renew subscription for ${username}`);
+            }
+          }
+
+          // Small delay to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (error: any) {
+          failed++;
+          this.logger.error(`❌ Error checking subscription for key ${key}:`, error.message);
+        }
+      }
+
+      this.logger.log(`🔄 Kick subscription renewal complete: ${active} active, ${renewed} renewed, ${failed} failed`);
+    } catch (error: any) {
+      this.logger.error('❌ Error in renewal cron job:', error.message);
+    }
   }
 }
 
