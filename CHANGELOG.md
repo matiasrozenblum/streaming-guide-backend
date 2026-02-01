@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.22.0] - 2026-01-31
+
+### Fixed
+- Fixed kick webhook not working
+
 ## [1.21.8] - 2026-01-31
 
 ### Added

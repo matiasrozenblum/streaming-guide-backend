@@ -460,15 +460,38 @@ export class StreamersService {
           const redisKey = `webhook:subscription:kick:${username}`;
           const redisSub = await this.redisService.get(redisKey) as any;
           const subscriptionId = redisSub?.subscriptionId;
+          const userId = redisSub?.userId;
 
           if (subscriptionId) {
-            // Kick doesn't have a public API to check subscription status
-            // So we just report what we have in Redis
+            // Verify with Kick API if we have the user ID
+            let verified = false;
+            let apiStatus = 'unknown';
+
+            if (userId) {
+              try {
+                const apiSubscriptions = await this.webhookSubscriptionService.getKickSubscriptions(userId);
+                const matchingSub = apiSubscriptions.find(
+                  sub => sub.subscription_id === subscriptionId || sub.event === 'livestream.status.updated'
+                );
+                if (matchingSub) {
+                  verified = true;
+                  apiStatus = 'enabled';
+                } else if (apiSubscriptions.length > 0) {
+                  // Has subscriptions but different ID - subscription was recreated
+                  apiStatus = 'different_id';
+                } else {
+                  apiStatus = 'not_found';
+                }
+              } catch (error) {
+                apiStatus = 'api_error';
+              }
+            }
+
             status.kick.push({
               username,
               subscriptionId,
-              status: 'unknown', // Kick API doesn't provide status endpoint
-              fromApi: false,
+              status: apiStatus,
+              fromApi: verified,
             });
           }
         }
@@ -522,6 +545,44 @@ export class StreamersService {
     return {
       streamer: { id: streamer.id, name: streamer.name },
       results,
+    };
+  }
+
+  /**
+   * Verify and renew Kick webhook subscriptions for a streamer
+   */
+  async verifyKickSubscription(streamerId: number): Promise<{
+    streamer: { id: number; name: string };
+    services: Array<{
+      username: string;
+      wasActive: boolean;
+      renewed: boolean;
+      subscriptionId: string | null;
+      error?: string;
+    }>;
+  }> {
+    const streamer = await this.findOne(streamerId);
+    const results: Array<{
+      username: string;
+      wasActive: boolean;
+      renewed: boolean;
+      subscriptionId: string | null;
+      error?: string;
+    }> = [];
+
+    for (const service of streamer.services) {
+      if (service.service === 'kick') {
+        const username = service.username || extractKickUsername(service.url);
+        if (username) {
+          const result = await this.webhookSubscriptionService.verifyAndRenewKickSubscription(username);
+          results.push({ username, ...result });
+        }
+      }
+    }
+
+    return {
+      streamer: { id: streamer.id, name: streamer.name },
+      services: results,
     };
   }
 }
