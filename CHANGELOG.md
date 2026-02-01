@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.22.1] - 2026-02-02
+
+### Changed
+- Changed similarity threshold from 80% to 70%
+
 ## [1.22.0] - 2026-01-31
 
 ### Fixed
