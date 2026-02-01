@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { RedisService } from '../redis/redis.service';
@@ -543,6 +544,78 @@ export class WebhookSubscriptionService {
       return match[1];
     }
     return null;
+  }
+
+  /**
+   * Cron job to automatically verify and renew expired Kick subscriptions
+   * Runs every 4 hours to ensure webhooks stay active
+   */
+  @Cron(CronExpression.EVERY_4_HOURS)
+  async renewExpiredKickSubscriptions(): Promise<void> {
+    this.logger.log('🔄 Starting automatic Kick subscription renewal check...');
+
+    try {
+      // Get all Kick subscription keys from Redis
+      const keys = await this.redisService.client.keys(`${this.SUBSCRIPTION_PREFIX}kick:*`);
+
+      if (keys.length === 0) {
+        this.logger.log('ℹ️ No Kick subscriptions found in Redis');
+        return;
+      }
+
+      this.logger.log(`📋 Found ${keys.length} Kick subscriptions to verify`);
+
+      let renewed = 0;
+      let active = 0;
+      let failed = 0;
+
+      for (const key of keys) {
+        try {
+          // Extract username from key: webhook:subscription:kick:username
+          const username = key.replace(`${this.SUBSCRIPTION_PREFIX}kick:`, '');
+
+          // Get stored data
+          const storedData = await this.redisService.get(key) as any;
+          const userId = storedData?.userId;
+
+          if (!userId) {
+            this.logger.warn(`⚠️ No userId stored for ${username}, skipping verification`);
+            continue;
+          }
+
+          // Check with Kick API
+          const apiSubscriptions = await this.getKickSubscriptions(userId);
+          const hasActiveSubscription = apiSubscriptions.some(
+            sub => sub.event === 'livestream.status.updated'
+          );
+
+          if (hasActiveSubscription) {
+            active++;
+          } else {
+            // Subscription is not active - renew it
+            this.logger.warn(`⚠️ Subscription for ${username} is NOT active - renewing...`);
+            const newSubId = await this.subscribeToKickWebhook(username, userId);
+            if (newSubId) {
+              renewed++;
+              this.logger.log(`✅ Renewed subscription for ${username}: ${newSubId}`);
+            } else {
+              failed++;
+              this.logger.error(`❌ Failed to renew subscription for ${username}`);
+            }
+          }
+
+          // Small delay to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (error: any) {
+          failed++;
+          this.logger.error(`❌ Error checking subscription for key ${key}:`, error.message);
+        }
+      }
+
+      this.logger.log(`🔄 Kick subscription renewal complete: ${active} active, ${renewed} renewed, ${failed} failed`);
+    } catch (error: any) {
+      this.logger.error('❌ Error in renewal cron job:', error.message);
+    }
   }
 }
 
