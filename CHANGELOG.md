@@ -22,7 +22,32 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ### Added
 - Added native app support
 
-## [1.21.5] - 2025-01-21
+## [1.22.1] - 2026-02-02
+
+### Changed
+- Changed similarity threshold from 80% to 70%
+
+## [1.22.0] - 2026-01-31
+
+### Fixed
+- Fixed kick webhook not working
+
+## [1.21.8] - 2026-01-31
+
+### Added
+- Added order for streamers
+
+## [1.21.7] - 2026-01-30
+
+### Added
+- Added manual sync for streamers
+
+## [1.21.6] - 2026-01-28
+
+### Changed
+- Fixed banner loading after a long time without refreshing
+
+## [1.21.5] - 2026-01-21
 
 ### Added
 - Added order for streamers
@@ -33,17 +58,17 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ### Fixed
 - Fixed SSE events being deleted when backoffice detected them
 
-## [1.21.4] - 2025-01-17
+## [1.21.4] - 2026-01-17
 
 ### Changed
 - Now we have two images for banners, web and mobile
 
-## [1.21.3] - 2025-01-15
+## [1.21.3] - 2026-01-15
 
 ### Fixed
 - Now filtering invisible programs and channels before attempting youtube fetch and escalating not found
 
-## [1.21.2] - 2025-01-14
+## [1.21.2] - 2026-01-14
 
 ### Added
 - Added upload banner logic

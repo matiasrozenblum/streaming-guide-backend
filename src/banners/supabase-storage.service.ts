@@ -17,7 +17,7 @@ export class SupabaseStorageService {
     }
 
     this.supabase = createClient(supabaseUrl, supabaseKey);
-    this.logger.log('Supabase Storage client initialized');
+    this.logger.log(`Supabase Storage client initialized for: ${supabaseUrl}`);
   }
 
   /**
@@ -64,7 +64,8 @@ export class SupabaseStorageService {
         });
 
       if (error) {
-        this.logger.error('Supabase Storage upload error:', error);
+        this.logger.error(`Supabase Storage upload error: ${JSON.stringify(error)}`);
+        this.logger.error(`Upload details - bucket: ${bucketName}, filename: ${filename}, contentType: ${file.mimetype}, size: ${file.size}`);
         throw new BadRequestException(`Failed to upload image: ${error.message}`);
       }
 
