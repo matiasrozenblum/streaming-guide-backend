@@ -15,13 +15,13 @@ import { SchedulesService } from '../schedules/schedules.service';
 // Mock dayjs
 jest.mock('dayjs', () => {
   const originalDayjs = jest.requireActual('dayjs');
-  
+
   const mockDayjs = jest.fn((date?: any) => {
     if (date) return originalDayjs(date);
     // Return a fixed date for consistent testing - Friday 10:00 AM
     return originalDayjs('2023-12-01T10:00:00.000Z');
   }) as any;
-  
+
   // Mock the tz method to return an object with add, second, millisecond, and format methods
   mockDayjs.tz = jest.fn(() => ({
     add: jest.fn(() => ({
@@ -34,11 +34,11 @@ jest.mock('dayjs', () => {
     })),
     format: jest.fn(() => '10:10:00'),
   }));
-  
+
   // Copy all static methods and properties
   Object.setPrototypeOf(mockDayjs, originalDayjs);
   Object.assign(mockDayjs, originalDayjs);
-  
+
   return mockDayjs;
 });
 
@@ -171,12 +171,12 @@ describe('PushScheduler', () => {
     pushSubscriptionRepository = module.get<Repository<PushSubscriptionEntity>>(
       getRepositoryToken(PushSubscriptionEntity)
     );
-    
+
     // Mock logger methods
     jest.spyOn(scheduler['logger'], 'log').mockImplementation();
     jest.spyOn(scheduler['logger'], 'debug').mockImplementation();
     jest.spyOn(scheduler['logger'], 'error').mockImplementation();
-    
+
     // Setup default SchedulesService mock to prevent undefined errors
     const schedulesService = module.get(SchedulesService);
     jest.spyOn(schedulesService, 'findAll').mockResolvedValue([]);
@@ -196,7 +196,7 @@ describe('PushScheduler', () => {
       await scheduler.handleNotificationsCron();
 
       expect(mockUserSubscriptionRepository.find).toHaveBeenCalledWith({
-        where: { 
+        where: {
           program: { id: In([mockProgram.id]) },
           isActive: true,
         },
@@ -206,9 +206,13 @@ describe('PushScheduler', () => {
       expect(mockPushService.sendNotification).toHaveBeenCalledWith(
         mockUser.devices[0].pushSubscriptions[0],
         {
-          title: mockProgram.name,
+          title: `${mockProgram.name} en ${mockChannel.name}`,
+          body: 'Comienza en 10 minutos!',
+          data: {
+            programId: String(mockProgram.id),
+            channelHandle: '',
+          },
           options: {
-            body: `¡En 10 minutos comienza ${mockProgram.name}!`,
             icon: '/img/logo-192x192.png',
           },
         }
@@ -270,13 +274,13 @@ describe('PushScheduler', () => {
       expect(mockPushService.sendNotification).toHaveBeenCalledWith(
         expect.any(Object),
         expect.objectContaining({
-          title: mockProgram.name,
+          title: `${mockProgram.name} en ${mockChannel.name}`,
         })
       );
       expect(mockPushService.sendNotification).toHaveBeenCalledWith(
         expect.any(Object),
         expect.objectContaining({
-          title: program2.name,
+          title: `${program2.name} en ${mockChannel.name}`,
         })
       );
     });
@@ -477,7 +481,7 @@ describe('PushScheduler', () => {
       expect(mockPushService.sendNotification).toHaveBeenCalledWith(
         expect.any(Object),
         expect.objectContaining({
-          title: programWithoutChannel.name,
+          title: `${programWithoutChannel.name} en Canal desconocido`,
         })
       );
     });

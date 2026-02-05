@@ -34,7 +34,7 @@ export class PushScheduler {
     private readonly subsRepo: Repository<PushSubscriptionEntity>,
     private readonly configService: ConfigService,
     private readonly schedulesService: SchedulesService,
-  ) {}
+  ) { }
 
   @Cron(CronExpression.EVERY_MINUTE, {
     timeZone: 'America/Argentina/Buenos_Aires',
@@ -54,7 +54,7 @@ export class PushScheduler {
       liveStatus: false,
       skipCache: false, // ✅ IMPORTANTE: Usar cache para reducir carga en DB
     });
-    
+
     // Filtrar schedules que empiezan en 10 min
     const dueSchedules = allSchedules.filter(s => s.start_time === timeString);
     if (dueSchedules.length === 0) {
@@ -78,7 +78,7 @@ export class PushScheduler {
 
     // 4) Traer subscripciones de usuarios para esos programas
     const allUserSubscriptions = await this.userSubscriptionRepo.find({
-      where: { 
+      where: {
         program: { id: In(programIds) },
         isActive: true,
       },
@@ -102,14 +102,14 @@ export class PushScheduler {
         this.logger.log(`⏸️ Notificaciones suspendidas para canal ${channelHandle} por holiday/flag`);
         continue;
       }
-      
+
       // subscripciones para este programa específico
       const programSubscriptions = allUserSubscriptions.filter(sub => sub.program.id === program.id);
-      
+
       for (const subscription of programSubscriptions) {
         const user = subscription.user;
         const notificationMethod = subscription.notificationMethod;
-        
+
         // Send push notifications
         if (notificationMethod === NotificationMethod.PUSH || notificationMethod === NotificationMethod.BOTH) {
           if (user.devices && user.devices.length > 0) {
@@ -117,10 +117,16 @@ export class PushScheduler {
               if (device.pushSubscriptions && device.pushSubscriptions.length > 0) {
                 for (const pushSub of device.pushSubscriptions) {
                   try {
+                    const timeString = schedule.start_time.substring(0, 5); // "22:00"
+
                     await this.pushService.sendNotification(pushSub, {
-                      title,
+                      title: `${title} en ${channelName}`,
+                      body: `Comienza en 10 minutos!`,
+                      data: {
+                        programId: String(program.id),
+                        channelHandle: program.channel?.handle || ''
+                      },
                       options: {
-                        body: `¡En 10 minutos comienza ${title}!`, 
                         icon: '/img/logo-192x192.png',
                       },
                     });
@@ -133,7 +139,7 @@ export class PushScheduler {
             }
           }
         }
-        
+
         // Send email notifications
         if (notificationMethod === NotificationMethod.EMAIL || notificationMethod === NotificationMethod.BOTH) {
           try {
@@ -144,14 +150,14 @@ export class PushScheduler {
               schedule.end_time,
               program.description,
             );
-            
+
             await this.emailService.sendEmail({
               to: user.email,
               subject: `¡${program.name} comienza en 10 minutos!`,
               html: emailHtml,
               emailType: 'program_notification',
             });
-            
+
             this.logger.log(`✅ Email notification enviado a usuario ${user.email} para "${title}"`);
           } catch (err) {
             this.logger.error(`❌ Falló email notification a usuario ${user.email}`, err as any);

@@ -9,6 +9,7 @@ import { Channel } from '../channels/channels.entity';
 import { NotFoundException, ConflictException } from '@nestjs/common';
 import { Device } from './device.entity';
 import { PushSubscriptionEntity } from '../push/push-subscription.entity';
+import { DeviceService } from './device.service';
 
 describe('SubscriptionService', () => {
   let service: SubscriptionService;
@@ -107,11 +108,26 @@ describe('SubscriptionService', () => {
         },
         {
           provide: getRepositoryToken(PushSubscriptionEntity),
-          useValue: {},
+          useValue: {
+            findOne: jest.fn().mockResolvedValue(null),
+            create: jest.fn().mockImplementation((data) => data),
+            save: jest.fn().mockResolvedValue({}),
+          },
         },
         {
           provide: getRepositoryToken(User),
           useValue: mockUserRepository,
+        },
+        {
+          provide: DeviceService,
+          useValue: {
+            findOrCreateDevice: jest.fn().mockResolvedValue({
+              id: 'device-1',
+              deviceId: 'test-device-id',
+              deviceName: 'Test Device',
+              deviceType: 'mobile',
+            }),
+          },
         },
       ],
     }).compile();

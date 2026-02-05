@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [2.0.0] - 2025-01-25
+
+### Added
+- Added native app support
+
 ## [1.22.1] - 2026-02-02
 
 ### Changed
