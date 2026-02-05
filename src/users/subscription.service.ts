@@ -12,9 +12,9 @@ import { v4 as uuidv4 } from 'uuid';
 export interface CreateSubscriptionDto {
   programId: number;
   notificationMethod: NotificationMethod;
-  endpoint: string;
-  p256dh: string;
-  auth: string;
+  endpoint?: string;
+  p256dh?: string;
+  auth?: string;
 }
 
 export interface UpdateSubscriptionDto {
@@ -77,10 +77,15 @@ export class SubscriptionService {
   private async createPushSubscription(
     user: User,
     subscription: UserSubscription,
-    endpoint: string,
-    p256dh: string,
-    auth: string
+    endpoint?: string,
+    p256dh?: string,
+    auth?: string
   ): Promise<void> {
+
+    if (!endpoint) {
+      // Cannot create push subscription without endpoint
+      return;
+    }
     let device = await this.deviceRepository.findOne({
       where: { user: { id: user.id } },
       relations: ['pushSubscriptions'],
@@ -108,16 +113,16 @@ export class SubscriptionService {
       const pushSubscription = this.pushSubscriptionRepository.create({
         device,
         endpoint,
-        p256dh,
-        auth,
+        p256dh: p256dh || null,
+        auth: auth || null,
       });
       await this.pushSubscriptionRepository.save(pushSubscription);
       console.log(`✅ [SubscriptionService] Push subscription created for device ${device.deviceId}`);
     } else {
       // Update existing push subscription with new keys if they differ
-      if (existingPushSubscription.p256dh !== p256dh || existingPushSubscription.auth !== auth) {
-        existingPushSubscription.p256dh = p256dh;
-        existingPushSubscription.auth = auth;
+      if (existingPushSubscription.p256dh !== (p256dh || null) || existingPushSubscription.auth !== (auth || null)) {
+        existingPushSubscription.p256dh = p256dh || null;
+        existingPushSubscription.auth = auth || null;
         await this.pushSubscriptionRepository.save(existingPushSubscription);
         console.log(`🔄 [SubscriptionService] Push subscription updated for device ${device.deviceId}`);
       }

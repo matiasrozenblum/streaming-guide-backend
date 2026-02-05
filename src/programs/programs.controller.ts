@@ -17,7 +17,7 @@ export class ProgramsController {
   constructor(
     private readonly programsService: ProgramsService,
     private readonly subscriptionService: SubscriptionService,
-  ) {}
+  ) { }
 
   @Get()
   @ApiOperation({ summary: 'Get all programs' })
@@ -46,7 +46,7 @@ export class ProgramsController {
       user.id,
       Number(id),
     );
-    
+
     return {
       isSubscribed,
       programId: Number(id),
@@ -63,15 +63,15 @@ export class ProgramsController {
   ) {
     const user = req.user;
     const { notificationMethod = NotificationMethod.BOTH, endpoint, p256dh, auth } = body;
-    
+
     const subscription = await this.subscriptionService.createSubscription(user, {
       programId: Number(id),
       notificationMethod,
-      endpoint: endpoint || '',
-      p256dh: p256dh || '',
-      auth: auth || '',
+      endpoint: endpoint,
+      p256dh: p256dh,
+      auth: auth,
     });
-    
+
     return {
       message: 'Successfully subscribed to program',
       subscription: {

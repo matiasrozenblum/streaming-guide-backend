@@ -107,6 +107,13 @@ export class PushService {
   }
 
   async sendNotification(entity: PushSubscriptionEntity, payload: any) {
+    // Validate integrity - Endpoint is mandatory for BOTH Native and Web
+    if (!entity.endpoint || entity.endpoint.trim() === '') {
+      console.warn(`⚠️ Subscription ${entity.id} has no endpoint. Deleting...`);
+      await this.repo.delete({ id: entity.id });
+      return;
+    }
+
     if (!entity.p256dh || !entity.auth) {
       // Native Push (Firebase)
       console.log('🔥 Sending NATIVE push notification to device', entity.device?.deviceId || 'unknown');
@@ -120,11 +127,6 @@ export class PushService {
           data: payload.data || {},
         });
       } catch (error) {
-        if (!entity.endpoint) {
-          console.error('❌ CRITICAL: Attempting to send Native Push with EMPTY or NULL endpoint! DELETING SUBSCRIPTION.', JSON.stringify(entity));
-          await this.repo.delete({ id: entity.id });
-          return;
-        }
         if (error.code === 'messaging/registration-token-not-registered' || error.code === 'messaging/invalid-payload') {
           console.warn(`⚠️ Token invalid (${error.code}), deleting subscription:`, entity.endpoint);
           await this.repo.delete({ id: entity.id });
@@ -140,7 +142,16 @@ export class PushService {
       endpoint: entity.endpoint,
       keys: { p256dh: entity.p256dh, auth: entity.auth },
     };
-    return webPush.sendNotification(pushSub, JSON.stringify(payload));
+    try {
+      return await webPush.sendNotification(pushSub, JSON.stringify(payload));
+    } catch (error) {
+      if (error.statusCode === 404 || error.statusCode === 410) {
+        console.log('Subscription has expired or is no longer valid:', error.statusCode);
+        await this.repo.delete({ id: entity.id });
+        return;
+      }
+      throw error;
+    }
   }
 
   async scheduleForProgram(
