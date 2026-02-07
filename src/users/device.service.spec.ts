@@ -36,6 +36,9 @@ describe('DeviceService', () => {
     createdAt: new Date(),
     updatedAt: new Date(),
     pushSubscriptions: [],
+    platform: 'web',
+    fcmToken: 'test-fcm-token',
+    appVersion: '1.0.0',
   };
 
   const mockRepository = {
