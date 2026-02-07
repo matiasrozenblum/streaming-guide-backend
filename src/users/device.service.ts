@@ -10,31 +10,36 @@ export class DeviceService {
   constructor(
     @InjectRepository(Device)
     private deviceRepository: Repository<Device>,
-  ) {}
+  ) { }
 
   async findOrCreateDevice(
     user: User,
     userAgent: string,
     deviceId?: string,
+    platform?: 'ios' | 'android' | 'web',
+    fcmToken?: string,
+    appVersion?: string,
   ): Promise<Device> {
     console.log('🔍 [DeviceService] findOrCreateDevice called with:', {
       userId: user.id,
       userEmail: user.email,
       userAgent,
       deviceId,
+      platform,
+      appVersion,
       timestamp: new Date().toISOString()
     });
 
     // Generate device ID if not provided
     const finalDeviceId = deviceId || uuidv4();
     console.log('📱 [DeviceService] Using device ID:', finalDeviceId);
-    
+
     // Try to find existing device first
     let device = await this.deviceRepository.findOne({
       where: { deviceId: finalDeviceId },
       relations: ['user'],
     });
-    
+
     if (device) {
       console.log('✅ [DeviceService] Found existing device:', {
         deviceId: device.deviceId,
@@ -43,6 +48,12 @@ export class DeviceService {
         newUserId: user.id,
         lastSeen: device.lastSeen
       });
+
+      // Update basic fields
+      device.userAgent = userAgent;
+      if (platform) device.platform = platform;
+      if (fcmToken) device.fcmToken = fcmToken;
+      if (appVersion) device.appVersion = appVersion;
 
       // Update last seen and associate with user if not already associated
       if (!device.user || device.user.id !== user.id) {
@@ -59,8 +70,7 @@ export class DeviceService {
           console.log('⏭️ [DeviceService] Skipping lastSeen update (updated recently)');
         }
       }
-      
-      device.userAgent = userAgent;
+
       const updatedDevice = await this.deviceRepository.save(device);
       console.log('✅ [DeviceService] Updated existing device');
       return updatedDevice;
@@ -74,7 +84,10 @@ export class DeviceService {
         deviceId: finalDeviceId,
         user,
         userAgent,
-        deviceType: this.detectDeviceType(userAgent),
+        deviceType: deviceId ? 'mobile' : this.detectDeviceType(userAgent), // Assume mobile if deviceId provided manually, else detect
+        platform: platform || 'web',
+        fcmToken,
+        appVersion,
         deviceName: this.generateDeviceName(userAgent),
         lastSeen: new Date(),
       });
@@ -92,7 +105,7 @@ export class DeviceService {
       return savedDevice;
     } catch (error) {
       console.error('❌ [DeviceService] Error creating device:', error);
-      
+
       // If unique constraint violation, try to find the device again
       // This handles race conditions where another request created the device
       if (error.code === '23505') { // PostgreSQL unique violation
@@ -101,7 +114,7 @@ export class DeviceService {
           where: { deviceId: finalDeviceId },
           relations: ['user'],
         });
-        
+
         if (device) {
           console.log('✅ [DeviceService] Found device after constraint violation:', device.deviceId);
           // Update the existing device
@@ -123,7 +136,7 @@ export class DeviceService {
           console.error('❌ [DeviceService] Device not found even after constraint violation');
         }
       }
-      
+
       throw error;
     }
   }

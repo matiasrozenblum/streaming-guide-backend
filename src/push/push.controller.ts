@@ -5,7 +5,7 @@ import { ScheduleNotificationDto } from './dto/schedule-notification.dto';
 
 @Controller('push')
 export class PushController {
-  constructor(private svc: PushService) {}
+  constructor(private svc: PushService) { }
 
   @Get('vapidPublicKey')
   getVapidPublicKey() {
@@ -15,6 +15,16 @@ export class PushController {
   @Post('subscribe')
   subscribe(@Body() dto: CreatePushSubscriptionDto) {
     return this.svc.create(dto);
+  }
+
+  @Post('fcm/subscribe')
+  subscribeFCM(@Body() body: { deviceId: string; fcmToken: string; platform: 'ios' | 'android' | 'web' }) {
+    return this.svc.createFCM(body.deviceId, body.fcmToken, body.platform);
+  }
+
+  @Post('fcm/unsubscribe')
+  unsubscribeFCM(@Body() body: { deviceId: string }) {
+    return this.svc.unsubscribeFCM(body.deviceId);
   }
 
   @Post('schedule')
