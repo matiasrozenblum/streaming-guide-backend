@@ -34,10 +34,10 @@ export class Device {
   @Column({ name: 'platform', nullable: true })
   platform: string; // 'ios', 'android', 'web'
 
-  @Column({ name: 'fcm_token', nullable: true })
-  fcmToken: string | null;
+  @Column({ name: 'fcm_token', nullable: true, type: 'text' })
+  fcmToken: string;
 
-  @Column({ name: 'app_version', nullable: true })
+  @Column({ name: 'app_version', nullable: true, type: 'text' })
   appVersion: string;
 
   @ManyToOne(() => User, (user) => user.devices, { onDelete: 'CASCADE' })
