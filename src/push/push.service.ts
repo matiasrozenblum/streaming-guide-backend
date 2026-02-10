@@ -199,6 +199,12 @@ export class PushService {
             body: notificationBody,
           },
           data: payload.data || {},
+          android: {
+            priority: 'high',
+            notification: {
+              channelId: 'streaming_alerts',
+            },
+          },
         });
         return true;
       } catch (error) {
