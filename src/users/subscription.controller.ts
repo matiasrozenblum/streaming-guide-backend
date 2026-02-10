@@ -179,19 +179,20 @@ export class SubscriptionController {
   @Post('device')
   async registerDevice(
     @Request() req: any,
-    @Body() body: { deviceId?: string },
+    @Body() body: { deviceId?: string; platform?: 'ios' | 'android' | 'web'; fcmToken?: string; appVersion?: string },
   ) {
     const userFromToken = req.user;
-    
+
     console.log('🔍 [SubscriptionController] device registration called with:', {
       userId: userFromToken.id,
       userType: userFromToken.type,
       userRole: userFromToken.role,
       deviceId: body.deviceId,
+      platform: body.platform,
       userAgent: req.headers['user-agent'],
       timestamp: new Date().toISOString()
     });
-    
+
     // Check if this is a legacy authentication token
     if (userFromToken.type === 'public' && (typeof userFromToken.id === 'string' || userFromToken.id === 'public')) {
       console.log('⏭️ [SubscriptionController] Skipping device registration for legacy user');
@@ -200,7 +201,7 @@ export class SubscriptionController {
         message: 'Please register with a user account to use device features',
       };
     }
-    
+
     // For real users, fetch the actual User entity from database
     const user = await this.usersService.findOne(userFromToken.id);
     if (!user) {
@@ -210,18 +211,21 @@ export class SubscriptionController {
         message: 'Unable to register device for this user',
       };
     }
-    
+
     console.log('✅ [SubscriptionController] User found, proceeding with device registration');
     const userAgent = req.headers['user-agent'] || 'Unknown';
-    
+
     const device = await this.deviceService.findOrCreateDevice(
       user,
       userAgent,
       body.deviceId,
+      body.platform,
+      body.fcmToken,
+      body.appVersion,
     );
-    
+
     console.log('✅ [SubscriptionController] Device registration completed:', device.deviceId);
-    
+
     return {
       deviceId: device.deviceId,
       deviceName: device.deviceName,
