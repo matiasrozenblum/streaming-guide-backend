@@ -22,17 +22,24 @@ export class PushService {
     // Initialize Firebase Admin SDK
     if (admin.apps.length === 0) {
       try {
-        // Try to load from environment variable first (best practice)
+        // Option 1: JSON string in env var (recommended for cloud platforms like Railway)
+        const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT;
+        // Option 2: File path in env var
         const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
 
-        if (serviceAccountPath) {
+        if (serviceAccountJson) {
+          const serviceAccount = JSON.parse(serviceAccountJson);
+          admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount),
+          });
+          console.log('✅ Firebase Admin initialized with FIREBASE_SERVICE_ACCOUNT');
+        } else if (serviceAccountPath) {
           admin.initializeApp({
             credential: admin.credential.cert(serviceAccountPath),
           });
           console.log('✅ Firebase Admin initialized with GOOGLE_APPLICATION_CREDENTIALS');
         } else {
-          // Fallback: try to load local key file if it exists (dev only)
-          // We can hardcode the path to the root file provided by user for now
+          // Fallback: local key file (dev only)
           const keyPath = require('path').resolve(process.cwd(), 'backend-firebase-key.json');
           if (require('fs').existsSync(keyPath)) {
             admin.initializeApp({
