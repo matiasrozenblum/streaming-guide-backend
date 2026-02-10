@@ -110,7 +110,10 @@ export class PushService {
 
   // Method to handle Native FCM Subscriptions
   async createFCM(deviceId: string, fcmToken: string, platform: 'ios' | 'android' | 'web') {
+    console.log(`📱 [PushService] createFCM called: deviceId=${deviceId}, platform=${platform}, tokenPrefix=${fcmToken?.substring(0, 20)}...`);
+
     if (!fcmToken || fcmToken.trim() === '') {
+      console.error('❌ [PushService] FCM Token is empty');
       throw new Error('FCM Token cannot be empty');
     }
 
@@ -119,14 +122,18 @@ export class PushService {
     });
 
     if (!device) {
+      console.error(`❌ [PushService] Device not found for deviceId=${deviceId}`);
       throw new Error('Device not found');
     }
+
+    console.log(`✅ [PushService] Device found: id=${device.id}, deviceId=${device.deviceId}`);
 
     // Update device platform/token if needed
     if (device.platform !== platform || device.fcmToken !== fcmToken) {
       device.platform = platform;
       device.fcmToken = fcmToken;
       await this.deviceRepository.save(device);
+      console.log(`✅ [PushService] Device updated with new FCM token and platform`);
     }
 
     // Check if subscription exists
@@ -136,11 +143,13 @@ export class PushService {
     });
 
     if (existing) {
+      console.log(`✅ [PushService] FCM subscription already exists for this device/token`);
       return existing;
     }
 
     // Create new FCM subscription
     // For Native, we use endpoint = fcmToken, and NULL keys
+    console.log(`🆕 [PushService] Creating new FCM subscription (p256dh=null, auth=null)`);
     const sub = this.repo.create({
       device,
       endpoint: fcmToken,
@@ -180,11 +189,14 @@ export class PushService {
       // Native Push (Firebase)
       console.log('🔥 Sending NATIVE push notification to device', entity.device?.deviceId || 'unknown');
       try {
+        // Handle both payload formats: { title, body } and { title, options: { body } }
+        const notificationBody = payload.body || payload.options?.body || '';
+        const notificationTitle = payload.title || 'La Guia del Streaming';
         await admin.messaging().send({
           token: entity.endpoint, // Endpoint stores the FCM token for native
           notification: {
-            title: payload.title,
-            body: payload.body,
+            title: notificationTitle,
+            body: notificationBody,
           },
           data: payload.data || {},
         });

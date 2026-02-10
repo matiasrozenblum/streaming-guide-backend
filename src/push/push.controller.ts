@@ -1,10 +1,11 @@
-import { Controller, Post, Body, Get } from '@nestjs/common';
+import { Controller, Post, Body, Get, Logger } from '@nestjs/common';
 import { PushService } from './push.service';
 import { CreatePushSubscriptionDto } from './dto/create-push-subscription.dto';
 import { ScheduleNotificationDto } from './dto/schedule-notification.dto';
 
 @Controller('push')
 export class PushController {
+  private readonly logger = new Logger(PushController.name);
   constructor(private svc: PushService) { }
 
   @Get('vapidPublicKey')
@@ -19,6 +20,7 @@ export class PushController {
 
   @Post('fcm/subscribe')
   subscribeFCM(@Body() body: { deviceId: string; fcmToken: string; platform: 'ios' | 'android' | 'web' }) {
+    this.logger.log(`📱 FCM subscribe request: deviceId=${body.deviceId}, platform=${body.platform}, tokenPrefix=${body.fcmToken?.substring(0, 20)}...`);
     return this.svc.createFCM(body.deviceId, body.fcmToken, body.platform);
   }
 

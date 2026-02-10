@@ -112,10 +112,15 @@ export class PushScheduler {
         
         // Send push notifications
         if (notificationMethod === NotificationMethod.PUSH || notificationMethod === NotificationMethod.BOTH) {
+          this.logger.log(`📱 User ${user.email}: ${user.devices?.length || 0} devices found`);
           if (user.devices && user.devices.length > 0) {
             for (const device of user.devices) {
+              const subsCount = device.pushSubscriptions?.length || 0;
+              this.logger.log(`  📱 Device ${device.deviceId} (${device.platform || 'unknown'}): ${subsCount} push subscriptions, fcmToken=${device.fcmToken ? 'yes' : 'no'}`);
               if (device.pushSubscriptions && device.pushSubscriptions.length > 0) {
                 for (const pushSub of device.pushSubscriptions) {
+                  const isNative = !pushSub.p256dh && !pushSub.auth;
+                  this.logger.log(`    🔔 Subscription type: ${isNative ? 'NATIVE/FCM' : 'WEB'}, endpoint prefix: ${pushSub.endpoint?.substring(0, 30)}...`);
                   try {
                     await this.pushService.sendNotification(pushSub, {
                       title,
