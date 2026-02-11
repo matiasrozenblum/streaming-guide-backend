@@ -43,6 +43,18 @@ export class ChannelsController {
     return this.channelsService.getTodaySchedules(deviceId, liveStatusBool, raw);
   }
 
+  @Get('with-schedules/today/v2')
+  @ApiOperation({ summary: 'V2: Get today\'s schedules with batched Redis reads (fast)' })
+  @ApiResponse({ status: 200, description: 'Today\'s schedules with optimized live status' })
+  async getTodaySchedulesV2(
+    @Query('deviceId') deviceId?: string,
+    @Query('live_status') liveStatus?: string,
+    @Query('raw') raw?: string
+  ) {
+    const liveStatusBool = liveStatus === 'true' ? true : liveStatus === 'false' ? false : undefined;
+    return this.channelsService.getTodaySchedulesV2(deviceId, liveStatusBool, raw);
+  }
+
   @Get('with-schedules/week')
   @ApiOperation({ summary: 'Get full week schedules (optimized for background loading)' })
   @ApiResponse({ status: 200, description: 'Full week schedules for all channels' })

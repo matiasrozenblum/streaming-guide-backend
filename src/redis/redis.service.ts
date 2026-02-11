@@ -64,6 +64,16 @@ export class RedisService implements OnModuleInit {
     return result === 'OK';
   }
 
+  /**
+   * Get multiple keys at once (single round trip)
+   * Returns array of parsed values in same order as keys, null for missing keys
+   */
+  async mget<T>(keys: string[]): Promise<(T | null)[]> {
+    if (keys.length === 0) return [];
+    const values = await this.client.mget(...keys);
+    return values.map(v => (v ? JSON.parse(v) : null));
+  }
+
   async del(key: string): Promise<void> {
     await this.client.del(key);
   }
