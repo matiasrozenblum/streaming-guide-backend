@@ -242,11 +242,11 @@ export class OptimizedSchedulesService {
             stream_count: 0,
           };
         } else if (isCurrentlyLive) {
-          // Cache says not live — trust it (background cron will update)
-          // V2: no async fetch trigger, just use cache value
+          // Program is in its scheduled time but cache says no live stream.
+          // Match V1 behavior: mark as live (optimistic) — background cron will update.
           enrichedSchedule.program = {
             ...schedule.program,
-            is_live: false,
+            is_live: true,
             stream_url: schedule.program.stream_url || schedule.program.youtube_url,
             live_streams: [],
             stream_count: 0,
