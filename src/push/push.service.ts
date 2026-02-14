@@ -222,7 +222,11 @@ export class PushService {
           // Handle both payload formats: { title, body } and { title, options: { body } }
           const notificationBody = payload.body || payload.options?.body || '';
           const notificationTitle = payload.title || 'La Guia del Streaming';
-          await admin.messaging().send({
+          if (!this.firebaseApp) {
+            console.error('❌ Firebase Admin app is not initialized. Cannot send native push.');
+            return false;
+          }
+          await this.firebaseApp.messaging().send({
             token: entity.endpoint, // Endpoint stores the FCM token for native
             notification: {
               title: notificationTitle,
