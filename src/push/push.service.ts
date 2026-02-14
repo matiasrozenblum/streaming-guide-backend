@@ -226,20 +226,40 @@ export class PushService {
             console.error('❌ Firebase Admin app is not initialized. Cannot send native push.');
             return false;
           }
-          await this.firebaseApp.messaging().send({
-            token: entity.endpoint, // Endpoint stores the FCM token for native
+
+          console.log(`ℹ️ [PushService] Sending via app: ${this.firebaseApp.name} | Project: ${this.firebaseApp.options.projectId}`);
+
+          const message: admin.messaging.Message = {
+            token: entity.endpoint,
             notification: {
               title: notificationTitle,
               body: notificationBody,
             },
             data: payload.data || {},
+            // Android-specific config
             android: {
               priority: 'high',
               notification: {
                 channelId: 'streaming_alerts',
               },
             },
-          });
+            // APNs (iOS) specific config
+            apns: {
+              payload: {
+                aps: {
+                  alert: {
+                    title: notificationTitle,
+                    body: notificationBody,
+                  },
+                  sound: 'default',
+                  badge: 1,
+                  contentAvailable: true,
+                },
+              },
+            },
+          };
+
+          await this.firebaseApp.messaging().send(message);
           return true;
         } catch (error) {
           if (attempt === 1) {
