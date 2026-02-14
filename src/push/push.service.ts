@@ -214,33 +214,45 @@ export class PushService {
     if (!entity.p256dh || !entity.auth) {
       // Native Push (Firebase)
       console.log('🔥 Sending NATIVE push notification to device', entity.device?.deviceId || 'unknown');
-      try {
-        // Handle both payload formats: { title, body } and { title, options: { body } }
-        const notificationBody = payload.body || payload.options?.body || '';
-        const notificationTitle = payload.title || 'La Guia del Streaming';
-        await admin.messaging().send({
-          token: entity.endpoint, // Endpoint stores the FCM token for native
-          notification: {
-            title: notificationTitle,
-            body: notificationBody,
-          },
-          data: payload.data || {},
-          android: {
-            priority: 'high',
+
+      const sendNative = async (attempt = 1): Promise<boolean> => {
+        try {
+          // Handle both payload formats: { title, body } and { title, options: { body } }
+          const notificationBody = payload.body || payload.options?.body || '';
+          const notificationTitle = payload.title || 'La Guia del Streaming';
+          await admin.messaging().send({
+            token: entity.endpoint, // Endpoint stores the FCM token for native
             notification: {
-              channelId: 'streaming_alerts',
+              title: notificationTitle,
+              body: notificationBody,
             },
-          },
-        });
-        return true;
-      } catch (error) {
-        if (error.code === 'messaging/registration-token-not-registered' || error.code === 'messaging/invalid-payload') {
-          console.warn(`⚠️ Token invalid (${error.code}), deleting subscription:`, entity.endpoint);
-          await this.repo.delete({ id: entity.id });
+            data: payload.data || {},
+            android: {
+              priority: 'high',
+              notification: {
+                channelId: 'streaming_alerts',
+              },
+            },
+          });
+          return true;
+        } catch (error) {
+          if (attempt === 1) {
+            console.warn(`⚠️ First attempt failed for native push (${error.message}). Retrying...`);
+            await new Promise(r => setTimeout(r, 1000)); // Wait 1s
+            return sendNative(2);
+          }
+
+          if (error.code === 'messaging/registration-token-not-registered' || error.code === 'messaging/invalid-payload') {
+            console.warn(`⚠️ Token invalid (${error.code}), deleting subscription:`, entity.endpoint);
+            await this.repo.delete({ id: entity.id });
+          }
+          console.error(`❌ Failed to send native push (Attempt ${attempt}): ${error.message}`);
+          console.error('Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+          return false;
         }
-        console.error(`❌ Failed to send native push: ${error.message}`);
-        return false;
-      }
+      };
+
+      return sendNative();
     }
 
     // Web Push
