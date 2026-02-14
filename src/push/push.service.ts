@@ -20,65 +20,74 @@ export class PushService {
     private notificationsService: NotificationsService,
   ) {
     // Initialize Firebase Admin SDK
+    // Ensure clean state by checking existing apps
+    if (admin.apps.length > 0) {
+      console.log(`ℹ️ [PushService] Found ${admin.apps.length} existing Firebase apps. Checking credentials compatibility...`);
+      // For debugging purposes, we might want to blow them away to ensure OUR credentials are used
+      // admin.apps.forEach(app => app.delete().catch(() => {}));
+    }
+
     if (admin.apps.length === 0) {
       console.log('🔄 [PushService] Initializing Firebase Admin...');
       try {
-        // Option 1: JSON string in env var (recommended for cloud platforms like Railway)
-        const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT;
-        // Option 2: File path in env var
         const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+        const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT;
 
-        console.log(`ℹ️ [PushService] serviceAccountJson present: ${!!serviceAccountJson}`);
-        console.log(`ℹ️ [PushService] serviceAccountPath: "${serviceAccountPath}"`);
-        console.log(`ℹ️ [PushService] CWD: ${process.cwd()}`);
+        let credential;
+        let projectId;
 
         if (serviceAccountJson) {
           const serviceAccount = JSON.parse(serviceAccountJson);
-          admin.initializeApp({
-            credential: admin.credential.cert(serviceAccount),
-          });
-          console.log('✅ Firebase Admin initialized with FIREBASE_SERVICE_ACCOUNT');
+          credential = admin.credential.cert(serviceAccount);
+          projectId = serviceAccount.project_id;
+          console.log('✅ Loaded credentials from JSON env var');
         } else if (serviceAccountPath) {
-          // Check if file exists
-          // If path starts with " it might be quoted
           const cleanPath = serviceAccountPath.replace(/^"|"$/g, '');
           const resolvePath = require('path').resolve(process.cwd(), cleanPath);
           console.log(`ℹ️ [PushService] Resolving path: ${resolvePath}`);
 
           if (require('fs').existsSync(resolvePath)) {
             try {
-              const serviceAccount = JSON.parse(require('fs').readFileSync(resolvePath, 'utf8'));
-              admin.initializeApp({
-                credential: admin.credential.cert(serviceAccount),
-              });
-              console.log('✅ Firebase Admin initialized with GOOGLE_APPLICATION_CREDENTIALS (file loaded explicitly)');
+              const fileContent = require('fs').readFileSync(resolvePath, 'utf8');
+              const serviceAccount = JSON.parse(fileContent);
+              credential = admin.credential.cert(serviceAccount);
+              projectId = serviceAccount.project_id;
+              console.log(`✅ Loaded credentials from file. Project ID: ${projectId}`);
             } catch (err) {
               console.error('❌ Failed to read/parse service account file:', err.message);
-              throw err;
             }
           } else {
             console.error(`❌ Service account file not found at: ${resolvePath}`);
-            // Try fallback or throw?
-          }
-        } else {
-          // Fallback: local key file (dev only)
-          const keyPath = require('path').resolve(process.cwd(), 'backend-firebase-key.json');
-          console.log(`ℹ️ [PushService] Checking fallback keyPath: ${keyPath}, Exists: ${require('fs').existsSync(keyPath)}`);
-          if (require('fs').existsSync(keyPath)) {
-            admin.initializeApp({
-              credential: admin.credential.cert(require(keyPath)),
-            });
-            console.log('✅ Firebase Admin initialized with backend-firebase-key.json');
-          } else {
-            console.warn('⚠️ Firebase Admin not initialized: No credentials found');
           }
         }
+
+        // Fallback to local default file if nothing else found
+        if (!credential) {
+          const keyPath = require('path').resolve(process.cwd(), 'backend-firebase-key.json');
+          if (require('fs').existsSync(keyPath)) {
+            const serviceAccount = require(keyPath);
+            credential = admin.credential.cert(serviceAccount);
+            projectId = serviceAccount.project_id;
+            console.log('✅ Loaded credentials from fallback backend-firebase-key.json');
+          }
+        }
+
+        if (credential) {
+          admin.initializeApp({
+            credential,
+            projectId: projectId || 'la-guia-del-streaming-ee16f'
+          });
+          console.log('🚀 Firebase Admin initialized successfully!');
+        } else {
+          console.warn('⚠️ Firebase Admin not initialized: No credentials resolved');
+        }
+
       } catch (error) {
         console.error('❌ Failed to initialize Firebase Admin:', error.message);
         console.error(error);
       }
     } else {
-      console.log('ℹ️ [PushService] Firebase Admin already initialized');
+      console.log('ℹ️ [PushService] Firebase Admin already initialized (skipping re-init)');
     }
 
     // Temporarily disable VAPID initialization to prevent startup errors
