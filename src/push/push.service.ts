@@ -7,28 +7,29 @@ import { PushSubscriptionEntity } from './push-subscription.entity';
 import { CreatePushSubscriptionDto } from './dto/create-push-subscription.dto';
 import { NotificationsService } from '@/notifications/notifications.service';
 import { Device } from '../users/device.entity';
+import { ConfigService } from '@nestjs/config'; // Added ConfigService import
 
 @Injectable()
 export class PushService {
+  private firebaseApp: admin.app.App; // Added firebaseApp property
+
   constructor(
     @InjectRepository(PushSubscriptionEntity)
     private repo: Repository<PushSubscriptionEntity>,
-
     @InjectRepository(Device)
     private deviceRepository: Repository<Device>,
-
+    private configService: ConfigService,
     private notificationsService: NotificationsService,
   ) {
-    // Initialize Firebase Admin SDK
-    // Ensure clean state by checking existing apps
-    if (admin.apps.length > 0) {
-      console.log(`ℹ️ [PushService] Found ${admin.apps.length} existing Firebase apps. Checking credentials compatibility...`);
-      // For debugging purposes, we might want to blow them away to ensure OUR credentials are used
-      // admin.apps.forEach(app => app.delete().catch(() => {}));
-    }
+    // Initialize Firebase Admin SDK with a named app to avoid global conflicts
+    const appName = 'streaming-guide-push';
+    const existingApp = admin.apps.find(app => app && app.name === appName);
 
-    if (admin.apps.length === 0) {
-      console.log('🔄 [PushService] Initializing Firebase Admin...');
+    if (existingApp) {
+      this.firebaseApp = existingApp;
+      console.log(`ℹ️ [PushService] Reusing existing Firebase app: ${appName}`);
+    } else {
+      console.log('🔄 [PushService] Initializing new Firebase Admin app...');
       try {
         const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
         const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT;
@@ -73,11 +74,11 @@ export class PushService {
         }
 
         if (credential) {
-          admin.initializeApp({
+          this.firebaseApp = admin.initializeApp({
             credential,
             projectId: projectId || 'la-guia-del-streaming-ee16f'
-          });
-          console.log('🚀 Firebase Admin initialized successfully!');
+          }, appName);
+          console.log(`🚀 Firebase Admin app '${appName}' initialized successfully!`);
         } else {
           console.warn('⚠️ Firebase Admin not initialized: No credentials resolved');
         }
@@ -86,8 +87,6 @@ export class PushService {
         console.error('❌ Failed to initialize Firebase Admin:', error.message);
         console.error(error);
       }
-    } else {
-      console.log('ℹ️ [PushService] Firebase Admin already initialized (skipping re-init)');
     }
 
     // Temporarily disable VAPID initialization to prevent startup errors
@@ -95,19 +94,19 @@ export class PushService {
     const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
     const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
 
-    if (vapidPublicKey && vapidPrivateKey && vapidPublicKey.length > 0 && vapidPrivateKey.length > 0) {
+    if (vapidPublicKey && vapidPrivateKey) { // Changed condition to just check for existence
       try {
         webPush.setVapidDetails(
-          'mailto:hola@laguiadelstreaming.com',
+          'mailto:soporte@laguiadelstreaming.com.ar', // Updated mailto address
           vapidPublicKey,
           vapidPrivateKey,
         );
-        console.log('✅ VAPID keys initialized successfully');
+        console.log('✅ Web Push (VAPID) initialized'); // Updated log message
       } catch (error) {
-        console.warn('⚠️ Failed to initialize VAPID keys:', error.message);
+        console.warn('⚠️ Failed to set VAPID details:', error.message); // Updated warning message
       }
     } else {
-      console.warn('⚠️ VAPID keys not configured - web push notifications will not work');
+      console.warn('⚠️ VAPID keys missing. Web Push will not work.'); // Updated warning message
     }
   }
 
@@ -199,13 +198,7 @@ export class PushService {
     if (!device) return;
 
     // Remove subscriptions for this device that are FCM (null keys)
-    // Actually we should probably remove by endpoint if provided, but typically unsubscribe is for the device.
-    // Or maybe we just clear the fcmToken from device and remove subs?
-    // Spec says POST /push/fcm/unsubscribe with deviceId.
-
-    await this.repo.delete({ device: { id: device.id } }); // Delete all pus subs for this device? Or just native?
-    // For safety let's delete only those with null keys if we want to be specific, but usually a device has one active token.
-    // Let's just delete all for safety as a full unsubscribe.
+    await this.repo.delete({ device: { id: device.id } }); // Delete all pushes for this device for safety
 
     device.fcmToken = null;
     await this.deviceRepository.save(device);
