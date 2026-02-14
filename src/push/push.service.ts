@@ -21,11 +21,16 @@ export class PushService {
   ) {
     // Initialize Firebase Admin SDK
     if (admin.apps.length === 0) {
+      console.log('🔄 [PushService] Initializing Firebase Admin...');
       try {
         // Option 1: JSON string in env var (recommended for cloud platforms like Railway)
         const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT;
         // Option 2: File path in env var
         const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+
+        console.log(`ℹ️ [PushService] serviceAccountJson present: ${!!serviceAccountJson}`);
+        console.log(`ℹ️ [PushService] serviceAccountPath: "${serviceAccountPath}"`);
+        console.log(`ℹ️ [PushService] CWD: ${process.cwd()}`);
 
         if (serviceAccountJson) {
           const serviceAccount = JSON.parse(serviceAccountJson);
@@ -34,13 +39,31 @@ export class PushService {
           });
           console.log('✅ Firebase Admin initialized with FIREBASE_SERVICE_ACCOUNT');
         } else if (serviceAccountPath) {
-          admin.initializeApp({
-            credential: admin.credential.cert(serviceAccountPath),
-          });
-          console.log('✅ Firebase Admin initialized with GOOGLE_APPLICATION_CREDENTIALS');
+          // Check if file exists
+          // If path starts with " it might be quoted
+          const cleanPath = serviceAccountPath.replace(/^"|"$/g, '');
+          const resolvePath = require('path').resolve(process.cwd(), cleanPath);
+          console.log(`ℹ️ [PushService] Resolving path: ${resolvePath}`);
+
+          if (require('fs').existsSync(resolvePath)) {
+            try {
+              const serviceAccount = JSON.parse(require('fs').readFileSync(resolvePath, 'utf8'));
+              admin.initializeApp({
+                credential: admin.credential.cert(serviceAccount),
+              });
+              console.log('✅ Firebase Admin initialized with GOOGLE_APPLICATION_CREDENTIALS (file loaded explicitly)');
+            } catch (err) {
+              console.error('❌ Failed to read/parse service account file:', err.message);
+              throw err;
+            }
+          } else {
+            console.error(`❌ Service account file not found at: ${resolvePath}`);
+            // Try fallback or throw?
+          }
         } else {
           // Fallback: local key file (dev only)
           const keyPath = require('path').resolve(process.cwd(), 'backend-firebase-key.json');
+          console.log(`ℹ️ [PushService] Checking fallback keyPath: ${keyPath}, Exists: ${require('fs').existsSync(keyPath)}`);
           if (require('fs').existsSync(keyPath)) {
             admin.initializeApp({
               credential: admin.credential.cert(require(keyPath)),
@@ -52,7 +75,10 @@ export class PushService {
         }
       } catch (error) {
         console.error('❌ Failed to initialize Firebase Admin:', error.message);
+        console.error(error);
       }
+    } else {
+      console.log('ℹ️ [PushService] Firebase Admin already initialized');
     }
 
     // Temporarily disable VAPID initialization to prevent startup errors
