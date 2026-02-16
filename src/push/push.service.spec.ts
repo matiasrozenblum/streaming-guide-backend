@@ -5,6 +5,7 @@ import { PushService } from './push.service';
 import { PushSubscriptionEntity } from './push-subscription.entity';
 import { Device } from '../users/device.entity';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ConfigService } from '@nestjs/config';
 import * as webpush from 'web-push';
 
 // Mock web-push
@@ -49,6 +50,10 @@ describe('PushService', () => {
     list: jest.fn(),
   };
 
+  const mockConfigService = {
+    get: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -64,6 +69,10 @@ describe('PushService', () => {
         {
           provide: NotificationsService,
           useValue: mockNotificationsService,
+        },
+        {
+          provide: ConfigService,
+          useValue: mockConfigService,
         },
       ],
     }).compile();
@@ -179,8 +188,8 @@ describe('PushService', () => {
       const error = new Error('Push service error');
       mockWebPush.sendNotification.mockRejectedValue(error);
 
-      await expect(service.sendNotification(mockPushSubscription, mockPayload))
-        .rejects.toThrow('Push service error');
+      const result = await service.sendNotification(mockPushSubscription, mockPayload);
+      expect(result).toBe(false);
     });
   });
 
@@ -232,8 +241,7 @@ describe('PushService', () => {
       await service.sendNotificationToDevices(devicesWithSubscriptions, mockPayload);
 
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to send push notification'),
-        error
+        expect.stringContaining('❌ Failed to send web push: Push failed'),
       );
 
       consoleSpy.mockRestore();

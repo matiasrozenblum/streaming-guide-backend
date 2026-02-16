@@ -31,6 +31,15 @@ export class Device {
   @Column({ name: 'last_seen', nullable: true })
   lastSeen: Date;
 
+  @Column({ name: 'platform', nullable: true })
+  platform: string; // 'ios', 'android', 'web'
+
+  @Column({ name: 'fcm_token', nullable: true, type: 'text' })
+  fcmToken: string | null;
+
+  @Column({ name: 'app_version', nullable: true, type: 'text' })
+  appVersion: string | null;
+
   @ManyToOne(() => User, (user) => user.devices, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user: User;

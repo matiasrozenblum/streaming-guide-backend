@@ -36,6 +36,7 @@ import { BannersModule } from './banners/banners.module';
 import { ResourceMonitorService } from './services/resource-monitor.service';
 import { ConnectionPoolMonitorService } from './services/connection-pool-monitor.service';
 import { PerformanceInterceptor } from './interceptors/performance.interceptor';
+import { UpdatesModule } from './updates/updates.module';
 
 @Module({
   imports: [
@@ -108,6 +109,7 @@ import { PerformanceInterceptor } from './interceptors/performance.interceptor';
     BannersModule,
     WebhooksModule,
     RedisModule,
+    UpdatesModule,
   ],
   controllers: [AppController],
   providers: [
@@ -122,4 +124,4 @@ import { PerformanceInterceptor } from './interceptors/performance.interceptor';
     },
   ],
 })
-export class AppModule {}
+export class AppModule { }
