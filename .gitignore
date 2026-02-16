@@ -69,3 +69,5 @@ logs.*.json
 # Otros
 coverage/
 docs/
+# Firebase credentials
+backend-firebase-key.json

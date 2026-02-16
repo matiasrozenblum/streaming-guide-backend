@@ -36,6 +36,9 @@ describe('DeviceService', () => {
     createdAt: new Date(),
     updatedAt: new Date(),
     pushSubscriptions: [],
+    platform: 'web',
+    fcmToken: 'test-fcm-token',
+    appVersion: '1.0.0',
   };
 
   const mockRepository = {
@@ -95,9 +98,12 @@ describe('DeviceService', () => {
         deviceId,
         user: mockUser,
         userAgent,
-        deviceType: 'web',
+        deviceType: 'mobile',
         deviceName: 'Chrome Browser',
         lastSeen: expect.any(Date),
+        platform: 'web',
+        appVersion: undefined,
+        fcmToken: undefined,
       });
       expect(mockRepository.save).toHaveBeenCalled();
       expect(result).toEqual(mockDevice);
@@ -134,4 +140,4 @@ describe('DeviceService', () => {
       expect(result).toEqual(devices);
     });
   });
-}); 
+});

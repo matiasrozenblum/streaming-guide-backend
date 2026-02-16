@@ -107,10 +107,27 @@ export class StreamerLiveStatusService {
    * Returns a map of streamerId -> isLive
    */
   async getAllLiveStatuses(): Promise<Map<number, boolean>> {
-    // This is a simplified version - in production, you might want to scan Redis
-    // For now, we'll rely on individual lookups when needed
-    // This method can be enhanced if we need to fetch all at once
-    return new Map();
+    const result = new Map<number, boolean>();
+    let cursor = '0';
+
+    do {
+      // Scan for keys with the prefix
+      const reply = await this.redisService.client.scan(cursor, 'MATCH', `${this.CACHE_PREFIX}*`, 'COUNT', 100);
+      cursor = reply[0];
+      const keys = reply[1];
+
+      if (keys.length > 0) {
+        // Fetch values for these keys
+        for (const key of keys) {
+          const data = await this.redisService.get<StreamerLiveStatusCache>(key);
+          if (data && data.isLive) {
+            result.set(data.streamerId, true);
+          }
+        }
+      }
+    } while (cursor !== '0');
+
+    return result;
   }
 
   /**

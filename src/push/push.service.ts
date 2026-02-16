@@ -2,40 +2,111 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as webPush from 'web-push';
+import * as admin from 'firebase-admin';
 import { PushSubscriptionEntity } from './push-subscription.entity';
 import { CreatePushSubscriptionDto } from './dto/create-push-subscription.dto';
 import { NotificationsService } from '@/notifications/notifications.service';
 import { Device } from '../users/device.entity';
+import { ConfigService } from '@nestjs/config'; // Added ConfigService import
 
 @Injectable()
 export class PushService {
+  private firebaseApp: admin.app.App; // Added firebaseApp property
+
   constructor(
     @InjectRepository(PushSubscriptionEntity)
     private repo: Repository<PushSubscriptionEntity>,
-
     @InjectRepository(Device)
     private deviceRepository: Repository<Device>,
-
+    private configService: ConfigService,
     private notificationsService: NotificationsService,
   ) {
+    // Initialize Firebase Admin SDK with a named app to avoid global conflicts
+    const appName = 'streaming-guide-push';
+    const existingApp = admin.apps.find(app => app && app.name === appName);
+
+    if (existingApp) {
+      this.firebaseApp = existingApp;
+      console.log(`ℹ️ [PushService] Reusing existing Firebase app: ${appName}`);
+    } else {
+      console.log('🔄 [PushService] Initializing new Firebase Admin app...');
+      try {
+        const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+        const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT;
+
+        let credential;
+        let projectId;
+
+        if (serviceAccountJson) {
+          const serviceAccount = JSON.parse(serviceAccountJson);
+          credential = admin.credential.cert(serviceAccount);
+          projectId = serviceAccount.project_id;
+          console.log('✅ Loaded credentials from JSON env var');
+        } else if (serviceAccountPath) {
+          const cleanPath = serviceAccountPath.replace(/^"|"$/g, '');
+          const resolvePath = require('path').resolve(process.cwd(), cleanPath);
+          console.log(`ℹ️ [PushService] Resolving path: ${resolvePath}`);
+
+          if (require('fs').existsSync(resolvePath)) {
+            try {
+              const fileContent = require('fs').readFileSync(resolvePath, 'utf8');
+              const serviceAccount = JSON.parse(fileContent);
+              credential = admin.credential.cert(serviceAccount);
+              projectId = serviceAccount.project_id;
+              console.log(`✅ Loaded credentials from file. Project ID: ${projectId}`);
+            } catch (err) {
+              console.error('❌ Failed to read/parse service account file:', err.message);
+            }
+          } else {
+            console.error(`❌ Service account file not found at: ${resolvePath}`);
+          }
+        }
+
+        // Fallback to local default file if nothing else found
+        if (!credential) {
+          const keyPath = require('path').resolve(process.cwd(), 'backend-firebase-key.json');
+          if (require('fs').existsSync(keyPath)) {
+            const serviceAccount = require(keyPath);
+            credential = admin.credential.cert(serviceAccount);
+            projectId = serviceAccount.project_id;
+            console.log('✅ Loaded credentials from fallback backend-firebase-key.json');
+          }
+        }
+
+        if (credential) {
+          this.firebaseApp = admin.initializeApp({
+            credential,
+            projectId: projectId || 'la-guia-del-streaming-ee16f'
+          }, appName);
+          console.log(`🚀 Firebase Admin app '${appName}' initialized successfully!`);
+        } else {
+          console.warn('⚠️ Firebase Admin not initialized: No credentials resolved');
+        }
+
+      } catch (error) {
+        console.error('❌ Failed to initialize Firebase Admin:', error.message);
+        console.error(error);
+      }
+    }
+
     // Temporarily disable VAPID initialization to prevent startup errors
     // TODO: Set proper VAPID environment variables
     const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
     const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
-    
-    if (vapidPublicKey && vapidPrivateKey && vapidPublicKey.length > 0 && vapidPrivateKey.length > 0) {
+
+    if (vapidPublicKey && vapidPrivateKey) { // Changed condition to just check for existence
       try {
         webPush.setVapidDetails(
-          'mailto:hola@laguiadelstreaming.com',
+          'mailto:soporte@laguiadelstreaming.com.ar', // Updated mailto address
           vapidPublicKey,
           vapidPrivateKey,
         );
-        console.log('✅ VAPID keys initialized successfully');
+        console.log('✅ Web Push (VAPID) initialized'); // Updated log message
       } catch (error) {
-        console.warn('⚠️ Failed to initialize VAPID keys:', error.message);
+        console.warn('⚠️ Failed to set VAPID details:', error.message); // Updated warning message
       }
     } else {
-      console.warn('⚠️ VAPID keys not configured - push notifications will not work');
+      console.warn('⚠️ VAPID keys missing. Web Push will not work.'); // Updated warning message
     }
   }
 
@@ -53,7 +124,7 @@ export class PushService {
     }
 
     // 1) Si ya existe la misma subscripción, devolvemos la existente
-    const existing = await this.repo.findOne({ 
+    const existing = await this.repo.findOne({
       where: { device: { id: device.id }, endpoint },
       relations: ['device'],
     });
@@ -71,13 +142,163 @@ export class PushService {
     return this.repo.save(sub);
   }
 
-  async sendNotification(entity: PushSubscriptionEntity, payload: any) {
-    console.log('🔥 Sending push notification to device', entity.device?.deviceId || 'unknown');
+  // Method to handle Native FCM Subscriptions
+  async createFCM(deviceId: string, fcmToken: string, platform: 'ios' | 'android' | 'web') {
+    console.log(`📱 [PushService] createFCM called: deviceId=${deviceId}, platform=${platform}, tokenPrefix=${fcmToken?.substring(0, 20)}...`);
+
+    if (!fcmToken || fcmToken.trim() === '') {
+      console.error('❌ [PushService] FCM Token is empty');
+      throw new Error('FCM Token cannot be empty');
+    }
+
+    const device = await this.deviceRepository.findOne({
+      where: { deviceId },
+    });
+
+    if (!device) {
+      console.error(`❌ [PushService] Device not found for deviceId=${deviceId}`);
+      throw new Error('Device not found');
+    }
+
+    console.log(`✅ [PushService] Device found: id=${device.id}, deviceId=${device.deviceId}`);
+
+    // Update device platform/token if needed
+    if (device.platform !== platform || device.fcmToken !== fcmToken) {
+      device.platform = platform;
+      device.fcmToken = fcmToken;
+      await this.deviceRepository.save(device);
+      console.log(`✅ [PushService] Device updated with new FCM token and platform`);
+    }
+
+    // Check if subscription exists
+    const existing = await this.repo.findOne({
+      where: { device: { id: device.id }, endpoint: fcmToken },
+      relations: ['device'],
+    });
+
+    if (existing) {
+      console.log(`✅ [PushService] FCM subscription already exists for this device/token`);
+      return existing;
+    }
+
+    // Create new FCM subscription
+    // For Native, we use endpoint = fcmToken, and NULL keys
+    console.log(`🆕 [PushService] Creating new FCM subscription (p256dh=null, auth=null)`);
+    const sub = this.repo.create({
+      device,
+      endpoint: fcmToken,
+      p256dh: null,
+      auth: null,
+    });
+    return this.repo.save(sub);
+  }
+
+  async unsubscribeFCM(deviceId: string) {
+    const device = await this.deviceRepository.findOne({ where: { deviceId } });
+    if (!device) return;
+
+    // Remove subscriptions for this device that are FCM (null keys)
+    await this.repo.delete({ device: { id: device.id } }); // Delete all pushes for this device for safety
+
+    device.fcmToken = null;
+    await this.deviceRepository.save(device);
+    return { success: true };
+  }
+
+  async sendNotification(entity: PushSubscriptionEntity, payload: any): Promise<boolean> {
+    // Validate integrity - Endpoint is mandatory for BOTH Native and Web
+    if (!entity.endpoint || entity.endpoint.trim() === '') {
+      console.warn(`⚠️ Subscription ${entity.id} has no endpoint. Deleting...`);
+      await this.repo.delete({ id: entity.id });
+      return false;
+    }
+
+    if (!entity.p256dh || !entity.auth) {
+      // Native Push (Firebase)
+      console.log('🔥 Sending NATIVE push notification to device', entity.device?.deviceId || 'unknown');
+
+      const sendNative = async (attempt = 1): Promise<boolean> => {
+        try {
+          // Handle both payload formats: { title, body } and { title, options: { body } }
+          const notificationBody = payload.body || payload.options?.body || '';
+          const notificationTitle = payload.title || 'La Guia del Streaming';
+          if (!this.firebaseApp) {
+            console.error('❌ Firebase Admin app is not initialized. Cannot send native push.');
+            return false;
+          }
+
+          console.log(`ℹ️ [PushService] Sending via app: ${this.firebaseApp.name} | Project: ${this.firebaseApp.options.projectId}`);
+
+          const message: admin.messaging.Message = {
+            token: entity.endpoint,
+            notification: {
+              title: notificationTitle,
+              body: notificationBody,
+            },
+            data: payload.data || {},
+            // Android-specific config
+            android: {
+              priority: 'high',
+              notification: {
+                channelId: 'streaming_alerts',
+              },
+            },
+            // APNs (iOS) specific config
+            apns: {
+              payload: {
+                aps: {
+                  alert: {
+                    title: notificationTitle,
+                    body: notificationBody,
+                  },
+                  sound: 'default',
+                  badge: 1,
+                  contentAvailable: true,
+                },
+              },
+            },
+          };
+
+          await this.firebaseApp.messaging().send(message);
+          return true;
+        } catch (error) {
+          if (attempt === 1) {
+            console.warn(`⚠️ First attempt failed for native push (${error.message}). Retrying...`);
+            await new Promise(r => setTimeout(r, 1000)); // Wait 1s
+            return sendNative(2);
+          }
+
+          if (error.code === 'messaging/registration-token-not-registered' || error.code === 'messaging/invalid-payload') {
+            console.warn(`⚠️ Token invalid (${error.code}), deleting subscription:`, entity.endpoint);
+            await this.repo.delete({ id: entity.id });
+          }
+          console.error(`❌ Failed to send native push (Attempt ${attempt}): ${error.message}`);
+          console.error('Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+          return false;
+        }
+      };
+
+      return sendNative();
+    }
+
+    // Web Push
+    console.log('🔥 Sending WEB push notification to device', entity.device?.deviceId || 'unknown');
     const pushSub = {
       endpoint: entity.endpoint,
-      keys: { p256dh: entity.p256dh, auth: entity.auth },
+      keys: { p256dh: entity.p256dh!, auth: entity.auth! },
     };
-    return webPush.sendNotification(pushSub, JSON.stringify(payload));
+    try {
+      await webPush.sendNotification(pushSub, JSON.stringify(payload));
+      return true;
+    } catch (error) {
+      if (error.statusCode === 404 || error.statusCode === 410) {
+        console.log('Subscription has expired or is no longer valid:', error.statusCode);
+        await this.repo.delete({ id: entity.id });
+        return false;
+      }
+      console.error(`❌ Failed to send web push: ${error.message}`);
+      return false;
+    }
   }
 
   async scheduleForProgram(
