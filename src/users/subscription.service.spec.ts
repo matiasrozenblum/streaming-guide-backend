@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SubscriptionService } from './subscription.service';
-import { UserSubscription, NotificationMethod } from './user-subscription.entity';
+import { UserSubscription } from './user-subscription.entity';
 import { Program } from '../programs/programs.entity';
 import { User } from './users.entity';
 import { Channel } from '../channels/channels.entity';
@@ -66,7 +66,7 @@ describe('SubscriptionService', () => {
     id: 'sub-1',
     user: mockUser,
     program: mockProgram,
-    notificationMethod: NotificationMethod.PUSH,
+
     isActive: true,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -132,7 +132,6 @@ describe('SubscriptionService', () => {
     it('should create a new subscription', async () => {
       const createDto = {
         programId: 1,
-        notificationMethod: NotificationMethod.PUSH,
         endpoint: 'test-endpoint',
         p256dh: 'test-p256dh',
         auth: 'test-auth',
@@ -154,7 +153,6 @@ describe('SubscriptionService', () => {
       expect(mockUserSubscriptionRepository.create).toHaveBeenCalledWith({
         user: mockUser,
         program: mockProgram,
-        notificationMethod: createDto.notificationMethod,
         isActive: true,
       });
       expect(result).toEqual(mockSubscription);
@@ -163,7 +161,6 @@ describe('SubscriptionService', () => {
     it('should throw NotFoundException when program not found', async () => {
       const createDto = {
         programId: 999,
-        notificationMethod: NotificationMethod.PUSH,
         endpoint: 'test-endpoint',
         p256dh: 'test-p256dh',
         auth: 'test-auth',
@@ -178,7 +175,6 @@ describe('SubscriptionService', () => {
     it('should update and return the existing subscription when subscription already exists', async () => {
       const createDto = {
         programId: 1,
-        notificationMethod: NotificationMethod.PUSH,
         endpoint: 'test-endpoint',
         p256dh: 'test-p256dh',
         auth: 'test-auth',
@@ -188,64 +184,14 @@ describe('SubscriptionService', () => {
       mockUserSubscriptionRepository.findOne.mockResolvedValue(mockSubscription);
       mockUserSubscriptionRepository.save.mockResolvedValue({
         ...mockSubscription,
-        notificationMethod: createDto.notificationMethod,
         isActive: true,
       });
 
       const result = await service.createSubscription(mockUser, createDto);
       expect(result).toEqual({
         ...mockSubscription,
-        notificationMethod: createDto.notificationMethod,
         isActive: true,
       });
-    });
-
-    it('should create subscription with EMAIL notification method', async () => {
-      const createDto = {
-        programId: 1,
-        notificationMethod: NotificationMethod.EMAIL,
-        endpoint: 'test-endpoint',
-        p256dh: 'test-p256dh',
-        auth: 'test-auth',
-      };
-
-      const emailSubscription = {
-        ...mockSubscription,
-        notificationMethod: NotificationMethod.EMAIL,
-      };
-
-      mockProgramRepository.findOne.mockResolvedValue(mockProgram);
-      mockUserSubscriptionRepository.findOne.mockResolvedValue(null);
-      mockUserSubscriptionRepository.create.mockReturnValue(emailSubscription);
-      mockUserSubscriptionRepository.save.mockResolvedValue(emailSubscription);
-
-      const result = await service.createSubscription(mockUser, createDto);
-
-      expect(result.notificationMethod).toBe(NotificationMethod.EMAIL);
-    });
-
-    it('should create subscription with BOTH notification method', async () => {
-      const createDto = {
-        programId: 1,
-        notificationMethod: NotificationMethod.BOTH,
-        endpoint: 'test-endpoint',
-        p256dh: 'test-p256dh',
-        auth: 'test-auth',
-      };
-
-      const bothSubscription = {
-        ...mockSubscription,
-        notificationMethod: NotificationMethod.BOTH,
-      };
-
-      mockProgramRepository.findOne.mockResolvedValue(mockProgram);
-      mockUserSubscriptionRepository.findOne.mockResolvedValue(null);
-      mockUserSubscriptionRepository.create.mockReturnValue(bothSubscription);
-      mockUserSubscriptionRepository.save.mockResolvedValue(bothSubscription);
-
-      const result = await service.createSubscription(mockUser, createDto);
-
-      expect(result.notificationMethod).toBe(NotificationMethod.BOTH);
     });
   });
 
@@ -295,14 +241,14 @@ describe('SubscriptionService', () => {
   });
 
   describe('updateSubscription', () => {
-    it('should update subscription notification method', async () => {
+    it('should update subscription active status', async () => {
       const updateDto = {
-        notificationMethod: NotificationMethod.EMAIL,
+        isActive: false,
       };
 
       const updatedSubscription = {
         ...mockSubscription,
-        notificationMethod: NotificationMethod.EMAIL,
+        isActive: false,
       };
 
       mockUserSubscriptionRepository.findOne.mockResolvedValue(mockSubscription);
@@ -314,12 +260,12 @@ describe('SubscriptionService', () => {
         where: { id: mockSubscription.id, user: { id: mockUser.id } },
         relations: ['program'],
       });
-      expect(result.notificationMethod).toBe(NotificationMethod.EMAIL);
+      expect(result.isActive).toBe(false);
     });
 
     it('should throw NotFoundException when subscription not found', async () => {
       const updateDto = {
-        notificationMethod: NotificationMethod.EMAIL,
+        isActive: false,
       };
 
       mockUserSubscriptionRepository.findOne.mockResolvedValue(null);
