@@ -87,6 +87,7 @@ export class SubscriptionController {
             name: sub.program.channel.name,
             order: sub.program.channel.order,
             logo_url: sub.program.channel.logo_url,
+            background_color: sub.program.channel.background_color,
           },
         },
         isActive: sub.isActive,
