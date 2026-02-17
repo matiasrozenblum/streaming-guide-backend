@@ -80,11 +80,13 @@ export class SubscriptionController {
           id: sub.program.id,
           name: sub.program.name,
           description: sub.program.description,
-          logoUrl: sub.program.logo_url,
+          logoUrl: sub.program.logo_url, // Keep for legacy frontend support
+          logo_url: sub.program.logo_url, // Add for consistency and mobile
           channel: {
             id: sub.program.channel.id,
             name: sub.program.channel.name,
             order: sub.program.channel.order,
+            logo_url: sub.program.channel.logo_url,
           },
         },
         isActive: sub.isActive,
