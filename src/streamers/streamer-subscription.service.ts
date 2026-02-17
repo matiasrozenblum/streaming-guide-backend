@@ -1,14 +1,13 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { UserStreamerSubscription, NotificationMethod } from '../users/user-streamer-subscription.entity';
+import { UserStreamerSubscription } from '../users/user-streamer-subscription.entity';
 import { User } from '../users/users.entity';
 import { Streamer } from './streamers.entity';
 import { CreateStreamerSubscriptionDto } from './dto/create-streamer-subscription.dto';
 import { Device } from '../users/device.entity';
 import { PushSubscriptionEntity } from '../push/push-subscription.entity';
 import { PushService } from '../push/push.service';
-import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class StreamerSubscriptionService {
@@ -26,11 +25,10 @@ export class StreamerSubscriptionService {
         @InjectRepository(User)
         private userRepository: Repository<User>,
         private readonly pushService: PushService,
-        private readonly emailService: EmailService, // Assuming EmailService exists and is injectable
     ) { }
 
     async subscribe(user: User, streamerId: number, dto: CreateStreamerSubscriptionDto): Promise<UserStreamerSubscription> {
-        const { notificationMethod, endpoint, p256dh, auth } = dto;
+        const { endpoint, p256dh, auth } = dto;
         const streamer = await this.streamerRepository.findOne({ where: { id: streamerId } });
         if (!streamer) {
             throw new NotFoundException(`Streamer with ID ${streamerId} not found`);
@@ -44,24 +42,20 @@ export class StreamerSubscriptionService {
         let subscription: UserStreamerSubscription;
 
         if (existingSubscription) {
-            existingSubscription.notificationMethod = notificationMethod;
             existingSubscription.isActive = true;
             subscription = await this.subscriptionRepository.save(existingSubscription);
         } else {
             subscription = this.subscriptionRepository.create({
                 user,
                 streamer,
-                notificationMethod,
                 isActive: true,
             });
             subscription = await this.subscriptionRepository.save(subscription);
         }
 
-        // If notification method includes PUSH, handle device subscription
-        if (notificationMethod === NotificationMethod.PUSH || notificationMethod === NotificationMethod.BOTH) {
-            if (endpoint) {
-                await this.createPushSubscription(user, endpoint, p256dh, auth);
-            }
+        // Always handle device subscription for Push
+        if (endpoint) {
+            await this.createPushSubscription(user, endpoint, p256dh, auth);
         }
 
         return subscription;
@@ -142,36 +136,27 @@ export class StreamerSubscriptionService {
 
         for (const subscription of subscriptions) {
             const user = subscription.user;
-            const method = subscription.notificationMethod;
 
             // PUSH Notifications
-            if (method === NotificationMethod.PUSH || method === NotificationMethod.BOTH) {
-                if (user.devices && user.devices.length > 0) {
-                    for (const device of user.devices) {
-                        if (device.pushSubscriptions && device.pushSubscriptions.length > 0) {
-                            for (const pushSub of device.pushSubscriptions) {
-                                try {
-                                    await this.pushService.sendNotification(pushSub, {
-                                        title,
-                                        options: {
-                                            body,
-                                            icon,
-                                        },
-                                    });
-                                } catch (error) {
-                                    this.logger.error(`Failed to send push notification to user ${user.id}`, error);
-                                }
+            if (user.devices && user.devices.length > 0) {
+                for (const device of user.devices) {
+                    if (device.pushSubscriptions && device.pushSubscriptions.length > 0) {
+                        for (const pushSub of device.pushSubscriptions) {
+                            try {
+                                await this.pushService.sendNotification(pushSub, {
+                                    title,
+                                    options: {
+                                        body,
+                                        icon,
+                                    },
+                                });
+                            } catch (error) {
+                                this.logger.error(`Failed to send push notification to user ${user.id}`, error);
                             }
                         }
                     }
                 }
             }
-
-            // EMAIL Notifications (Optional - based on user request "program have... users can subscribe")
-            // User didn't strictly specify email, but program subscription has it.
-            // Implementation plan says: "Text: ¡{streamer name} acaba de empezar un stream!"
-            // I will implement email if I have the service, but prioritize push.
-            // I'll skip email for now unless strictly required, focusing on push as per request "push notification".
         }
 
         this.logger.log(`✅ Notifications sent to ${subscriptions.length} subscribers.`);

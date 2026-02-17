@@ -17,7 +17,11 @@ describe('StreamerLiveStatusService', () => {
   };
 
   const mockConfigService = {
-    get: jest.fn().mockReturnValue('mock-kick-token'),
+    get: jest.fn((key: string) => {
+      if (key === 'KICK_APP_ACCESS_TOKEN') return 'mock-kick-token';
+      if (key === 'REDIS_TTL') return undefined; // Return undefined to use default
+      return null;
+    }),
   };
 
   const mockSubscriptionService = {

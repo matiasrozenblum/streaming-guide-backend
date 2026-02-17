@@ -7,11 +7,9 @@ import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
 
 import { Schedule } from '../schedules/schedules.entity';
-import { UserSubscription, NotificationMethod } from '../users/user-subscription.entity';
+import { UserSubscription } from '../users/user-subscription.entity';
 import { PushSubscriptionEntity } from './push-subscription.entity';
 import { PushService } from './push.service';
-import { EmailService } from '../email/email.service';
-import { buildProgramNotificationHtml } from '../email/email.templates';
 import { ConfigService } from '../config/config.service';
 import { TimezoneUtil } from '../utils/timezone.util';
 import { SchedulesService } from '../schedules/schedules.service';
@@ -25,7 +23,6 @@ export class PushScheduler {
 
   constructor(
     private readonly pushService: PushService,
-    private readonly emailService: EmailService,
     @InjectRepository(Schedule)
     private readonly scheduleRepo: Repository<Schedule>,
     @InjectRepository(UserSubscription)
@@ -94,7 +91,6 @@ export class PushScheduler {
     for (const schedule of dueSchedules) {
       const program = schedule.program;
       const title = program.name;
-      const channelName = program.channel?.name || 'Canal desconocido';
       const channelHandle = program.channel?.handle;
 
       // Gating: skip notifications if channel is not fetchable (holiday/flag)
@@ -108,63 +104,36 @@ export class PushScheduler {
 
       for (const subscription of programSubscriptions) {
         const user = subscription.user;
-        const notificationMethod = subscription.notificationMethod;
 
         // Send push notifications
-        if (notificationMethod === NotificationMethod.PUSH || notificationMethod === NotificationMethod.BOTH) {
-          this.logger.log(`📱 User ${user.email}: ${user.devices?.length || 0} devices found`);
-          if (user.devices && user.devices.length > 0) {
-            for (const device of user.devices) {
-              const subsCount = device.pushSubscriptions?.length || 0;
-              this.logger.log(`  📱 Device ${device.deviceId} (${device.platform || 'unknown'}): ${subsCount} push subscriptions, fcmToken=${device.fcmToken ? 'yes' : 'no'}`);
-              if (device.pushSubscriptions && device.pushSubscriptions.length > 0) {
-                for (const pushSub of device.pushSubscriptions) {
-                  const isNative = !pushSub.p256dh && !pushSub.auth;
-                  this.logger.log(`    🔔 Subscription type: ${isNative ? 'NATIVE/FCM' : 'WEB'}, endpoint prefix: ${pushSub.endpoint?.substring(0, 30)}...`);
-                  try {
-                    const success = await this.pushService.sendNotification(pushSub, {
-                      title,
-                      options: {
-                        body: `¡En 10 minutos comienza ${title}!`,
-                        icon: '/img/logo-192x192.png',
-                      },
-                    });
+        this.logger.log(`📱 User ${user.email}: ${user.devices?.length || 0} devices found`);
+        if (user.devices && user.devices.length > 0) {
+          for (const device of user.devices) {
+            const subsCount = device.pushSubscriptions?.length || 0;
+            this.logger.log(`  📱 Device ${device.deviceId} (${device.platform || 'unknown'}): ${subsCount} push subscriptions, fcmToken=${device.fcmToken ? 'yes' : 'no'}`);
+            if (device.pushSubscriptions && device.pushSubscriptions.length > 0) {
+              for (const pushSub of device.pushSubscriptions) {
+                const isNative = !pushSub.p256dh && !pushSub.auth;
+                this.logger.log(`    🔔 Subscription type: ${isNative ? 'NATIVE/FCM' : 'WEB'}, endpoint prefix: ${pushSub.endpoint?.substring(0, 30)}...`);
+                try {
+                  const success = await this.pushService.sendNotification(pushSub, {
+                    title,
+                    options: {
+                      body: `¡En 10 minutos comienza ${title}!`,
+                      icon: '/img/logo-192x192.png',
+                    },
+                  });
 
-                    if (success) {
-                      this.logger.log(`✅ Push notification enviada a usuario ${user.email} (device: ${device.deviceId}) para "${title}"`);
-                    } else {
-                      this.logger.warn(`⚠️ No se pudo enviar push notification a usuario ${user.email} (device: ${device.deviceId})`);
-                    }
-                  } catch (err) {
-                    this.logger.error(`❌ Falló push notification a usuario ${user.email} (device: ${device.deviceId})`, err as any);
+                  if (success) {
+                    this.logger.log(`✅ Push notification enviada a usuario ${user.email} (device: ${device.deviceId}) para "${title}"`);
+                  } else {
+                    this.logger.warn(`⚠️ No se pudo enviar push notification a usuario ${user.email} (device: ${device.deviceId})`);
                   }
+                } catch (err) {
+                  this.logger.error(`❌ Falló push notification a usuario ${user.email} (device: ${device.deviceId})`, err as any);
                 }
               }
             }
-          }
-        }
-
-        // Send email notifications
-        if (notificationMethod === NotificationMethod.EMAIL || notificationMethod === NotificationMethod.BOTH) {
-          try {
-            const emailHtml = buildProgramNotificationHtml(
-              program.name,
-              channelName,
-              schedule.start_time,
-              schedule.end_time,
-              program.description,
-            );
-
-            await this.emailService.sendEmail({
-              to: user.email,
-              subject: `¡${program.name} comienza en 10 minutos!`,
-              html: emailHtml,
-              emailType: 'program_notification',
-            });
-
-            this.logger.log(`✅ Email notification enviado a usuario ${user.email} para "${title}"`);
-          } catch (err) {
-            this.logger.error(`❌ Falló email notification a usuario ${user.email}`, err as any);
           }
         }
       }
