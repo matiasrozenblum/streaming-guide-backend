@@ -2,6 +2,7 @@ import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, OneToMany } f
 import { Exclude } from "class-transformer";
 import { Device } from "./device.entity";
 import { UserSubscription } from "./user-subscription.entity";
+import { UserStreamerSubscription } from "./user-streamer-subscription.entity";
 
 @Entity('users')
 export class User {
@@ -27,11 +28,11 @@ export class User {
   @Column()
   password: string;
 
-  @Column({ type: 'enum', enum: ['user','admin'], default: 'user' })
+  @Column({ type: 'enum', enum: ['user', 'admin'], default: 'user' })
   role: 'user' | 'admin';
 
-  @Column({ 
-    type: 'enum', 
+  @Column({
+    type: 'enum',
     enum: ['male', 'female', 'non_binary', 'rather_not_say'],
     nullable: true,
     name: 'gender'
@@ -41,9 +42,9 @@ export class User {
   @Column({ type: 'date', nullable: true, name: 'birth_date' })
   birthDate: Date;
 
-  @Column({ 
-    type: 'enum', 
-    enum: ['traditional', 'google', 'facebook'], 
+  @Column({
+    type: 'enum',
+    enum: ['traditional', 'google', 'facebook'],
     default: 'traditional',
     name: 'origin'
   })
@@ -54,4 +55,7 @@ export class User {
 
   @OneToMany(() => UserSubscription, (subscription) => subscription.user, { cascade: true })
   subscriptions: UserSubscription[];
+
+  @OneToMany(() => UserStreamerSubscription, (subscription) => subscription.user, { cascade: true })
+  streamerSubscriptions: UserStreamerSubscription[];
 }

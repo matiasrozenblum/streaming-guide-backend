@@ -23,6 +23,7 @@ describe('DeviceService', () => {
     origin: 'traditional',
     devices: [],
     subscriptions: [],
+    streamerSubscriptions: [],
   };
 
   const mockDevice: Device = {
@@ -98,9 +99,12 @@ describe('DeviceService', () => {
         deviceId,
         user: mockUser,
         userAgent,
-        deviceType: 'web',
+        deviceType: 'mobile',
         deviceName: 'Chrome Browser',
         lastSeen: expect.any(Date),
+        platform: 'web',
+        appVersion: undefined,
+        fcmToken: undefined,
       });
       expect(mockRepository.save).toHaveBeenCalled();
       expect(result).toEqual(mockDevice);
@@ -137,4 +141,4 @@ describe('DeviceService', () => {
       expect(result).toEqual(devices);
     });
   });
-}); 
+});

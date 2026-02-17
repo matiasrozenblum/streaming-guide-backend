@@ -29,6 +29,7 @@ describe('SubscriptionService', () => {
     origin: 'traditional',
     devices: [],
     subscriptions: [],
+    streamerSubscriptions: [],
   };
 
   const mockChannel: Channel = {
