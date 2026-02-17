@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from '@/redis/redis.service';
 import { StreamerLiveStatusCache, StreamerServiceStatus } from './interfaces/streamer-live-status-cache.interface';
 import { StreamerService } from './streamers.entity';
+import { StreamerSubscriptionService } from './streamer-subscription.service';
 
 @Injectable()
 export class StreamerLiveStatusService {
@@ -10,12 +11,16 @@ export class StreamerLiveStatusService {
   private readonly CACHE_PREFIX = 'streamer:live-status:';
   // TTL: 7 days (604800 seconds) - cache persists until webhook updates it
   // This is a safety net in case webhooks fail; normally webhooks will update/clear the cache
-  private readonly DEFAULT_TTL = 604800; // 7 days
+  private readonly DEFAULT_TTL: number; // 7 days
 
   constructor(
-    private readonly redisService: RedisService,
     private readonly configService: ConfigService,
-  ) { }
+    private readonly redisService: RedisService,
+    @Inject(forwardRef(() => StreamerSubscriptionService))
+    private readonly streamerSubscriptionService: StreamerSubscriptionService,
+  ) {
+    this.DEFAULT_TTL = this.configService.get<number>('REDIS_TTL') || 604800; // Default to 7 days if not configured
+  }
 
   /**
    * Update live status for a specific streamer and service
@@ -53,6 +58,7 @@ export class StreamerLiveStatusService {
 
       // Recalculate overall isLive (true if ANY service is live)
       const overallIsLive = existing.services.some(s => s.isLive);
+      const wasLive = existing.isLive;
 
       updatedCache = {
         streamerId: existing.streamerId,
@@ -61,6 +67,15 @@ export class StreamerLiveStatusService {
         lastUpdated: now,
         ttl: this.DEFAULT_TTL, // Refresh TTL on webhook update to ensure cache persists
       };
+
+      // Trigger notification if transition from Offline -> Live
+      if (!wasLive && overallIsLive) {
+        this.logger.log(`🚀 Streamer ${streamerId} went LIVE! Triggering notifications...`);
+        // Use fire-and-forget to not block the webhook response
+        this.streamerSubscriptionService.notifySubscribers(streamerId).catch(err => {
+          this.logger.error(`Failed to notify subscribers for streamer ${streamerId}`, err);
+        });
+      }
     } else {
       // Create new cache entry
       updatedCache = {
@@ -70,6 +85,16 @@ export class StreamerLiveStatusService {
         lastUpdated: now,
         ttl: this.DEFAULT_TTL,
       };
+
+      // Trigger notification if initial state is Live (might be edge case, but good to have if we missed previous state)
+      // However, for "create new cache", it usually happens on restart or new streamer.
+      // If it's a webhook update that initializes the cache as LIVE, we should probably notify.
+      if (isLive) {
+        this.logger.log(`🚀 Streamer ${streamerId} went LIVE (init)! Triggering notifications...`);
+        this.streamerSubscriptionService.notifySubscribers(streamerId).catch(err => {
+          this.logger.error(`Failed to notify subscribers for streamer ${streamerId}`, err);
+        });
+      }
     }
 
     await this.redisService.set(cacheKey, updatedCache, updatedCache.ttl);
