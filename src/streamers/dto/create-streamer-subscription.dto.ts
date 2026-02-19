@@ -7,6 +7,8 @@ export class CreateStreamerSubscriptionDto {
     @IsString()
     endpoint?: string;
 
+    @ApiProperty({ required: false })
+    @IsOptional()
     @IsString()
     p256dh?: string;
 
