@@ -39,6 +39,11 @@ export class PushService {
 
         if (serviceAccountJson) {
           const serviceAccount = JSON.parse(serviceAccountJson);
+          // Vercel sometimes double-escapes newlines in environment variables.
+          // This ensures the private key has actual newline characters required by Firebase.
+          if (serviceAccount.private_key) {
+            serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+          }
           credential = admin.credential.cert(serviceAccount);
           projectId = serviceAccount.project_id;
           console.log('✅ Loaded credentials from JSON env var');
