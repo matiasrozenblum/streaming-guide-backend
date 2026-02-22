@@ -335,4 +335,29 @@ export class PushService {
       }
     }
   }
+
+  async testFcmToken(token: string): Promise<any> {
+    const firebaseApp = admin.apps.length > 0 ? admin.app() : null;
+    if (!firebaseApp) {
+      return { error: 'Firebase App not initialized' };
+    }
+
+    try {
+      const payload = {
+        token: token,
+        notification: {
+          title: 'Diagnostic Test',
+          body: 'Checking if Firebase Admin works'
+        }
+      };
+      const res = await firebaseApp.messaging().send(payload);
+      return { success: true, res };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Unknown error',
+        code: error.code || 'No code'
+      };
+    }
+  }
 }
