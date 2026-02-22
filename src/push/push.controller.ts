@@ -29,6 +29,11 @@ export class PushController {
     return this.svc.testFcmToken(token);
   }
 
+  @Get('test-real')
+  async testRealTokens() {
+    return this.svc.testRealTokens();
+  }
+
   @Post('fcm/unsubscribe')
   unsubscribeFCM(@Body() body: { deviceId: string }) {
     return this.svc.unsubscribeFCM(body.deviceId);
