@@ -233,7 +233,7 @@ export class PushService {
               title: notificationTitle,
               body: notificationBody,
             },
-            data: payload.data || {},
+            ...(payload.data && Object.keys(payload.data).length > 0 ? { data: payload.data } : {}),
             // Android-specific config
             android: {
               priority: 'high',
