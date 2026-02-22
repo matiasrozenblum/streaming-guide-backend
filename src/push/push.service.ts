@@ -336,6 +336,30 @@ export class PushService {
     }
   }
 
+  async testRealTokens(): Promise<any> {
+    try {
+      const { IsNull } = require('typeorm');
+      const subs = await this.repo.find({
+        where: { p256dh: IsNull() },
+        take: 5
+      });
+
+      const results: any[] = [];
+      for (const sub of subs) {
+        if (sub.endpoint) {
+          const res = await this.testFcmToken(sub.endpoint);
+          results.push({
+            tokenPrefix: sub.endpoint.substring(0, 15),
+            result: res
+          });
+        }
+      }
+      return { tested: results.length, results };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  }
+
   async testFcmToken(token: string): Promise<any> {
     const firebaseApp = admin.apps.length > 0 ? admin.app() : null;
     if (!firebaseApp) {
