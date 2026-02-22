@@ -13,10 +13,6 @@ export class SentryService implements OnModuleInit {
   }
 
   onModuleInit() {
-    // DISABLE SENTRY TEMPORARILY TO TEST IF IT BREAKS FIREBASE:
-    // This allows us to prove 100% whether Sentry interceptors are the culprit
-    return;
-
     // Don't initialize Sentry in staging to avoid using quota
     if (this.isStaging) {
       return;
