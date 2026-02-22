@@ -24,6 +24,11 @@ export class SentryService implements OnModuleInit {
       environment: process.env.NODE_ENV || 'development',
       // Performance Monitoring
       tracesSampleRate: 1.0,
+      tracePropagationTargets: [
+        'localhost',
+        /^\//,
+        /api\.laguiadelstreaming\.com\.ar/
+      ],
       // Error Monitoring
       beforeSend(event) {
         // Filter out health check errors

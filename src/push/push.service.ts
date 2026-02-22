@@ -8,10 +8,92 @@ import { CreatePushSubscriptionDto } from './dto/create-push-subscription.dto';
 import { NotificationsService } from '@/notifications/notifications.service';
 import { Device } from '../users/device.entity';
 import { ConfigService } from '@nestjs/config'; // Added ConfigService import
+let firebaseApp: admin.app.App | null = null;
+let vapidInitialized = false;
+
+// Global Initialization for Serverless environments (Vercel)
+// This guarantees the SDK is initialized immediately when the module is imported,
+// avoiding cold-start race conditions inside the NestJS DI container.
+const initializeFirebase = () => {
+  if (firebaseApp) return;
+
+  if (admin.apps.length > 0) {
+    firebaseApp = admin.app(); // gets DEFAULT app
+    console.log(`ℹ️ [Global] Reusing existing DEFAULT Firebase app`);
+    return;
+  }
+
+  console.log('🔄 [Global] Initializing new DEFAULT Firebase Admin app...');
+  try {
+    const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT;
+
+    let credential;
+    let projectId;
+
+    if (serviceAccountJson) {
+      const serviceAccount = JSON.parse(serviceAccountJson);
+      if (serviceAccount.private_key) {
+        serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+      }
+      credential = admin.credential.cert(serviceAccount);
+      projectId = serviceAccount.project_id;
+      console.log(`✅ [Global] Loaded credentials from JSON env var. Valid client_email: ${!!serviceAccount.client_email}`);
+    } else if (serviceAccountPath) {
+      const cleanPath = serviceAccountPath.replace(/^"|"$/g, '');
+      const resolvePath = require('path').resolve(process.cwd(), cleanPath);
+
+      if (require('fs').existsSync(resolvePath)) {
+        const fileContent = require('fs').readFileSync(resolvePath, 'utf8');
+        const serviceAccount = JSON.parse(fileContent);
+        credential = admin.credential.cert(serviceAccount);
+        projectId = serviceAccount.project_id;
+        console.log(`✅ [Global] Loaded credentials from file. Project ID: ${projectId}`);
+      }
+    }
+
+    if (!credential) {
+      const keyPath = require('path').resolve(process.cwd(), 'backend-firebase-key.json');
+      if (require('fs').existsSync(keyPath)) {
+        const serviceAccount = require(keyPath);
+        credential = admin.credential.cert(serviceAccount);
+        projectId = serviceAccount.project_id;
+        console.log('✅ [Global] Loaded credentials from local fallback');
+      }
+    }
+
+    if (credential) {
+      firebaseApp = admin.initializeApp({
+        credential,
+        projectId: projectId || 'la-guia-del-streaming-ee16f'
+      });
+      console.log(`🚀 [Global] Firebase Admin initialized successfully!`);
+    } else {
+      console.warn('⚠️ [Global] Firebase Admin not initialized: No credentials resolved');
+    }
+  } catch (error: any) {
+    console.error('❌ [Global] Failed to initialize Firebase:', error.message);
+  }
+};
+
+const initializeWebPush = () => {
+  if (vapidInitialized) return;
+  const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
+  const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
+
+  if (vapidPublicKey && vapidPrivateKey) {
+    try {
+      webPush.setVapidDetails('mailto:soporte@laguiadelstreaming.com.ar', vapidPublicKey, vapidPrivateKey);
+      vapidInitialized = true;
+      console.log('✅ [Global] Web Push (VAPID) initialized');
+    } catch (error: any) {
+      console.warn('⚠️ [Global] Failed to set VAPID details:', error.message);
+    }
+  }
+};
 
 @Injectable()
 export class PushService {
-  private firebaseApp: admin.app.App; // Added firebaseApp property
 
   constructor(
     @InjectRepository(PushSubscriptionEntity)
@@ -21,93 +103,9 @@ export class PushService {
     private configService: ConfigService,
     private notificationsService: NotificationsService,
   ) {
-    // Initialize Firebase Admin SDK with a named app to avoid global conflicts
-    const appName = 'streaming-guide-push';
-    const existingApp = admin.apps.find(app => app && app.name === appName);
-
-    if (existingApp) {
-      this.firebaseApp = existingApp;
-      console.log(`ℹ️ [PushService] Reusing existing Firebase app: ${appName}`);
-    } else {
-      console.log('🔄 [PushService] Initializing new Firebase Admin app...');
-      try {
-        const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-        const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT;
-
-        let credential;
-        let projectId;
-
-        if (serviceAccountJson) {
-          const serviceAccount = JSON.parse(serviceAccountJson);
-          credential = admin.credential.cert(serviceAccount);
-          projectId = serviceAccount.project_id;
-          console.log('✅ Loaded credentials from JSON env var');
-        } else if (serviceAccountPath) {
-          const cleanPath = serviceAccountPath.replace(/^"|"$/g, '');
-          const resolvePath = require('path').resolve(process.cwd(), cleanPath);
-          console.log(`ℹ️ [PushService] Resolving path: ${resolvePath}`);
-
-          if (require('fs').existsSync(resolvePath)) {
-            try {
-              const fileContent = require('fs').readFileSync(resolvePath, 'utf8');
-              const serviceAccount = JSON.parse(fileContent);
-              credential = admin.credential.cert(serviceAccount);
-              projectId = serviceAccount.project_id;
-              console.log(`✅ Loaded credentials from file. Project ID: ${projectId}`);
-            } catch (err) {
-              console.error('❌ Failed to read/parse service account file:', err.message);
-            }
-          } else {
-            console.error(`❌ Service account file not found at: ${resolvePath}`);
-          }
-        }
-
-        // Fallback to local default file if nothing else found
-        if (!credential) {
-          const keyPath = require('path').resolve(process.cwd(), 'backend-firebase-key.json');
-          if (require('fs').existsSync(keyPath)) {
-            const serviceAccount = require(keyPath);
-            credential = admin.credential.cert(serviceAccount);
-            projectId = serviceAccount.project_id;
-            console.log('✅ Loaded credentials from fallback backend-firebase-key.json');
-          }
-        }
-
-        if (credential) {
-          this.firebaseApp = admin.initializeApp({
-            credential,
-            projectId: projectId || 'la-guia-del-streaming-ee16f'
-          }, appName);
-          console.log(`🚀 Firebase Admin app '${appName}' initialized successfully!`);
-        } else {
-          console.warn('⚠️ Firebase Admin not initialized: No credentials resolved');
-        }
-
-      } catch (error) {
-        console.error('❌ Failed to initialize Firebase Admin:', error.message);
-        console.error(error);
-      }
-    }
-
-    // Temporarily disable VAPID initialization to prevent startup errors
-    // TODO: Set proper VAPID environment variables
-    const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
-    const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
-
-    if (vapidPublicKey && vapidPrivateKey) { // Changed condition to just check for existence
-      try {
-        webPush.setVapidDetails(
-          'mailto:soporte@laguiadelstreaming.com.ar', // Updated mailto address
-          vapidPublicKey,
-          vapidPrivateKey,
-        );
-        console.log('✅ Web Push (VAPID) initialized'); // Updated log message
-      } catch (error) {
-        console.warn('⚠️ Failed to set VAPID details:', error.message); // Updated warning message
-      }
-    } else {
-      console.warn('⚠️ VAPID keys missing. Web Push will not work.'); // Updated warning message
-    }
+    // Ensure initialization happened, just in case
+    initializeFirebase();
+    initializeWebPush();
   }
 
   async create(dto: CreatePushSubscriptionDto) {
@@ -222,12 +220,12 @@ export class PushService {
           // Handle both payload formats: { title, body } and { title, options: { body } }
           const notificationBody = payload.body || payload.options?.body || '';
           const notificationTitle = payload.title || 'La Guia del Streaming';
-          if (!this.firebaseApp) {
+          if (!firebaseApp) {
             console.error('❌ Firebase Admin app is not initialized. Cannot send native push.');
             return false;
           }
 
-          console.log(`ℹ️ [PushService] Sending via app: ${this.firebaseApp.name} | Project: ${this.firebaseApp.options.projectId}`);
+          console.log(`ℹ️ [PushService] Sending via app: ${firebaseApp.name} | Project: ${firebaseApp?.options?.projectId}`);
 
           const message: admin.messaging.Message = {
             token: entity.endpoint,
@@ -235,7 +233,7 @@ export class PushService {
               title: notificationTitle,
               body: notificationBody,
             },
-            data: payload.data || {},
+            ...(payload.data && Object.keys(payload.data).length > 0 ? { data: payload.data } : {}),
             // Android-specific config
             android: {
               priority: 'high',
@@ -259,7 +257,17 @@ export class PushService {
             },
           };
 
-          await this.firebaseApp.messaging().send(message);
+          // Diagnostic logs for Railway backend 401 issues
+          console.log(`[Diagnostic] Native payload structure check:`, JSON.stringify({
+            hasToken: !!message.token,
+            tokenPrefix: message.token?.substring(0, 15) || 'NONE',
+            title: message.notification?.title,
+            bodyPrefix: message.notification?.body?.substring(0, 15),
+            projectId: firebaseApp.options.projectId || 'UNKNOWN',
+            credentialExists: !!firebaseApp.options.credential
+          }));
+
+          await firebaseApp.messaging().send(message);
           return true;
         } catch (error) {
           if (attempt === 1) {
@@ -268,12 +276,17 @@ export class PushService {
             return sendNative(2);
           }
 
-          if (error.code === 'messaging/registration-token-not-registered' || error.code === 'messaging/invalid-payload') {
-            console.warn(`⚠️ Token invalid (${error.code}), deleting subscription:`, entity.endpoint);
+          if (
+            error.code === 'messaging/registration-token-not-registered' ||
+            error.code === 'messaging/invalid-payload' ||
+            error.code === 'messaging/third-party-auth-error' ||
+            error.code === 'messaging/invalid-argument' ||
+            error.code === 'app/invalid-credential'
+          ) {
+            console.warn(`⚠️ Token invalid or from wrong project (${error.code}), deleting subscription:`, entity.endpoint);
             await this.repo.delete({ id: entity.id });
           }
           console.error(`❌ Failed to send native push (Attempt ${attempt}): ${error.message}`);
-          console.error('Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
           return false;
         }
       };
@@ -327,4 +340,5 @@ export class PushService {
       }
     }
   }
+
 }

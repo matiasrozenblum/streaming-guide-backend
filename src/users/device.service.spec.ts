@@ -23,6 +23,7 @@ describe('DeviceService', () => {
     origin: 'traditional',
     devices: [],
     subscriptions: [],
+    streamerSubscriptions: [],
   };
 
   const mockDevice: Device = {
