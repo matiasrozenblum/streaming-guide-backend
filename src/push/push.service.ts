@@ -22,7 +22,7 @@ export class PushService {
     private notificationsService: NotificationsService,
   ) {
     // Initialize Firebase Admin SDK with a named app to avoid global conflicts
-    const appName = 'streaming-guide-push';
+    const appName = 'streaming-guide-push-v2';
     const existingApp = admin.apps.find(app => app && app.name === appName);
 
     if (existingApp) {
