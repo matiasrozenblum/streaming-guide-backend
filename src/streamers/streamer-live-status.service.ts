@@ -71,10 +71,12 @@ export class StreamerLiveStatusService {
       // Trigger notification if transition from Offline -> Live
       if (!wasLive && overallIsLive) {
         this.logger.log(`🚀 Streamer ${streamerId} went LIVE! Triggering notifications...`);
-        // Use fire-and-forget to not block the webhook response
-        this.streamerSubscriptionService.notifySubscribers(streamerId).catch(err => {
+        // WAIT for notifications to finish before ending the Express request
+        try {
+          await this.streamerSubscriptionService.notifySubscribers(streamerId);
+        } catch (err) {
           this.logger.error(`Failed to notify subscribers for streamer ${streamerId}`, err);
-        });
+        }
       }
     } else {
       // Create new cache entry
@@ -91,9 +93,13 @@ export class StreamerLiveStatusService {
       // If it's a webhook update that initializes the cache as LIVE, we should probably notify.
       if (isLive) {
         this.logger.log(`🚀 Streamer ${streamerId} went LIVE (init)! Triggering notifications...`);
-        this.streamerSubscriptionService.notifySubscribers(streamerId).catch(err => {
+        // WAIT for notifications to finish before ending the Express request
+        // This is a diagnostic test to see if execution context destruction is stripping the Auth headers.
+        try {
+          await this.streamerSubscriptionService.notifySubscribers(streamerId);
+        } catch (err) {
           this.logger.error(`Failed to notify subscribers for streamer ${streamerId}`, err);
-        });
+        }
       }
     }
 
