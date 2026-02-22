@@ -17,64 +17,62 @@ let vapidInitialized = false;
 const initializeFirebase = () => {
   if (firebaseApp) return;
 
-  const appName = 'streaming-guide-push-v3';
-  const existingApp = admin.apps.find(app => app && app.name === appName);
+  if (admin.apps.length > 0) {
+    firebaseApp = admin.app(); // gets DEFAULT app
+    console.log(`ℹ️ [Global] Reusing existing DEFAULT Firebase app`);
+    return;
+  }
 
-  if (existingApp) {
-    firebaseApp = existingApp;
-    console.log(`ℹ️ [Global] Reusing existing Firebase app: ${appName}`);
-  } else {
-    console.log('🔄 [Global] Initializing new Firebase Admin app...');
-    try {
-      const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-      const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT;
+  console.log('🔄 [Global] Initializing new DEFAULT Firebase Admin app...');
+  try {
+    const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT;
 
-      let credential;
-      let projectId;
+    let credential;
+    let projectId;
 
-      if (serviceAccountJson) {
-        const serviceAccount = JSON.parse(serviceAccountJson);
-        if (serviceAccount.private_key) {
-          serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
-        }
+    if (serviceAccountJson) {
+      const serviceAccount = JSON.parse(serviceAccountJson);
+      if (serviceAccount.private_key) {
+        serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+      }
+      credential = admin.credential.cert(serviceAccount);
+      projectId = serviceAccount.project_id;
+      console.log(`✅ [Global] Loaded credentials from JSON env var. Valid client_email: ${!!serviceAccount.client_email}`);
+    } else if (serviceAccountPath) {
+      const cleanPath = serviceAccountPath.replace(/^"|"$/g, '');
+      const resolvePath = require('path').resolve(process.cwd(), cleanPath);
+
+      if (require('fs').existsSync(resolvePath)) {
+        const fileContent = require('fs').readFileSync(resolvePath, 'utf8');
+        const serviceAccount = JSON.parse(fileContent);
         credential = admin.credential.cert(serviceAccount);
         projectId = serviceAccount.project_id;
-        console.log('✅ [Global] Loaded credentials from JSON env var');
-      } else if (serviceAccountPath) {
-        const cleanPath = serviceAccountPath.replace(/^"|"$/g, '');
-        const resolvePath = require('path').resolve(process.cwd(), cleanPath);
-
-        if (require('fs').existsSync(resolvePath)) {
-          const fileContent = require('fs').readFileSync(resolvePath, 'utf8');
-          const serviceAccount = JSON.parse(fileContent);
-          credential = admin.credential.cert(serviceAccount);
-          projectId = serviceAccount.project_id;
-          console.log(`✅ [Global] Loaded credentials from file. Project ID: ${projectId}`);
-        }
+        console.log(`✅ [Global] Loaded credentials from file. Project ID: ${projectId}`);
       }
-
-      if (!credential) {
-        const keyPath = require('path').resolve(process.cwd(), 'backend-firebase-key.json');
-        if (require('fs').existsSync(keyPath)) {
-          const serviceAccount = require(keyPath);
-          credential = admin.credential.cert(serviceAccount);
-          projectId = serviceAccount.project_id;
-          console.log('✅ [Global] Loaded credentials from local fallback');
-        }
-      }
-
-      if (credential) {
-        firebaseApp = admin.initializeApp({
-          credential,
-          projectId: projectId || 'la-guia-del-streaming-ee16f'
-        }, appName);
-        console.log(`🚀 [Global] Firebase Admin '${appName}' initialized successfully!`);
-      } else {
-        console.warn('⚠️ [Global] Firebase Admin not initialized: No credentials resolved');
-      }
-    } catch (error: any) {
-      console.error('❌ [Global] Failed to initialize Firebase:', error.message);
     }
+
+    if (!credential) {
+      const keyPath = require('path').resolve(process.cwd(), 'backend-firebase-key.json');
+      if (require('fs').existsSync(keyPath)) {
+        const serviceAccount = require(keyPath);
+        credential = admin.credential.cert(serviceAccount);
+        projectId = serviceAccount.project_id;
+        console.log('✅ [Global] Loaded credentials from local fallback');
+      }
+    }
+
+    if (credential) {
+      firebaseApp = admin.initializeApp({
+        credential,
+        projectId: projectId || 'la-guia-del-streaming-ee16f'
+      });
+      console.log(`🚀 [Global] Firebase Admin initialized successfully!`);
+    } else {
+      console.warn('⚠️ [Global] Firebase Admin not initialized: No credentials resolved');
+    }
+  } catch (error: any) {
+    console.error('❌ [Global] Failed to initialize Firebase:', error.message);
   }
 };
 
@@ -258,6 +256,16 @@ export class PushService {
               },
             },
           };
+
+          // Diagnostic logs for Railway backend 401 issues
+          console.log(`[Diagnostic] Native payload structure check:`, JSON.stringify({
+            hasToken: !!message.token,
+            tokenPrefix: message.token?.substring(0, 15) || 'NONE',
+            title: message.notification?.title,
+            bodyPrefix: message.notification?.body?.substring(0, 15),
+            projectId: firebaseApp.options.projectId || 'UNKNOWN',
+            credentialExists: !!firebaseApp.options.credential
+          }));
 
           await firebaseApp.messaging().send(message);
           return true;
