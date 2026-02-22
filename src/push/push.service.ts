@@ -343,13 +343,33 @@ export class PushService {
     }
 
     try {
-      const payload = {
+      const payload: admin.messaging.Message = {
         token: token,
         notification: {
           title: 'Diagnostic Test',
           body: 'Checking if Firebase Admin works'
-        }
+        },
+        android: {
+          priority: 'high',
+          notification: {
+            channelId: 'streaming_alerts',
+          },
+        },
+        apns: {
+          payload: {
+            aps: {
+              alert: {
+                title: 'Diagnostic Test',
+                body: 'Checking if Firebase Admin works',
+              },
+              sound: 'default',
+              badge: 1,
+              mutableContent: true,
+            },
+          },
+        },
       };
+
       const res = await firebaseApp.messaging().send(payload);
       return { success: true, res };
     } catch (error: any) {
