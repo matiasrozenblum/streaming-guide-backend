@@ -44,11 +44,11 @@ export class User {
 
   @Column({
     type: 'enum',
-    enum: ['traditional', 'google', 'facebook'],
+    enum: ['traditional', 'google', 'facebook', 'apple'],
     default: 'traditional',
     name: 'origin'
   })
-  origin: 'traditional' | 'google' | 'facebook';
+  origin: 'traditional' | 'google' | 'facebook' | 'apple';
 
   @OneToMany(() => Device, (device) => device.user, { cascade: true })
   devices: Device[];
