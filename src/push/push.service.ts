@@ -239,6 +239,8 @@ export class PushService {
               priority: 'high',
               notification: {
                 channelId: 'streaming_alerts',
+                icon: 'notification_icon',
+                color: '#2563eb',
               },
             },
             // APNs (iOS) specific config
