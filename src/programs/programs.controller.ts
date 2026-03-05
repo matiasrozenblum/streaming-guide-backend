@@ -7,7 +7,6 @@ import { UpdateProgramDto } from './dto/update-program.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Panelist } from '../panelists/panelists.entity';
 import { SubscriptionService } from '../users/subscription.service';
-import { NotificationMethod } from '../users/user-subscription.entity';
 
 @ApiTags('programs')  // Etiqueta para los programas
 @Controller('programs')
@@ -17,7 +16,7 @@ export class ProgramsController {
   constructor(
     private readonly programsService: ProgramsService,
     private readonly subscriptionService: SubscriptionService,
-  ) {}
+  ) { }
 
   @Get()
   @ApiOperation({ summary: 'Get all programs' })
@@ -46,7 +45,7 @@ export class ProgramsController {
       user.id,
       Number(id),
     );
-    
+
     return {
       isSubscribed,
       programId: Number(id),
@@ -59,25 +58,23 @@ export class ProgramsController {
   async subscribeToProgram(
     @Request() req: any,
     @Param('id') id: string,
-    @Body() body: { notificationMethod?: NotificationMethod, endpoint?: string, p256dh?: string, auth?: string },
+    @Body() body: { endpoint?: string, p256dh?: string, auth?: string },
   ) {
     const user = req.user;
-    const { notificationMethod = NotificationMethod.BOTH, endpoint, p256dh, auth } = body;
-    
+    const { endpoint, p256dh, auth } = body;
+
     const subscription = await this.subscriptionService.createSubscription(user, {
       programId: Number(id),
-      notificationMethod,
       endpoint: endpoint || '',
       p256dh: p256dh || '',
       auth: auth || '',
     });
-    
+
     return {
       message: 'Successfully subscribed to program',
       subscription: {
         id: subscription.id,
         programId: Number(id),
-        notificationMethod: subscription.notificationMethod,
         createdAt: subscription.createdAt,
       },
     };

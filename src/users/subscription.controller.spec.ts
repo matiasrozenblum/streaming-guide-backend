@@ -3,7 +3,7 @@ import { SubscriptionController } from './subscription.controller';
 import { SubscriptionService } from './subscription.service';
 import { DeviceService } from './device.service';
 import { UsersService } from './users.service';
-import { NotificationMethod } from './user-subscription.entity';
+
 import { NotFoundException } from '@nestjs/common';
 
 describe('SubscriptionController', () => {
@@ -24,7 +24,7 @@ describe('SubscriptionController', () => {
       name: 'Test Program',
       channel: { id: 1, name: 'Test Channel' },
     },
-    notificationMethod: NotificationMethod.PUSH,
+
     isActive: true,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -102,7 +102,6 @@ describe('SubscriptionController', () => {
     it('should create a subscription for real users', async () => {
       const createDto = {
         programId: 1,
-        notificationMethod: NotificationMethod.PUSH,
         endpoint: 'test-endpoint',
         p256dh: 'test-p256dh',
         auth: 'test-auth',
@@ -114,14 +113,12 @@ describe('SubscriptionController', () => {
       expect(mockUsersService.findOne).toHaveBeenCalledWith(mockUser.id);
       expect(mockSubscriptionService.createSubscription).toHaveBeenCalledWith(mockUser, createDto);
       expect(result.message).toBe('Successfully subscribed to program');
-      expect(result.subscription?.notificationMethod).toBe(NotificationMethod.PUSH);
     });
 
     it('should return error for legacy users', async () => {
       const legacyUser = { id: 'public', type: 'public', email: 'legacy@example.com', role: 'user' };
       const createDto = {
         programId: 1,
-        notificationMethod: NotificationMethod.PUSH,
         endpoint: 'test-endpoint',
         p256dh: 'test-p256dh',
         auth: 'test-auth',
@@ -131,32 +128,9 @@ describe('SubscriptionController', () => {
       expect(result.error).toBe('Subscriptions not available for legacy authentication');
     });
 
-    it('should create a new subscription', async () => {
-      const createDto = {
-        programId: 1,
-        notificationMethod: NotificationMethod.EMAIL,
-        endpoint: 'test-endpoint',
-        p256dh: 'test-p256dh',
-        auth: 'test-auth',
-      };
-      const mockRequest = { user: mockUser };
-      mockUsersService.findOne.mockResolvedValue(mockUser);
-      mockSubscriptionService.createSubscription.mockResolvedValue({
-        ...mockSubscription,
-        notificationMethod: NotificationMethod.EMAIL,
-      });
-      const result = await controller.createSubscription(mockRequest, createDto);
-      expect(result).toBeDefined();
-      expect(result.subscription).toBeDefined();
-      if (result.subscription) {
-        expect(result.subscription.notificationMethod).toBe(NotificationMethod.EMAIL);
-      }
-    });
-
     it('should update an existing subscription', async () => {
       const createDto = {
         programId: 1,
-        notificationMethod: NotificationMethod.PUSH,
         endpoint: 'test-endpoint',
         p256dh: 'test-p256dh',
         auth: 'test-auth',
@@ -167,21 +141,18 @@ describe('SubscriptionController', () => {
       const result = await controller.createSubscription(mockRequest, createDto);
       expect(result).toBeDefined();
       expect(result.subscription).toBeDefined();
-      if (result.subscription) {
-        expect(result.subscription.notificationMethod).toBe(NotificationMethod.PUSH);
-      }
     });
   });
 
   describe('updateSubscription', () => {
     it('should update a subscription for real users', async () => {
       const updateDto = {
-        notificationMethod: NotificationMethod.EMAIL,
+        isActive: false,
       };
 
       const updatedSubscription = {
         ...mockSubscription,
-        notificationMethod: NotificationMethod.EMAIL,
+        isActive: false,
       };
 
       mockSubscriptionService.updateSubscription.mockResolvedValue(updatedSubscription);
@@ -200,7 +171,7 @@ describe('SubscriptionController', () => {
     it('should return error for legacy users', async () => {
       const legacyUser = { id: 'public', type: 'public', email: 'legacy@example.com', role: 'user' };
       const updateDto = {
-        notificationMethod: NotificationMethod.EMAIL,
+        isActive: false,
       };
 
       const mockRequest = { user: legacyUser };

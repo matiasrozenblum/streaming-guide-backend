@@ -6,7 +6,7 @@ import { PushScheduler } from './push.scheduler';
 import { PushService } from './push.service';
 import { EmailService } from '../email/email.service';
 import { Schedule } from '../schedules/schedules.entity';
-import { UserSubscription, NotificationMethod } from '../users/user-subscription.entity';
+import { UserSubscription } from '../users/user-subscription.entity';
 import { PushSubscriptionEntity } from './push-subscription.entity';
 import * as dayjs from 'dayjs';
 import { ConfigService } from '../config/config.service';
@@ -97,7 +97,7 @@ describe('PushScheduler', () => {
     id: 'sub-1',
     user: mockUser,
     program: mockProgram,
-    notificationMethod: NotificationMethod.PUSH,
+
     isActive: true,
   };
 
@@ -213,45 +213,6 @@ describe('PushScheduler', () => {
           },
         }
       );
-    });
-
-    it('should send email notifications for due schedules', async () => {
-      const emailSubscription = {
-        ...mockUserSubscription,
-        notificationMethod: NotificationMethod.EMAIL,
-      };
-
-      const schedulesService = module.get(SchedulesService);
-      jest.spyOn(schedulesService, 'findAll').mockResolvedValue([mockSchedule]);
-      mockUserSubscriptionRepository.find.mockResolvedValue([emailSubscription]);
-      mockEmailService.sendEmail.mockResolvedValue(undefined);
-
-      await scheduler.handleNotificationsCron();
-
-      expect(mockEmailService.sendEmail).toHaveBeenCalledWith({
-        to: mockUser.email,
-        subject: `¡${mockProgram.name} comienza en 10 minutos!`,
-        html: expect.stringContaining(mockProgram.name),
-        emailType: 'program_notification',
-      });
-    });
-
-    it('should send both push and email notifications when method is BOTH', async () => {
-      const bothSubscription = {
-        ...mockUserSubscription,
-        notificationMethod: NotificationMethod.BOTH,
-      };
-
-      const schedulesService = module.get(SchedulesService);
-      jest.spyOn(schedulesService, 'findAll').mockResolvedValue([mockSchedule]);
-      mockUserSubscriptionRepository.find.mockResolvedValue([bothSubscription]);
-      mockPushService.sendNotification.mockResolvedValue(undefined);
-      mockEmailService.sendEmail.mockResolvedValue(undefined);
-
-      await scheduler.handleNotificationsCron();
-
-      expect(mockPushService.sendNotification).toHaveBeenCalled();
-      expect(mockEmailService.sendEmail).toHaveBeenCalled();
     });
 
     it('should handle multiple schedules for different programs', async () => {
@@ -409,25 +370,6 @@ describe('PushScheduler', () => {
       );
     });
 
-    it('should handle email notification failures gracefully', async () => {
-      const emailSubscription = {
-        ...mockUserSubscription,
-        notificationMethod: NotificationMethod.EMAIL,
-      };
-
-      const schedulesService = module.get(SchedulesService);
-      jest.spyOn(schedulesService, 'findAll').mockResolvedValue([mockSchedule]);
-      mockUserSubscriptionRepository.find.mockResolvedValue([emailSubscription]);
-      mockEmailService.sendEmail.mockRejectedValue(new Error('Email failed'));
-
-      await scheduler.handleNotificationsCron();
-
-      expect(scheduler['logger'].error).toHaveBeenCalledWith(
-        expect.stringContaining('❌ Falló email notification'),
-        expect.any(Error)
-      );
-    });
-
     it('should return early when no schedules match', async () => {
       const schedulesService = module.get(SchedulesService);
       jest.spyOn(schedulesService, 'findAll').mockResolvedValue([]);
@@ -492,24 +434,6 @@ describe('PushScheduler', () => {
 
       expect(scheduler['logger'].log).toHaveBeenCalledWith(
         expect.stringContaining('✅ Push notification enviada')
-      );
-    });
-
-    it('should log successful email notifications', async () => {
-      const emailSubscription = {
-        ...mockUserSubscription,
-        notificationMethod: NotificationMethod.EMAIL,
-      };
-
-      const schedulesService = module.get(SchedulesService);
-      jest.spyOn(schedulesService, 'findAll').mockResolvedValue([mockSchedule]);
-      mockUserSubscriptionRepository.find.mockResolvedValue([emailSubscription]);
-      mockEmailService.sendEmail.mockResolvedValue(undefined);
-
-      await scheduler.handleNotificationsCron();
-
-      expect(scheduler['logger'].log).toHaveBeenCalledWith(
-        expect.stringContaining('✅ Email notification enviado')
       );
     });
 
