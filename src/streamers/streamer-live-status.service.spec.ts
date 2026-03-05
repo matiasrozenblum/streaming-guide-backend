@@ -2,11 +2,13 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { StreamerLiveStatusService } from './streamer-live-status.service';
 import { RedisService } from '../redis/redis.service';
+import { StreamerSubscriptionService } from './streamer-subscription.service';
 import { StreamerLiveStatusCache } from './interfaces/streamer-live-status-cache.interface';
 
 describe('StreamerLiveStatusService', () => {
   let service: StreamerLiveStatusService;
   let redisService: RedisService;
+  let subscriptionService: StreamerSubscriptionService;
 
   const mockRedisService = {
     get: jest.fn(),
@@ -15,7 +17,15 @@ describe('StreamerLiveStatusService', () => {
   };
 
   const mockConfigService = {
-    get: jest.fn().mockReturnValue('mock-kick-token'),
+    get: jest.fn((key: string) => {
+      if (key === 'KICK_APP_ACCESS_TOKEN') return 'mock-kick-token';
+      if (key === 'REDIS_TTL') return undefined; // Return undefined to use default
+      return null;
+    }),
+  };
+
+  const mockSubscriptionService = {
+    notifySubscribers: jest.fn().mockResolvedValue(undefined),
   };
 
   beforeEach(async () => {
@@ -30,11 +40,16 @@ describe('StreamerLiveStatusService', () => {
           provide: ConfigService,
           useValue: mockConfigService,
         },
+        {
+          provide: StreamerSubscriptionService,
+          useValue: mockSubscriptionService,
+        },
       ],
     }).compile();
 
     service = module.get<StreamerLiveStatusService>(StreamerLiveStatusService);
     redisService = module.get<RedisService>(RedisService);
+    subscriptionService = module.get<StreamerSubscriptionService>(StreamerSubscriptionService);
   });
 
   afterEach(() => {
@@ -46,7 +61,7 @@ describe('StreamerLiveStatusService', () => {
   });
 
   describe('updateLiveStatus', () => {
-    it('should create new cache entry when none exists', async () => {
+    it('should create new cache entry when none exists and notify subscribers if live', async () => {
       mockRedisService.get.mockResolvedValue(null);
 
       await service.updateLiveStatus(1, 'twitch', true, 'testuser');
@@ -66,6 +81,7 @@ describe('StreamerLiveStatusService', () => {
         }),
         604800
       );
+      expect(mockSubscriptionService.notifySubscribers).toHaveBeenCalledWith(1);
     });
 
     it('should update existing cache entry', async () => {
@@ -102,6 +118,7 @@ describe('StreamerLiveStatusService', () => {
         }),
         604800
       );
+      expect(mockSubscriptionService.notifySubscribers).toHaveBeenCalledWith(1);
     });
 
     it('should add new service to existing cache', async () => {

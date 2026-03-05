@@ -14,9 +14,12 @@ export class UsersService {
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     private deviceService: DeviceService,
-  ) {}
+  ) { }
 
   async create(createUserDto: CreateUserDto): Promise<User> {
+    if (createUserDto.email) {
+      createUserDto.email = createUserDto.email.toLowerCase().trim();
+    }
     const { password, birthDate, gender, ...rest } = createUserDto;
     // Validate age
     if (!birthDate) {
@@ -49,6 +52,9 @@ export class UsersService {
 
   /** Create user for social login (no password required) */
   async createSocialUser(body: { firstName: string; lastName: string; email: string; gender?: string; birthDate?: string; origin?: string }): Promise<User> {
+    if (body.email) {
+      body.email = body.email.toLowerCase().trim();
+    }
     // Generate a random password (not used for login)
     const randomPassword = randomBytes(16).toString('hex'); // always a string
     // Validate gender
@@ -58,10 +64,10 @@ export class UsersService {
       gender = body.gender as 'male' | 'female' | 'non_binary' | 'rather_not_say';
     }
     // Validate origin
-    const allowedOrigins = ['traditional', 'google', 'facebook'];
-    let origin: 'traditional' | 'google' | 'facebook' = 'traditional';
+    const allowedOrigins = ['traditional', 'google', 'facebook', 'apple'];
+    let origin: 'traditional' | 'google' | 'facebook' | 'apple' = 'traditional';
     if (body.origin && allowedOrigins.includes(body.origin)) {
-      origin = body.origin as 'traditional' | 'google' | 'facebook';
+      origin = body.origin as 'traditional' | 'google' | 'facebook' | 'apple';
     }
     const userData: any = {
       firstName: body.firstName,
@@ -83,7 +89,7 @@ export class UsersService {
 
   async findAll(page: number = 1, pageSize: number = 20): Promise<{ users: User[]; total: number; page: number; pageSize: number }> {
     const skip = (page - 1) * pageSize;
-    
+
     const [users, total] = await this.usersRepository.findAndCount({
       relations: ['devices', 'subscriptions', 'subscriptions.program'],
       skip,
@@ -100,7 +106,7 @@ export class UsersService {
   }
 
   async findOne(id: number): Promise<User> {
-    const user = await this.usersRepository.findOne({ 
+    const user = await this.usersRepository.findOne({
       where: { id },
       relations: ['devices', 'subscriptions'],
     });
@@ -112,30 +118,34 @@ export class UsersService {
     // Optimized: Don't load relations for update operations
     const user = await this.usersRepository.findOne({ where: { id } });
     if (!user) throw new NotFoundException(`User with ID ${id} not found`);
-    
+
+    if (updateUserDto.email) {
+      updateUserDto.email = updateUserDto.email.toLowerCase().trim();
+    }
+
     // Hash password if provided (this is the main performance bottleneck)
     if (updateUserDto.password) {
       updateUserDto.password = await bcrypt.hash(updateUserDto.password, 10);
     }
-    
+
     // Fix: ensure birthDate is a Date if present
     if (updateUserDto.birthDate && typeof updateUserDto.birthDate === 'string') {
       updateUserDto.birthDate = new Date(updateUserDto.birthDate) as any;
     }
-    
+
     // Fix: ensure gender is correct enum
     const allowedGenders = ['male', 'female', 'non_binary', 'rather_not_say'];
     if (updateUserDto.gender && !allowedGenders.includes(updateUserDto.gender)) {
       updateUserDto.gender = undefined;
     }
-    
+
     const updateData = Object.entries(updateUserDto).reduce((acc, [key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
         acc[key] = value;
       }
       return acc;
     }, {} as Partial<User>);
-    
+
     Object.assign(user, updateData);
     try {
       return await this.usersRepository.save(user);
@@ -151,30 +161,30 @@ export class UsersService {
   /**
    * Fast profile completion update - optimized for social users (no password hashing)
    */
-  async updateProfile(id: number, profileData: { 
-    firstName: string; 
-    lastName: string; 
-    gender: string; 
-    birthDate: string; 
+  async updateProfile(id: number, profileData: {
+    firstName: string;
+    lastName: string;
+    gender: string;
+    birthDate: string;
     password?: string;
   }): Promise<User> {
     const user = await this.usersRepository.findOne({ where: { id } });
     if (!user) throw new NotFoundException(`User with ID ${id} not found`);
-    
+
     // Hash password only if provided (for traditional users)
     if (profileData.password) {
       profileData.password = await bcrypt.hash(profileData.password, 10);
     }
-    
+
     // Ensure birthDate is a Date
     const birthDate = new Date(profileData.birthDate);
-    
+
     // Validate gender
     const allowedGenders = ['male', 'female', 'non_binary', 'rather_not_say'];
     if (!allowedGenders.includes(profileData.gender)) {
       throw new Error('Invalid gender');
     }
-    
+
     // Update user directly without loading relations
     Object.assign(user, {
       firstName: profileData.firstName,
@@ -183,7 +193,7 @@ export class UsersService {
       birthDate,
       ...(profileData.password && { password: profileData.password })
     });
-    
+
     try {
       return await this.usersRepository.save(user);
     } catch (error) {
@@ -202,7 +212,8 @@ export class UsersService {
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    return this.usersRepository.findOne({ 
+    email = email.toLowerCase().trim();
+    return this.usersRepository.findOne({
       where: { email },
       relations: ['devices', 'subscriptions'],
     });
@@ -212,7 +223,8 @@ export class UsersService {
    * Fast user lookup by email without relations - for performance-critical operations
    */
   async findByEmailFast(email: string): Promise<User | null> {
-    return this.usersRepository.findOne({ 
+    email = email.toLowerCase().trim();
+    return this.usersRepository.findOne({
       where: { email },
       // No relations for better performance
     });
@@ -232,7 +244,7 @@ export class UsersService {
   ): Promise<void> {
     const user = await this.findOne(userId);
     const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
-    
+
     if (!isPasswordValid) {
       throw new UnauthorizedException('Current password is incorrect');
     }
@@ -255,14 +267,14 @@ export class UsersService {
       timestamp: new Date().toISOString(),
       stack: new Error().stack?.split('\n').slice(1, 4).join('\n') // Show call stack
     });
-    
+
     const device = await this.deviceService.findOrCreateDevice(user, userAgent, deviceId);
-    
+
     console.log('✅ [UsersService] ensureUserDevice completed:', {
       deviceId: device.deviceId,
       deviceName: device.deviceName
     });
-    
+
     return device.deviceId;
   }
 }

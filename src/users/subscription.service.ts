@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { UserSubscription, NotificationMethod } from './user-subscription.entity';
+import { UserSubscription } from './user-subscription.entity';
 import { User } from './users.entity';
 import { Program } from '../programs/programs.entity';
 import { Device } from '../users/device.entity';
@@ -9,14 +9,12 @@ import { PushSubscriptionEntity } from '../push/push-subscription.entity';
 
 export interface CreateSubscriptionDto {
   programId: number;
-  notificationMethod: NotificationMethod;
   endpoint: string;
   p256dh: string;
   auth: string;
 }
 
 export interface UpdateSubscriptionDto {
-  notificationMethod?: NotificationMethod;
   isActive?: boolean;
 }
 
@@ -33,10 +31,10 @@ export class SubscriptionService {
     private pushSubscriptionRepository: Repository<PushSubscriptionEntity>,
     @InjectRepository(User)
     private userRepository: Repository<User>,
-  ) {}
+  ) { }
 
   async createSubscription(user: User, dto: CreateSubscriptionDto): Promise<UserSubscription> {
-    const { programId, notificationMethod, endpoint, p256dh, auth } = dto;
+    const { programId, endpoint, p256dh, auth } = dto;
     const program = await this.programRepository.findOne({ where: { id: programId } });
     if (!program) {
       throw new NotFoundException(`Program with ID ${programId} not found`);
@@ -48,7 +46,6 @@ export class SubscriptionService {
     });
 
     if (existingSubscription) {
-      existingSubscription.notificationMethod = notificationMethod;
       existingSubscription.isActive = true;
       return await this.subscriptionRepository.save(existingSubscription);
     }
@@ -56,16 +53,13 @@ export class SubscriptionService {
     const subscription = this.subscriptionRepository.create({
       user,
       program,
-      notificationMethod,
       isActive: true,
     });
 
     const savedSubscription = await this.subscriptionRepository.save(subscription);
 
-    // If notification method is PUSH or BOTH, create a push subscription entry
-    if (notificationMethod === NotificationMethod.PUSH || notificationMethod === NotificationMethod.BOTH) {
-      await this.createPushSubscription(user, savedSubscription, endpoint, p256dh, auth);
-    }
+    // Always create a push subscription entry
+    await this.createPushSubscription(user, savedSubscription, endpoint, p256dh, auth);
 
     return savedSubscription;
   }
@@ -127,10 +121,6 @@ export class SubscriptionService {
       throw new NotFoundException('Subscription not found');
     }
 
-    if (dto.notificationMethod !== undefined) {
-      subscription.notificationMethod = dto.notificationMethod;
-    }
-    
     if (dto.isActive !== undefined) {
       subscription.isActive = dto.isActive;
     }
@@ -166,7 +156,7 @@ export class SubscriptionService {
 
   // Admin Methods
 
-  async adminCreateSubscription(userId: number, programId: number, notificationMethod: NotificationMethod): Promise<UserSubscription> {
+  async adminCreateSubscription(userId: number, programId: number): Promise<UserSubscription> {
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException(`User with ID ${userId} not found`);
@@ -177,22 +167,16 @@ export class SubscriptionService {
       throw new NotFoundException(`Program with ID ${programId} not found`);
     }
 
-    if (notificationMethod !== NotificationMethod.EMAIL) {
-        throw new BadRequestException('Admin can only create subscriptions with "email" notification method.');
-    }
-
     let subscription = await this.subscriptionRepository.findOne({
       where: { user: { id: user.id }, program: { id: programId } },
     });
 
     if (subscription) {
-      subscription.notificationMethod = notificationMethod;
       subscription.isActive = true;
     } else {
       subscription = this.subscriptionRepository.create({
         user,
         program,
-        notificationMethod,
         isActive: true,
       });
     }
@@ -209,10 +193,6 @@ export class SubscriptionService {
       throw new NotFoundException('Subscription not found');
     }
 
-    if (dto.notificationMethod !== undefined) {
-      subscription.notificationMethod = dto.notificationMethod;
-    }
-    
     if (dto.isActive !== undefined) {
       subscription.isActive = dto.isActive;
     }

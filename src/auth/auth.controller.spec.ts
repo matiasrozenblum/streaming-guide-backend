@@ -31,6 +31,7 @@ describe('AuthController', () => {
     origin: 'traditional' as const,
     devices: [],
     subscriptions: [],
+    streamerSubscriptions: [],
   };
 
   beforeEach(async () => {
@@ -98,7 +99,7 @@ describe('AuthController', () => {
 
   describe('loginUser', () => {
     it('should return access and refresh tokens on successful login', async () => {
-      const mockTokens = { 
+      const mockTokens = {
         access_token: 'test-token',
         refresh_token: 'refresh-token'
       };
@@ -152,7 +153,7 @@ describe('AuthController', () => {
 
   describe('verifyCode', () => {
     it('should return access and refresh tokens for existing user', async () => {
-      const mockTokens = { 
+      const mockTokens = {
         access_token: 'test-token',
         refresh_token: 'refresh-token'
       };
@@ -176,10 +177,10 @@ describe('AuthController', () => {
         { identifier: 'test@example.com', code: '123456' },
       );
 
-      expect(result).toEqual({ 
-        access_token: 'test-token', 
+      expect(result).toEqual({
+        access_token: 'test-token',
         refresh_token: 'refresh-token',
-        isNew: false 
+        isNew: false
       });
     });
 
@@ -199,7 +200,7 @@ describe('AuthController', () => {
 
   describe('register', () => {
     it('should complete registration and return access and refresh tokens', async () => {
-      const mockTokens = { 
+      const mockTokens = {
         access_token: 'test-token',
         refresh_token: 'refresh-token'
       };
@@ -380,8 +381,8 @@ describe('AuthController', () => {
       });
     });
 
-    it('should update existing user with new data and return registration token if incomplete', async () => {
-      const incompleteUser = { ...mockUser, gender: null as any, birthDate: null as any };
+    it('should update existing user with new data and return registration token', async () => {
+      const incompleteUser = { ...mockUser, gender: null as any, birthDate: null as any, streamerSubscriptions: [] };
       const mockRegistrationToken = 'registration-token';
 
       jest.spyOn(usersService, 'findByEmail').mockResolvedValue(incompleteUser);

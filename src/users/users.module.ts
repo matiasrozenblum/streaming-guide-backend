@@ -5,6 +5,7 @@ import { UsersController } from './users.controller';
 import { User } from './users.entity';
 import { Device } from './device.entity';
 import { UserSubscription } from './user-subscription.entity';
+import { UserStreamerSubscription } from './user-streamer-subscription.entity';
 import { Program } from '../programs/programs.entity';
 import { DeviceService } from './device.service';
 import { SubscriptionService } from './subscription.service';
@@ -16,7 +17,7 @@ import { AdminSubscriptionController } from './admin-subscription.controller';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Device, UserSubscription, Program]),
+    TypeOrmModule.forFeature([User, Device, UserSubscription, UserStreamerSubscription, Program]),
     forwardRef(() => AuthModule),
     PushModule,
   ],
@@ -24,4 +25,4 @@ import { AdminSubscriptionController } from './admin-subscription.controller';
   providers: [UsersService, DeviceService, SubscriptionService],
   exports: [UsersService, DeviceService, SubscriptionService],
 })
-export class UsersModule {}
+export class UsersModule { }

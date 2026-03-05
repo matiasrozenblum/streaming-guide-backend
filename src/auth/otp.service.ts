@@ -21,6 +21,7 @@ export class OtpService {
   }
 
   async sendCode(identifier: string): Promise<void> {
+    identifier = identifier.toLowerCase().trim();
     const code = this.genCode();
     const key = this.prefix + identifier;
     // almacena código en Redis con TTL
@@ -31,6 +32,7 @@ export class OtpService {
   }
 
   async verifyCode(identifier: string, code: string): Promise<void> {
+    identifier = identifier.toLowerCase().trim();
     const key = this.prefix + identifier;
     const stored = await this.redis.get<string>(key);
     if (!stored || stored !== code) {

@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
 import { UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import { User } from '../users/users.entity';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -29,7 +30,8 @@ describe('AuthService', () => {
     origin: 'traditional' as const,
     devices: [],
     subscriptions: [],
-  };
+    streamerSubscriptions: [],
+  } as User;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
