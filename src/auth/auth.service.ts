@@ -13,7 +13,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly usersService: UsersService,
-  ) {}
+  ) { }
 
   async loginUser(
     email: string,
@@ -21,6 +21,7 @@ export class AuthService {
     userAgent?: string,
     deviceId?: string,
   ): Promise<{ access_token: string; refresh_token: string }> {
+    email = email.toLowerCase().trim();
     const user = await this.usersService.findByEmail(email);
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
@@ -63,6 +64,7 @@ export class AuthService {
   }
 
   async signJwtForIdentifier(identifier: string): Promise<string> {
+    identifier = identifier.toLowerCase().trim();
     const user = await this.usersService.findByEmail(identifier);
     if (!user) throw new UnauthorizedException('User not found');
     const birthDate =
@@ -84,12 +86,13 @@ export class AuthService {
   }
 
   async signRegistrationToken(identifier: string, additionalData?: Record<string, any>): Promise<string> {
+    identifier = identifier.toLowerCase().trim();
     // firmamos un token que contiene el email, un flag y datos adicionales
     const payload = { email: identifier, type: 'registration', ...additionalData };
     return await this.jwtService.sign(payload, { expiresIn: '1h' });
   }
 
-  async verifyRegistrationToken(token: string): Promise<{ email: string; [key: string]: any }> {
+  async verifyRegistrationToken(token: string): Promise<{ email: string;[key: string]: any }> {
     try {
       const payload: any = await this.jwtService.verify(token);
       if (payload.type !== 'registration' || !payload.email) {
