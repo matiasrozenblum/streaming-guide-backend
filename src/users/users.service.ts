@@ -17,6 +17,9 @@ export class UsersService {
   ) { }
 
   async create(createUserDto: CreateUserDto): Promise<User> {
+    if (createUserDto.email) {
+      createUserDto.email = createUserDto.email.toLowerCase().trim();
+    }
     const { password, birthDate, gender, ...rest } = createUserDto;
     // Validate age
     if (!birthDate) {
@@ -49,6 +52,9 @@ export class UsersService {
 
   /** Create user for social login (no password required) */
   async createSocialUser(body: { firstName: string; lastName: string; email: string; gender?: string; birthDate?: string; origin?: string }): Promise<User> {
+    if (body.email) {
+      body.email = body.email.toLowerCase().trim();
+    }
     // Generate a random password (not used for login)
     const randomPassword = randomBytes(16).toString('hex'); // always a string
     // Validate gender
@@ -112,6 +118,10 @@ export class UsersService {
     // Optimized: Don't load relations for update operations
     const user = await this.usersRepository.findOne({ where: { id } });
     if (!user) throw new NotFoundException(`User with ID ${id} not found`);
+
+    if (updateUserDto.email) {
+      updateUserDto.email = updateUserDto.email.toLowerCase().trim();
+    }
 
     // Hash password if provided (this is the main performance bottleneck)
     if (updateUserDto.password) {
@@ -202,6 +212,7 @@ export class UsersService {
   }
 
   async findByEmail(email: string): Promise<User | null> {
+    email = email.toLowerCase().trim();
     return this.usersRepository.findOne({
       where: { email },
       relations: ['devices', 'subscriptions'],
@@ -212,6 +223,7 @@ export class UsersService {
    * Fast user lookup by email without relations - for performance-critical operations
    */
   async findByEmailFast(email: string): Promise<User | null> {
+    email = email.toLowerCase().trim();
     return this.usersRepository.findOne({
       where: { email },
       // No relations for better performance
