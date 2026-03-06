@@ -30,7 +30,7 @@ export class StreamersController {
   @Get('visible')
   @ApiOperation({ summary: 'Obtener streamers visibles (público) con estado de live' })
   @ApiResponse({ status: 200, description: 'Lista de streamers visibles con estado de live', type: [Streamer] })
-  async findAllVisible(): Promise<Array<Streamer & { is_live?: boolean }>> {
+  async findAllVisible(): Promise<Array<Streamer & { is_live?: boolean, active_services?: string[] }>> {
     return this.streamersService.findAllVisibleWithLiveStatus();
   }
 

@@ -183,6 +183,7 @@ export class KickWebhookController {
         streamerName: streamer.name,
         service: 'kick',
         isLive,
+        active_services: isLive ? ['kick'] : [] // Minimum exact data for frontend SSE
       },
       revalidatePaths: ['/streamers'],
     });
