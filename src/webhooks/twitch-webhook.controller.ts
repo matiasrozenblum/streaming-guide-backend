@@ -96,13 +96,13 @@ export class TwitchWebhookController {
       if (challenge) {
         // Get raw body for signature verification
         const rawBody = (req as any).rawBody || JSON.stringify(body);
-        
+
         // Verify signature for verification requests too (Twitch signs them)
         if (!this.verifySignature(signature, messageId, timestamp, rawBody)) {
           this.logger.warn('❌ Invalid Twitch webhook signature for verification request');
           return res.status(403).send('Invalid signature');
         }
-        
+
         this.logger.log(`✅ Twitch webhook callback verification received, returning challenge: ${challenge.substring(0, 20)}...`);
         // Response must contain the raw challenge string only
         // Set Content-Type to text/plain and return 200
@@ -183,7 +183,7 @@ export class TwitchWebhookController {
     // Check lengths before comparison (timingSafeEqual requires equal lengths)
     const signatureBuffer = Buffer.from(signature);
     const expectedBuffer = Buffer.from(expectedSignature);
-    
+
     if (signatureBuffer.length !== expectedBuffer.length) {
       this.logger.warn(`❌ Signature length mismatch: received ${signatureBuffer.length}, expected ${expectedBuffer.length}`);
       return false;
@@ -251,6 +251,7 @@ export class TwitchWebhookController {
         streamerName: streamer.name,
         service: 'twitch',
         isLive,
+        active_services: isLive ? ['twitch'] : [] // Minimum exact data for frontend SSE
       },
       revalidatePaths: ['/streamers'],
     });
