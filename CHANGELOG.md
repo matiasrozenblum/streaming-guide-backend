@@ -10,6 +10,7 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ### Added
 
 ### Changed
+- Now indicating which service the streamer is live on
 
 ### Removed
 
