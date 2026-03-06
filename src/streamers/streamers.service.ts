@@ -74,7 +74,7 @@ export class StreamersService {
    * Get visible streamers with live status included
    * Live streamers are shown first, maintaining their relative order within each group
    */
-  async findAllVisibleWithLiveStatus(): Promise<Array<Streamer & { is_live?: boolean }>> {
+  async findAllVisibleWithLiveStatus(): Promise<Array<Streamer & { is_live?: boolean, active_services?: string[] }>> {
     const streamers = await this.findAllVisible();
     const streamerIds = streamers.map(s => s.id);
 
@@ -87,6 +87,7 @@ export class StreamersService {
       return {
         ...streamer,
         is_live: liveStatus?.isLive || false,
+        active_services: liveStatus?.services?.filter(s => s.isLive).map(s => s.service) || [],
       };
     });
 

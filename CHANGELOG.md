@@ -10,12 +10,22 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ### Added
 
 ### Changed
+- Now indicating which service the streamer is live on
 
 ### Removed
 
 ### Fixed
 
 ---
+
+## [1.24.0] - 2026-03-05
+
+### Added
+- Added support for native app
+- Added email lowercase normalization
+
+### Changed
+- Major refactor to notifications, removing type, only push now.
 
 ## [1.23.0] - 2026-02-16
 
