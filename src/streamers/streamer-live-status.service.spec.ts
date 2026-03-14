@@ -81,7 +81,7 @@ describe('StreamerLiveStatusService', () => {
         }),
         604800
       );
-      expect(mockSubscriptionService.notifySubscribers).toHaveBeenCalledWith(1);
+      expect(mockSubscriptionService.notifySubscribers).toHaveBeenCalledWith(1, 'twitch');
     });
 
     it('should update existing cache entry', async () => {
@@ -118,7 +118,7 @@ describe('StreamerLiveStatusService', () => {
         }),
         604800
       );
-      expect(mockSubscriptionService.notifySubscribers).toHaveBeenCalledWith(1);
+      expect(mockSubscriptionService.notifySubscribers).toHaveBeenCalledWith(1, 'twitch');
     });
 
     it('should add new service to existing cache', async () => {

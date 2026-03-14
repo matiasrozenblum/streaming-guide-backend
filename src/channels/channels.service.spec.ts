@@ -157,9 +157,14 @@ describe('ChannelsService - Channel Handle Change Detection', () => {
     redisService = module.get<RedisService>(RedisService);
     schedulesService = module.get<SchedulesService>(SchedulesService);
     youtubeDiscoveryService = module.get<YoutubeDiscoveryService>(YoutubeDiscoveryService);
+
+    // Prevent un-awaited setImmediate calls from hanging the Jest process
+    jest.useFakeTimers();
   });
 
   afterEach(() => {
+    jest.runAllTimers();
+    jest.useRealTimers();
     jest.clearAllMocks();
   });
 
@@ -220,7 +225,7 @@ describe('ChannelsService - Channel Handle Change Detection', () => {
         handle: '@oldhandle', // Old handle
         youtube_channel_id: 'OLD_YOUTUBE_ID_123',
       };
-      
+
       jest.spyOn(channelsRepository, 'findOne').mockResolvedValue(mockChannelWithOldHandle as any);
       jest.spyOn(channelsRepository, 'save').mockResolvedValue(mockChannelWithOldHandle as any);
       jest.spyOn(youtubeDiscoveryService, 'getChannelIdFromHandle').mockResolvedValue(null);
@@ -243,7 +248,7 @@ describe('ChannelsService - Channel Handle Change Detection', () => {
         handle: '@oldhandle', // Old handle
         youtube_channel_id: 'OLD_YOUTUBE_ID_123',
       };
-      
+
       const mockChannelWithNewHandle = {
         ...mockChannel,
         handle: '@newhandle',
@@ -271,7 +276,7 @@ describe('ChannelsService - Channel Handle Change Detection', () => {
         handle: '@oldhandle', // Old handle
         youtube_channel_id: 'OLD_YOUTUBE_ID_123',
       };
-      
+
       const mockChannelWithSameYouTubeId = {
         ...mockChannel,
         handle: '@newhandle',
