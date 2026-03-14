@@ -17,6 +17,12 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.24.2] - 2026-03-04
+
+### Changed
+- Now push notification text includes streaming service
+- Push notification takes the user to the streamer live stream
+
 ## [1.24.1] - 2026-03-05
 
 ### Changed

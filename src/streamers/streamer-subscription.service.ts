@@ -114,7 +114,7 @@ export class StreamerSubscriptionService {
         }
     }
 
-    async notifySubscribers(streamerId: number): Promise<void> {
+    async notifySubscribers(streamerId: number, platform?: string): Promise<void> {
         const streamer = await this.streamerRepository.findOne({ where: { id: streamerId } });
         if (!streamer) return;
 
@@ -130,9 +130,30 @@ export class StreamerSubscriptionService {
             return;
         }
 
+        let formattedPlatform = '';
+        if (platform) {
+            if (platform.toLowerCase() === 'youtube') formattedPlatform = 'YouTube';
+            else formattedPlatform = platform.charAt(0).toUpperCase() + platform.slice(1);
+        }
+
         const title = streamer.name;
-        const body = `¡${streamer.name} acaba de empezar un stream!`;
+        const body = formattedPlatform
+            ? `¡${streamer.name} acaba de empezar un stream en ${formattedPlatform}!`
+            : `¡${streamer.name} acaba de empezar un stream!`;
         const icon = streamer.logo_url || '/img/logo-192x192.png';
+
+        // Find the specific URL for the platform they went live on
+        let liveUrl = '';
+        if (platform && streamer.services) {
+            const activeService = streamer.services.find(s => s.service.toLowerCase() === platform.toLowerCase());
+            if (activeService) liveUrl = activeService.url;
+        }
+
+        const notificationData = {
+            type: 'streamer_live',
+            streamerId: String(streamer.id),
+            url: liveUrl
+        };
 
         for (const subscription of subscriptions) {
             const user = subscription.user;
@@ -149,6 +170,7 @@ export class StreamerSubscriptionService {
                                         body,
                                         icon,
                                     },
+                                    data: notificationData,
                                 });
                             } catch (error) {
                                 this.logger.error(`Failed to send push notification to user ${user.id}`, error);
