@@ -73,7 +73,7 @@ export class StreamerLiveStatusService {
         this.logger.log(`🚀 Streamer ${streamerId} went LIVE! Triggering notifications...`);
         // WAIT for notifications to finish before ending the Express request
         try {
-          await this.streamerSubscriptionService.notifySubscribers(streamerId);
+          await this.streamerSubscriptionService.notifySubscribers(streamerId, service);
         } catch (err) {
           this.logger.error(`Failed to notify subscribers for streamer ${streamerId}`, err);
         }
@@ -96,7 +96,7 @@ export class StreamerLiveStatusService {
         // WAIT for notifications to finish before ending the Express request
         // This is a diagnostic test to see if execution context destruction is stripping the Auth headers.
         try {
-          await this.streamerSubscriptionService.notifySubscribers(streamerId);
+          await this.streamerSubscriptionService.notifySubscribers(streamerId, service);
         } catch (err) {
           this.logger.error(`Failed to notify subscribers for streamer ${streamerId}`, err);
         }
