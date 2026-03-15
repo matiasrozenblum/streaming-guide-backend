@@ -136,11 +136,11 @@ export class CategoriesService {
   }
 
   async reorder(categoryIds: number[]): Promise<void> {
-    await this.dataSource.transaction(async (manager) => {
-      for (let i = 0; i < categoryIds.length; i++) {
-        await manager.update(Category, categoryIds[i], { order: i + 1 });
-      }
-    });
+    const entities = categoryIds.map((id, index) => ({
+      id,
+      order: index + 1,
+    }));
+    await this.categoriesRepository.save(entities);
 
     // Notify and revalidate
     console.log('[CategoriesService] Triggering revalidation for categories reorder...');

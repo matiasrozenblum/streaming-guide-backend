@@ -184,12 +184,11 @@ export class StreamersService {
   }
 
   async reorder(streamerIds: number[]): Promise<void> {
-    // Update order in a transaction
-    await this.streamersRepository.manager.transaction(async (manager) => {
-      for (let i = 0; i < streamerIds.length; i++) {
-        await manager.update(Streamer, streamerIds[i], { order: i + 1 });
-      }
-    });
+    const entities = streamerIds.map((id, index) => ({
+      id,
+      order: index + 1,
+    }));
+    await this.streamersRepository.save(entities);
 
     // Clear cache
     try {
