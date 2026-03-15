@@ -464,7 +464,11 @@ describe('BannersService', () => {
 
       const result = await service.reorder(reorderDto);
 
-      expect(mockRepository.update).toHaveBeenCalledTimes(2);
+      expect(mockRepository.save).toHaveBeenCalledTimes(1);
+      expect(mockRepository.save).toHaveBeenCalledWith([
+        { id: 1, display_order: 2 },
+        { id: 2, display_order: 1 },
+      ]);
       expect(result).toEqual([mockBanner]);
     });
 
