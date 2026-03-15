@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.24.3] - 2026-03-15
+
+### Changed
+- Fixed n+1 queries on reorder
+
 ## [1.24.2] - 2026-03-04
 
 ### Changed
