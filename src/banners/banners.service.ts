@@ -319,11 +319,11 @@ export class BannersService {
     }
 
     // Update display orders
-    const updatePromises = banners.map(({ id, display_order }) =>
-      this.bannersRepository.update(id, { display_order })
-    );
-
-    await Promise.all(updatePromises);
+    const entities = banners.map(({ id, display_order }) => ({
+      id,
+      display_order,
+    }));
+    await this.bannersRepository.save(entities);
 
     // Notify and revalidate
     await this.notifyUtil.notifyAndRevalidate({

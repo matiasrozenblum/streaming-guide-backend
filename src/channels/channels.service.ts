@@ -339,11 +339,11 @@ export class ChannelsService {
   }
 
   async reorder(channelIds: number[]): Promise<void> {
-    await this.dataSource.transaction(async (manager) => {
-      for (let i = 0; i < channelIds.length; i++) {
-        await manager.update(Channel, channelIds[i], { order: i + 1 });
-      }
-    });
+    const entities = channelIds.map((id, index) => ({
+      id,
+      order: index + 1,
+    }));
+    await this.channelsRepository.save(entities);
     
     // Clear unified cache
     try {
