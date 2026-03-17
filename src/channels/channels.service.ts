@@ -155,7 +155,7 @@ export class ChannelsService {
     }
     
     // Warm cache asynchronously (non-blocking)
-    setImmediate(() => this.schedulesService.warmSchedulesCache());
+    this.schedulesService.debouncedWarmSchedulesCache();
     
     const saved = await this.channelsRepository.save(channel);
 
@@ -226,7 +226,7 @@ export class ChannelsService {
     }
     
     // Warm cache asynchronously (non-blocking)
-    setImmediate(() => this.schedulesService.warmSchedulesCache());
+    this.schedulesService.debouncedWarmSchedulesCache();
     
     const updated = await this.channelsRepository.save(channel);
 
@@ -326,7 +326,7 @@ export class ChannelsService {
     }
     
     // Warm cache asynchronously (non-blocking)
-    setImmediate(() => this.schedulesService.warmSchedulesCache());
+    this.schedulesService.debouncedWarmSchedulesCache();
 
     // Notify and revalidate
     await this.notifyUtil.notifyAndRevalidate({
@@ -354,7 +354,7 @@ export class ChannelsService {
     }
     
     // Warm cache asynchronously (non-blocking)
-    setImmediate(() => this.schedulesService.warmSchedulesCache());
+    this.schedulesService.debouncedWarmSchedulesCache();
 
     // Notify and revalidate
     await this.notifyUtil.notifyAndRevalidate({

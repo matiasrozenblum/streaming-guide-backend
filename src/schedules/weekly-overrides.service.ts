@@ -272,7 +272,7 @@ export class WeeklyOverridesService {
     await this.updateWeeklyCacheForWeek(weekStartDate);
     
     // Warm cache asynchronously (non-blocking)
-    setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
+    this.schedulesService?.debouncedWarmSchedulesCache?.();
 
     // Notify frontend via SSE
     await this.notifyUtil.notifyAndRevalidate({
@@ -417,7 +417,7 @@ export class WeeklyOverridesService {
     await this.updateWeeklyCacheForWeek(existingOverride.weekStartDate);
     
     // Warm cache asynchronously (non-blocking)
-    setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
+    this.schedulesService?.debouncedWarmSchedulesCache?.();
 
     // Notify frontend via SSE
     await this.notifyUtil.notifyAndRevalidate({
@@ -673,7 +673,7 @@ export class WeeklyOverridesService {
     await this.updateWeeklyCacheForWeek(exists.weekStartDate);
     
     // Warm cache asynchronously (non-blocking)
-    setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
+    this.schedulesService?.debouncedWarmSchedulesCache?.();
     
     // Notify frontend via SSE
     await this.notifyUtil.notifyAndRevalidate({
@@ -962,7 +962,7 @@ export class WeeklyOverridesService {
       await this.redisService.del('schedules:week:complete');
       
       // Warm cache asynchronously (non-blocking)
-      setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
+      this.schedulesService?.debouncedWarmSchedulesCache?.();
     }
 
     return cleaned;
@@ -994,7 +994,7 @@ export class WeeklyOverridesService {
       await this.redisService.del('schedules:week:complete');
       
       // Warm cache asynchronously (non-blocking)
-      setImmediate(() => this.schedulesService?.warmSchedulesCache?.());
+      this.schedulesService?.debouncedWarmSchedulesCache?.();
       
       // Notify frontend via SSE
       await this.notifyUtil.notifyAndRevalidate({

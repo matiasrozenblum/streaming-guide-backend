@@ -44,6 +44,8 @@ describe('NotifyAndRevalidateUtil', () => {
       payload: {},
       revalidatePaths: ['/foo', '/bar'],
     });
+    // Revalidation is fire-and-forget; flush microtasks so fetch promises settle
+    await new Promise(resolve => process.nextTick(resolve));
     expect(global.fetch).toHaveBeenCalledTimes(2);
     expect(global.fetch).toHaveBeenCalledWith(
       'https://frontend.test/api/revalidate?x-vercel-set-bypass-cookie=true&x-vercel-protection-bypass=testsecret',
@@ -71,14 +73,15 @@ describe('NotifyAndRevalidateUtil', () => {
 
   it('handles fetch errors gracefully', async () => {
     (global.fetch as jest.Mock).mockRejectedValue(new Error('fail'));
-    await expect(
-      util.notifyAndRevalidate({
-        eventType: 'test_event',
-        entity: 'test_entity',
-        entityId: 123,
-        payload: {},
-        revalidatePaths: ['/'],
-      })
-    ).resolves.not.toThrow();
+    await util.notifyAndRevalidate({
+      eventType: 'test_event',
+      entity: 'test_entity',
+      entityId: 123,
+      payload: {},
+      revalidatePaths: ['/'],
+    });
+    // Flush microtasks to let the background revalidation error be caught
+    await new Promise(resolve => process.nextTick(resolve));
+    // Should not throw — errors are caught internally
   });
 }); 
