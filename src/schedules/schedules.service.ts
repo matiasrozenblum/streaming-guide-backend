@@ -36,6 +36,8 @@ export class SchedulesService {
   private readonly logger = new Logger(SchedulesService.name);
   private dayjs: typeof dayjs;
   private notifyUtil: NotifyAndRevalidateUtil;
+  private warmCacheTimer: ReturnType<typeof setTimeout> | null = null;
+  private static readonly WARM_CACHE_DEBOUNCE_MS = 2000;
 
   constructor(
     @InjectRepository(Schedule)
@@ -244,6 +246,21 @@ export class SchedulesService {
       // Log to Sentry but don't throw - cache warming failure shouldn't break operations
       this.sentryService.captureException(error);
     }
+  }
+
+  /**
+   * Debounced version of warmSchedulesCache.
+   * Multiple calls within WARM_CACHE_DEBOUNCE_MS are collapsed into a single cache warm,
+   * so bulk operations (e.g. creating a program + schedules + panelists) only trigger one rebuild.
+   */
+  debouncedWarmSchedulesCache(): void {
+    if (this.warmCacheTimer) {
+      clearTimeout(this.warmCacheTimer);
+    }
+    this.warmCacheTimer = setTimeout(() => {
+      this.warmCacheTimer = null;
+      this.warmSchedulesCache();
+    }, SchedulesService.WARM_CACHE_DEBOUNCE_MS);
   }
 
   async enrichSchedules(schedules: Schedule[], liveStatus: boolean = false): Promise<any[]> {
@@ -728,7 +745,7 @@ export class SchedulesService {
     await this.redisService.del('schedules:week:complete');
     
     // Warm cache asynchronously (non-blocking)
-    setImmediate(() => this.warmSchedulesCache());
+    this.debouncedWarmSchedulesCache();
 
     // Notify and revalidate
     await this.notifyUtil.notifyAndRevalidate({
@@ -753,7 +770,7 @@ export class SchedulesService {
     await this.redisService.del('schedules:week:complete');
     
     // Warm cache asynchronously (non-blocking)
-    setImmediate(() => this.warmSchedulesCache());
+    this.debouncedWarmSchedulesCache();
 
     // Notify and revalidate
     this.logger.debug(`Sending schedule update notification for ID: ${id}`);
@@ -775,7 +792,7 @@ export class SchedulesService {
       await this.redisService.delByPattern('schedules:all:*');
       
       // Warm cache asynchronously (non-blocking)
-      setImmediate(() => this.warmSchedulesCache());
+      this.debouncedWarmSchedulesCache();
       
       // Notify and revalidate
       await this.notifyUtil.notifyAndRevalidate({
@@ -825,7 +842,7 @@ export class SchedulesService {
     await this.redisService.delByPattern('schedules:all:*');
 
     // Warm cache asynchronously (non-blocking)
-    setImmediate(() => this.warmSchedulesCache());
+    this.debouncedWarmSchedulesCache();
 
     // Notify and revalidate
     await this.notifyUtil.notifyAndRevalidate({
@@ -858,7 +875,7 @@ export class SchedulesService {
     await this.redisService.del('schedules:week:complete');
     
     // Warm cache asynchronously (non-blocking)
-    setImmediate(() => this.warmSchedulesCache());
+    this.debouncedWarmSchedulesCache();
 
     // Notify and revalidate
     await this.notifyUtil.notifyAndRevalidate({

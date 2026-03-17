@@ -115,6 +115,7 @@ describe('ChannelsService - Channel Handle Change Detection', () => {
           provide: SchedulesService,
           useValue: {
             warmSchedulesCache: jest.fn(),
+            debouncedWarmSchedulesCache: jest.fn(),
           },
         },
         {
