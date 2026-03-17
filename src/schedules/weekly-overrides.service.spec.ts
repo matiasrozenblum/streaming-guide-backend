@@ -75,6 +75,7 @@ describe('WeeklyOverridesService', () => {
           provide: SchedulesService,
           useValue: {
             warmSchedulesCache: jest.fn(),
+            debouncedWarmSchedulesCache: jest.fn(),
           },
         },
       ],

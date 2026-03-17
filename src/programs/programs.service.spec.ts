@@ -157,6 +157,7 @@ describe('ProgramsService', () => {
           provide: SchedulesService,
           useValue: {
             warmSchedulesCache: jest.fn(),
+            debouncedWarmSchedulesCache: jest.fn(),
           },
         },
       ],

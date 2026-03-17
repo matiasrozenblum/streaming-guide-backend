@@ -74,6 +74,7 @@ describe('PanelistsService', () => {
           provide: SchedulesService,
           useValue: {
             warmSchedulesCache: jest.fn(),
+            debouncedWarmSchedulesCache: jest.fn(),
           },
         },
       ],
