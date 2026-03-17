@@ -117,7 +117,7 @@ export class PanelistsService {
     ]);
     
     // Warm cache asynchronously (non-blocking)
-    setImmediate(() => this.schedulesService.warmSchedulesCache());
+    this.schedulesService.debouncedWarmSchedulesCache();
 
     // Notify and revalidate
     await this.notifyUtil.notifyAndRevalidate({
@@ -173,7 +173,7 @@ export class PanelistsService {
       await this.redisService.del('schedules:week:complete');
       
       // Warm cache asynchronously (non-blocking)
-      setImmediate(() => this.schedulesService.warmSchedulesCache());
+      this.schedulesService.debouncedWarmSchedulesCache();
       
       // Notify and revalidate
       await this.notifyUtil.notifyAndRevalidate({
@@ -197,7 +197,7 @@ export class PanelistsService {
       await this.redisService.del('schedules:week:complete');
       
       // Warm cache asynchronously (non-blocking)
-      setImmediate(() => this.schedulesService.warmSchedulesCache());
+      this.schedulesService.debouncedWarmSchedulesCache();
       
       // Notify and revalidate
       await this.notifyUtil.notifyAndRevalidate({
