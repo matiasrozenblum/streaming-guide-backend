@@ -523,8 +523,17 @@ export class StreamersService {
             ...result,
           });
         }
+      } else if (service.service === 'twitch') {
+        const username = service.username || extractTwitchUsername(service.url);
+        if (username) {
+          const result = await this.streamerLiveStatusService.syncLiveStatusFromTwitch(streamerId, username);
+          results.push({
+            service: 'twitch',
+            username,
+            ...result,
+          });
+        }
       }
-      // TODO: Add Twitch sync when needed
     }
 
     // Notify frontend if any status changed
