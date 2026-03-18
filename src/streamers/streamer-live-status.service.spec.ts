@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { StreamerLiveStatusService } from './streamer-live-status.service';
 import { RedisService } from '../redis/redis.service';
 import { StreamerSubscriptionService } from './streamer-subscription.service';
+import { TokenRefreshService } from '../webhooks/token-refresh.service';
 import { StreamerLiveStatusCache } from './interfaces/streamer-live-status-cache.interface';
 
 describe('StreamerLiveStatusService', () => {
@@ -28,6 +29,10 @@ describe('StreamerLiveStatusService', () => {
     notifySubscribers: jest.fn().mockResolvedValue(undefined),
   };
 
+  const mockTokenRefreshService = {
+    getTwitchAccessToken: jest.fn().mockResolvedValue('mock-twitch-token'),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -43,6 +48,10 @@ describe('StreamerLiveStatusService', () => {
         {
           provide: StreamerSubscriptionService,
           useValue: mockSubscriptionService,
+        },
+        {
+          provide: TokenRefreshService,
+          useValue: mockTokenRefreshService,
         },
       ],
     }).compile();
