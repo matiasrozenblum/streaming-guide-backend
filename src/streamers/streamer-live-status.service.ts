@@ -4,6 +4,7 @@ import { RedisService } from '@/redis/redis.service';
 import { StreamerLiveStatusCache, StreamerServiceStatus } from './interfaces/streamer-live-status-cache.interface';
 import { StreamerService } from './streamers.entity';
 import { StreamerSubscriptionService } from './streamer-subscription.service';
+import { TokenRefreshService } from '../webhooks/token-refresh.service';
 
 @Injectable()
 export class StreamerLiveStatusService {
@@ -18,6 +19,8 @@ export class StreamerLiveStatusService {
     private readonly redisService: RedisService,
     @Inject(forwardRef(() => StreamerSubscriptionService))
     private readonly streamerSubscriptionService: StreamerSubscriptionService,
+    @Inject(forwardRef(() => TokenRefreshService))
+    private readonly tokenRefreshService: TokenRefreshService,
   ) {
     this.DEFAULT_TTL = this.configService.get<number>('REDIS_TTL') || 604800; // Default to 7 days if not configured
   }
@@ -247,6 +250,57 @@ export class StreamerLiveStatusService {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.logger.error(`❌ Error syncing live status from Kick for ${username}: ${errorMessage}`);
+      return { success: false, isLive: false, error: errorMessage };
+    }
+  }
+
+  /**
+   * Check live status from Twitch API and update cache
+   * Returns the current live status from Twitch's API
+   */
+  async syncLiveStatusFromTwitch(
+    streamerId: number,
+    username: string
+  ): Promise<{ success: boolean; isLive: boolean; error?: string }> {
+    try {
+      this.logger.log(`🔄 Syncing live status from Twitch API for streamer ${streamerId} (${username})`);
+
+      const clientId = this.configService.get<string>('TWITCH_CLIENT_ID');
+      const accessToken = await this.tokenRefreshService.getTwitchAccessToken();
+
+      if (!clientId || !accessToken) {
+        this.logger.warn('⚠️ Twitch credentials not configured, cannot sync live status');
+        return { success: false, isLive: false, error: 'Twitch credentials not configured' };
+      }
+
+      const response = await fetch(`https://api.twitch.tv/helix/streams?user_login=${username}`, {
+        headers: {
+          'Client-ID': clientId,
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        this.logger.warn(`⚠️ Failed to fetch Twitch channel data for ${username}: ${response.status} - ${errorText}`);
+        return { success: false, isLive: false, error: `Twitch API returned ${response.status}` };
+      }
+
+      const data = await response.json();
+
+      // Twitch API returns an array of streams in 'data'. If it's not empty, the streamer is live.
+      const isLive = data.data && Array.isArray(data.data) && data.data.length > 0;
+
+      this.logger.log(`📡 Twitch API response for ${username}: isLive=${isLive}`);
+
+      // Update the cache with the new status
+      await this.updateLiveStatus(streamerId, 'twitch', isLive, username);
+
+      this.logger.log(`✅ Synced live status for streamer ${streamerId} (${username}): isLive=${isLive}`);
+      return { success: true, isLive };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.logger.error(`❌ Error syncing live status from Twitch for ${username}: ${errorMessage}`);
       return { success: false, isLive: false, error: errorMessage };
     }
   }
