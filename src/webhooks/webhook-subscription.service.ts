@@ -427,26 +427,45 @@ export class WebhookSubscriptionService {
       kick: [] as string[],
     };
 
+    const keysToFetch: string[] = [];
+    const keyTypes = new Map<string, { service: 'twitch' | 'kick'; username: string }>();
+
+    // ⚡ Bolt: Batch Redis keys to avoid N+1 query patterns
     for (const service of services) {
       if (service.service === 'twitch') {
         const username = service.username || this.extractTwitchUsername(service.url);
         if (username) {
-          // Check for both online and offline subscriptions
           const onlineKey = `${this.SUBSCRIPTION_PREFIX}twitch:${username}:stream.online`;
           const offlineKey = `${this.SUBSCRIPTION_PREFIX}twitch:${username}:stream.offline`;
-          const onlineSub = await this.redisService.get(onlineKey);
-          const offlineSub = await this.redisService.get(offlineKey);
-          if (onlineSub) subscriptions.twitch.push((onlineSub as any).subscriptionId);
-          if (offlineSub) subscriptions.twitch.push((offlineSub as any).subscriptionId);
+          keysToFetch.push(onlineKey, offlineKey);
+          keyTypes.set(onlineKey, { service: 'twitch', username });
+          keyTypes.set(offlineKey, { service: 'twitch', username });
         }
       } else if (service.service === 'kick') {
         const username = service.username || this.extractKickUsername(service.url);
         if (username) {
           const key = `${this.SUBSCRIPTION_PREFIX}kick:${username}`;
-          const sub = await this.redisService.get(key);
-          if (sub) subscriptions.kick.push((sub as any).subscriptionId || username);
+          keysToFetch.push(key);
+          keyTypes.set(key, { service: 'kick', username });
         }
       }
+    }
+
+    if (keysToFetch.length > 0) {
+      // ⚡ Bolt: Perform a single round trip to Redis using mget instead of N individual get operations
+      const results = await this.redisService.mget<any>(keysToFetch);
+
+      results.forEach((sub, index) => {
+        if (sub) {
+          const key = keysToFetch[index];
+          const typeInfo = keyTypes.get(key);
+          if (typeInfo?.service === 'twitch') {
+            subscriptions.twitch.push(sub.subscriptionId);
+          } else if (typeInfo?.service === 'kick') {
+            subscriptions.kick.push(sub.subscriptionId || typeInfo.username);
+          }
+        }
+      });
     }
 
     return subscriptions;
