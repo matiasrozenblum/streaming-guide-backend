@@ -17,13 +17,13 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
-## [1.24.5] - 2026-03-18
+## [1.24.5] - 2026-03-23
 
 ### Added
-- Added twitch live status sync
+- Added custom holidays
 
 ### Changed
-- Improved streamer service get live status to use mget instead of multiple get calls
+- Fixed holiday calculation
 
 ## [1.24.4] - 2026-03-16
 

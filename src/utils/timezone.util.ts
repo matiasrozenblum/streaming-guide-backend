@@ -27,6 +27,15 @@ export class TimezoneUtil {
   }
 
   /**
+   * Parse a date string (YYYY-MM-DD) directly in Argentina timezone.
+   * Unlike toArgentinaTime, this interprets the string AS a date in Argentina,
+   * rather than parsing as UTC and then converting (which shifts the day back).
+   */
+  static parseInArgentinaTime(dateStr: string): dayjs.Dayjs {
+    return dayjs.tz(dateStr, this.ARGENTINA_TIMEZONE);
+  }
+
+  /**
    * Get current time formatted as HH:mm:ss in Argentina timezone
    */
   static currentTimeString(): string {
