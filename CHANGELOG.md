@@ -17,6 +17,14 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.24.5] - 2026-03-23
+
+### Added
+- Added custom holidays
+
+### Changed
+- Fixed holiday calculation
+
 ## [1.24.4] - 2026-03-16
 
 ### Changed
