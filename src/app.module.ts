@@ -37,6 +37,7 @@ import { ResourceMonitorService } from './services/resource-monitor.service';
 import { ConnectionPoolMonitorService } from './services/connection-pool-monitor.service';
 import { PerformanceInterceptor } from './interceptors/performance.interceptor';
 import { UpdatesModule } from './updates/updates.module';
+import { ConfigModule as AppConfigModule } from './config/config.module';
 
 @Module({
   imports: [
@@ -94,7 +95,7 @@ import { UpdatesModule } from './updates/updates.module';
     SchedulesModule,
     PanelistsModule,
     ScraperModule,
-    ConfigModule,
+    AppConfigModule,
     AuthModule,
     YoutubeLiveModule,
     ProposedChangesModule,

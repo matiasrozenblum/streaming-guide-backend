@@ -17,6 +17,7 @@ import { SentryService } from './sentry/sentry.service';
 import { ResourceMonitorService } from './services/resource-monitor.service';
 import { ConnectionPoolMonitorService } from './services/connection-pool-monitor.service';
 import { TimezoneUtil } from './utils/timezone.util';
+import { ConfigService as AppConfigService } from './config/config.service';
 
 const HolidaysClass = (DateHolidays as any).default ?? DateHolidays;
 
@@ -40,6 +41,7 @@ export class AppController {
     private readonly sentryService: SentryService,
     private readonly resourceMonitorService: ResourceMonitorService,
     private readonly connectionPoolMonitorService: ConnectionPoolMonitorService,
+    private readonly appConfigService: AppConfigService,
   ) {
     console.log('🚀 AppController initialized');
   }
@@ -516,38 +518,46 @@ export class AppController {
   }
   
   @Get('holiday')
-  isHoliday(@Query('date') date?: string) {
+  async isHoliday(@Query('date') date?: string) {
     let checkDate: Date;
     let dateString: string;
-    
+
     if (date) {
-      // Parse date string (expects YYYY-MM-DD format) as a date in Argentina timezone
-      // Use dayjs to parse the date string directly in Argentina timezone
-      const dateInArgentina = TimezoneUtil.toArgentinaTime(date).startOf('day');
+      const dateInArgentina = TimezoneUtil.parseInArgentinaTime(date).startOf('day');
       if (!dateInArgentina.isValid()) {
         return { error: 'Invalid date format. Use YYYY-MM-DD' };
       }
       checkDate = dateInArgentina.toDate();
       dateString = dateInArgentina.format('YYYY-MM-DD');
     } else {
-      // Default to today in Argentina timezone
       const now = TimezoneUtil.now();
       checkDate = now.toDate();
       dateString = now.format('YYYY-MM-DD');
     }
-    
-    const holidays = this.hd.isHoliday(checkDate);
-    const isHoliday = !!holidays;
-    
-    // Return detailed information
+
+    // Check date-holidays library
+    const libHolidays = this.hd.isHoliday(checkDate);
+    const holidayList: { name: string; type: string; date: string }[] = libHolidays
+      ? libHolidays.map((h: any) => ({ name: h.name, type: h.type, date: h.date }))
+      : [];
+
+    // Check custom dates from config (e.g. bridge days / "días no laborables")
+    const customDatesRaw = await this.appConfigService.get('holiday.custom_dates');
+    if (customDatesRaw) {
+      const customDates = customDatesRaw.split(',').map(d => d.trim());
+      if (customDates.includes(dateString)) {
+        holidayList.push({
+          name: 'Día no laborable',
+          type: 'custom',
+          date: `${dateString} 00:00:00`,
+        });
+      }
+    }
+
     return {
       date: dateString,
-      isHoliday,
-      holidays: isHoliday ? holidays.map((h: any) => ({
-        name: h.name,
-        type: h.type,
-        date: h.date,
-      })) : [],
+      isHoliday: holidayList.length > 0,
+      holidays: holidayList,
     };
   }
 }

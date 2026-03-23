@@ -5,11 +5,16 @@ import { Repository } from 'typeorm';
 import * as DateHolidays from 'date-holidays';
 import { TimezoneUtil } from '../utils/timezone.util';
 import { RedisService } from '../redis/redis.service';
+import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
+
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
+const REVALIDATE_SECRET = process.env.REVALIDATE_SECRET || 'changeme';
 
 @Injectable()
 export class ConfigService {
   private readonly hd = new ((DateHolidays as any).default ?? DateHolidays)('AR');
-  
+  private notifyUtil: NotifyAndRevalidateUtil;
+
   // Redis key prefixes for config cache
   private readonly FETCH_ENABLED_PREFIX = 'config:fetch_enabled:';
   private readonly HOLIDAY_OVERRIDE_PREFIX = 'config:holiday_override:';
@@ -23,7 +28,11 @@ export class ConfigService {
     private configRepository: Repository<Config>,
     private readonly redisService: RedisService,
   ) {
-    // Seed cache asynchronously on first use, not in constructor
+    this.notifyUtil = new NotifyAndRevalidateUtil(
+      this.redisService,
+      FRONTEND_URL,
+      REVALIDATE_SECRET,
+    );
   }
 
   /**
@@ -127,7 +136,19 @@ export class ConfigService {
     } else if (key === 'youtube.title_match_disabled' || key.startsWith('youtube.title_match_disabled.')) {
       await this.redisService.set(`${this.TITLE_MATCH_DISABLED_PREFIX}${key}`, boolValue);
     }
-    
+
+    // When holiday custom dates change: invalidate holiday cache + revalidate frontend
+    if (key === 'holiday.custom_dates') {
+      await this.redisService.del(this.HOLIDAY_CACHE_KEY);
+      this.notifyUtil.notifyAndRevalidate({
+        eventType: 'config.updated',
+        entity: 'config',
+        entityId: key,
+        payload: { key, value },
+        revalidatePaths: ['/'],
+      });
+    }
+
     return result;
   }
 
@@ -195,10 +216,19 @@ export class ConfigService {
     
     let isHoliday: boolean;
     if (!cachedHoliday || cachedHoliday.date !== today) {
-      // Check holiday using Argentina timezone
+      // Check date-holidays library
       const argentinaDate = TimezoneUtil.now().toDate();
       isHoliday = !!this.hd.isHoliday(argentinaDate);
-      
+
+      // Also check custom dates config (bridge days / "días no laborables")
+      if (!isHoliday) {
+        const customDatesRaw = await this.get('holiday.custom_dates');
+        if (customDatesRaw) {
+          const customDates = customDatesRaw.split(',').map(d => d.trim());
+          isHoliday = customDates.includes(today);
+        }
+      }
+
       // Cache until end of day (Argentina time)
       const ttl = TimezoneUtil.ttlUntilEndOfDay();
       await this.redisService.set(this.HOLIDAY_CACHE_KEY, { date: today, isHoliday }, ttl);
