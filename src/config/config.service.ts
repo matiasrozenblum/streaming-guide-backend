@@ -137,8 +137,9 @@ export class ConfigService {
       await this.redisService.set(`${this.TITLE_MATCH_DISABLED_PREFIX}${key}`, boolValue);
     }
 
-    // Revalidate frontend home when holiday custom dates change
+    // When holiday custom dates change: invalidate holiday cache + revalidate frontend
     if (key === 'holiday.custom_dates') {
+      await this.redisService.del(this.HOLIDAY_CACHE_KEY);
       this.notifyUtil.notifyAndRevalidate({
         eventType: 'config.updated',
         entity: 'config',
@@ -215,10 +216,19 @@ export class ConfigService {
     
     let isHoliday: boolean;
     if (!cachedHoliday || cachedHoliday.date !== today) {
-      // Check holiday using Argentina timezone
+      // Check date-holidays library
       const argentinaDate = TimezoneUtil.now().toDate();
       isHoliday = !!this.hd.isHoliday(argentinaDate);
-      
+
+      // Also check custom dates config (bridge days / "días no laborables")
+      if (!isHoliday) {
+        const customDatesRaw = await this.get('holiday.custom_dates');
+        if (customDatesRaw) {
+          const customDates = customDatesRaw.split(',').map(d => d.trim());
+          isHoliday = customDates.includes(today);
+        }
+      }
+
       // Cache until end of day (Argentina time)
       const ttl = TimezoneUtil.ttlUntilEndOfDay();
       await this.redisService.set(this.HOLIDAY_CACHE_KEY, { date: today, isHoliday }, ttl);
