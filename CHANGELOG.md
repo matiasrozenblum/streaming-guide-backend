@@ -17,6 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.24.6] - 2026-03-24
+
+### Changed
+- Streamer live status optimization
+
 ## [1.24.5] - 2026-03-23
 
 ### Added
