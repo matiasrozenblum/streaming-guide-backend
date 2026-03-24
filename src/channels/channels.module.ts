@@ -16,7 +16,14 @@ import { Category } from '../categories/categories.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Channel, Program, Schedule, UserSubscription, Device, Category]),
+    TypeOrmModule.forFeature([
+      Channel,
+      Program,
+      Schedule,
+      UserSubscription,
+      Device,
+      Category,
+    ]),
     forwardRef(() => YoutubeLiveModule),
     forwardRef(() => SchedulesModule),
     RedisModule,

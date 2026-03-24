@@ -10,7 +10,7 @@ describe('EmailService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    
+
     mockMailerService = {
       sendMail: jest.fn(),
     } as any;
@@ -35,7 +35,11 @@ describe('EmailService', () => {
       }),
     } as any;
 
-    service = new EmailService(mockMailerService, mockSentryService, mockConfigService);
+    service = new EmailService(
+      mockMailerService,
+      mockSentryService,
+      mockConfigService,
+    );
   });
 
   afterEach(() => {
@@ -59,21 +63,23 @@ describe('EmailService', () => {
     it('sends email successfully when changes exist', async () => {
       mockMailerService.sendMail.mockResolvedValue(undefined);
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
-      
+
       await service.sendProposedChangesReport(mockChanges);
-      
+
       expect(mockMailerService.sendMail).toHaveBeenCalledWith({
         from: expect.stringContaining('notifications@laguiadelstreaming.com'),
         to: 'admin@laguiadelstreaming.com',
         subject: '📋 Nuevos cambios detectados en la programación',
         html: expect.stringContaining('Cambios propuestos'),
       });
-      expect(consoleSpy).toHaveBeenCalledWith('📬 Email de cambios enviado via SMTP.');
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '📬 Email de cambios enviado via SMTP.',
+      );
     });
 
     it('does not send email when no changes exist', async () => {
       await service.sendProposedChangesReport([]);
-      
+
       expect(mockMailerService.sendMail).not.toHaveBeenCalled();
     });
 
@@ -81,10 +87,15 @@ describe('EmailService', () => {
       const error = new Error('SMTP connection failed');
       mockMailerService.sendMail.mockRejectedValue(error);
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
-      
-      await expect(service.sendProposedChangesReport(mockChanges)).rejects.toThrow('SMTP connection failed');
-      
-      expect(consoleSpy).toHaveBeenCalledWith('❌ Error sending proposed changes email:', error);
+
+      await expect(
+        service.sendProposedChangesReport(mockChanges),
+      ).rejects.toThrow('SMTP connection failed');
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '❌ Error sending proposed changes email:',
+        error,
+      );
       expect(mockSentryService.captureMessage).toHaveBeenCalledWith(
         'Email service failure - Proposed changes report failed',
         'error',
@@ -94,10 +105,13 @@ describe('EmailService', () => {
           error_message: 'SMTP connection failed',
           email_type: 'proposed_changes_report',
           recipient: 'admin@laguiadelstreaming.com',
-        })
+        }),
       );
       expect(mockSentryService.setTag).toHaveBeenCalledWith('service', 'email');
-      expect(mockSentryService.setTag).toHaveBeenCalledWith('error_type', 'send_failure');
+      expect(mockSentryService.setTag).toHaveBeenCalledWith(
+        'error_type',
+        'send_failure',
+      );
     });
   });
 
@@ -105,26 +119,33 @@ describe('EmailService', () => {
     it('sends OTP email successfully', async () => {
       mockMailerService.sendMail.mockResolvedValue(undefined);
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
-      
+
       await service.sendOtpCode('test@example.com', '123456', 5);
-      
+
       expect(mockMailerService.sendMail).toHaveBeenCalledWith({
         from: expect.stringContaining('noreply@laguiadelstreaming.com'),
         to: 'test@example.com',
         subject: 'Tu código de acceso • La Guía del Streaming',
         html: expect.stringContaining('123456'),
       });
-      expect(consoleSpy).toHaveBeenCalledWith('OTP enviado a test@example.com via SMTP: 123456');
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'OTP enviado a test@example.com via SMTP: 123456',
+      );
     });
 
     it('reports error to Sentry when OTP email fails', async () => {
       const error = new Error('Invalid email address');
       mockMailerService.sendMail.mockRejectedValue(error);
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
-      
-      await expect(service.sendOtpCode('invalid@example.com', '123456', 5)).rejects.toThrow('Invalid email address');
-      
-      expect(consoleSpy).toHaveBeenCalledWith('❌ Error sending OTP email:', error);
+
+      await expect(
+        service.sendOtpCode('invalid@example.com', '123456', 5),
+      ).rejects.toThrow('Invalid email address');
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '❌ Error sending OTP email:',
+        error,
+      );
       expect(mockSentryService.captureMessage).toHaveBeenCalledWith(
         'Email service failure - OTP code failed to send',
         'error',
@@ -134,10 +155,13 @@ describe('EmailService', () => {
           error_message: 'Invalid email address',
           email_type: 'otp_code',
           recipient: 'invalid@example.com',
-        })
+        }),
       );
       expect(mockSentryService.setTag).toHaveBeenCalledWith('service', 'email');
-      expect(mockSentryService.setTag).toHaveBeenCalledWith('error_type', 'send_failure');
+      expect(mockSentryService.setTag).toHaveBeenCalledWith(
+        'error_type',
+        'send_failure',
+      );
     });
   });
 
@@ -152,7 +176,7 @@ describe('EmailService', () => {
 
     it('sends report with attachment successfully', async () => {
       mockMailerService.sendMail.mockResolvedValue(undefined);
-      
+
       await service.sendReportWithAttachment({
         to: 'admin@example.com',
         subject: 'Weekly Report',
@@ -160,7 +184,7 @@ describe('EmailService', () => {
         html: '<h1>Report</h1>',
         attachments: mockAttachments,
       });
-      
+
       expect(mockMailerService.sendMail).toHaveBeenCalledWith({
         from: expect.stringContaining('notifications@laguiadelstreaming.com'),
         to: 'admin@example.com',
@@ -175,16 +199,21 @@ describe('EmailService', () => {
       const error = new Error('Attachment too large');
       mockMailerService.sendMail.mockRejectedValue(error);
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
-      
-      await expect(service.sendReportWithAttachment({
-        to: 'admin@example.com',
-        subject: 'Weekly Report',
-        text: 'Report content',
-        html: '<h1>Report</h1>',
-        attachments: mockAttachments,
-      })).rejects.toThrow('Attachment too large');
-      
-      expect(consoleSpy).toHaveBeenCalledWith('❌ Error sending report with attachment:', error);
+
+      await expect(
+        service.sendReportWithAttachment({
+          to: 'admin@example.com',
+          subject: 'Weekly Report',
+          text: 'Report content',
+          html: '<h1>Report</h1>',
+          attachments: mockAttachments,
+        }),
+      ).rejects.toThrow('Attachment too large');
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '❌ Error sending report with attachment:',
+        error,
+      );
       expect(mockSentryService.captureMessage).toHaveBeenCalledWith(
         'Email service failure - Report with attachment failed',
         'error',
@@ -195,10 +224,13 @@ describe('EmailService', () => {
           email_type: 'report_with_attachment',
           recipient: 'admin@example.com',
           subject: 'Weekly Report',
-        })
+        }),
       );
       expect(mockSentryService.setTag).toHaveBeenCalledWith('service', 'email');
-      expect(mockSentryService.setTag).toHaveBeenCalledWith('error_type', 'send_failure');
+      expect(mockSentryService.setTag).toHaveBeenCalledWith(
+        'error_type',
+        'send_failure',
+      );
     });
   });
 
@@ -206,42 +238,46 @@ describe('EmailService', () => {
     it('sends email successfully via SMTP when no SendGrid API key', async () => {
       mockMailerService.sendMail.mockResolvedValue(undefined);
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
-      
+
       await service.sendEmail({
         to: 'test@example.com',
         subject: 'Test Subject',
         html: '<h1>Test Content</h1>',
-        text: 'Test Content'
+        text: 'Test Content',
       });
-      
+
       expect(mockMailerService.sendMail).toHaveBeenCalledWith({
         from: expect.stringContaining('hola@laguiadelstreaming.com'),
         to: 'test@example.com',
         subject: 'Test Subject',
         html: '<h1>Test Content</h1>',
-        text: 'Test Content'
+        text: 'Test Content',
       });
-      expect(consoleSpy).toHaveBeenCalledWith('Email enviado a test@example.com via SMTP');
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Email enviado a test@example.com via SMTP',
+      );
     });
 
     it('generates text from HTML when text not provided', async () => {
       mockMailerService.sendMail.mockResolvedValue(undefined);
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
-      
+
       await service.sendEmail({
         to: 'test@example.com',
         subject: 'Test Subject',
-        html: '<h1>Test Content</h1><p>This is a paragraph.</p>'
+        html: '<h1>Test Content</h1><p>This is a paragraph.</p>',
       });
-      
+
       expect(mockMailerService.sendMail).toHaveBeenCalledWith({
         from: expect.stringContaining('hola@laguiadelstreaming.com'),
         to: 'test@example.com',
         subject: 'Test Subject',
         html: '<h1>Test Content</h1><p>This is a paragraph.</p>',
-        text: 'Test ContentThis is a paragraph.'
+        text: 'Test ContentThis is a paragraph.',
       });
-      expect(consoleSpy).toHaveBeenCalledWith('Email enviado a test@example.com via SMTP');
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Email enviado a test@example.com via SMTP',
+      );
     });
 
     it('tries SendGrid first when API key is available', async () => {
@@ -258,20 +294,33 @@ describe('EmailService', () => {
         }),
       } as any;
 
-      service = new EmailService(mockMailerService, mockSentryService, mockConfigService);
-      
+      service = new EmailService(
+        mockMailerService,
+        mockSentryService,
+        mockConfigService,
+      );
+
       // Mock the private sendViaSendGrid method
-      const sendViaSendGridSpy = jest.spyOn(service as any, 'sendViaSendGrid').mockResolvedValue(undefined);
+      const sendViaSendGridSpy = jest
+        .spyOn(service as any, 'sendViaSendGrid')
+        .mockResolvedValue(undefined);
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
-      
+
       await service.sendEmail({
         to: 'test@example.com',
         subject: 'Test Subject',
-        html: '<h1>Test Content</h1>'
+        html: '<h1>Test Content</h1>',
       });
-      
-      expect(sendViaSendGridSpy).toHaveBeenCalledWith('test@example.com', 'Test Subject', '<h1>Test Content</h1>', 'general');
-      expect(consoleSpy).toHaveBeenCalledWith('Email enviado a test@example.com via SendGrid');
+
+      expect(sendViaSendGridSpy).toHaveBeenCalledWith(
+        'test@example.com',
+        'Test Subject',
+        '<h1>Test Content</h1>',
+        'general',
+      );
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Email enviado a test@example.com via SendGrid',
+      );
       expect(mockMailerService.sendMail).not.toHaveBeenCalled();
     });
 
@@ -289,43 +338,61 @@ describe('EmailService', () => {
         }),
       } as any;
 
-      service = new EmailService(mockMailerService, mockSentryService, mockConfigService);
-      
+      service = new EmailService(
+        mockMailerService,
+        mockSentryService,
+        mockConfigService,
+      );
+
       // Mock SendGrid to fail
-      const sendViaSendGridSpy = jest.spyOn(service as any, 'sendViaSendGrid').mockRejectedValue(new Error('SendGrid API error'));
+      const sendViaSendGridSpy = jest
+        .spyOn(service as any, 'sendViaSendGrid')
+        .mockRejectedValue(new Error('SendGrid API error'));
       mockMailerService.sendMail.mockResolvedValue(undefined);
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-      
+
       await service.sendEmail({
         to: 'test@example.com',
         subject: 'Test Subject',
-        html: '<h1>Test Content</h1>'
+        html: '<h1>Test Content</h1>',
       });
-      
-      expect(sendViaSendGridSpy).toHaveBeenCalledWith('test@example.com', 'Test Subject', '<h1>Test Content</h1>', 'general');
-      expect(consoleErrorSpy).toHaveBeenCalledWith('❌ SendGrid failed, falling back to SMTP:', expect.any(Error));
+
+      expect(sendViaSendGridSpy).toHaveBeenCalledWith(
+        'test@example.com',
+        'Test Subject',
+        '<h1>Test Content</h1>',
+        'general',
+      );
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        '❌ SendGrid failed, falling back to SMTP:',
+        expect.any(Error),
+      );
       expect(mockMailerService.sendMail).toHaveBeenCalledWith({
         from: expect.stringContaining('hola@laguiadelstreaming.com'),
         to: 'test@example.com',
         subject: 'Test Subject',
         html: '<h1>Test Content</h1>',
-        text: 'Test Content'
+        text: 'Test Content',
       });
-      expect(consoleSpy).toHaveBeenCalledWith('Email enviado a test@example.com via SMTP');
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Email enviado a test@example.com via SMTP',
+      );
     });
 
     it('reports error to Sentry when SMTP fails', async () => {
       const error = new Error('SMTP connection failed');
       mockMailerService.sendMail.mockRejectedValue(error);
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
-      
-      await expect(service.sendEmail({
-        to: 'test@example.com',
-        subject: 'Test Subject',
-        html: '<h1>Test Content</h1>'
-      })).rejects.toThrow('SMTP connection failed');
-      
+
+      await expect(
+        service.sendEmail({
+          to: 'test@example.com',
+          subject: 'Test Subject',
+          html: '<h1>Test Content</h1>',
+        }),
+      ).rejects.toThrow('SMTP connection failed');
+
       expect(consoleSpy).toHaveBeenCalledWith('❌ Error sending email:', error);
       expect(mockSentryService.captureMessage).toHaveBeenCalledWith(
         'Email service failure - generic email failed to send',
@@ -336,18 +403,22 @@ describe('EmailService', () => {
           error_message: 'SMTP connection failed',
           email_type: 'general',
           recipient: 'test@example.com',
-        })
+        }),
       );
       expect(mockSentryService.setTag).toHaveBeenCalledWith('service', 'email');
-      expect(mockSentryService.setTag).toHaveBeenCalledWith('error_type', 'send_failure');
+      expect(mockSentryService.setTag).toHaveBeenCalledWith(
+        'error_type',
+        'send_failure',
+      );
     });
   });
 
   describe('stripHtml', () => {
     it('removes HTML tags and normalizes whitespace', () => {
-      const html = '<h1>Test Title</h1><p>This is a   paragraph with   extra spaces.</p>';
+      const html =
+        '<h1>Test Title</h1><p>This is a   paragraph with   extra spaces.</p>';
       const result = service['stripHtml'](html);
-      
+
       expect(result).toBe('Test TitleThis is a paragraph with extra spaces.');
     });
 
@@ -365,7 +436,7 @@ describe('EmailService', () => {
   describe('buildOtpHtml', () => {
     it('generates OTP HTML with correct code and TTL', () => {
       const html = service['buildOtpHtml']('123456', 5);
-      
+
       expect(html).toContain('123456');
       expect(html).toContain('5 minutos');
       expect(html).toContain('La Guía del Streaming');
@@ -373,9 +444,9 @@ describe('EmailService', () => {
 
     it('handles different TTL values', () => {
       const html = service['buildOtpHtml']('654321', 10);
-      
+
       expect(html).toContain('654321');
       expect(html).toContain('10 minutos');
     });
   });
-}); 
+});

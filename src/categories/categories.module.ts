@@ -6,10 +6,7 @@ import { Category } from './categories.entity';
 import { RedisModule } from '../redis/redis.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Category]),
-    RedisModule,
-  ],
+  imports: [TypeOrmModule.forFeature([Category]), RedisModule],
   controllers: [CategoriesController],
   providers: [CategoriesService],
   exports: [CategoriesService],

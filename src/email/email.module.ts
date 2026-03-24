@@ -22,8 +22,8 @@ import { SentryModule } from '../sentry/sentry.module';
             pass: configService.get('SMTP_PASS'),
           },
           connectionTimeout: 60000, // 60 seconds
-          greetingTimeout: 30000,   // 30 seconds
-          socketTimeout: 60000,     // 60 seconds
+          greetingTimeout: 30000, // 30 seconds
+          socketTimeout: 60000, // 60 seconds
         },
         defaults: {
           from: `"La Guía del Streaming" <${configService.get('SMTP_USER')}>`,

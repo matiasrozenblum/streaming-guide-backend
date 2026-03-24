@@ -30,7 +30,7 @@ export class NotifyAndRevalidateUtil {
     await this.redisService.set(
       notificationKey,
       JSON.stringify(notification),
-      300 // 5 minutes TTL
+      300, // 5 minutes TTL
     );
 
     // 2. Revalidate Next.js paths in the background (non-blocking, fire-and-forget)
@@ -57,14 +57,23 @@ export class NotifyAndRevalidateUtil {
           });
 
           if (!response.ok) {
-            console.error(`[NotifyAndRevalidate] Failed to revalidate path: ${path}, status: ${response.status}`);
+            console.error(
+              `[NotifyAndRevalidate] Failed to revalidate path: ${path}, status: ${response.status}`,
+            );
           }
         } catch (err) {
-          console.error('[NotifyAndRevalidate] Failed to revalidate path', path, err);
+          console.error(
+            '[NotifyAndRevalidate] Failed to revalidate path',
+            path,
+            err,
+          );
         }
       }),
     ).catch((err) => {
-      console.error('[NotifyAndRevalidate] Unexpected error in background revalidation', err);
+      console.error(
+        '[NotifyAndRevalidate] Unexpected error in background revalidation',
+        err,
+      );
     });
   }
-} 
+}

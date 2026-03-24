@@ -130,8 +130,8 @@ describe('BannersService', () => {
       const result = await service.findAllActive();
 
       // Timed banners should come first
-      const timedIndex = result.findIndex(b => b.id === 1);
-      const fixedIndex = result.findIndex(b => b.id === 2);
+      const timedIndex = result.findIndex((b) => b.id === 1);
+      const fixedIndex = result.findIndex((b) => b.id === 2);
       expect(timedIndex).toBeLessThan(fixedIndex);
     });
 
@@ -159,8 +159,8 @@ describe('BannersService', () => {
       const result = await service.findAllActive();
 
       // Banner with priority 1 should come before priority 3
-      const banner2Index = result.findIndex(b => b.id === 2);
-      const banner1Index = result.findIndex(b => b.id === 1);
+      const banner2Index = result.findIndex((b) => b.id === 2);
+      const banner1Index = result.findIndex((b) => b.id === 1);
       expect(banner2Index).toBeLessThan(banner1Index);
     });
 
@@ -186,7 +186,9 @@ describe('BannersService', () => {
 
       mockRepository.find.mockResolvedValue([timedBanner, disabledFixedBanner]);
       // Mock save to return the updated banner
-      mockRepository.save.mockImplementation((banner) => Promise.resolve({ ...banner, is_enabled: true }));
+      mockRepository.save.mockImplementation((banner) =>
+        Promise.resolve({ ...banner, is_enabled: true }),
+      );
 
       const result = await service.findAllActive();
 
@@ -234,14 +236,23 @@ describe('BannersService', () => {
         end_date: null,
       };
 
-      mockRepository.find.mockResolvedValue([timedBanner, disabledFixed1, disabledFixed2, disabledFixed3]);
-      mockRepository.save.mockImplementation((banner) => Promise.resolve({ ...banner, is_enabled: true }));
+      mockRepository.find.mockResolvedValue([
+        timedBanner,
+        disabledFixed1,
+        disabledFixed2,
+        disabledFixed3,
+      ]);
+      mockRepository.save.mockImplementation((banner) =>
+        Promise.resolve({ ...banner, is_enabled: true }),
+      );
 
       const result = await service.findAllActive();
 
       // Should only auto-enable up to 2 fixed banners (we have 1 timed, so need 1 more = 1 auto-enabled)
       // Total enabled fixed should be at most 2 (including any already enabled)
-      const enabledFixedCount = result.filter(b => b.is_fixed && b.is_enabled).length;
+      const enabledFixedCount = result.filter(
+        (b) => b.is_fixed && b.is_enabled,
+      ).length;
       expect(enabledFixedCount).toBeLessThanOrEqual(2);
       // Should have called save at most once (for 1 auto-enable)
       expect(mockRepository.save).toHaveBeenCalledTimes(1);
@@ -260,7 +271,9 @@ describe('BannersService', () => {
       const otherError = new Error('Database connection failed');
       mockRepository.find.mockRejectedValue(otherError);
 
-      await expect(service.findAllActive()).rejects.toThrow('Database connection failed');
+      await expect(service.findAllActive()).rejects.toThrow(
+        'Database connection failed',
+      );
     });
   });
 
@@ -355,7 +368,9 @@ describe('BannersService', () => {
         link_url: undefined,
       };
 
-      await expect(service.create(invalidDto)).rejects.toThrow(BadRequestException);
+      await expect(service.create(invalidDto)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('should throw BadRequestException if start_date is after end_date', async () => {
@@ -365,7 +380,9 @@ describe('BannersService', () => {
         end_date: '2024-01-01T00:00:00Z',
       };
 
-      await expect(service.create(invalidDto)).rejects.toThrow(BadRequestException);
+      await expect(service.create(invalidDto)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('should throw BadRequestException if timed banner missing dates', async () => {
@@ -376,7 +393,9 @@ describe('BannersService', () => {
         // end_date missing
       };
 
-      await expect(service.create(invalidDto)).rejects.toThrow(BadRequestException);
+      await expect(service.create(invalidDto)).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 
@@ -402,7 +421,12 @@ describe('BannersService', () => {
         end_date: new Date(),
       };
       mockRepository.findOne.mockResolvedValue(bannerWithDates);
-      mockRepository.save.mockResolvedValue({ ...bannerWithDates, is_fixed: true, start_date: null, end_date: null });
+      mockRepository.save.mockResolvedValue({
+        ...bannerWithDates,
+        is_fixed: true,
+        start_date: null,
+        end_date: null,
+      });
 
       const result = await service.update(1, { is_fixed: true });
 
@@ -421,14 +445,19 @@ describe('BannersService', () => {
       mockRepository.findOne.mockResolvedValue(fixedBanner);
 
       await expect(
-        service.update(1, { is_fixed: false, start_date: '2024-01-01T00:00:00Z' })
+        service.update(1, {
+          is_fixed: false,
+          start_date: '2024-01-01T00:00:00Z',
+        }),
       ).rejects.toThrow(BadRequestException);
     });
 
     it('should throw NotFoundException if banner not found', async () => {
       mockRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.update(999, updateDto)).rejects.toThrow(NotFoundException);
+      await expect(service.update(999, updateDto)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -458,7 +487,10 @@ describe('BannersService', () => {
         ],
       };
 
-      mockRepository.findByIds.mockResolvedValue([mockBanner, { ...mockBanner, id: 2 }]);
+      mockRepository.findByIds.mockResolvedValue([
+        mockBanner,
+        { ...mockBanner, id: 2 },
+      ]);
       mockRepository.update.mockResolvedValue({ affected: 1 });
       mockRepository.find.mockResolvedValue([mockBanner]);
 
@@ -482,7 +514,9 @@ describe('BannersService', () => {
 
       mockRepository.findByIds.mockResolvedValue([mockBanner]); // Only one banner found
 
-      await expect(service.reorder(reorderDto)).rejects.toThrow(NotFoundException);
+      await expect(service.reorder(reorderDto)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 

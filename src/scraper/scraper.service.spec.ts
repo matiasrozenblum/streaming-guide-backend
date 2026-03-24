@@ -78,32 +78,40 @@ describe('ScraperService', () => {
           endTime: '12:00',
         },
       ]);
-    
+
       // Mocks de repositorios
       mockChannelRepo.findOne.mockResolvedValue(null);
       mockChannelRepo.create.mockReturnValue({ name: 'Vorterix' });
       mockChannelRepo.save.mockResolvedValue({ id: 1, name: 'Vorterix' });
-    
+
       mockProgramRepo.findOne.mockResolvedValue(null);
       mockProgramRepo.find.mockResolvedValue([]); // No existing programs found
       mockProgramRepo.create.mockReturnValue({ name: 'Demo Show' });
       mockProgramRepo.save.mockResolvedValue({ id: 1, name: 'Demo Show' });
-    
+
       mockScheduleRepo.findOne.mockResolvedValue(null);
-    
+
       // Mock de proposedChangesService
-      mockProposedChangesService.clearPendingChangesForChannel = jest.fn().mockResolvedValue(undefined);
-      mockProposedChangesService.createProposedChange = jest.fn().mockResolvedValue(undefined);
-    
+      mockProposedChangesService.clearPendingChangesForChannel = jest
+        .fn()
+        .mockResolvedValue(undefined);
+      mockProposedChangesService.createProposedChange = jest
+        .fn()
+        .mockResolvedValue(undefined);
+
       // Ejecutar
       const result = await service.insertVorterixSchedule();
-    
+
       // Verificaciones
       expect(result).toEqual({ success: true });
       expect(mockChannelRepo.create).toHaveBeenCalled();
-      expect(mockProposedChangesService.clearPendingChangesForChannel).toHaveBeenCalledWith('Vorterix');
-    
-      expect(mockProposedChangesService.createProposedChange).toHaveBeenCalledWith([
+      expect(
+        mockProposedChangesService.clearPendingChangesForChannel,
+      ).toHaveBeenCalledWith('Vorterix');
+
+      expect(
+        mockProposedChangesService.createProposedChange,
+      ).toHaveBeenCalledWith([
         {
           entityType: 'program',
           action: 'create',
@@ -130,7 +138,6 @@ describe('ScraperService', () => {
         },
       ]);
     });
-    
   });
 
   describe('insertGelatinaSchedule', () => {

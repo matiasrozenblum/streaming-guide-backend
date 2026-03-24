@@ -1,8 +1,14 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, OneToMany } from "typeorm";
-import { Exclude } from "class-transformer";
-import { Device } from "./device.entity";
-import { UserSubscription } from "./user-subscription.entity";
-import { UserStreamerSubscription } from "./user-streamer-subscription.entity";
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  PrimaryGeneratedColumn,
+  OneToMany,
+} from 'typeorm';
+import { Exclude } from 'class-transformer';
+import { Device } from './device.entity';
+import { UserSubscription } from './user-subscription.entity';
+import { UserStreamerSubscription } from './user-streamer-subscription.entity';
 
 @Entity('users')
 export class User {
@@ -35,7 +41,7 @@ export class User {
     type: 'enum',
     enum: ['male', 'female', 'non_binary', 'rather_not_say'],
     nullable: true,
-    name: 'gender'
+    name: 'gender',
   })
   gender: 'male' | 'female' | 'non_binary' | 'rather_not_say';
 
@@ -46,16 +52,22 @@ export class User {
     type: 'enum',
     enum: ['traditional', 'google', 'facebook', 'apple'],
     default: 'traditional',
-    name: 'origin'
+    name: 'origin',
   })
   origin: 'traditional' | 'google' | 'facebook' | 'apple';
 
   @OneToMany(() => Device, (device) => device.user, { cascade: true })
   devices: Device[];
 
-  @OneToMany(() => UserSubscription, (subscription) => subscription.user, { cascade: true })
+  @OneToMany(() => UserSubscription, (subscription) => subscription.user, {
+    cascade: true,
+  })
   subscriptions: UserSubscription[];
 
-  @OneToMany(() => UserStreamerSubscription, (subscription) => subscription.user, { cascade: true })
+  @OneToMany(
+    () => UserStreamerSubscription,
+    (subscription) => subscription.user,
+    { cascade: true },
+  )
   streamerSubscriptions: UserStreamerSubscription[];
 }

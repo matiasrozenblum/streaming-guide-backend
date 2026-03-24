@@ -119,9 +119,11 @@ describe('SubscriptionService', () => {
 
     service = module.get<SubscriptionService>(SubscriptionService);
     userSubscriptionRepository = module.get<Repository<UserSubscription>>(
-      getRepositoryToken(UserSubscription)
+      getRepositoryToken(UserSubscription),
     );
-    programRepository = module.get<Repository<Program>>(getRepositoryToken(Program));
+    programRepository = module.get<Repository<Program>>(
+      getRepositoryToken(Program),
+    );
   });
 
   afterEach(() => {
@@ -148,7 +150,10 @@ describe('SubscriptionService', () => {
         where: { id: createDto.programId },
       });
       expect(mockUserSubscriptionRepository.findOne).toHaveBeenCalledWith({
-        where: { user: { id: mockUser.id }, program: { id: createDto.programId } },
+        where: {
+          user: { id: mockUser.id },
+          program: { id: createDto.programId },
+        },
       });
       expect(mockUserSubscriptionRepository.create).toHaveBeenCalledWith({
         user: mockUser,
@@ -168,8 +173,9 @@ describe('SubscriptionService', () => {
 
       mockProgramRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.createSubscription(mockUser, createDto))
-        .rejects.toThrow(NotFoundException);
+      await expect(
+        service.createSubscription(mockUser, createDto),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should update and return the existing subscription when subscription already exists', async () => {
@@ -181,7 +187,9 @@ describe('SubscriptionService', () => {
       };
 
       mockProgramRepository.findOne.mockResolvedValue(mockProgram);
-      mockUserSubscriptionRepository.findOne.mockResolvedValue(mockSubscription);
+      mockUserSubscriptionRepository.findOne.mockResolvedValue(
+        mockSubscription,
+      );
       mockUserSubscriptionRepository.save.mockResolvedValue({
         ...mockSubscription,
         isActive: true,
@@ -221,7 +229,9 @@ describe('SubscriptionService', () => {
 
   describe('removeSubscription', () => {
     it('should remove a subscription', async () => {
-      mockUserSubscriptionRepository.findOne.mockResolvedValue(mockSubscription);
+      mockUserSubscriptionRepository.findOne.mockResolvedValue(
+        mockSubscription,
+      );
       mockUserSubscriptionRepository.remove.mockResolvedValue(mockSubscription);
 
       await service.removeSubscription(mockUser.id, mockSubscription.id);
@@ -229,14 +239,17 @@ describe('SubscriptionService', () => {
       expect(mockUserSubscriptionRepository.findOne).toHaveBeenCalledWith({
         where: { id: mockSubscription.id, user: { id: mockUser.id } },
       });
-      expect(mockUserSubscriptionRepository.remove).toHaveBeenCalledWith(mockSubscription);
+      expect(mockUserSubscriptionRepository.remove).toHaveBeenCalledWith(
+        mockSubscription,
+      );
     });
 
     it('should throw NotFoundException when subscription not found', async () => {
       mockUserSubscriptionRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.removeSubscription(mockUser.id, 'non-existent'))
-        .rejects.toThrow(NotFoundException);
+      await expect(
+        service.removeSubscription(mockUser.id, 'non-existent'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -251,10 +264,18 @@ describe('SubscriptionService', () => {
         isActive: false,
       };
 
-      mockUserSubscriptionRepository.findOne.mockResolvedValue(mockSubscription);
-      mockUserSubscriptionRepository.save.mockResolvedValue(updatedSubscription);
+      mockUserSubscriptionRepository.findOne.mockResolvedValue(
+        mockSubscription,
+      );
+      mockUserSubscriptionRepository.save.mockResolvedValue(
+        updatedSubscription,
+      );
 
-      const result = await service.updateSubscription(mockUser.id, mockSubscription.id, updateDto);
+      const result = await service.updateSubscription(
+        mockUser.id,
+        mockSubscription.id,
+        updateDto,
+      );
 
       expect(mockUserSubscriptionRepository.findOne).toHaveBeenCalledWith({
         where: { id: mockSubscription.id, user: { id: mockUser.id } },
@@ -270,19 +291,29 @@ describe('SubscriptionService', () => {
 
       mockUserSubscriptionRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.updateSubscription(mockUser.id, 'non-existent', updateDto))
-        .rejects.toThrow(NotFoundException);
+      await expect(
+        service.updateSubscription(mockUser.id, 'non-existent', updateDto),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('isUserSubscribedToProgram', () => {
     it('should return true when user is subscribed', async () => {
-      mockUserSubscriptionRepository.findOne.mockResolvedValue(mockSubscription);
+      mockUserSubscriptionRepository.findOne.mockResolvedValue(
+        mockSubscription,
+      );
 
-      const result = await service.isUserSubscribedToProgram(mockUser.id, mockProgram.id);
+      const result = await service.isUserSubscribedToProgram(
+        mockUser.id,
+        mockProgram.id,
+      );
 
       expect(mockUserSubscriptionRepository.findOne).toHaveBeenCalledWith({
-        where: { user: { id: mockUser.id }, program: { id: mockProgram.id }, isActive: true },
+        where: {
+          user: { id: mockUser.id },
+          program: { id: mockProgram.id },
+          isActive: true,
+        },
       });
       expect(result).toBe(true);
     });
@@ -290,9 +321,12 @@ describe('SubscriptionService', () => {
     it('should return false when user is not subscribed', async () => {
       mockUserSubscriptionRepository.findOne.mockResolvedValue(null);
 
-      const result = await service.isUserSubscribedToProgram(mockUser.id, mockProgram.id);
+      const result = await service.isUserSubscribedToProgram(
+        mockUser.id,
+        mockProgram.id,
+      );
 
       expect(result).toBe(false);
     });
   });
-}); 
+});

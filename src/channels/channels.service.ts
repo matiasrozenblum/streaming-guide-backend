@@ -24,7 +24,8 @@ import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
+const FRONTEND_URL =
+  process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
 const REVALIDATE_SECRET = process.env.REVALIDATE_SECRET || 'changeme';
 
 type ChannelWithSchedules = {
@@ -62,7 +63,7 @@ type ChannelWithSchedules = {
       channel_stream_count?: number;
       panelists: { id: string; name: string }[];
       style_override: string | null;
-        is_visible: boolean;
+      is_visible: boolean;
     };
   }>;
 };
@@ -100,7 +101,7 @@ export class ChannelsService {
     this.notifyUtil = new NotifyAndRevalidateUtil(
       this.redisService,
       FRONTEND_URL,
-      REVALIDATE_SECRET
+      REVALIDATE_SECRET,
     );
   }
 
@@ -114,9 +115,9 @@ export class ChannelsService {
   }
 
   async findOne(id: number): Promise<Channel> {
-    const channel = await this.channelsRepository.findOne({ 
+    const channel = await this.channelsRepository.findOne({
       where: { id },
-      relations: ['categories']
+      relations: ['categories'],
     });
     if (!channel) {
       throw new NotFoundException(`Channel with ID ${id} not found`);
@@ -130,11 +131,16 @@ export class ChannelsService {
       .where('channel.order IS NOT NULL')
       .orderBy('channel.order', 'DESC')
       .getOne();
-  
+
     const newOrder = lastChannel ? (lastChannel.order || 0) + 1 : 1;
-  
-    const { category_ids, youtube_fetch_enabled, youtube_fetch_override_holiday, ...channelData } = createChannelDto;
-    
+
+    const {
+      category_ids,
+      youtube_fetch_enabled,
+      youtube_fetch_override_holiday,
+      ...channelData
+    } = createChannelDto;
+
     const channel = this.channelsRepository.create({
       ...channelData,
       order: newOrder,
@@ -142,10 +148,11 @@ export class ChannelsService {
 
     // Load categories if provided
     if (category_ids && category_ids.length > 0) {
-      const categories = await this.categoriesRepository.findByIds(category_ids);
+      const categories =
+        await this.categoriesRepository.findByIds(category_ids);
       channel.categories = categories;
     }
-  
+
     // Clear unified cache
     try {
       await this.redisService.del('schedules:week:complete');
@@ -153,13 +160,15 @@ export class ChannelsService {
     } catch (error) {
       console.error('❌ Error clearing caches:', error.message);
     }
-    
+
     // Warm cache asynchronously (non-blocking)
     this.schedulesService.debouncedWarmSchedulesCache();
-    
+
     const saved = await this.channelsRepository.save(channel);
 
-    const info = await this.youtubeDiscovery.getChannelIdFromHandle(createChannelDto.handle);
+    const info = await this.youtubeDiscovery.getChannelIdFromHandle(
+      createChannelDto.handle,
+    );
     if (info) {
       saved.youtube_channel_id = info.channelId;
       await this.channelsRepository.save(saved);
@@ -169,11 +178,11 @@ export class ChannelsService {
     if (saved.handle) {
       await this.configService.set(
         `youtube.fetch_enabled.${saved.handle}`,
-        (youtube_fetch_enabled ?? true).toString()
+        (youtube_fetch_enabled ?? true).toString(),
       );
       await this.configService.set(
         `youtube.fetch_override_holiday.${saved.handle}`,
-        (youtube_fetch_override_holiday ?? true).toString()
+        (youtube_fetch_override_holiday ?? true).toString(),
       );
     }
 
@@ -189,18 +198,27 @@ export class ChannelsService {
     return saved;
   }
 
-  async update(id: number, updateChannelDto: UpdateChannelDto): Promise<Channel> {
+  async update(
+    id: number,
+    updateChannelDto: UpdateChannelDto,
+  ): Promise<Channel> {
     const channel = await this.findOne(id);
-    
-    const { category_ids, youtube_fetch_enabled, youtube_fetch_override_holiday, ...channelData } = updateChannelDto;
-    
+
+    const {
+      category_ids,
+      youtube_fetch_enabled,
+      youtube_fetch_override_holiday,
+      ...channelData
+    } = updateChannelDto;
+
     // Check if handle is being updated
-    const handleChanged = channelData.handle !== undefined && channelData.handle !== channel.handle;
-    
+    const handleChanged =
+      channelData.handle !== undefined && channelData.handle !== channel.handle;
+
     // Capture old values BEFORE modifying channel object
     const oldYoutubeChannelId = channel.youtube_channel_id;
     const oldHandle = channel.handle;
-    
+
     Object.keys(channelData).forEach((key) => {
       if (channelData[key] !== undefined) {
         channel[key] = channelData[key];
@@ -210,7 +228,8 @@ export class ChannelsService {
     // Handle categories update
     if (category_ids !== undefined) {
       if (category_ids.length > 0) {
-        const categories = await this.categoriesRepository.findByIds(category_ids);
+        const categories =
+          await this.categoriesRepository.findByIds(category_ids);
         channel.categories = categories;
       } else {
         channel.categories = [];
@@ -224,10 +243,10 @@ export class ChannelsService {
     } catch (error) {
       console.error('❌ Error clearing caches:', error.message);
     }
-    
+
     // Warm cache asynchronously (non-blocking)
     this.schedulesService.debouncedWarmSchedulesCache();
-    
+
     const updated = await this.channelsRepository.save(channel);
 
     // Handle YouTube fetch configs update
@@ -237,22 +256,26 @@ export class ChannelsService {
         // Delete old configs
         try {
           await this.configService.remove(`youtube.fetch_enabled.${oldHandle}`);
-          await this.configService.remove(`youtube.fetch_override_holiday.${oldHandle}`);
+          await this.configService.remove(
+            `youtube.fetch_override_holiday.${oldHandle}`,
+          );
         } catch (error) {
           // Config might not exist, ignore error
-          console.log(`⚠️ Could not remove old configs for handle: ${oldHandle}`);
+          console.log(
+            `⚠️ Could not remove old configs for handle: ${oldHandle}`,
+          );
         }
       }
-      
+
       // Update configs with provided values (always required in UpdateChannelDto)
       // Use updated.handle which already contains the new handle if it changed
       await this.configService.set(
         `youtube.fetch_enabled.${updated.handle}`,
-        youtube_fetch_enabled.toString()
+        youtube_fetch_enabled.toString(),
       );
       await this.configService.set(
         `youtube.fetch_override_holiday.${updated.handle}`,
-        youtube_fetch_override_holiday.toString()
+        youtube_fetch_override_holiday.toString(),
       );
     }
 
@@ -261,41 +284,58 @@ export class ChannelsService {
       // If handle changed: invalidate old handle cache
       if (oldHandle) {
         await this.invalidateLiveStatusCaches(oldHandle);
-        console.log(`🗑️ Invalidated live status caches for old handle: ${oldHandle}`);
+        console.log(
+          `🗑️ Invalidated live status caches for old handle: ${oldHandle}`,
+        );
       }
-      
+
       // Resolve new YouTube channel ID from new handle
       try {
-        const info = await this.youtubeDiscovery.getChannelIdFromHandle(updateChannelDto.handle);
+        const info = await this.youtubeDiscovery.getChannelIdFromHandle(
+          updateChannelDto.handle,
+        );
         if (info) {
           updated.youtube_channel_id = info.channelId;
           await this.channelsRepository.save(updated);
-          console.log(`🔄 Updated YouTube channel ID for ${updated.name}: ${info.channelId}`);
-          
+          console.log(
+            `🔄 Updated YouTube channel ID for ${updated.name}: ${info.channelId}`,
+          );
+
           // If YouTube channel ID also changed, invalidate new handle cache (in case it was already cached with wrong YouTube channel ID)
-          const youtubeChannelIdChanged = oldYoutubeChannelId && oldYoutubeChannelId !== info.channelId;
+          const youtubeChannelIdChanged =
+            oldYoutubeChannelId && oldYoutubeChannelId !== info.channelId;
           if (youtubeChannelIdChanged && updateChannelDto.handle) {
             await this.invalidateLiveStatusCaches(updateChannelDto.handle);
-            console.log(`🗑️ Invalidated live status caches for new handle (YouTube channel ID changed): ${updateChannelDto.handle}`);
+            console.log(
+              `🗑️ Invalidated live status caches for new handle (YouTube channel ID changed): ${updateChannelDto.handle}`,
+            );
           }
         } else {
-          console.log(`⚠️ Could not resolve YouTube channel ID for handle: ${updateChannelDto.handle}`);
+          console.log(
+            `⚠️ Could not resolve YouTube channel ID for handle: ${updateChannelDto.handle}`,
+          );
         }
       } catch (error) {
-        console.error(`❌ Error updating YouTube channel ID for ${updated.name}:`, error.message);
+        console.error(
+          `❌ Error updating YouTube channel ID for ${updated.name}:`,
+          error.message,
+        );
       }
     } else {
       // Handle didn't change, but check if YouTube channel ID was manually updated
       // (Note: This would be rare, as YouTube channel ID is usually derived from handle)
-      const youtubeChannelIdChanged = oldYoutubeChannelId && 
-                                      updated.youtube_channel_id && 
-                                      oldYoutubeChannelId !== updated.youtube_channel_id;
-      
+      const youtubeChannelIdChanged =
+        oldYoutubeChannelId &&
+        updated.youtube_channel_id &&
+        oldYoutubeChannelId !== updated.youtube_channel_id;
+
       if (youtubeChannelIdChanged && updated.handle) {
         // YouTube channel ID changed but handle stayed the same - invalidate current handle cache
         // since we were fetching for the wrong YouTube channel ID
         await this.invalidateLiveStatusCaches(updated.handle);
-        console.log(`🗑️ Invalidated live status caches for handle (YouTube channel ID changed): ${updated.handle}`);
+        console.log(
+          `🗑️ Invalidated live status caches for handle (YouTube channel ID changed): ${updated.handle}`,
+        );
       }
     }
 
@@ -316,7 +356,7 @@ export class ChannelsService {
     if (result.affected === 0) {
       throw new NotFoundException(`Channel with ID ${id} not found`);
     }
-    
+
     // Clear unified cache
     try {
       await this.redisService.del('schedules:week:complete');
@@ -324,7 +364,7 @@ export class ChannelsService {
     } catch (error) {
       console.error('❌ Error clearing caches:', error.message);
     }
-    
+
     // Warm cache asynchronously (non-blocking)
     this.schedulesService.debouncedWarmSchedulesCache();
 
@@ -344,7 +384,7 @@ export class ChannelsService {
       order: index + 1,
     }));
     await this.channelsRepository.save(entities);
-    
+
     // Clear unified cache
     try {
       await this.redisService.del('schedules:week:complete');
@@ -352,7 +392,7 @@ export class ChannelsService {
     } catch (error) {
       console.error('❌ Error clearing caches:', error.message);
     }
-    
+
     // Warm cache asynchronously (non-blocking)
     this.schedulesService.debouncedWarmSchedulesCache();
 
@@ -366,10 +406,17 @@ export class ChannelsService {
     });
   }
 
-  async getChannelsWithSchedules(day?: string, deviceId?: string, liveStatus?: boolean, raw?: string): Promise<ChannelWithSchedules[]> {
+  async getChannelsWithSchedules(
+    day?: string,
+    deviceId?: string,
+    liveStatus?: boolean,
+    raw?: string,
+  ): Promise<ChannelWithSchedules[]> {
     const overallStart = Date.now();
     const requestId = Math.random().toString(36).substr(2, 9);
-    console.log(`[CHANNELS-SCHEDULES-${requestId}] Starting fetch - day: ${day || 'all'}, live: ${liveStatus}, raw: ${raw} at ${new Date().toISOString()}`);
+    console.log(
+      `[CHANNELS-SCHEDULES-${requestId}] Starting fetch - day: ${day || 'all'}, live: ${liveStatus}, raw: ${raw} at ${new Date().toISOString()}`,
+    );
 
     // Pre-fetch user subscriptions if deviceId is provided (optimized query)
     let subscribedProgramIds: Set<number> = new Set();
@@ -382,69 +429,96 @@ export class ChannelsService {
           .select(['device.id', 'user.id'])
           .where('device.deviceId = :deviceId', { deviceId })
           .getOne();
-        
+
         if (device?.user?.id) {
           const subscriptions = await this.userSubscriptionRepo.find({
             where: { user: { id: device.user.id }, isActive: true },
             relations: ['program'],
           });
-          subscribedProgramIds = new Set(subscriptions.map(sub => sub.program.id));
+          subscribedProgramIds = new Set(
+            subscriptions.map((sub) => sub.program.id),
+          );
         }
       } catch (error) {
-        console.warn(`[CHANNELS-SCHEDULES] Device lookup failed for ${deviceId}:`, error.message);
+        console.warn(
+          `[CHANNELS-SCHEDULES] Device lookup failed for ${deviceId}:`,
+          error.message,
+        );
         // Continue without device filtering if lookup fails
       }
     }
 
     // Use Approach B: cache combination for better performance
     const queryStart = Date.now();
-    console.log(`[CHANNELS-SCHEDULES-${requestId}] Using cache combination approach at ${new Date().toISOString()}`);
+    console.log(
+      `[CHANNELS-SCHEDULES-${requestId}] Using cache combination approach at ${new Date().toISOString()}`,
+    );
     let allSchedules;
     try {
       // Get data from OptimizedSchedulesService (combines schedules + liveStatus + overrides)
-      allSchedules = await this.optimizedSchedulesService.getSchedulesWithOptimizedLiveStatus({
-        dayOfWeek: day,
-        applyOverrides: raw !== 'true',
-        liveStatus: liveStatus || false,
-      });
-      
-      console.log(`[CHANNELS-SCHEDULES-${requestId}] Cache combination query completed (${Date.now() - queryStart}ms) - ${allSchedules.length} schedules`);
+      allSchedules =
+        await this.optimizedSchedulesService.getSchedulesWithOptimizedLiveStatus(
+          {
+            dayOfWeek: day,
+            applyOverrides: raw !== 'true',
+            liveStatus: liveStatus || false,
+          },
+        );
+
+      console.log(
+        `[CHANNELS-SCHEDULES-${requestId}] Cache combination query completed (${Date.now() - queryStart}ms) - ${allSchedules.length} schedules`,
+      );
     } catch (error) {
-      console.error(`[CHANNELS-SCHEDULES-${requestId}] Error in cache combination approach:`, error.message);
-      
+      console.error(
+        `[CHANNELS-SCHEDULES-${requestId}] Error in cache combination approach:`,
+        error.message,
+      );
+
       // EMERGENCY FALLBACK: Use basic schedules without live status
-      console.log(`[CHANNELS-SCHEDULES-${requestId}] Using emergency fallback...`);
+      console.log(
+        `[CHANNELS-SCHEDULES-${requestId}] Using emergency fallback...`,
+      );
       try {
         allSchedules = await this.schedulesService.findAll({
           dayOfWeek: day,
           applyOverrides: raw !== 'true',
           liveStatus: false, // Skip live status in emergency
         });
-        
-        console.log(`[CHANNELS-SCHEDULES-${requestId}] Emergency fallback completed - ${allSchedules.length} schedules`);
+
+        console.log(
+          `[CHANNELS-SCHEDULES-${requestId}] Emergency fallback completed - ${allSchedules.length} schedules`,
+        );
       } catch (fallbackError) {
-        console.error(`[CHANNELS-SCHEDULES-${requestId}] Emergency fallback also failed:`, fallbackError.message);
+        console.error(
+          `[CHANNELS-SCHEDULES-${requestId}] Emergency fallback also failed:`,
+          fallbackError.message,
+        );
         allSchedules = [];
       }
     }
 
     // Filter out schedules for invisible programs
-    allSchedules = (allSchedules || []).filter(s => s?.program?.is_visible !== false);
+    allSchedules = (allSchedules || []).filter(
+      (s) => s?.program?.is_visible !== false,
+    );
 
     // Group schedules by channel
     const groupStart = Date.now();
-    const schedulesGroupedByChannelId = allSchedules.reduce((acc, schedule) => {
-      const channelId = schedule.program?.channel?.id;
-      if (!channelId) return acc;
-      if (!acc[channelId]) acc[channelId] = [];
-      acc[channelId].push(schedule);
-      return acc;
-    }, {} as Record<number, any[]>);
+    const schedulesGroupedByChannelId = allSchedules.reduce(
+      (acc, schedule) => {
+        const channelId = schedule.program?.channel?.id;
+        if (!channelId) return acc;
+        if (!acc[channelId]) acc[channelId] = [];
+        acc[channelId].push(schedule);
+        return acc;
+      },
+      {} as Record<number, any[]>,
+    );
 
     // Get all channels for the result structure (with caching)
     const channelsQueryStart = Date.now();
     const channelsCacheKey = 'channels:visible_with_categories';
-    
+
     let channels = await this.redisService.get<any[]>(channelsCacheKey);
     if (!channels) {
       channels = await this.channelsRepository.find({
@@ -452,17 +526,21 @@ export class ChannelsService {
         order: { order: 'ASC' },
         relations: ['categories'],
       });
-      
+
       // Cache for 30 minutes (matches schedules cache TTL)
       await this.redisService.set(channelsCacheKey, channels, 1800);
-      console.log(`[CHANNELS-SCHEDULES] Channels query completed from DB (${Date.now() - channelsQueryStart}ms) - ${channels.length} channels`);
+      console.log(
+        `[CHANNELS-SCHEDULES] Channels query completed from DB (${Date.now() - channelsQueryStart}ms) - ${channels.length} channels`,
+      );
     } else {
-      console.log(`[CHANNELS-SCHEDULES] Channels from cache (${Date.now() - channelsQueryStart}ms) - ${channels.length} channels`);
+      console.log(
+        `[CHANNELS-SCHEDULES] Channels from cache (${Date.now() - channelsQueryStart}ms) - ${channels.length} channels`,
+      );
     }
 
     // Build final result
     const resultStart = Date.now();
-    const result: ChannelWithSchedules[] = channels.map(channel => {
+    const result: ChannelWithSchedules[] = channels.map((channel) => {
       return {
         channel: {
           id: channel.id,
@@ -473,53 +551,67 @@ export class ChannelsService {
           handle: channel.handle,
           categories: channel.categories,
         },
-      schedules: (schedulesGroupedByChannelId[channel.id] || []).map((schedule) => ({
-        id: schedule.id,
-        day_of_week: schedule.day_of_week,
-        start_time: schedule.start_time,
-        end_time: schedule.end_time,
-        subscribed: subscribedProgramIds.has(schedule.program.id),
-        isWeeklyOverride: schedule.isWeeklyOverride,
-        overrideType: schedule.overrideType,
-        program: {
-          id: schedule.program.id,
-          name: schedule.program.name,
-          logo_url: schedule.program.logo_url,
-          description: schedule.program.description,
-          stream_url: schedule.program.stream_url,
-          is_live: schedule.program.is_live,
-          live_streams: schedule.program.live_streams,
-          stream_count: schedule.program.stream_count,
-          channel_stream_count: schedule.program.channel_stream_count,
-          panelists: schedule.program.panelists?.map((p) => ({
-            id: p.id.toString(),
-            name: p.name,
-          })) || [],
-          style_override: schedule.program.style_override,
-          is_visible: schedule.program.is_visible ?? true,
-        },
-      })),
+        schedules: (schedulesGroupedByChannelId[channel.id] || []).map(
+          (schedule) => ({
+            id: schedule.id,
+            day_of_week: schedule.day_of_week,
+            start_time: schedule.start_time,
+            end_time: schedule.end_time,
+            subscribed: subscribedProgramIds.has(schedule.program.id),
+            isWeeklyOverride: schedule.isWeeklyOverride,
+            overrideType: schedule.overrideType,
+            program: {
+              id: schedule.program.id,
+              name: schedule.program.name,
+              logo_url: schedule.program.logo_url,
+              description: schedule.program.description,
+              stream_url: schedule.program.stream_url,
+              is_live: schedule.program.is_live,
+              live_streams: schedule.program.live_streams,
+              stream_count: schedule.program.stream_count,
+              channel_stream_count: schedule.program.channel_stream_count,
+              panelists:
+                schedule.program.panelists?.map((p) => ({
+                  id: p.id.toString(),
+                  name: p.name,
+                })) || [],
+              style_override: schedule.program.style_override,
+              is_visible: schedule.program.is_visible ?? true,
+            },
+          }),
+        ),
       };
     });
-    console.log(`[CHANNELS-SCHEDULES] Built result (${Date.now() - resultStart}ms) - ${result.length} channels`);
-    console.log(`[CHANNELS-SCHEDULES] TOTAL time: ${Date.now() - overallStart}ms`);
+    console.log(
+      `[CHANNELS-SCHEDULES] Built result (${Date.now() - resultStart}ms) - ${result.length} channels`,
+    );
+    console.log(
+      `[CHANNELS-SCHEDULES] TOTAL time: ${Date.now() - overallStart}ms`,
+    );
     return result;
   }
 
   /**
    * Get today's schedules only - optimized for initial page load
    */
-  async getTodaySchedules(deviceId?: string, liveStatus?: boolean, raw?: string): Promise<ChannelWithSchedules[]> {
+  async getTodaySchedules(
+    deviceId?: string,
+    liveStatus?: boolean,
+    raw?: string,
+  ): Promise<ChannelWithSchedules[]> {
     const today = TimezoneUtil.currentDayOfWeek();
-    
+
     return this.getChannelsWithSchedules(today, deviceId, liveStatus, raw);
   }
 
   /**
    * Get full week schedules - optimized for background loading
    */
-  async getWeekSchedules(deviceId?: string, liveStatus?: boolean, raw?: string): Promise<ChannelWithSchedules[]> {
-
+  async getWeekSchedules(
+    deviceId?: string,
+    liveStatus?: boolean,
+    raw?: string,
+  ): Promise<ChannelWithSchedules[]> {
     return this.getChannelsWithSchedules(undefined, deviceId, liveStatus, raw);
   }
 
@@ -528,10 +620,16 @@ export class ChannelsService {
    * Same response format as getTodaySchedules but uses MGET to batch Redis operations
    * (~4 round trips instead of ~150), reducing response time from ~7.5s to ~600ms.
    */
-  async getTodaySchedulesV2(deviceId?: string, liveStatus?: boolean, raw?: string): Promise<ChannelWithSchedules[]> {
+  async getTodaySchedulesV2(
+    deviceId?: string,
+    liveStatus?: boolean,
+    raw?: string,
+  ): Promise<ChannelWithSchedules[]> {
     const overallStart = Date.now();
     const today = TimezoneUtil.currentDayOfWeek();
-    console.log(`[CHANNELS-SCHEDULES-V2] Starting fetch - day: ${today}, live: ${liveStatus} at ${new Date().toISOString()}`);
+    console.log(
+      `[CHANNELS-SCHEDULES-V2] Starting fetch - day: ${today}, live: ${liveStatus} at ${new Date().toISOString()}`,
+    );
 
     // Pre-fetch user subscriptions if deviceId is provided
     let subscribedProgramIds: Set<number> = new Set();
@@ -549,10 +647,15 @@ export class ChannelsService {
             where: { user: { id: device.user.id }, isActive: true },
             relations: ['program'],
           });
-          subscribedProgramIds = new Set(subscriptions.map(sub => sub.program.id));
+          subscribedProgramIds = new Set(
+            subscriptions.map((sub) => sub.program.id),
+          );
         }
       } catch (error) {
-        console.warn(`[CHANNELS-SCHEDULES-V2] Device lookup failed for ${deviceId}:`, error.message);
+        console.warn(
+          `[CHANNELS-SCHEDULES-V2] Device lookup failed for ${deviceId}:`,
+          error.message,
+        );
       }
     }
 
@@ -560,12 +663,17 @@ export class ChannelsService {
     const queryStart = Date.now();
     let allSchedules;
     try {
-      allSchedules = await this.optimizedSchedulesService.getSchedulesWithOptimizedLiveStatusV2({
-        dayOfWeek: today,
-        applyOverrides: raw !== 'true',
-        liveStatus: liveStatus || false,
-      });
-      console.log(`[CHANNELS-SCHEDULES-V2] Optimized query completed (${Date.now() - queryStart}ms) - ${allSchedules.length} schedules`);
+      allSchedules =
+        await this.optimizedSchedulesService.getSchedulesWithOptimizedLiveStatusV2(
+          {
+            dayOfWeek: today,
+            applyOverrides: raw !== 'true',
+            liveStatus: liveStatus || false,
+          },
+        );
+      console.log(
+        `[CHANNELS-SCHEDULES-V2] Optimized query completed (${Date.now() - queryStart}ms) - ${allSchedules.length} schedules`,
+      );
     } catch (error) {
       console.error(`[CHANNELS-SCHEDULES-V2] Error:`, error.message);
       // Fallback to basic schedules without live status
@@ -581,16 +689,21 @@ export class ChannelsService {
     }
 
     // Filter out invisible programs
-    allSchedules = (allSchedules || []).filter(s => s?.program?.is_visible !== false);
+    allSchedules = (allSchedules || []).filter(
+      (s) => s?.program?.is_visible !== false,
+    );
 
     // Group schedules by channel
-    const schedulesGroupedByChannelId = allSchedules.reduce((acc, schedule) => {
-      const channelId = schedule.program?.channel?.id;
-      if (!channelId) return acc;
-      if (!acc[channelId]) acc[channelId] = [];
-      acc[channelId].push(schedule);
-      return acc;
-    }, {} as Record<number, any[]>);
+    const schedulesGroupedByChannelId = allSchedules.reduce(
+      (acc, schedule) => {
+        const channelId = schedule.program?.channel?.id;
+        if (!channelId) return acc;
+        if (!acc[channelId]) acc[channelId] = [];
+        acc[channelId].push(schedule);
+        return acc;
+      },
+      {} as Record<number, any[]>,
+    );
 
     // Get channels (cached)
     const channelsCacheKey = 'channels:visible_with_categories';
@@ -605,7 +718,7 @@ export class ChannelsService {
     }
 
     // Build final result (same structure as v1)
-    const result: ChannelWithSchedules[] = channels.map(channel => ({
+    const result: ChannelWithSchedules[] = channels.map((channel) => ({
       channel: {
         id: channel.id,
         name: channel.name,
@@ -615,35 +728,40 @@ export class ChannelsService {
         handle: channel.handle,
         categories: channel.categories,
       },
-      schedules: (schedulesGroupedByChannelId[channel.id] || []).map((schedule) => ({
-        id: schedule.id,
-        day_of_week: schedule.day_of_week,
-        start_time: schedule.start_time,
-        end_time: schedule.end_time,
-        subscribed: subscribedProgramIds.has(schedule.program.id),
-        isWeeklyOverride: schedule.isWeeklyOverride,
-        overrideType: schedule.overrideType,
-        program: {
-          id: schedule.program.id,
-          name: schedule.program.name,
-          logo_url: schedule.program.logo_url,
-          description: schedule.program.description,
-          stream_url: schedule.program.stream_url,
-          is_live: schedule.program.is_live,
-          live_streams: schedule.program.live_streams,
-          stream_count: schedule.program.stream_count,
-          channel_stream_count: schedule.program.channel_stream_count,
-          panelists: schedule.program.panelists?.map((p) => ({
-            id: p.id.toString(),
-            name: p.name,
-          })) || [],
-          style_override: schedule.program.style_override,
-          is_visible: schedule.program.is_visible ?? true,
-        },
-      })),
+      schedules: (schedulesGroupedByChannelId[channel.id] || []).map(
+        (schedule) => ({
+          id: schedule.id,
+          day_of_week: schedule.day_of_week,
+          start_time: schedule.start_time,
+          end_time: schedule.end_time,
+          subscribed: subscribedProgramIds.has(schedule.program.id),
+          isWeeklyOverride: schedule.isWeeklyOverride,
+          overrideType: schedule.overrideType,
+          program: {
+            id: schedule.program.id,
+            name: schedule.program.name,
+            logo_url: schedule.program.logo_url,
+            description: schedule.program.description,
+            stream_url: schedule.program.stream_url,
+            is_live: schedule.program.is_live,
+            live_streams: schedule.program.live_streams,
+            stream_count: schedule.program.stream_count,
+            channel_stream_count: schedule.program.channel_stream_count,
+            panelists:
+              schedule.program.panelists?.map((p) => ({
+                id: p.id.toString(),
+                name: p.name,
+              })) || [],
+            style_override: schedule.program.style_override,
+            is_visible: schedule.program.is_visible ?? true,
+          },
+        }),
+      ),
     }));
 
-    console.log(`[CHANNELS-SCHEDULES-V2] TOTAL time: ${Date.now() - overallStart}ms`);
+    console.log(
+      `[CHANNELS-SCHEDULES-V2] TOTAL time: ${Date.now() - overallStart}ms`,
+    );
     return result;
   }
 
@@ -660,7 +778,7 @@ export class ChannelsService {
     if (!handle) {
       return; // Can't invalidate without handle
     }
-    
+
     try {
       // Invalidate unified cache and related keys
       // Note: liveStreamsByChannel no longer exists (unified into liveStatusByHandle)
@@ -669,7 +787,10 @@ export class ChannelsService {
       await this.redisService.del(`notFoundAttempts:${handle}`);
       console.log(`🗑️ Invalidated cache keys for: ${handle}`);
     } catch (error) {
-      console.error(`❌ Error invalidating live status cache for ${handle}:`, error.message);
+      console.error(
+        `❌ Error invalidating live status cache for ${handle}:`,
+        error.message,
+      );
     }
   }
 
@@ -683,18 +804,18 @@ export class ChannelsService {
     }
 
     const cleared: string[] = [];
-    
+
     try {
       // Clear all channel-related cache entries
       await this.redisService.del(`liveStatusByHandle:${handle}`);
       cleared.push('liveStatusByHandle');
-      
+
       await this.redisService.del(`videoIdNotFound:${handle}`);
       cleared.push('videoIdNotFound');
-      
+
       await this.redisService.del(`notFoundAttempts:${handle}`);
       cleared.push('notFoundAttempts');
-      
+
       console.log(`🗑️ Manually cleared cache keys for: ${handle}`);
       return { cleared };
     } catch (error) {
@@ -702,5 +823,4 @@ export class ChannelsService {
       throw error;
     }
   }
-
 }

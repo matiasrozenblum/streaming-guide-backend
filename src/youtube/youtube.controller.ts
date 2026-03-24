@@ -24,7 +24,7 @@ export class YoutubeController {
   constructor(
     private readonly youtubeLiveService: YoutubeLiveService,
     private readonly redisService: RedisService,
-  ) { }
+  ) {}
 
   @Sse('live-events')
   liveEvents(): Observable<MessageEvent> {
@@ -48,7 +48,9 @@ export class YoutubeController {
         try {
           // Check for recent live notifications (last 60 seconds to give more time)
           const sixtySecondsAgo = Date.now() - 60000;
-          const keys = await this.redisService.client.keys('live_notification:*');
+          const keys = await this.redisService.client.keys(
+            'live_notification:*',
+          );
 
           for (const key of keys) {
             const parts = key.split(':');
@@ -61,9 +63,14 @@ export class YoutubeController {
 
             if (timestamp > sixtySecondsAgo) {
               const notificationString = await this.redisService.get(key);
-              if (notificationString && typeof notificationString === 'string') {
+              if (
+                notificationString &&
+                typeof notificationString === 'string'
+              ) {
                 try {
-                  const notification = JSON.parse(notificationString) as LiveNotification;
+                  const notification = JSON.parse(
+                    notificationString,
+                  ) as LiveNotification;
 
                   // Create a unique identifier for this notification
                   const notificationId = notification.channelId
@@ -112,11 +119,13 @@ export class YoutubeController {
   }
 
   @Post('test-live-notification')
-  async testLiveNotification(@Body() body: { channelId: string; channelName: string; videoId?: string }) {
+  async testLiveNotification(
+    @Body() body: { channelId: string; channelName: string; videoId?: string },
+  ) {
     try {
       // Manually trigger a live status notification for testing
       const notification = {
-        type: 'live_status_changed',  // Fixed: frontend expects 'live_status_changed' not 'live_status_change'
+        type: 'live_status_changed', // Fixed: frontend expects 'live_status_changed' not 'live_status_change'
         channelId: body.channelId,
         videoId: body.videoId || 'test_video_id_123',
         channelName: body.channelName,
@@ -126,7 +135,7 @@ export class YoutubeController {
       await this.redisService.set(
         `live_notification:${body.channelId}:${Date.now()}`,
         JSON.stringify(notification),
-        300 // 5 minutes TTL
+        300, // 5 minutes TTL
       );
 
       this.logger.debug(`🧪 Test notification sent for ${body.channelName}`);
@@ -138,4 +147,4 @@ export class YoutubeController {
   }
 
   // YouTube API usage endpoint removed - no longer needed
-} 
+}

@@ -53,8 +53,18 @@ export class UsersController {
   @Get()
   @Roles('admin')
   @ApiOperation({ summary: 'Listar usuarios (solo admin)' })
-  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)' })
-  @ApiQuery({ name: 'pageSize', required: false, type: Number, description: 'Page size (default: 20)' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'pageSize',
+    required: false,
+    type: Number,
+    description: 'Page size (default: 20)',
+  })
   @ApiResponse({ status: 200, description: 'Paginated list of users' })
   findAll(
     @Query('page') page: number = 1,
@@ -74,10 +84,10 @@ export class UsersController {
   }
 
   /** Obtener usuario por ID (admin o dueño) */
-  @UseGuards(JwtAuthGuard, RolesGuard)        // ← agregado aquí
+  @UseGuards(JwtAuthGuard, RolesGuard) // ← agregado aquí
   @ApiBearerAuth()
   @Get(':id')
-  @Roles('admin', 'user')                     // ← opcional, aclara roles válidos
+  @Roles('admin', 'user') // ← opcional, aclara roles válidos
   @ApiOperation({ summary: 'Obtener usuario por ID' })
   @ApiResponse({ status: 200, type: User })
   findOne(@Param('id') id: string, @Req() req) {
@@ -90,8 +100,8 @@ export class UsersController {
   }
 
   /**
-     * Buscar usuario por email
-     */
+   * Buscar usuario por email
+   */
   @Get('email/:email')
   @ApiOperation({ summary: 'Buscar usuario por email' })
   @ApiResponse({ status: 200, type: User })
@@ -115,8 +125,19 @@ export class UsersController {
 
   /** Upsert user for social login (no password required) */
   @Post('social-upsert')
-  @ApiOperation({ summary: 'Upsert user for social login (no password required)' })
-  async socialUpsert(@Body() body: { firstName: string; lastName: string; email: string; gender?: string; birthDate?: string }) {
+  @ApiOperation({
+    summary: 'Upsert user for social login (no password required)',
+  })
+  async socialUpsert(
+    @Body()
+    body: {
+      firstName: string;
+      lastName: string;
+      email: string;
+      gender?: string;
+      birthDate?: string;
+    },
+  ) {
     // Try to find user by email
     let user = await this.usersService.findByEmail(body.email);
     const allowedGenders = ['male', 'female', 'non_binary', 'rather_not_say'];
@@ -153,8 +174,8 @@ export class UsersController {
     @Req() req,
   ) {
     // Remove empty string fields before validation
-    Object.keys(updateUserDto).forEach(
-      (key) => (updateUserDto[key] === '' ? delete updateUserDto[key] : undefined)
+    Object.keys(updateUserDto).forEach((key) =>
+      updateUserDto[key] === '' ? delete updateUserDto[key] : undefined,
     );
     const userId = Number(id);
     const requester = req.user;
@@ -184,7 +205,9 @@ export class UsersController {
   @Post('reset-password')
   @ApiOperation({ summary: 'Resetear contraseña de usuario (olvidada)' })
   @ApiResponse({ status: 200, description: 'Contraseña reseteada' })
-  async resetPassword(@Body() body: { email: string; password: string; code: string }) {
+  async resetPassword(
+    @Body() body: { email: string; password: string; code: string },
+  ) {
     const { email, password, code } = body;
     // 1. Verificar el código
     await this.otpService.verifyCode(email, code); // Throws if invalid
