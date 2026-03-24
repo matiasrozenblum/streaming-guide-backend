@@ -124,15 +124,20 @@ export class StreamerLiveStatusService {
   async getLiveStatuses(streamerIds: number[]): Promise<Map<number, StreamerLiveStatusCache>> {
     const result = new Map<number, StreamerLiveStatusCache>();
 
-    // Fetch all in parallel
-    const promises = streamerIds.map(async (id) => {
-      const status = await this.getLiveStatus(id);
+    if (streamerIds.length === 0) {
+      return result;
+    }
+
+    // ⚡ Bolt Optimization: Replace N+1 Redis queries with a single mget
+    const keys = streamerIds.map(id => `${this.CACHE_PREFIX}${id}`);
+    const statuses = await this.redisService.mget<StreamerLiveStatusCache>(keys);
+
+    statuses.forEach((status, index) => {
       if (status) {
-        result.set(id, status);
+        result.set(streamerIds[index], status);
       }
     });
 
-    await Promise.all(promises);
     return result;
   }
 
