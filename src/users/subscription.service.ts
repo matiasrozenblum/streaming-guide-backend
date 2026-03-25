@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserSubscription } from './user-subscription.entity';
@@ -31,11 +35,16 @@ export class SubscriptionService {
     private pushSubscriptionRepository: Repository<PushSubscriptionEntity>,
     @InjectRepository(User)
     private userRepository: Repository<User>,
-  ) { }
+  ) {}
 
-  async createSubscription(user: User, dto: CreateSubscriptionDto): Promise<UserSubscription> {
+  async createSubscription(
+    user: User,
+    dto: CreateSubscriptionDto,
+  ): Promise<UserSubscription> {
     const { programId, endpoint, p256dh, auth } = dto;
-    const program = await this.programRepository.findOne({ where: { id: programId } });
+    const program = await this.programRepository.findOne({
+      where: { id: programId },
+    });
     if (!program) {
       throw new NotFoundException(`Program with ID ${programId} not found`);
     }
@@ -56,10 +65,17 @@ export class SubscriptionService {
       isActive: true,
     });
 
-    const savedSubscription = await this.subscriptionRepository.save(subscription);
+    const savedSubscription =
+      await this.subscriptionRepository.save(subscription);
 
     // Always create a push subscription entry
-    await this.createPushSubscription(user, savedSubscription, endpoint, p256dh, auth);
+    await this.createPushSubscription(
+      user,
+      savedSubscription,
+      endpoint,
+      p256dh,
+      auth,
+    );
 
     return savedSubscription;
   }
@@ -70,7 +86,7 @@ export class SubscriptionService {
     subscription: UserSubscription,
     endpoint: string,
     p256dh: string,
-    auth: string
+    auth: string,
   ): Promise<void> {
     const device = await this.deviceRepository.findOne({
       where: { user: { id: user.id } },
@@ -78,14 +94,17 @@ export class SubscriptionService {
     });
 
     if (!device) {
-      console.warn(`No device found for user ${user.id} to create push subscription`);
+      console.warn(
+        `No device found for user ${user.id} to create push subscription`,
+      );
       return;
     }
 
     // Check if a push subscription already exists for this device
-    const existingPushSubscription = await this.pushSubscriptionRepository.findOne({
-      where: { device: { id: device.id } },
-    });
+    const existingPushSubscription =
+      await this.pushSubscriptionRepository.findOne({
+        where: { device: { id: device.id } },
+      });
 
     if (!existingPushSubscription) {
       // Create a new push subscription entry with actual values
@@ -128,7 +147,10 @@ export class SubscriptionService {
     return await this.subscriptionRepository.save(subscription);
   }
 
-  async removeSubscription(userId: number, subscriptionId: string): Promise<void> {
+  async removeSubscription(
+    userId: number,
+    subscriptionId: string,
+  ): Promise<void> {
     const subscription = await this.subscriptionRepository.findOne({
       where: { id: subscriptionId, user: { id: userId } },
     });
@@ -140,29 +162,43 @@ export class SubscriptionService {
     await this.subscriptionRepository.remove(subscription);
   }
 
-  async getSubscribedUsersForProgram(programId: number): Promise<UserSubscription[]> {
+  async getSubscribedUsersForProgram(
+    programId: number,
+  ): Promise<UserSubscription[]> {
     return await this.subscriptionRepository.find({
       where: { program: { id: programId }, isActive: true },
       relations: ['user', 'user.devices', 'user.devices.pushSubscriptions'],
     });
   }
 
-  async isUserSubscribedToProgram(userId: number, programId: number): Promise<boolean> {
+  async isUserSubscribedToProgram(
+    userId: number,
+    programId: number,
+  ): Promise<boolean> {
     const subscription = await this.subscriptionRepository.findOne({
-      where: { user: { id: userId }, program: { id: programId }, isActive: true },
+      where: {
+        user: { id: userId },
+        program: { id: programId },
+        isActive: true,
+      },
     });
     return !!subscription;
   }
 
   // Admin Methods
 
-  async adminCreateSubscription(userId: number, programId: number): Promise<UserSubscription> {
+  async adminCreateSubscription(
+    userId: number,
+    programId: number,
+  ): Promise<UserSubscription> {
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException(`User with ID ${userId} not found`);
     }
 
-    const program = await this.programRepository.findOne({ where: { id: programId } });
+    const program = await this.programRepository.findOne({
+      where: { id: programId },
+    });
     if (!program) {
       throw new NotFoundException(`Program with ID ${programId} not found`);
     }
@@ -184,7 +220,10 @@ export class SubscriptionService {
     return await this.subscriptionRepository.save(subscription);
   }
 
-  async adminUpdateSubscription(subscriptionId: string, dto: UpdateSubscriptionDto): Promise<UserSubscription> {
+  async adminUpdateSubscription(
+    subscriptionId: string,
+    dto: UpdateSubscriptionDto,
+  ): Promise<UserSubscription> {
     const subscription = await this.subscriptionRepository.findOne({
       where: { id: subscriptionId },
     });
@@ -203,7 +242,9 @@ export class SubscriptionService {
   async adminRemoveSubscription(subscriptionId: string): Promise<void> {
     const result = await this.subscriptionRepository.delete(subscriptionId);
     if (result.affected === 0) {
-      throw new NotFoundException(`Subscription with ID ${subscriptionId} not found`);
+      throw new NotFoundException(
+        `Subscription with ID ${subscriptionId} not found`,
+      );
     }
   }
-} 
+}

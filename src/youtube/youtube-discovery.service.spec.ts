@@ -19,9 +19,7 @@ describe('YoutubeDiscoveryService', () => {
     it('returns channelId and title if item found', async () => {
       jest.spyOn(axios, 'get').mockResolvedValue({
         data: {
-          items: [
-            { snippet: { channelId: 'cid123', title: 'Test Channel' } },
-          ],
+          items: [{ snippet: { channelId: 'cid123', title: 'Test Channel' } }],
         },
       });
       const result = await service.getChannelIdFromHandle('@test');
@@ -39,19 +37,23 @@ describe('YoutubeDiscoveryService', () => {
       const result = await service.getChannelIdFromHandle('plainhandle');
       expect(result).toEqual({ channelId: 'cid456', title: 'Another Channel' });
       // Check that axios was called with the correct query param (with @)
-      expect((axios.get as jest.Mock).mock.calls[0][1].params.q).toBe('@plainhandle');
+      expect((axios.get as jest.Mock).mock.calls[0][1].params.q).toBe(
+        '@plainhandle',
+      );
     });
   });
 
   describe('getChannelIdsFromLiveUrls', () => {
     it('returns empty array if no valid urls', async () => {
       // Mock getChannelIdFromHandle to return a value for '@handle' to match the current code behavior
-      jest.spyOn(service, 'getChannelIdFromHandle').mockImplementation(async (handle: string) => {
-        if (handle === '@handle') {
-          return { channelId: 'cid456', title: 'Another Channel' };
-        }
-        return null;
-      });
+      jest
+        .spyOn(service, 'getChannelIdFromHandle')
+        .mockImplementation(async (handle: string) => {
+          if (handle === '@handle') {
+            return { channelId: 'cid456', title: 'Another Channel' };
+          }
+          return null;
+        });
       const result = await service.getChannelIdsFromLiveUrls([
         'https://youtube.com/invalid/url',
         'https://notyoutube.com/@handle/live',
@@ -95,4 +97,4 @@ describe('YoutubeDiscoveryService', () => {
       expect(result).toEqual([]);
     });
   });
-}); 
+});

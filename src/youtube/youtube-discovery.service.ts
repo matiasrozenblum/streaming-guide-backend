@@ -12,16 +12,19 @@ export class YoutubeDiscoveryService {
     // Ensure handle has @ prefix for better search results
     const query = handle.startsWith('@') ? handle : `@${handle}`;
 
-    const response = await axios.get('https://www.googleapis.com/youtube/v3/search', {
-      params: {
-        part: 'snippet',
-        q: query,
-        type: 'channel',
-        key: this.apiKey,
-        maxResults: 1,
-        regionCode: 'AR',
+    const response = await axios.get(
+      'https://www.googleapis.com/youtube/v3/search',
+      {
+        params: {
+          part: 'snippet',
+          q: query,
+          type: 'channel',
+          key: this.apiKey,
+          maxResults: 1,
+          regionCode: 'AR',
+        },
       },
-    });
+    );
 
     const item = response.data.items?.[0];
     if (!item) return null;
@@ -32,9 +35,9 @@ export class YoutubeDiscoveryService {
     };
   }
 
-  async getChannelIdsFromLiveUrls(urls: string[]): Promise<
-    { handle: string; channelId: string; title: string }[]
-  > {
+  async getChannelIdsFromLiveUrls(
+    urls: string[],
+  ): Promise<{ handle: string; channelId: string; title: string }[]> {
     const results: { handle: string; channelId: string; title: string }[] = [];
 
     for (const url of urls) {

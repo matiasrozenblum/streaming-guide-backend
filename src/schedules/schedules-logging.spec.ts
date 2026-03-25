@@ -125,7 +125,9 @@ describe('SchedulesService Logging Improvements', () => {
     }).compile();
 
     service = module.get<SchedulesService>(SchedulesService);
-    schedulesRepository = module.get<Repository<Schedule>>(getRepositoryToken(Schedule));
+    schedulesRepository = module.get<Repository<Schedule>>(
+      getRepositoryToken(Schedule),
+    );
     redisService = module.get<RedisService>(RedisService);
   });
 
@@ -135,137 +137,175 @@ describe('SchedulesService Logging Improvements', () => {
 
   describe('Improved Logging', () => {
     it('should log cache operations with correct prefix', async () => {
-      const loggerSpy = jest.spyOn(service['logger'], 'debug').mockImplementation();
-      
+      const loggerSpy = jest
+        .spyOn(service['logger'], 'debug')
+        .mockImplementation();
+
       // Mock the repository to return data
-      mockSchedulesRepository.createQueryBuilder().getMany.mockResolvedValue([mockSchedule]);
-      
+      mockSchedulesRepository
+        .createQueryBuilder()
+        .getMany.mockResolvedValue([mockSchedule]);
+
       await service.findAll({ dayOfWeek: 'monday' });
-      
+
       expect(loggerSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Cache MISS:')
+        expect.stringContaining('Cache MISS:'),
       );
-      
+
       loggerSpy.mockRestore();
     });
 
     it('should log database operations with correct prefix', async () => {
-      const loggerSpy = jest.spyOn(service['logger'], 'debug').mockImplementation();
-      
+      const loggerSpy = jest
+        .spyOn(service['logger'], 'debug')
+        .mockImplementation();
+
       // Mock the repository to return data
-      mockSchedulesRepository.createQueryBuilder().getMany.mockResolvedValue([mockSchedule]);
-      
+      mockSchedulesRepository
+        .createQueryBuilder()
+        .getMany.mockResolvedValue([mockSchedule]);
+
       await service.findAll({ dayOfWeek: 'monday' });
-      
+
       expect(loggerSpy).toHaveBeenCalledWith(
-        expect.stringContaining('DB query:')
+        expect.stringContaining('DB query:'),
       );
-      
+
       loggerSpy.mockRestore();
     });
 
     it('should log performance metrics in correct format', async () => {
-      const loggerSpy = jest.spyOn(service['logger'], 'debug').mockImplementation();
-      
+      const loggerSpy = jest
+        .spyOn(service['logger'], 'debug')
+        .mockImplementation();
+
       // Mock the repository to return data
-      mockSchedulesRepository.createQueryBuilder().getMany.mockResolvedValue([mockSchedule]);
-      
+      mockSchedulesRepository
+        .createQueryBuilder()
+        .getMany.mockResolvedValue([mockSchedule]);
+
       await service.findAll({ dayOfWeek: 'monday' });
-      
+
       // Should contain performance metrics in the format (XXXms)
       const logCalls = loggerSpy.mock.calls;
-      const hasPerformanceLogs = logCalls.some(call => 
-        call[0] && typeof call[0] === 'string' && call[0].includes('ms)')
+      const hasPerformanceLogs = logCalls.some(
+        (call) =>
+          call[0] && typeof call[0] === 'string' && call[0].includes('ms)'),
       );
-      
+
       expect(hasPerformanceLogs).toBe(true);
       loggerSpy.mockRestore();
     });
 
     it('should log cache hit with correct format', async () => {
-      const loggerSpy = jest.spyOn(service['logger'], 'debug').mockImplementation();
+      const loggerSpy = jest
+        .spyOn(service['logger'], 'debug')
+        .mockImplementation();
       mockRedisService.get.mockResolvedValue([mockSchedule]);
-      
+
       await service.findAll({ dayOfWeek: 'monday' });
-      
+
       expect(loggerSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Cache HIT:')
+        expect.stringContaining('Cache HIT:'),
       );
-      
+
       loggerSpy.mockRestore();
     });
 
     it('should log cache storage with correct format', async () => {
-      const loggerSpy = jest.spyOn(service['logger'], 'debug').mockImplementation();
-      
+      const loggerSpy = jest
+        .spyOn(service['logger'], 'debug')
+        .mockImplementation();
+
       // Mock cache miss to trigger storage
       mockRedisService.get.mockResolvedValue(null);
-      
+
       // Mock the repository to return data
-      mockSchedulesRepository.createQueryBuilder().getMany.mockResolvedValue([mockSchedule]);
-      
+      mockSchedulesRepository
+        .createQueryBuilder()
+        .getMany.mockResolvedValue([mockSchedule]);
+
       await service.findAll({ dayOfWeek: 'monday' });
-      
+
       loggerSpy.mockRestore();
     });
 
     it('should log overrides application with correct prefix', async () => {
-      const loggerSpy = jest.spyOn(service['logger'], 'debug').mockImplementation();
-      
+      const loggerSpy = jest
+        .spyOn(service['logger'], 'debug')
+        .mockImplementation();
+
       // Mock the repository to return data
-      mockSchedulesRepository.createQueryBuilder().getMany.mockResolvedValue([mockSchedule]);
-      
+      mockSchedulesRepository
+        .createQueryBuilder()
+        .getMany.mockResolvedValue([mockSchedule]);
+
       await service.findAll({ dayOfWeek: 'monday', applyOverrides: true });
-      
+
       // Should log the completion time
       expect(loggerSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Completed in')
+        expect.stringContaining('Completed in'),
       );
-      
+
       loggerSpy.mockRestore();
     });
 
     it('should log enrichment with correct prefix', async () => {
-      const loggerSpy = jest.spyOn(service['logger'], 'debug').mockImplementation();
-      
+      const loggerSpy = jest
+        .spyOn(service['logger'], 'debug')
+        .mockImplementation();
+
       // Mock the repository to return data
-      mockSchedulesRepository.createQueryBuilder().getMany.mockResolvedValue([mockSchedule]);
-      
+      mockSchedulesRepository
+        .createQueryBuilder()
+        .getMany.mockResolvedValue([mockSchedule]);
+
       await service.findAll({ dayOfWeek: 'monday', liveStatus: true });
-      
+
       // Should log the completion time
       expect(loggerSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Completed in')
+        expect.stringContaining('Completed in'),
       );
-      
+
       loggerSpy.mockRestore();
     });
 
     it('should log total time with correct prefix', async () => {
-      const loggerSpy = jest.spyOn(service['logger'], 'debug').mockImplementation();
-      
+      const loggerSpy = jest
+        .spyOn(service['logger'], 'debug')
+        .mockImplementation();
+
       // Mock the repository to return data
-      mockSchedulesRepository.createQueryBuilder().getMany.mockResolvedValue([mockSchedule]);
-      
+      mockSchedulesRepository
+        .createQueryBuilder()
+        .getMany.mockResolvedValue([mockSchedule]);
+
       await service.findAll({ dayOfWeek: 'monday' });
-      
+
       expect(loggerSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Completed in')
+        expect.stringContaining('Completed in'),
       );
-      
+
       loggerSpy.mockRestore();
     });
 
     it('should warn on slow database queries', async () => {
-      const loggerSpy = jest.spyOn(service['logger'], 'warn').mockImplementation();
-      
+      const loggerSpy = jest
+        .spyOn(service['logger'], 'warn')
+        .mockImplementation();
+
       // Mock slow query by making getMany take longer
-      mockSchedulesRepository.createQueryBuilder().getMany.mockImplementation(
-        () => new Promise(resolve => setTimeout(() => resolve([mockSchedule]), 100))
-      );
-      
+      mockSchedulesRepository
+        .createQueryBuilder()
+        .getMany.mockImplementation(
+          () =>
+            new Promise((resolve) =>
+              setTimeout(() => resolve([mockSchedule]), 100),
+            ),
+        );
+
       await service.findAll({ dayOfWeek: 'monday' });
-      
+
       // Should warn about slow query (if it takes more than 5 seconds in real scenario)
       // Note: This test might not trigger the warning due to timing, but the structure is correct
       loggerSpy.mockRestore();
@@ -274,22 +314,27 @@ describe('SchedulesService Logging Improvements', () => {
 
   describe('Logging Consistency', () => {
     it('should use consistent log format across all operations', async () => {
-      const loggerSpy = jest.spyOn(service['logger'], 'debug').mockImplementation();
-      
+      const loggerSpy = jest
+        .spyOn(service['logger'], 'debug')
+        .mockImplementation();
+
       // Mock the repository to return data
-      mockSchedulesRepository.createQueryBuilder().getMany.mockResolvedValue([mockSchedule]);
-      
+      mockSchedulesRepository
+        .createQueryBuilder()
+        .getMany.mockResolvedValue([mockSchedule]);
+
       await service.findAll({ dayOfWeek: 'monday', liveStatus: true });
-      
+
       const logCalls = loggerSpy.mock.calls;
-      
+
       // All performance logs should include timing in parentheses
-      const performanceLogs = logCalls.filter(call => 
-        call[0] && typeof call[0] === 'string' && call[0].includes('ms)')
+      const performanceLogs = logCalls.filter(
+        (call) =>
+          call[0] && typeof call[0] === 'string' && call[0].includes('ms)'),
       );
-      
+
       expect(performanceLogs.length).toBeGreaterThan(0);
-      
+
       loggerSpy.mockRestore();
     });
   });

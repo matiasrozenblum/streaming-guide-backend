@@ -10,8 +10,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private configService: ConfigService,
     private readonly sentryService: SentryService,
   ) {
-    const secret = configService.get<string>('JWT_SECRET') || 'default_secret_key_for_development';
-    
+    const secret =
+      configService.get<string>('JWT_SECRET') ||
+      'default_secret_key_for_development';
+
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
@@ -23,21 +25,25 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     try {
       if (!payload.type || !payload.sub) {
         // Log JWT validation failure
-        this.sentryService.captureMessage('JWT token validation failed - Invalid token payload', 'error', {
-          service: 'authentication',
-          error_type: 'jwt_validation_failed',
-          payload_keys: Object.keys(payload),
-          has_type: !!payload.type,
-          has_sub: !!payload.sub,
-          timestamp: new Date().toISOString(),
-        });
-        
+        this.sentryService.captureMessage(
+          'JWT token validation failed - Invalid token payload',
+          'error',
+          {
+            service: 'authentication',
+            error_type: 'jwt_validation_failed',
+            payload_keys: Object.keys(payload),
+            has_type: !!payload.type,
+            has_sub: !!payload.sub,
+            timestamp: new Date().toISOString(),
+          },
+        );
+
         this.sentryService.setTag('service', 'authentication');
         this.sentryService.setTag('error_type', 'jwt_validation_failed');
-        
+
         throw new UnauthorizedException('Invalid token payload');
       }
-      
+
       return {
         id: payload.sub,
         role: payload.role,
@@ -48,18 +54,22 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       if (error instanceof UnauthorizedException) {
         throw error; // Re-throw UnauthorizedException
       }
-      
-      this.sentryService.captureMessage('JWT token validation failed - Unexpected error', 'error', {
-        service: 'authentication',
-        error_type: 'jwt_validation_failed',
-        error_message: error.message,
-        timestamp: new Date().toISOString(),
-      });
-      
+
+      this.sentryService.captureMessage(
+        'JWT token validation failed - Unexpected error',
+        'error',
+        {
+          service: 'authentication',
+          error_type: 'jwt_validation_failed',
+          error_message: error.message,
+          timestamp: new Date().toISOString(),
+        },
+      );
+
       this.sentryService.setTag('service', 'authentication');
       this.sentryService.setTag('error_type', 'jwt_validation_failed');
-      
+
       throw new UnauthorizedException('Invalid token');
     }
   }
-} 
+}

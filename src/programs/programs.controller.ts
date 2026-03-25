@@ -1,14 +1,31 @@
-import { Controller, Get, Post, Body, Param, Delete, Patch, UseGuards, NotFoundException, Request, UnauthorizedException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Delete,
+  Patch,
+  UseGuards,
+  NotFoundException,
+  Request,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ProgramsService } from './programs.service';
 import { CreateProgramDto } from './dto/create-program.dto';
 import { Program } from './programs.entity';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { UpdateProgramDto } from './dto/update-program.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Panelist } from '../panelists/panelists.entity';
 import { SubscriptionService } from '../users/subscription.service';
 
-@ApiTags('programs')  // Etiqueta para los programas
+@ApiTags('programs') // Etiqueta para los programas
 @Controller('programs')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
@@ -16,7 +33,7 @@ export class ProgramsController {
   constructor(
     private readonly programsService: ProgramsService,
     private readonly subscriptionService: SubscriptionService,
-  ) { }
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Get all programs' })
@@ -36,15 +53,13 @@ export class ProgramsController {
   @Get(':id/subscription-status')
   @ApiOperation({ summary: 'Get user subscription status for a program' })
   @ApiResponse({ status: 200, description: 'Return subscription status.' })
-  async getSubscriptionStatus(
-    @Request() req: any,
-    @Param('id') id: string,
-  ) {
+  async getSubscriptionStatus(@Request() req: any, @Param('id') id: string) {
     const user = req.user;
-    const isSubscribed = await this.subscriptionService.isUserSubscribedToProgram(
-      user.id,
-      Number(id),
-    );
+    const isSubscribed =
+      await this.subscriptionService.isUserSubscribedToProgram(
+        user.id,
+        Number(id),
+      );
 
     return {
       isSubscribed,
@@ -54,21 +69,27 @@ export class ProgramsController {
 
   @Post(':id/subscribe')
   @ApiOperation({ summary: 'Subscribe to a program' })
-  @ApiResponse({ status: 201, description: 'Successfully subscribed to program.' })
+  @ApiResponse({
+    status: 201,
+    description: 'Successfully subscribed to program.',
+  })
   async subscribeToProgram(
     @Request() req: any,
     @Param('id') id: string,
-    @Body() body: { endpoint?: string, p256dh?: string, auth?: string },
+    @Body() body: { endpoint?: string; p256dh?: string; auth?: string },
   ) {
     const user = req.user;
     const { endpoint, p256dh, auth } = body;
 
-    const subscription = await this.subscriptionService.createSubscription(user, {
-      programId: Number(id),
-      endpoint: endpoint || '',
-      p256dh: p256dh || '',
-      auth: auth || '',
-    });
+    const subscription = await this.subscriptionService.createSubscription(
+      user,
+      {
+        programId: Number(id),
+        endpoint: endpoint || '',
+        p256dh: p256dh || '',
+        auth: auth || '',
+      },
+    );
 
     return {
       message: 'Successfully subscribed to program',
@@ -82,11 +103,11 @@ export class ProgramsController {
 
   @Delete(':id/subscribe')
   @ApiOperation({ summary: 'Unsubscribe from a program' })
-  @ApiResponse({ status: 200, description: 'Successfully unsubscribed from program.' })
-  async unsubscribeFromProgram(
-    @Request() req: any,
-    @Param('id') id: string,
-  ) {
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully unsubscribed from program.',
+  })
+  async unsubscribeFromProgram(@Request() req: any, @Param('id') id: string) {
     const user = req.user;
 
     // Validate user.id
@@ -96,8 +117,11 @@ export class ProgramsController {
     const userId = Number(user.id);
 
     // Find the subscription first
-    const subscriptions = await this.subscriptionService.getUserSubscriptions(userId);
-    const subscription = subscriptions.find(sub => sub.program.id === Number(id));
+    const subscriptions =
+      await this.subscriptionService.getUserSubscriptions(userId);
+    const subscription = subscriptions.find(
+      (sub) => sub.program.id === Number(id),
+    );
 
     if (!subscription) {
       throw new NotFoundException('Subscription not found');
@@ -146,22 +170,34 @@ export class ProgramsController {
 
   @Post()
   @ApiOperation({ summary: 'Create a new program' })
-  @ApiResponse({ status: 201, description: 'The program has been successfully created.' })
+  @ApiResponse({
+    status: 201,
+    description: 'The program has been successfully created.',
+  })
   create(@Body() createProgramDto: CreateProgramDto): Promise<Program> {
     return this.programsService.create(createProgramDto);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update a program' })
-  @ApiResponse({ status: 200, description: 'The program has been successfully updated.' })
+  @ApiResponse({
+    status: 200,
+    description: 'The program has been successfully updated.',
+  })
   @ApiResponse({ status: 404, description: 'Program not found.' })
-  update(@Param('id') id: string, @Body() updateProgramDto: UpdateProgramDto): Promise<Program> {
+  update(
+    @Param('id') id: string,
+    @Body() updateProgramDto: UpdateProgramDto,
+  ): Promise<Program> {
     return this.programsService.update(Number(id), updateProgramDto);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a program' })
-  @ApiResponse({ status: 200, description: 'The program has been successfully deleted.' })
+  @ApiResponse({
+    status: 200,
+    description: 'The program has been successfully deleted.',
+  })
   @ApiResponse({ status: 404, description: 'Program not found.' })
   remove(@Param('id') id: string): Promise<void> {
     return this.programsService.remove(Number(id));

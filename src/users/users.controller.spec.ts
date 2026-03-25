@@ -71,13 +71,13 @@ describe('UsersController', () => {
 
   describe('create', () => {
     it('should call usersService.create with dto', async () => {
-      const dto = { 
-        email: 'a', 
-        password: 'b', 
-        phone: 'c', 
-        firstName: 'd', 
+      const dto = {
+        email: 'a',
+        password: 'b',
+        phone: 'c',
+        firstName: 'd',
         lastName: 'e',
-        gender: 'male' as const
+        gender: 'male' as const,
       };
       usersService.create.mockResolvedValue({ ...mockUser, ...dto });
       const result = await controller.create(dto);
@@ -132,7 +132,10 @@ describe('UsersController', () => {
 
   describe('update', () => {
     it('should allow admin to update any user', async () => {
-      usersService.update.mockResolvedValue({ ...mockUser, firstName: 'Updated' });
+      usersService.update.mockResolvedValue({
+        ...mockUser,
+        firstName: 'Updated',
+      });
       const req = mockRequest({ id: mockAdmin.id, role: 'admin' });
       const dto = { firstName: 'Updated' };
       const result = await controller.update(String(mockUser.id), dto, req);
@@ -197,23 +200,38 @@ describe('UsersController', () => {
       usersService.update.mockResolvedValue({ ...mockUser, password: 'new' });
       const body = { email: mockUser.email, password: 'new', code: '123456' };
       const result = await controller.resetPassword(body);
-      expect(otpService.verifyCode).toHaveBeenCalledWith(mockUser.email, '123456');
+      expect(otpService.verifyCode).toHaveBeenCalledWith(
+        mockUser.email,
+        '123456',
+      );
       expect(usersService.findByEmail).toHaveBeenCalledWith(mockUser.email);
-      expect(usersService.update).toHaveBeenCalledWith(mockUser.id, { password: 'new' });
+      expect(usersService.update).toHaveBeenCalledWith(mockUser.id, {
+        password: 'new',
+      });
       expect(result).toEqual({ message: 'Password reset successfully' });
     });
 
     it('should throw UnauthorizedException if code is invalid', async () => {
-      otpService.verifyCode.mockRejectedValue(new UnauthorizedException('bad code'));
+      otpService.verifyCode.mockRejectedValue(
+        new UnauthorizedException('bad code'),
+      );
       const body = { email: mockUser.email, password: 'new', code: 'bad' };
-      await expect(controller.resetPassword(body)).rejects.toThrow(UnauthorizedException);
+      await expect(controller.resetPassword(body)).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('should throw NotFoundException if user not found', async () => {
       otpService.verifyCode.mockResolvedValue(undefined);
       usersService.findByEmail.mockResolvedValue(null);
-      const body = { email: 'notfound@example.com', password: 'new', code: '123456' };
-      await expect(controller.resetPassword(body)).rejects.toThrow('Usuario no encontrado');
+      const body = {
+        email: 'notfound@example.com',
+        password: 'new',
+        code: '123456',
+      };
+      await expect(controller.resetPassword(body)).rejects.toThrow(
+        'Usuario no encontrado',
+      );
     });
   });
-}); 
+});

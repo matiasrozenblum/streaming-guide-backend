@@ -65,15 +65,15 @@ jest.mock('dayjs', () => {
                   diff: (date: any, unit: string) => {
                     // Return a reasonable TTL value for testing
                     return 3600; // 1 hour in seconds
-                  }
+                  },
                 };
               },
               diff: (date: any, unit: string) => {
                 // Return a reasonable TTL value for testing
                 return 3600; // 1 hour in seconds
-              }
+              },
             };
-          }
+          },
         };
       },
       add: (amount: number, unit: string) => {
@@ -81,7 +81,7 @@ jest.mock('dayjs', () => {
           diff: (date: any, unit: string) => {
             // Return a reasonable TTL value for testing
             return 3600; // 1 hour in seconds
-          }
+          },
         };
       },
       diff: (date: any, unit: string) => {
@@ -93,9 +93,9 @@ jest.mock('dayjs', () => {
           diff: (date: any, unit: string) => {
             // Return a reasonable TTL value for testing
             return 3600; // 1 hour in seconds
-          }
+          },
         };
-      }
+      },
     };
   };
 
@@ -214,7 +214,9 @@ describe('SchedulesService', () => {
           provide: WeeklyOverridesService,
           useValue: {
             getWeekStartDate: jest.fn().mockReturnValue('2024-01-01'),
-            applyWeeklyOverrides: jest.fn().mockImplementation((schedules) => Promise.resolve(schedules)),
+            applyWeeklyOverrides: jest
+              .fn()
+              .mockImplementation((schedules) => Promise.resolve(schedules)),
           },
         },
         {
@@ -236,7 +238,9 @@ describe('SchedulesService', () => {
     }).compile();
 
     service = module.get<SchedulesService>(SchedulesService);
-    schedulesRepo = module.get<Repository<Schedule>>(getRepositoryToken(Schedule));
+    schedulesRepo = module.get<Repository<Schedule>>(
+      getRepositoryToken(Schedule),
+    );
     programsRepo = module.get<Repository<Program>>(getRepositoryToken(Program));
     redisService = module.get<RedisService>(RedisService);
     youtubeLiveService = module.get<YoutubeLiveService>(YoutubeLiveService);
@@ -244,21 +248,31 @@ describe('SchedulesService', () => {
     notifyUtil = new NotifyAndRevalidateUtil(
       redisService as any,
       'https://frontend.test',
-      'testsecret'
+      'testsecret',
     );
     service['notifyUtil'] = notifyUtil;
 
     // Mock TimezoneUtil methods
-    jest.spyOn(TimezoneUtil, 'now').mockReturnValue(dayjs().tz('America/Argentina/Buenos_Aires').hour(10).minute(30));
+    jest
+      .spyOn(TimezoneUtil, 'now')
+      .mockReturnValue(
+        dayjs().tz('America/Argentina/Buenos_Aires').hour(10).minute(30),
+      );
     jest.spyOn(TimezoneUtil, 'currentTimeInMinutes').mockReturnValue(630); // 10:30
     jest.spyOn(TimezoneUtil, 'currentDayOfWeek').mockReturnValue('monday');
-    jest.spyOn(TimezoneUtil, 'isWithinTimeRange').mockImplementation((startTime, endTime) => {
-      // Mock logic: 10:30 is within 10:00-12:00 range but NOT within 08:00-10:00 range
-      const start = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1]);
-      const end = parseInt(endTime.split(':')[0]) * 60 + parseInt(endTime.split(':')[1]);
-      const current = 630; // 10:30
-      return current >= start && current < end; // Use < instead of <= for end time
-    });
+    jest
+      .spyOn(TimezoneUtil, 'isWithinTimeRange')
+      .mockImplementation((startTime, endTime) => {
+        // Mock logic: 10:30 is within 10:00-12:00 range but NOT within 08:00-10:00 range
+        const start =
+          parseInt(startTime.split(':')[0]) * 60 +
+          parseInt(startTime.split(':')[1]);
+        const end =
+          parseInt(endTime.split(':')[0]) * 60 +
+          parseInt(endTime.split(':')[1]);
+        const current = 630; // 10:30
+        return current >= start && current < end; // Use < instead of <= for end time
+      });
   });
 
   describe('findByDay', () => {
@@ -286,9 +300,9 @@ describe('SchedulesService', () => {
             programs: [],
           },
           panelists: [],
-        schedules: [],
-      },
-    } as unknown as Schedule;
+          schedules: [],
+        },
+      } as unknown as Schedule;
 
       // Mock the query builder to return our test schedule
       const mockQueryBuilder = {
@@ -301,33 +315,41 @@ describe('SchedulesService', () => {
         getMany: jest.fn().mockResolvedValue([testSchedule]),
         getOne: jest.fn().mockResolvedValue(testSchedule),
       };
-      
-      jest.spyOn(schedulesRepo, 'createQueryBuilder').mockReturnValue(mockQueryBuilder as any);
+
+      jest
+        .spyOn(schedulesRepo, 'createQueryBuilder')
+        .mockReturnValue(mockQueryBuilder as any);
       // Mock Redis: first call for schedules cache (miss), then calls for streams cache (miss), then single video ID cache (hit)
-      jest.spyOn(redisService, 'get')
-        .mockResolvedValueOnce(null); // schedules cache miss
-      
+      jest.spyOn(redisService, 'get').mockResolvedValueOnce(null); // schedules cache miss
+
       // Mock getLiveStreams to return actual stream data
       jest.spyOn(youtubeLiveService, 'getLiveStreamsMain').mockResolvedValue({
-        streams: [{
-          videoId: 'live-video-id',
-          title: 'Live Stream',
-          publishedAt: new Date().toISOString(),
-          description: '',
-          channelTitle: 'Test Channel'
-        }],
+        streams: [
+          {
+            videoId: 'live-video-id',
+            title: 'Live Stream',
+            publishedAt: new Date().toISOString(),
+            description: '',
+            channelTitle: 'Test Channel',
+          },
+        ],
         primaryVideoId: 'live-video-id',
-        streamCount: 1
+        streamCount: 1,
       });
 
       currentTime = '10:30';
       currentDay = 'monday';
 
-      const result = await service.findAll({ dayOfWeek: 'monday', liveStatus: true });
+      const result = await service.findAll({
+        dayOfWeek: 'monday',
+        liveStatus: true,
+      });
 
       expect(result).toHaveLength(1);
       expect(result[0].program.is_live).toBe(true);
-      expect(result[0].program.stream_url).toBe('https://www.youtube.com/embed/live-video-id?autoplay=1');
+      expect(result[0].program.stream_url).toBe(
+        'https://www.youtube.com/embed/live-video-id?autoplay=1',
+      );
     });
 
     it('should not mark program as live if outside time', async () => {
@@ -369,19 +391,31 @@ describe('SchedulesService', () => {
         getMany: jest.fn().mockResolvedValue([testSchedule]),
         getOne: jest.fn().mockResolvedValue(testSchedule),
       };
-      
-      jest.spyOn(schedulesRepo, 'createQueryBuilder').mockReturnValue(mockQueryBuilder as any);
+
+      jest
+        .spyOn(schedulesRepo, 'createQueryBuilder')
+        .mockReturnValue(mockQueryBuilder as any);
       jest.spyOn(redisService, 'get').mockResolvedValueOnce(null);
 
       // Update TimezoneUtil mock for this specific test (15:00 is outside 08:00-10:00 range)
-      jest.spyOn(TimezoneUtil, 'now').mockReturnValue(dayjs().tz('America/Argentina/Buenos_Aires').hour(15).minute(0));
+      jest
+        .spyOn(TimezoneUtil, 'now')
+        .mockReturnValue(
+          dayjs().tz('America/Argentina/Buenos_Aires').hour(15).minute(0),
+        );
       jest.spyOn(TimezoneUtil, 'currentTimeInMinutes').mockReturnValue(900); // 15:00
-      jest.spyOn(TimezoneUtil, 'isWithinTimeRange').mockImplementation((startTime, endTime) => {
-        const start = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1]);
-        const end = parseInt(endTime.split(':')[0]) * 60 + parseInt(endTime.split(':')[1]);
-        const current = 900; // 15:00
-        return current >= start && current < end; // Use < instead of <= for end time
-      });
+      jest
+        .spyOn(TimezoneUtil, 'isWithinTimeRange')
+        .mockImplementation((startTime, endTime) => {
+          const start =
+            parseInt(startTime.split(':')[0]) * 60 +
+            parseInt(startTime.split(':')[1]);
+          const end =
+            parseInt(endTime.split(':')[0]) * 60 +
+            parseInt(endTime.split(':')[1]);
+          const current = 900; // 15:00
+          return current >= start && current < end; // Use < instead of <= for end time
+        });
 
       const result = await service.findByDay('monday');
 
@@ -479,12 +513,14 @@ describe('SchedulesService', () => {
       ] as any[];
 
       // Mock findAll to return filtered results based on dayOfWeek
-      jest.spyOn(service, 'findAll').mockImplementation(async (options: any) => {
-        if (options.dayOfWeek === 'friday') {
-          return allSchedules.filter(s => s.day_of_week === 'friday');
-        }
-        return allSchedules;
-      });
+      jest
+        .spyOn(service, 'findAll')
+        .mockImplementation(async (options: any) => {
+          if (options.dayOfWeek === 'friday') {
+            return allSchedules.filter((s) => s.day_of_week === 'friday');
+          }
+          return allSchedules;
+        });
 
       const result = await service.findByChannel('luzutv', 'friday');
 
@@ -517,10 +553,12 @@ describe('SchedulesService', () => {
       const testSchedules = [] as any[];
       jest.spyOn(service, 'findAll').mockResolvedValue(testSchedules);
 
-      await service.findByChannel('luzutv', undefined, { applyOverrides: false });
+      await service.findByChannel('luzutv', undefined, {
+        applyOverrides: false,
+      });
 
       expect(service.findAll).toHaveBeenCalledWith(
-        expect.objectContaining({ applyOverrides: false })
+        expect.objectContaining({ applyOverrides: false }),
       );
     });
   });
@@ -590,14 +628,19 @@ describe('SchedulesService', () => {
       ] as any[];
 
       // Mock findAll to return filtered results based on dayOfWeek
-      jest.spyOn(service, 'findAll').mockImplementation(async (options: any) => {
-        if (options.dayOfWeek === 'friday') {
-          return allSchedules.filter(s => s.day_of_week === 'friday');
-        }
-        return allSchedules;
-      });
+      jest
+        .spyOn(service, 'findAll')
+        .mockImplementation(async (options: any) => {
+          if (options.dayOfWeek === 'friday') {
+            return allSchedules.filter((s) => s.day_of_week === 'friday');
+          }
+          return allSchedules;
+        });
 
-      const result = await service.findByProgramName('Patria y Familia', 'friday');
+      const result = await service.findByProgramName(
+        'Patria y Familia',
+        'friday',
+      );
 
       expect(result).toHaveLength(1);
       expect(result[0].day_of_week).toBe('friday');
@@ -634,30 +677,44 @@ describe('SchedulesService', () => {
         expect.objectContaining({
           liveStatus: true,
           applyOverrides: false,
-        })
+        }),
       );
     });
   });
 
   describe('notifyAndRevalidate integration', () => {
     it('calls notifyAndRevalidate on create', async () => {
-      const spy = jest.spyOn(notifyUtil, 'notifyAndRevalidate').mockResolvedValue(undefined as any);
+      const spy = jest
+        .spyOn(notifyUtil, 'notifyAndRevalidate')
+        .mockResolvedValue(undefined as any);
       jest.spyOn(programsRepo, 'findOne').mockResolvedValue({ id: 1 } as any);
       jest.spyOn(schedulesRepo, 'create').mockReturnValue({ id: 1 } as any);
       jest.spyOn(schedulesRepo, 'save').mockResolvedValue({ id: 1 } as any);
-      await service.create({ programId: '1', channelId: '1', dayOfWeek: 'monday', startTime: '10:00', endTime: '12:00' });
+      await service.create({
+        programId: '1',
+        channelId: '1',
+        dayOfWeek: 'monday',
+        startTime: '10:00',
+        endTime: '12:00',
+      });
       expect(spy).toHaveBeenCalled();
     });
     it('calls notifyAndRevalidate on update', async () => {
-      const spy = jest.spyOn(notifyUtil, 'notifyAndRevalidate').mockResolvedValue(undefined as any);
+      const spy = jest
+        .spyOn(notifyUtil, 'notifyAndRevalidate')
+        .mockResolvedValue(undefined as any);
       jest.spyOn(service, 'findOne').mockResolvedValue({ id: 1 } as any);
       jest.spyOn(schedulesRepo, 'save').mockResolvedValue({ id: 1 } as any);
       await service.update('1', { dayOfWeek: 'tuesday' });
       expect(spy).toHaveBeenCalled();
     });
     it('calls notifyAndRevalidate on remove', async () => {
-      const spy = jest.spyOn(notifyUtil, 'notifyAndRevalidate').mockResolvedValue(undefined as any);
-      jest.spyOn(schedulesRepo, 'delete').mockResolvedValue({ affected: 1 } as any);
+      const spy = jest
+        .spyOn(notifyUtil, 'notifyAndRevalidate')
+        .mockResolvedValue(undefined as any);
+      jest
+        .spyOn(schedulesRepo, 'delete')
+        .mockResolvedValue({ affected: 1 } as any);
       await service.remove('1');
       expect(spy).toHaveBeenCalled();
     });
@@ -667,17 +724,27 @@ describe('SchedulesService', () => {
     beforeEach(() => {
       // Reset mocks
       jest.clearAllMocks();
-      
+
       // Mock TimezoneUtil methods for overlapping programs test (11:00 overlaps both 10:00-12:00 and 11:00-13:00)
-      jest.spyOn(TimezoneUtil, 'now').mockReturnValue(dayjs().tz('America/Argentina/Buenos_Aires').hour(11).minute(0));
+      jest
+        .spyOn(TimezoneUtil, 'now')
+        .mockReturnValue(
+          dayjs().tz('America/Argentina/Buenos_Aires').hour(11).minute(0),
+        );
       jest.spyOn(TimezoneUtil, 'currentTimeInMinutes').mockReturnValue(660); // 11:00
       jest.spyOn(TimezoneUtil, 'currentDayOfWeek').mockReturnValue('monday');
-      jest.spyOn(TimezoneUtil, 'isWithinTimeRange').mockImplementation((startTime, endTime) => {
-        const start = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1]);
-        const end = parseInt(endTime.split(':')[0]) * 60 + parseInt(endTime.split(':')[1]);
-        const current = 660; // 11:00
-        return current >= start && current <= end;
-      });
+      jest
+        .spyOn(TimezoneUtil, 'isWithinTimeRange')
+        .mockImplementation((startTime, endTime) => {
+          const start =
+            parseInt(startTime.split(':')[0]) * 60 +
+            parseInt(startTime.split(':')[1]);
+          const end =
+            parseInt(endTime.split(':')[0]) * 60 +
+            parseInt(endTime.split(':')[1]);
+          const current = 660; // 11:00
+          return current >= start && current <= end;
+        });
     });
 
     it('should distribute multiple streams to overlapping programs', async () => {
@@ -735,7 +802,7 @@ describe('SchedulesService', () => {
             panelists: [],
             schedules: [],
           },
-        }
+        },
       ] as unknown as Schedule[];
 
       const mockStreams = {
@@ -746,7 +813,7 @@ describe('SchedulesService', () => {
             publishedAt: '2023-01-01T00:00:00Z',
             description: 'Stream 1 Description',
             thumbnailUrl: 'thumb1.jpg',
-            channelTitle: 'Test Channel'
+            channelTitle: 'Test Channel',
           },
           {
             videoId: 'stream2',
@@ -754,35 +821,36 @@ describe('SchedulesService', () => {
             publishedAt: '2023-01-01T01:00:00Z',
             description: 'Stream 2 Description',
             thumbnailUrl: 'thumb2.jpg',
-            channelTitle: 'Test Channel'
-          }
+            channelTitle: 'Test Channel',
+          },
         ],
         primaryVideoId: 'stream1',
-        streamCount: 2
+        streamCount: 2,
       };
 
       // Mock config service
       jest.spyOn(configService, 'canFetchLive').mockResolvedValue(true);
-      
+
       // Mock YouTube service
-      jest.spyOn(youtubeLiveService, 'getLiveStreamsMain').mockResolvedValue(mockStreams);
+      jest
+        .spyOn(youtubeLiveService, 'getLiveStreamsMain')
+        .mockResolvedValue(mockStreams);
 
       const result = await service.enrichSchedules(testSchedules, true);
 
       expect(result).toHaveLength(2);
-      
+
       // Both programs should be live (overlapping at 11:00)
       expect(result[0].program.is_live).toBe(true);
       expect(result[1].program.is_live).toBe(true);
-      
+
       // Both should have live streams assigned
       expect(result[0].program.live_streams).toBeDefined();
       expect(result[1].program.live_streams).toBeDefined();
-      
+
       // Each program should get 1 stream (stream_count = 1)
       expect(result[0].program.stream_count).toBe(1);
       expect(result[1].program.stream_count).toBe(1);
-      
     });
 
     it('should skip title matching when only one program and one stream exist', async () => {
@@ -826,40 +894,55 @@ describe('SchedulesService', () => {
         streams: [
           {
             videoId: 'IDJ6Wn4DBQ4',
-            title: '🔴 MAÑANA VA A ESTAR BUENO con Pablo Kenny | VORTERIX EN VIVO', // Different from program name
+            title:
+              '🔴 MAÑANA VA A ESTAR BUENO con Pablo Kenny | VORTERIX EN VIVO', // Different from program name
             description: 'Test description',
             thumbnailUrl: 'test-thumb.jpg',
             publishedAt: '2025-10-02T10:18:19Z',
-            channelTitle: 'Vorterix'
-          }
+            channelTitle: 'Vorterix',
+          },
         ],
         primaryVideoId: 'IDJ6Wn4DBQ4',
-        streamCount: 1
+        streamCount: 1,
       };
 
       // Mock config service
       jest.spyOn(configService, 'canFetchLive').mockResolvedValue(true);
-      
+
       // Mock YouTube service
-      jest.spyOn(youtubeLiveService, 'getLiveStreamsMain').mockResolvedValue(mockStreams);
+      jest
+        .spyOn(youtubeLiveService, 'getLiveStreamsMain')
+        .mockResolvedValue(mockStreams);
 
       // Mock TimezoneUtil for this test (10:30 is within 10:00-12:00 range)
-      jest.spyOn(TimezoneUtil, 'now').mockReturnValue(dayjs().tz('America/Argentina/Buenos_Aires').hour(10).minute(30));
+      jest
+        .spyOn(TimezoneUtil, 'now')
+        .mockReturnValue(
+          dayjs().tz('America/Argentina/Buenos_Aires').hour(10).minute(30),
+        );
       jest.spyOn(TimezoneUtil, 'currentTimeInMinutes').mockReturnValue(630); // 10:30
       jest.spyOn(TimezoneUtil, 'currentDayOfWeek').mockReturnValue('monday');
-      jest.spyOn(TimezoneUtil, 'isWithinTimeRange').mockImplementation((startTime, endTime) => {
-        const start = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1]);
-        const end = parseInt(endTime.split(':')[0]) * 60 + parseInt(endTime.split(':')[1]);
-        const current = 630; // 10:30
-        return current >= start && current <= end;
-      });
+      jest
+        .spyOn(TimezoneUtil, 'isWithinTimeRange')
+        .mockImplementation((startTime, endTime) => {
+          const start =
+            parseInt(startTime.split(':')[0]) * 60 +
+            parseInt(startTime.split(':')[1]);
+          const end =
+            parseInt(endTime.split(':')[0]) * 60 +
+            parseInt(endTime.split(':')[1]);
+          const current = 630; // 10:30
+          return current >= start && current <= end;
+        });
 
       const result = await service.enrichSchedules(testSchedules, true);
 
       expect(result).toHaveLength(1);
-      
+
       // Should use the stream even though titles don't match
-      expect(result[0].program.stream_url).toBe('https://www.youtube.com/embed/IDJ6Wn4DBQ4?autoplay=1');
+      expect(result[0].program.stream_url).toBe(
+        'https://www.youtube.com/embed/IDJ6Wn4DBQ4?autoplay=1',
+      );
       expect(result[0].program.is_live).toBe(true);
       expect(result[0].program.live_streams).toHaveLength(1);
       expect(result[0].program.live_streams[0].videoId).toBe('IDJ6Wn4DBQ4');
@@ -902,7 +985,7 @@ describe('SchedulesService', () => {
             publishedAt: '2023-01-01T00:00:00Z',
             description: 'Stream 1 Description',
             thumbnailUrl: 'thumb1.jpg',
-            channelTitle: 'Test Channel'
+            channelTitle: 'Test Channel',
           },
           {
             videoId: 'stream2',
@@ -910,30 +993,31 @@ describe('SchedulesService', () => {
             publishedAt: '2023-01-01T01:00:00Z',
             description: 'Stream 2 Description',
             thumbnailUrl: 'thumb2.jpg',
-            channelTitle: 'Test Channel'
-          }
+            channelTitle: 'Test Channel',
+          },
         ],
         primaryVideoId: 'stream1',
-        streamCount: 2
+        streamCount: 2,
       };
 
       // Mock config service
       jest.spyOn(configService, 'canFetchLive').mockResolvedValue(true);
-      
+
       // Mock YouTube service
-      jest.spyOn(youtubeLiveService, 'getLiveStreamsMain').mockResolvedValue(mockStreams);
+      jest
+        .spyOn(youtubeLiveService, 'getLiveStreamsMain')
+        .mockResolvedValue(mockStreams);
 
       const result = await service.enrichSchedules([testSchedule], true);
 
       expect(result).toHaveLength(1);
-      
+
       // Program should be live
       expect(result[0].program.is_live).toBe(true);
-      
+
       // Should get 1 stream assigned (best match)
       expect(result[0].program.stream_count).toBe(1);
       expect(result[0].program.live_streams).toHaveLength(1);
-      
     });
 
     it('should use getLiveStreamsMain to enrich live programs', async () => {
@@ -966,33 +1050,39 @@ describe('SchedulesService', () => {
 
       // Mock config service
       jest.spyOn(configService, 'canFetchLive').mockResolvedValue(true);
-      
+
       // Mock YouTube service - getLiveStreams returns actual stream data
       jest.spyOn(youtubeLiveService, 'getLiveStreamsMain').mockResolvedValue({
-        streams: [{
-          videoId: 'fallback-video-id',
-          title: 'Live Stream',
-          publishedAt: new Date().toISOString(),
-          description: '',
-          channelTitle: 'Test Channel'
-        }],
+        streams: [
+          {
+            videoId: 'fallback-video-id',
+            title: 'Live Stream',
+            publishedAt: new Date().toISOString(),
+            description: '',
+            channelTitle: 'Test Channel',
+          },
+        ],
         primaryVideoId: 'fallback-video-id',
-        streamCount: 1
+        streamCount: 1,
       });
 
       const result = await service.enrichSchedules([testSchedule], true);
 
       expect(result).toHaveLength(1);
-      
+
       // Program should be live
       expect(result[0].program.is_live).toBe(true);
-      
+
       // Should use stream video ID
-      expect(result[0].program.stream_url).toBe('https://www.youtube.com/embed/fallback-video-id?autoplay=1');
-      
+      expect(result[0].program.stream_url).toBe(
+        'https://www.youtube.com/embed/fallback-video-id?autoplay=1',
+      );
+
       // Should have live_streams from getLiveStreamsMain
       expect(result[0].program.live_streams).toHaveLength(1);
-      expect(result[0].program.live_streams[0].videoId).toBe('fallback-video-id');
+      expect(result[0].program.live_streams[0].videoId).toBe(
+        'fallback-video-id',
+      );
       expect(result[0].program.stream_count).toBe(1);
     });
 
@@ -1027,13 +1117,15 @@ describe('SchedulesService', () => {
       const result = await service.enrichSchedules([testSchedule], true);
 
       expect(result).toHaveLength(1);
-      
+
       // Program should be live (time-based)
       expect(result[0].program.is_live).toBe(true);
-      
+
       // Should use original stream_url/youtube_url (no live stream fetching)
-      expect(result[0].program.stream_url).toBe('https://youtube.com/program-a');
-      
+      expect(result[0].program.stream_url).toBe(
+        'https://youtube.com/program-a',
+      );
+
       // Should have no live streams data
       expect(result[0].program.live_streams).toBeNull();
       expect(result[0].program.stream_count).toBe(0);
@@ -1069,23 +1161,27 @@ describe('SchedulesService', () => {
 
       // Mock config service
       jest.spyOn(configService, 'canFetchLive').mockResolvedValue(true);
-      
+
       // Mock YouTube service
-      const getLiveStreamsSpy = jest.spyOn(youtubeLiveService, 'getLiveStreamsMain').mockResolvedValue({
-        streams: [],
-        primaryVideoId: null,
-        streamCount: 0
-      });
+      const getLiveStreamsSpy = jest
+        .spyOn(youtubeLiveService, 'getLiveStreamsMain')
+        .mockResolvedValue({
+          streams: [],
+          primaryVideoId: null,
+          streamCount: 0,
+        });
       const result = await service.enrichSchedules([testSchedule], false); // liveStatus = false
 
       expect(result).toHaveLength(1);
-      
+
       // When liveStatus=false, should preserve original is_live state
       expect(result[0].program.is_live).toBe(false);
-      
+
       // Should use original stream_url/youtube_url (no live stream fetching)
-      expect(result[0].program.stream_url).toBe('https://youtube.com/program-a');
-      
+      expect(result[0].program.stream_url).toBe(
+        'https://youtube.com/program-a',
+      );
+
       // YouTube service should not be called
       expect(getLiveStreamsSpy).not.toHaveBeenCalled();
     });

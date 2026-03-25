@@ -15,10 +15,12 @@ describe('WebhookSubscriptionService', () => {
 
   const mockConfigService = {
     get: jest.fn(),
+    mget: jest.fn(),
   };
 
   const mockRedisService = {
     get: jest.fn(),
+    mget: jest.fn(),
     set: jest.fn(),
     del: jest.fn(),
   };
@@ -47,7 +49,9 @@ describe('WebhookSubscriptionService', () => {
       ],
     }).compile();
 
-    service = module.get<WebhookSubscriptionService>(WebhookSubscriptionService);
+    service = module.get<WebhookSubscriptionService>(
+      WebhookSubscriptionService,
+    );
     configService = module.get<ConfigService>(ConfigService);
     redisService = module.get<RedisService>(RedisService);
   });
@@ -71,7 +75,9 @@ describe('WebhookSubscriptionService', () => {
         .mockReturnValueOnce('client-id')
         .mockReturnValueOnce('client-secret')
         .mockReturnValueOnce('https://example.com');
-      mockTokenRefreshService.getTwitchAccessToken.mockResolvedValue('access-token');
+      mockTokenRefreshService.getTwitchAccessToken.mockResolvedValue(
+        'access-token',
+      );
 
       mockedAxios.get.mockResolvedValue({
         data: {
@@ -85,7 +91,10 @@ describe('WebhookSubscriptionService', () => {
         },
       });
 
-      const result = await service.subscribeToTwitchEventSub('testuser', 'stream.online');
+      const result = await service.subscribeToTwitchEventSub(
+        'testuser',
+        'stream.online',
+      );
 
       expect(result).toBe('sub-123');
       expect(mockRedisService.set).toHaveBeenCalledWith(
@@ -95,7 +104,7 @@ describe('WebhookSubscriptionService', () => {
           username: 'testuser',
           eventType: 'stream.online',
         }),
-        86400 * 365
+        86400 * 365,
       );
     });
 
@@ -103,7 +112,10 @@ describe('WebhookSubscriptionService', () => {
       mockConfigService.get.mockReturnValue(null);
       mockTokenRefreshService.getTwitchAccessToken.mockResolvedValue(null);
 
-      const result = await service.subscribeToTwitchEventSub('testuser', 'stream.online');
+      const result = await service.subscribeToTwitchEventSub(
+        'testuser',
+        'stream.online',
+      );
 
       expect(result).toBeNull();
       expect(mockedAxios.post).not.toHaveBeenCalled();
@@ -114,13 +126,18 @@ describe('WebhookSubscriptionService', () => {
         .mockReturnValueOnce('client-id')
         .mockReturnValueOnce('client-secret')
         .mockReturnValueOnce('https://example.com');
-      mockTokenRefreshService.getTwitchAccessToken.mockResolvedValue('access-token');
+      mockTokenRefreshService.getTwitchAccessToken.mockResolvedValue(
+        'access-token',
+      );
 
       mockedAxios.get.mockResolvedValue({
         data: { data: [] },
       });
 
-      const result = await service.subscribeToTwitchEventSub('testuser', 'stream.online');
+      const result = await service.subscribeToTwitchEventSub(
+        'testuser',
+        'stream.online',
+      );
 
       expect(result).toBeNull();
       expect(mockedAxios.post).not.toHaveBeenCalled();
@@ -130,7 +147,9 @@ describe('WebhookSubscriptionService', () => {
   describe('unsubscribeFromTwitchEventSub', () => {
     it('should unsubscribe from Twitch EventSub', async () => {
       mockConfigService.get.mockReturnValueOnce('client-id');
-      mockTokenRefreshService.getTwitchAccessToken.mockResolvedValue('access-token');
+      mockTokenRefreshService.getTwitchAccessToken.mockResolvedValue(
+        'access-token',
+      );
 
       mockedAxios.delete.mockResolvedValue({ status: 204 });
 
@@ -142,9 +161,9 @@ describe('WebhookSubscriptionService', () => {
         expect.objectContaining({
           headers: expect.objectContaining({
             'Client-ID': 'client-id',
-            'Authorization': 'Bearer access-token',
+            Authorization: 'Bearer access-token',
           }),
-        })
+        }),
       );
     });
 
@@ -163,12 +182,14 @@ describe('WebhookSubscriptionService', () => {
     it('should store subscription info in Redis', async () => {
       const mockUserId = 12345;
       const mockSubscriptionId = 'kick-sub-789';
-      
+
       mockConfigService.get
         .mockReturnValueOnce('client-id') // KICK_CLIENT_ID
         .mockReturnValueOnce('client-secret') // KICK_CLIENT_SECRET
         .mockReturnValueOnce('https://example.com'); // WEBHOOK_BASE_URL
-      mockTokenRefreshService.getKickAccessToken.mockResolvedValue('access-token');
+      mockTokenRefreshService.getKickAccessToken.mockResolvedValue(
+        'access-token',
+      );
 
       // Mock axios.get for fetching user ID from Kick API (public endpoint first)
       mockedAxios.get.mockResolvedValueOnce({
@@ -202,9 +223,9 @@ describe('WebhookSubscriptionService', () => {
         expect.objectContaining({
           headers: {
             'User-Agent': 'StreamingGuide/1.0',
-            'Accept': 'application/json',
+            Accept: 'application/json',
           },
-        })
+        }),
       );
       // Updated to use correct endpoint and payload format
       expect(mockedAxios.post).toHaveBeenCalledWith(
@@ -221,11 +242,11 @@ describe('WebhookSubscriptionService', () => {
         },
         expect.objectContaining({
           headers: {
-            'Authorization': 'Bearer access-token',
+            Authorization: 'Bearer access-token',
             'Content-Type': 'application/json',
-            'Accept': '*/*',
+            Accept: '*/*',
           },
-        })
+        }),
       );
       expect(mockRedisService.set).toHaveBeenCalledWith(
         'webhook:subscription:kick:testuser',
@@ -234,7 +255,7 @@ describe('WebhookSubscriptionService', () => {
           username: 'testuser',
           userId: mockUserId,
         }),
-        86400 * 365
+        86400 * 365,
       );
     });
 
@@ -256,7 +277,9 @@ describe('WebhookSubscriptionService', () => {
         .mockReturnValueOnce('client-id')
         .mockReturnValueOnce('client-secret')
         .mockReturnValueOnce(null); // WEBHOOK_BASE_URL missing
-      mockTokenRefreshService.getKickAccessToken.mockResolvedValue('access-token');
+      mockTokenRefreshService.getKickAccessToken.mockResolvedValue(
+        'access-token',
+      );
 
       const result = await service.subscribeToKickWebhook('testuser');
 
@@ -268,8 +291,16 @@ describe('WebhookSubscriptionService', () => {
   describe('getSubscriptionsForStreamer', () => {
     it('should return subscriptions for streamer services', async () => {
       const services = [
-        { service: 'twitch', url: 'https://twitch.tv/testuser', username: 'testuser' },
-        { service: 'kick', url: 'https://kick.com/kickuser', username: 'kickuser' },
+        {
+          service: 'twitch',
+          url: 'https://twitch.tv/testuser',
+          username: 'testuser',
+        },
+        {
+          service: 'kick',
+          url: 'https://kick.com/kickuser',
+          username: 'kickuser',
+        },
       ];
 
       mockRedisService.get
@@ -285,4 +316,3 @@ describe('WebhookSubscriptionService', () => {
     });
   });
 });
-

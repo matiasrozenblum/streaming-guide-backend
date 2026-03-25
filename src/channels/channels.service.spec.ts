@@ -154,10 +154,14 @@ describe('ChannelsService - Channel Handle Change Detection', () => {
     }).compile();
 
     service = module.get<ChannelsService>(ChannelsService);
-    channelsRepository = module.get<Repository<Channel>>(getRepositoryToken(Channel));
+    channelsRepository = module.get<Repository<Channel>>(
+      getRepositoryToken(Channel),
+    );
     redisService = module.get<RedisService>(RedisService);
     schedulesService = module.get<SchedulesService>(SchedulesService);
-    youtubeDiscoveryService = module.get<YoutubeDiscoveryService>(YoutubeDiscoveryService);
+    youtubeDiscoveryService = module.get<YoutubeDiscoveryService>(
+      YoutubeDiscoveryService,
+    );
 
     // Prevent un-awaited setImmediate calls from hanging the Jest process
     jest.useFakeTimers();
@@ -178,23 +182,35 @@ describe('ChannelsService - Channel Handle Change Detection', () => {
         youtube_channel_id: 'NEW_YOUTUBE_ID_456',
       };
 
-      jest.spyOn(channelsRepository, 'findOne').mockResolvedValue(mockChannel as any);
-      jest.spyOn(channelsRepository, 'save').mockResolvedValue(mockChannelWithNewHandle as any);
-      jest.spyOn(youtubeDiscoveryService, 'getChannelIdFromHandle').mockResolvedValue({
-        channelId: 'NEW_YOUTUBE_ID_456',
-        title: 'New Channel Title',
-      });
+      jest
+        .spyOn(channelsRepository, 'findOne')
+        .mockResolvedValue(mockChannel as any);
+      jest
+        .spyOn(channelsRepository, 'save')
+        .mockResolvedValue(mockChannelWithNewHandle as any);
+      jest
+        .spyOn(youtubeDiscoveryService, 'getChannelIdFromHandle')
+        .mockResolvedValue({
+          channelId: 'NEW_YOUTUBE_ID_456',
+          title: 'New Channel Title',
+        });
       jest.spyOn(redisService, 'del').mockResolvedValue(undefined);
 
       // Act
       await service.update(1, mockUpdateDto);
 
       // Assert
-      expect(youtubeDiscoveryService.getChannelIdFromHandle).toHaveBeenCalledWith('@newhandle');
+      expect(
+        youtubeDiscoveryService.getChannelIdFromHandle,
+      ).toHaveBeenCalledWith('@newhandle');
       // Should invalidate old handle cache when handle changes
-      expect(redisService.del).toHaveBeenCalledWith('liveStatusByHandle:@oldhandle');
+      expect(redisService.del).toHaveBeenCalledWith(
+        'liveStatusByHandle:@oldhandle',
+      );
       // Should also invalidate new handle cache when YouTube channel ID changes (wrong channel ID was cached)
-      expect(redisService.del).toHaveBeenCalledWith('liveStatusByHandle:@newhandle');
+      expect(redisService.del).toHaveBeenCalledWith(
+        'liveStatusByHandle:@newhandle',
+      );
     });
 
     it('should not invalidate live status caches when handle does not change', async () => {
@@ -206,17 +222,27 @@ describe('ChannelsService - Channel Handle Change Detection', () => {
         youtube_fetch_override_holiday: true,
       };
 
-      jest.spyOn(channelsRepository, 'findOne').mockResolvedValue(mockChannel as any);
-      jest.spyOn(channelsRepository, 'save').mockResolvedValue(mockChannel as any);
+      jest
+        .spyOn(channelsRepository, 'findOne')
+        .mockResolvedValue(mockChannel as any);
+      jest
+        .spyOn(channelsRepository, 'save')
+        .mockResolvedValue(mockChannel as any);
       jest.spyOn(redisService, 'del').mockResolvedValue(undefined);
 
       // Act
       await service.update(1, mockUpdateDtoNoHandleChange);
 
       // Assert
-      expect(youtubeDiscoveryService.getChannelIdFromHandle).not.toHaveBeenCalled();
-      expect(redisService.del).not.toHaveBeenCalledWith(expect.stringContaining('liveStreamsByChannel:'));
-      expect(redisService.del).not.toHaveBeenCalledWith(expect.stringContaining('liveStatus:background:'));
+      expect(
+        youtubeDiscoveryService.getChannelIdFromHandle,
+      ).not.toHaveBeenCalled();
+      expect(redisService.del).not.toHaveBeenCalledWith(
+        expect.stringContaining('liveStreamsByChannel:'),
+      );
+      expect(redisService.del).not.toHaveBeenCalledWith(
+        expect.stringContaining('liveStatus:background:'),
+      );
     });
 
     it('should handle YouTube channel ID resolution failure gracefully', async () => {
@@ -227,18 +253,28 @@ describe('ChannelsService - Channel Handle Change Detection', () => {
         youtube_channel_id: 'OLD_YOUTUBE_ID_123',
       };
 
-      jest.spyOn(channelsRepository, 'findOne').mockResolvedValue(mockChannelWithOldHandle as any);
-      jest.spyOn(channelsRepository, 'save').mockResolvedValue(mockChannelWithOldHandle as any);
-      jest.spyOn(youtubeDiscoveryService, 'getChannelIdFromHandle').mockResolvedValue(null);
+      jest
+        .spyOn(channelsRepository, 'findOne')
+        .mockResolvedValue(mockChannelWithOldHandle as any);
+      jest
+        .spyOn(channelsRepository, 'save')
+        .mockResolvedValue(mockChannelWithOldHandle as any);
+      jest
+        .spyOn(youtubeDiscoveryService, 'getChannelIdFromHandle')
+        .mockResolvedValue(null);
       jest.spyOn(redisService, 'del').mockResolvedValue(undefined);
 
       // Act
       await service.update(1, mockUpdateDto);
 
       // Assert
-      expect(youtubeDiscoveryService.getChannelIdFromHandle).toHaveBeenCalledWith('@newhandle');
+      expect(
+        youtubeDiscoveryService.getChannelIdFromHandle,
+      ).toHaveBeenCalledWith('@newhandle');
       // Should still invalidate old handle cache even if new channel ID resolution fails
-      expect(redisService.del).toHaveBeenCalledWith('liveStatusByHandle:@oldhandle');
+      expect(redisService.del).toHaveBeenCalledWith(
+        'liveStatusByHandle:@oldhandle',
+      );
       // Note: New handle cache won't be invalidated if channel ID resolution fails (no new channel ID to compare)
     });
 
@@ -256,17 +292,27 @@ describe('ChannelsService - Channel Handle Change Detection', () => {
         youtube_channel_id: 'NEW_YOUTUBE_ID_456',
       };
 
-      jest.spyOn(channelsRepository, 'findOne').mockResolvedValue(mockChannelWithOldHandle as any);
-      jest.spyOn(channelsRepository, 'save').mockResolvedValue(mockChannelWithNewHandle as any);
-      jest.spyOn(youtubeDiscoveryService, 'getChannelIdFromHandle').mockResolvedValue({
-        channelId: 'NEW_YOUTUBE_ID_456',
-        title: 'New Channel Title',
-      });
-      jest.spyOn(redisService, 'del').mockRejectedValue(new Error('Redis error'));
+      jest
+        .spyOn(channelsRepository, 'findOne')
+        .mockResolvedValue(mockChannelWithOldHandle as any);
+      jest
+        .spyOn(channelsRepository, 'save')
+        .mockResolvedValue(mockChannelWithNewHandle as any);
+      jest
+        .spyOn(youtubeDiscoveryService, 'getChannelIdFromHandle')
+        .mockResolvedValue({
+          channelId: 'NEW_YOUTUBE_ID_456',
+          title: 'New Channel Title',
+        });
+      jest
+        .spyOn(redisService, 'del')
+        .mockRejectedValue(new Error('Redis error'));
 
       // Act & Assert - should not throw
       await expect(service.update(1, mockUpdateDto)).resolves.not.toThrow();
-      expect(youtubeDiscoveryService.getChannelIdFromHandle).toHaveBeenCalledWith('@newhandle');
+      expect(
+        youtubeDiscoveryService.getChannelIdFromHandle,
+      ).toHaveBeenCalledWith('@newhandle');
       // Note: The cache invalidation error is handled gracefully in the service
     });
 
@@ -284,21 +330,31 @@ describe('ChannelsService - Channel Handle Change Detection', () => {
         youtube_channel_id: 'OLD_YOUTUBE_ID_123', // Same YouTube ID
       };
 
-      jest.spyOn(channelsRepository, 'findOne').mockResolvedValue(mockChannelWithOldHandle as any);
-      jest.spyOn(channelsRepository, 'save').mockResolvedValue(mockChannelWithSameYouTubeId as any);
-      jest.spyOn(youtubeDiscoveryService, 'getChannelIdFromHandle').mockResolvedValue({
-        channelId: 'OLD_YOUTUBE_ID_123', // Same YouTube ID
-        title: 'Same Channel Title',
-      });
+      jest
+        .spyOn(channelsRepository, 'findOne')
+        .mockResolvedValue(mockChannelWithOldHandle as any);
+      jest
+        .spyOn(channelsRepository, 'save')
+        .mockResolvedValue(mockChannelWithSameYouTubeId as any);
+      jest
+        .spyOn(youtubeDiscoveryService, 'getChannelIdFromHandle')
+        .mockResolvedValue({
+          channelId: 'OLD_YOUTUBE_ID_123', // Same YouTube ID
+          title: 'Same Channel Title',
+        });
       jest.spyOn(redisService, 'del').mockResolvedValue(undefined);
 
       // Act
       await service.update(1, mockUpdateDto);
 
       // Assert
-      expect(youtubeDiscoveryService.getChannelIdFromHandle).toHaveBeenCalledWith('@newhandle');
+      expect(
+        youtubeDiscoveryService.getChannelIdFromHandle,
+      ).toHaveBeenCalledWith('@newhandle');
       // Should not invalidate caches since YouTube channel ID is the same
-      expect(redisService.del).not.toHaveBeenCalledWith('liveStatus:OLD_YOUTUBE_ID_123');
+      expect(redisService.del).not.toHaveBeenCalledWith(
+        'liveStatus:OLD_YOUTUBE_ID_123',
+      );
     });
   });
 
@@ -312,26 +368,42 @@ describe('ChannelsService - Channel Handle Change Detection', () => {
       const result = await service.clearChannelCache(handle);
 
       // Assert
-      expect(redisService.del).toHaveBeenCalledWith('liveStatusByHandle:@testhandle');
-      expect(redisService.del).toHaveBeenCalledWith('videoIdNotFound:@testhandle');
-      expect(redisService.del).toHaveBeenCalledWith('notFoundAttempts:@testhandle');
+      expect(redisService.del).toHaveBeenCalledWith(
+        'liveStatusByHandle:@testhandle',
+      );
+      expect(redisService.del).toHaveBeenCalledWith(
+        'videoIdNotFound:@testhandle',
+      );
+      expect(redisService.del).toHaveBeenCalledWith(
+        'notFoundAttempts:@testhandle',
+      );
       expect(redisService.del).toHaveBeenCalledTimes(3);
-      expect(result.cleared).toEqual(['liveStatusByHandle', 'videoIdNotFound', 'notFoundAttempts']);
+      expect(result.cleared).toEqual([
+        'liveStatusByHandle',
+        'videoIdNotFound',
+        'notFoundAttempts',
+      ]);
     });
 
     it('should throw error if handle is empty', async () => {
       // Act & Assert
-      await expect(service.clearChannelCache('')).rejects.toThrow('Handle is required to clear cache');
+      await expect(service.clearChannelCache('')).rejects.toThrow(
+        'Handle is required to clear cache',
+      );
       expect(redisService.del).not.toHaveBeenCalled();
     });
 
     it('should handle Redis errors gracefully', async () => {
       // Arrange
       const handle = '@testhandle';
-      jest.spyOn(redisService, 'del').mockRejectedValue(new Error('Redis connection error'));
+      jest
+        .spyOn(redisService, 'del')
+        .mockRejectedValue(new Error('Redis connection error'));
 
       // Act & Assert
-      await expect(service.clearChannelCache(handle)).rejects.toThrow('Redis connection error');
+      await expect(service.clearChannelCache(handle)).rejects.toThrow(
+        'Redis connection error',
+      );
       expect(redisService.del).toHaveBeenCalled();
     });
   });

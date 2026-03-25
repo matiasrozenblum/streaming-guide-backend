@@ -17,16 +17,15 @@ export class TokenRefreshScheduler {
   })
   async handleTokenRefresh() {
     this.logger.log('⏰ Starting scheduled token refresh check...');
-    
+
     try {
       await this.tokenRefreshService.checkAndRefreshTokens();
       this.logger.log('✅ Token refresh check completed');
     } catch (error: any) {
-      this.logger.error(`❌ Error during token refresh check: ${error.message}`, error.stack);
+      this.logger.error(
+        `❌ Error during token refresh check: ${error.message}`,
+        error.stack,
+      );
     }
   }
 }
-
-
-
-

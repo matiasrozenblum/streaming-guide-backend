@@ -1,4 +1,12 @@
-import { IsString, IsEnum, IsOptional, IsNumber, IsArray, ValidateNested, IsDateString } from 'class-validator';
+import {
+  IsString,
+  IsEnum,
+  IsOptional,
+  IsNumber,
+  IsArray,
+  ValidateNested,
+  IsDateString,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export enum ReportType {
@@ -123,4 +131,4 @@ export class AutomaticReportDto {
 
   @IsString()
   toEmail: string = 'admin@laguiadelstreaming.com';
-} 
+}

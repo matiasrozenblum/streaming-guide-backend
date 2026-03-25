@@ -16,4 +16,3 @@ export interface StreamerLiveStatusCache {
   lastUpdated: number;
   ttl: number;
 }
-

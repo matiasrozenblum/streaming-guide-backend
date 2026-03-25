@@ -4,9 +4,11 @@ import * as Sentry from '@sentry/node';
 // Mock Sentry
 jest.mock('@sentry/node', () => ({
   init: jest.fn(),
-  withScope: jest.fn((callback) => callback({
-    setExtra: jest.fn(),
-  })),
+  withScope: jest.fn((callback) =>
+    callback({
+      setExtra: jest.fn(),
+    }),
+  ),
   captureException: jest.fn(),
   captureMessage: jest.fn(),
   setUser: jest.fn(),
@@ -23,7 +25,9 @@ describe('SentryService', () => {
     mockScope = {
       setExtra: jest.fn(),
     };
-    (Sentry.withScope as jest.Mock).mockImplementation((callback) => callback(mockScope));
+    (Sentry.withScope as jest.Mock).mockImplementation((callback) =>
+      callback(mockScope),
+    );
     service = new SentryService();
   });
 
@@ -50,7 +54,7 @@ describe('SentryService', () => {
         tracePropagationTargets: [
           'localhost',
           /^\//,
-          /api\.laguiadelstreaming\.com\.ar/
+          /api\.laguiadelstreaming\.com\.ar/,
         ],
         beforeSend: expect.any(Function),
       });
@@ -71,7 +75,7 @@ describe('SentryService', () => {
       expect(Sentry.init).toHaveBeenCalledWith(
         expect.objectContaining({
           environment: 'production',
-        })
+        }),
       );
 
       process.env.NODE_ENV = originalEnv;
@@ -232,7 +236,11 @@ describe('SentryService', () => {
       process.env.NODE_ENV = 'production';
 
       const prodService = new SentryService();
-      const user = { id: '123', email: 'test@example.com', username: 'testuser' };
+      const user = {
+        id: '123',
+        email: 'test@example.com',
+        username: 'testuser',
+      };
 
       prodService.setUser(user);
 
@@ -246,7 +254,11 @@ describe('SentryService', () => {
       process.env.NODE_ENV = 'staging';
 
       const stagingService = new SentryService();
-      const user = { id: '123', email: 'test@example.com', username: 'testuser' };
+      const user = {
+        id: '123',
+        email: 'test@example.com',
+        username: 'testuser',
+      };
 
       stagingService.setUser(user);
 
@@ -319,4 +331,4 @@ describe('SentryService', () => {
       process.env.NODE_ENV = originalEnv;
     });
   });
-}); 
+});

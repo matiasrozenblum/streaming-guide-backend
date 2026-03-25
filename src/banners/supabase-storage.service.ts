@@ -9,10 +9,13 @@ export class SupabaseStorageService {
 
   constructor() {
     const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+    const supabaseKey =
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
-      this.logger.warn('Supabase credentials not configured. Image upload will not work.');
+      this.logger.warn(
+        'Supabase credentials not configured. Image upload will not work.',
+      );
       return;
     }
 
@@ -28,24 +31,31 @@ export class SupabaseStorageService {
    */
   async uploadImage(
     file: Express.Multer.File,
-    bucketName: string = 'banners'
+    bucketName: string = 'banners',
   ): Promise<string> {
     if (!this.supabase) {
       throw new BadRequestException('Supabase Storage is not configured');
     }
 
     // Validate file type
-    const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const allowedMimeTypes = [
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/webp',
+    ];
     if (!allowedMimeTypes.includes(file.mimetype)) {
       throw new BadRequestException(
-        `Invalid file type. Allowed types: ${allowedMimeTypes.join(', ')}`
+        `Invalid file type. Allowed types: ${allowedMimeTypes.join(', ')}`,
       );
     }
 
     // Validate file size (max 5MB)
     const maxSize = 5 * 1024 * 1024; // 5MB
     if (file.size > maxSize) {
-      throw new BadRequestException(`File size exceeds maximum of ${maxSize / 1024 / 1024}MB`);
+      throw new BadRequestException(
+        `File size exceeds maximum of ${maxSize / 1024 / 1024}MB`,
+      );
     }
 
     // Generate unique filename
@@ -64,9 +74,15 @@ export class SupabaseStorageService {
         });
 
       if (error) {
-        this.logger.error(`Supabase Storage upload error: ${JSON.stringify(error)}`);
-        this.logger.error(`Upload details - bucket: ${bucketName}, filename: ${filename}, contentType: ${file.mimetype}, size: ${file.size}`);
-        throw new BadRequestException(`Failed to upload image: ${error.message}`);
+        this.logger.error(
+          `Supabase Storage upload error: ${JSON.stringify(error)}`,
+        );
+        this.logger.error(
+          `Upload details - bucket: ${bucketName}, filename: ${filename}, contentType: ${file.mimetype}, size: ${file.size}`,
+        );
+        throw new BadRequestException(
+          `Failed to upload image: ${error.message}`,
+        );
       }
 
       // Get public URL
@@ -75,7 +91,9 @@ export class SupabaseStorageService {
         .getPublicUrl(filename);
 
       if (!urlData?.publicUrl) {
-        throw new BadRequestException('Failed to get public URL for uploaded image');
+        throw new BadRequestException(
+          'Failed to get public URL for uploaded image',
+        );
       }
 
       this.logger.debug(`Image uploaded successfully: ${filename}`);
@@ -89,4 +107,3 @@ export class SupabaseStorageService {
     }
   }
 }
-

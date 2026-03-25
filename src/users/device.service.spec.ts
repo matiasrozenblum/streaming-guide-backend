@@ -30,7 +30,8 @@ describe('DeviceService', () => {
     id: 'test-device-uuid',
     deviceId: 'test-device-id',
     user: mockUser,
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    userAgent:
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
     deviceType: 'web',
     deviceName: 'Chrome Browser',
     lastSeen: new Date(),
@@ -70,14 +71,19 @@ describe('DeviceService', () => {
   });
 
   describe('findOrCreateDevice', () => {
-    const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
+    const userAgent =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
 
     it('should return existing device when found', async () => {
       const deviceId = 'existing-device-id';
       mockRepository.findOne.mockResolvedValue(mockDevice);
       mockRepository.save.mockResolvedValue(mockDevice);
 
-      const result = await service.findOrCreateDevice(mockUser, userAgent, deviceId);
+      const result = await service.findOrCreateDevice(
+        mockUser,
+        userAgent,
+        deviceId,
+      );
 
       expect(mockRepository.findOne).toHaveBeenCalledWith({
         where: { deviceId },
@@ -93,7 +99,11 @@ describe('DeviceService', () => {
       mockRepository.create.mockReturnValue(mockDevice);
       mockRepository.save.mockResolvedValue(mockDevice);
 
-      const result = await service.findOrCreateDevice(mockUser, userAgent, deviceId);
+      const result = await service.findOrCreateDevice(
+        mockUser,
+        userAgent,
+        deviceId,
+      );
 
       expect(mockRepository.create).toHaveBeenCalledWith({
         deviceId,
@@ -122,7 +132,7 @@ describe('DeviceService', () => {
           deviceId: expect.any(String),
           user: mockUser,
           userAgent,
-        })
+        }),
       );
     });
   });

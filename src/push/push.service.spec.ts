@@ -79,9 +79,11 @@ describe('PushService', () => {
 
     service = module.get<PushService>(PushService);
     pushSubscriptionRepository = module.get<Repository<PushSubscriptionEntity>>(
-      getRepositoryToken(PushSubscriptionEntity)
+      getRepositoryToken(PushSubscriptionEntity),
     );
-    deviceRepository = module.get<Repository<Device>>(getRepositoryToken(Device));
+    deviceRepository = module.get<Repository<Device>>(
+      getRepositoryToken(Device),
+    );
 
     // Reset mocks
     jest.clearAllMocks();
@@ -102,8 +104,12 @@ describe('PushService', () => {
 
       mockDeviceRepository.findOne.mockResolvedValue(mockDevice);
       mockPushSubscriptionRepository.findOne.mockResolvedValue(null);
-      mockPushSubscriptionRepository.create.mockReturnValue(mockPushSubscription);
-      mockPushSubscriptionRepository.save.mockResolvedValue(mockPushSubscription);
+      mockPushSubscriptionRepository.create.mockReturnValue(
+        mockPushSubscription,
+      );
+      mockPushSubscriptionRepository.save.mockResolvedValue(
+        mockPushSubscription,
+      );
 
       const result = await service.create(createDto);
 
@@ -132,7 +138,9 @@ describe('PushService', () => {
       };
 
       mockDeviceRepository.findOne.mockResolvedValue(mockDevice);
-      mockPushSubscriptionRepository.findOne.mockResolvedValue(mockPushSubscription);
+      mockPushSubscriptionRepository.findOne.mockResolvedValue(
+        mockPushSubscription,
+      );
 
       const result = await service.create(createDto);
 
@@ -154,7 +162,9 @@ describe('PushService', () => {
 
       mockDeviceRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.create(createDto)).rejects.toThrow('Device not found');
+      await expect(service.create(createDto)).rejects.toThrow(
+        'Device not found',
+      );
     });
   });
 
@@ -180,7 +190,7 @@ describe('PushService', () => {
             auth: mockPushSubscription.auth,
           },
         },
-        JSON.stringify(mockPayload)
+        JSON.stringify(mockPayload),
       );
     });
 
@@ -188,7 +198,10 @@ describe('PushService', () => {
       const error = new Error('Push service error');
       mockWebPush.sendNotification.mockRejectedValue(error);
 
-      const result = await service.sendNotification(mockPushSubscription, mockPayload);
+      const result = await service.sendNotification(
+        mockPushSubscription,
+        mockPayload,
+      );
       expect(result).toBe(false);
     });
   });
@@ -200,7 +213,7 @@ describe('PushService', () => {
       await service.scheduleForProgram('1', 'Test Program', 10);
 
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('scheduleForProgram(1, "Test Program", 10m)')
+        expect.stringContaining('scheduleForProgram(1, "Test Program", 10m)'),
       );
 
       consoleSpy.mockRestore();
@@ -219,7 +232,10 @@ describe('PushService', () => {
       const mockPayload = { title: 'Test', options: { body: 'Test body' } };
       mockWebPush.sendNotification.mockResolvedValue({} as any);
 
-      await service.sendNotificationToDevices(devicesWithSubscriptions, mockPayload);
+      await service.sendNotificationToDevices(
+        devicesWithSubscriptions,
+        mockPayload,
+      );
 
       expect(mockWebPush.sendNotification).toHaveBeenCalledTimes(1);
     });
@@ -238,7 +254,10 @@ describe('PushService', () => {
 
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
 
-      await service.sendNotificationToDevices(devicesWithSubscriptions, mockPayload);
+      await service.sendNotificationToDevices(
+        devicesWithSubscriptions,
+        mockPayload,
+      );
 
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining('❌ Failed to send web push: Push failed'),
@@ -247,4 +266,4 @@ describe('PushService', () => {
       consoleSpy.mockRestore();
     });
   });
-}); 
+});
