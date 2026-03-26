@@ -23,16 +23,16 @@ describe('RedisService', () => {
   beforeEach(() => {
     // Set up test environment variables
     process.env.REDIS_URL = 'redis://localhost:6379';
-    
-    Object.values(mockClient).forEach(fn => fn.mockReset && fn.mockReset());
-    
+
+    Object.values(mockClient).forEach((fn) => fn.mockReset && fn.mockReset());
+
     mockSentryService = {
       captureMessage: jest.fn(),
       captureException: jest.fn(),
       setTag: jest.fn(),
       addBreadcrumb: jest.fn(),
     } as any;
-    
+
     service = new RedisService(mockSentryService);
   });
 
@@ -58,11 +58,19 @@ describe('RedisService', () => {
   describe('set', () => {
     it('sets value without ttl', async () => {
       await service.set('key', { foo: 'bar' });
-      expect(mockClient.set).toHaveBeenCalledWith('key', JSON.stringify({ foo: 'bar' }));
+      expect(mockClient.set).toHaveBeenCalledWith(
+        'key',
+        JSON.stringify({ foo: 'bar' }),
+      );
     });
     it('sets value with ttl', async () => {
       await service.set('key', { foo: 'bar' }, 60);
-      expect(mockClient.set).toHaveBeenCalledWith('key', JSON.stringify({ foo: 'bar' }), 'EX', 60);
+      expect(mockClient.set).toHaveBeenCalledWith(
+        'key',
+        JSON.stringify({ foo: 'bar' }),
+        'EX',
+        60,
+      );
     });
   });
 
@@ -110,4 +118,4 @@ describe('RedisService', () => {
       expect(fakePipeline.exec).toHaveBeenCalled();
     });
   });
-}); 
+});

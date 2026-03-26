@@ -42,7 +42,9 @@ describe('TokenRefreshController', () => {
   describe('refreshTwitchToken', () => {
     it('should successfully refresh Twitch token', async () => {
       mockTokenRefreshService.refreshTwitchToken.mockResolvedValue(true);
-      mockTokenRefreshService.getTwitchAccessToken.mockResolvedValue('new-twitch-token-1234567890');
+      mockTokenRefreshService.getTwitchAccessToken.mockResolvedValue(
+        'new-twitch-token-1234567890',
+      );
 
       const result = await controller.refreshTwitchToken();
 
@@ -69,7 +71,9 @@ describe('TokenRefreshController', () => {
   describe('refreshKickToken', () => {
     it('should successfully refresh Kick token', async () => {
       mockTokenRefreshService.refreshKickToken.mockResolvedValue(true);
-      mockTokenRefreshService.getKickAccessToken.mockResolvedValue('new-kick-token-abcdefghij');
+      mockTokenRefreshService.getKickAccessToken.mockResolvedValue(
+        'new-kick-token-abcdefghij',
+      );
 
       const result = await controller.refreshKickToken();
 
@@ -155,9 +159,15 @@ describe('TokenRefreshController', () => {
     });
 
     it('should use smart refresh when force is not true', async () => {
-      mockTokenRefreshService.checkAndRefreshTokens.mockResolvedValue(undefined);
-      mockTokenRefreshService.getTwitchAccessToken.mockResolvedValue('twitch-token');
-      mockTokenRefreshService.getKickAccessToken.mockResolvedValue('kick-token');
+      mockTokenRefreshService.checkAndRefreshTokens.mockResolvedValue(
+        undefined,
+      );
+      mockTokenRefreshService.getTwitchAccessToken.mockResolvedValue(
+        'twitch-token',
+      );
+      mockTokenRefreshService.getKickAccessToken.mockResolvedValue(
+        'kick-token',
+      );
 
       const result = await controller.checkAndRefreshTokens('false');
 
@@ -175,7 +185,9 @@ describe('TokenRefreshController', () => {
     });
 
     it('should handle missing tokens', async () => {
-      mockTokenRefreshService.checkAndRefreshTokens.mockResolvedValue(undefined);
+      mockTokenRefreshService.checkAndRefreshTokens.mockResolvedValue(
+        undefined,
+      );
       mockTokenRefreshService.getTwitchAccessToken.mockResolvedValue(null);
       mockTokenRefreshService.getKickAccessToken.mockResolvedValue(null);
 
@@ -212,7 +224,9 @@ describe('TokenRefreshController', () => {
         ageInDays: 17,
       };
 
-      mockTokenRefreshService.getTwitchTokenStatus.mockResolvedValue(twitchStatus);
+      mockTokenRefreshService.getTwitchTokenStatus.mockResolvedValue(
+        twitchStatus,
+      );
       mockTokenRefreshService.getKickTokenStatus.mockResolvedValue(kickStatus);
 
       const result = await controller.getTokenStatus();
@@ -226,8 +240,12 @@ describe('TokenRefreshController', () => {
     });
 
     it('should handle missing tokens', async () => {
-      mockTokenRefreshService.getTwitchTokenStatus.mockResolvedValue({ hasToken: false });
-      mockTokenRefreshService.getKickTokenStatus.mockResolvedValue({ hasToken: false });
+      mockTokenRefreshService.getTwitchTokenStatus.mockResolvedValue({
+        hasToken: false,
+      });
+      mockTokenRefreshService.getKickTokenStatus.mockResolvedValue({
+        hasToken: false,
+      });
 
       const result = await controller.getTokenStatus();
 
@@ -238,4 +256,3 @@ describe('TokenRefreshController', () => {
     });
   });
 });
-

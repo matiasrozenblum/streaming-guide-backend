@@ -101,7 +101,7 @@ export class TimezoneUtil {
     const now = this.now();
     const start = this.todayAtTime(startTime);
     const end = this.todayAtTime(endTime);
-    
+
     return now.isAfter(start) && now.isBefore(end);
   }
 

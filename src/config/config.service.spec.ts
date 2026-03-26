@@ -49,11 +49,16 @@ describe('ConfigService', () => {
 
   describe('get', () => {
     it('should return the value for a given key', async () => {
-      mockRepository.findOne.mockResolvedValue({ key: 'HOTJAR_ENABLED', value: 'true' });
+      mockRepository.findOne.mockResolvedValue({
+        key: 'HOTJAR_ENABLED',
+        value: 'true',
+      });
 
       const result = await service.get('HOTJAR_ENABLED');
       expect(result).toBe('true');
-      expect(repo.findOne).toHaveBeenCalledWith({ where: { key: 'HOTJAR_ENABLED' } });
+      expect(repo.findOne).toHaveBeenCalledWith({
+        where: { key: 'HOTJAR_ENABLED' },
+      });
     });
 
     it('should return null if key does not exist', async () => {
@@ -96,11 +101,17 @@ describe('ConfigService', () => {
     it('should update value if config exists', async () => {
       const existing = { key: 'HOTJAR_ENABLED', value: 'false' };
       mockRepository.findOne.mockResolvedValue(existing);
-      mockRepository.save.mockResolvedValue({ key: 'HOTJAR_ENABLED', value: 'true' });
+      mockRepository.save.mockResolvedValue({
+        key: 'HOTJAR_ENABLED',
+        value: 'true',
+      });
 
       const result = await service.set('HOTJAR_ENABLED', 'true');
       expect(result).toEqual({ key: 'HOTJAR_ENABLED', value: 'true' });
-      expect(repo.save).toHaveBeenCalledWith({ key: 'HOTJAR_ENABLED', value: 'true' });
+      expect(repo.save).toHaveBeenCalledWith({
+        key: 'HOTJAR_ENABLED',
+        value: 'true',
+      });
     });
 
     it('should create new config if not exists', async () => {
@@ -110,7 +121,10 @@ describe('ConfigService', () => {
 
       const result = await service.set('NEW_KEY', '123');
       expect(result).toEqual({ key: 'NEW_KEY', value: '123' });
-      expect(repo.create).toHaveBeenCalledWith({ key: 'NEW_KEY', value: '123' });
+      expect(repo.create).toHaveBeenCalledWith({
+        key: 'NEW_KEY',
+        value: '123',
+      });
       expect(repo.save).toHaveBeenCalled();
     });
   });

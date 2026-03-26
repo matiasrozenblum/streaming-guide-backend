@@ -26,7 +26,8 @@ export class WeeklyScheduleManagerService {
 
     try {
       // 1. Clean up expired overrides
-      const expiredCount = await this.weeklyOverridesService.cleanupExpiredOverrides();
+      const expiredCount =
+        await this.weeklyOverridesService.cleanupExpiredOverrides();
       this.logger.log(`Cleaned up ${expiredCount} expired schedule overrides`);
 
       // 2. Clear unified schedule cache to force fresh data
@@ -62,12 +63,13 @@ export class WeeklyScheduleManagerService {
    */
   async getUpcomingWeekOverrides(): Promise<any> {
     const nextWeekStart = this.weeklyOverridesService.getWeekStartDate('next');
-    const overrides = await this.weeklyOverridesService.getOverridesForWeek(nextWeekStart);
+    const overrides =
+      await this.weeklyOverridesService.getOverridesForWeek(nextWeekStart);
 
     return {
       weekStart: nextWeekStart,
       overridesCount: overrides.length,
-      overrides: overrides.map(override => ({
+      overrides: overrides.map((override) => ({
         id: override.id,
         scheduleId: override.scheduleId,
         type: override.overrideType,
@@ -82,19 +84,23 @@ export class WeeklyScheduleManagerService {
    * Get current week's override statistics
    */
   async getCurrentWeekStats(): Promise<any> {
-    const currentWeekStart = this.weeklyOverridesService.getWeekStartDate('current');
-    const overrides = await this.weeklyOverridesService.getOverridesForWeek(currentWeekStart);
+    const currentWeekStart =
+      this.weeklyOverridesService.getWeekStartDate('current');
+    const overrides =
+      await this.weeklyOverridesService.getOverridesForWeek(currentWeekStart);
 
     const stats = {
       weekStart: currentWeekStart,
       totalOverrides: overrides.length,
       byType: {
-        cancel: overrides.filter(o => o.overrideType === 'cancel').length,
-        time_change: overrides.filter(o => o.overrideType === 'time_change').length,
-        reschedule: overrides.filter(o => o.overrideType === 'reschedule').length,
+        cancel: overrides.filter((o) => o.overrideType === 'cancel').length,
+        time_change: overrides.filter((o) => o.overrideType === 'time_change')
+          .length,
+        reschedule: overrides.filter((o) => o.overrideType === 'reschedule')
+          .length,
       },
     };
 
     return stats;
   }
-} 
+}

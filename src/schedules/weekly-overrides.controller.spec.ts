@@ -1,6 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { WeeklyOverridesController } from './weekly-overrides.controller';
-import { WeeklyOverridesService, WeeklyOverrideDto } from './weekly-overrides.service';
+import {
+  WeeklyOverridesService,
+  WeeklyOverrideDto,
+} from './weekly-overrides.service';
 
 describe('WeeklyOverridesController', () => {
   let controller: WeeklyOverridesController;
@@ -29,7 +32,9 @@ describe('WeeklyOverridesController', () => {
       ],
     }).compile();
 
-    controller = module.get<WeeklyOverridesController>(WeeklyOverridesController);
+    controller = module.get<WeeklyOverridesController>(
+      WeeklyOverridesController,
+    );
     service = module.get<WeeklyOverridesService>(WeeklyOverridesService);
   });
 
@@ -52,7 +57,9 @@ describe('WeeklyOverridesController', () => {
         createdAt: new Date(),
       };
 
-      jest.spyOn(service, 'createWeeklyOverride').mockResolvedValue(expectedResult as any);
+      jest
+        .spyOn(service, 'createWeeklyOverride')
+        .mockResolvedValue(expectedResult as any);
 
       const result = await controller.createOverride(dto);
 
@@ -70,7 +77,9 @@ describe('WeeklyOverridesController', () => {
         overrideType: 'cancel',
       };
 
-      jest.spyOn(service, 'getWeeklyOverride').mockResolvedValue(expectedResult as any);
+      jest
+        .spyOn(service, 'getWeeklyOverride')
+        .mockResolvedValue(expectedResult as any);
 
       const result = await controller.getOverride(overrideId);
 
@@ -118,7 +127,9 @@ describe('WeeklyOverridesController', () => {
       ];
 
       jest.spyOn(service, 'getWeekStartDate').mockReturnValue(weekStartDate);
-      jest.spyOn(service, 'getOverridesForWeek').mockResolvedValue(expectedOverrides as any);
+      jest
+        .spyOn(service, 'getOverridesForWeek')
+        .mockResolvedValue(expectedOverrides as any);
 
       const result = await controller.getWeekOverrides(targetWeek);
 
@@ -135,7 +146,9 @@ describe('WeeklyOverridesController', () => {
       ];
 
       jest.spyOn(service, 'getWeekStartDate').mockReturnValue(weekStartDate);
-      jest.spyOn(service, 'getOverridesForWeek').mockResolvedValue(expectedOverrides as any);
+      jest
+        .spyOn(service, 'getOverridesForWeek')
+        .mockResolvedValue(expectedOverrides as any);
 
       const result = await controller.getWeekOverrides(targetWeek);
 
@@ -156,7 +169,9 @@ describe('WeeklyOverridesController', () => {
         ],
       };
 
-      jest.spyOn(service, 'getCurrentAndNextWeekOverrides').mockResolvedValue(expectedResult as any);
+      jest
+        .spyOn(service, 'getCurrentAndNextWeekOverrides')
+        .mockResolvedValue(expectedResult as any);
 
       const result = await controller.getAllOverrides();
 
@@ -169,7 +184,9 @@ describe('WeeklyOverridesController', () => {
     it('should cleanup expired overrides', async () => {
       const cleanedCount = 3;
 
-      jest.spyOn(service, 'cleanupExpiredOverrides').mockResolvedValue(cleanedCount);
+      jest
+        .spyOn(service, 'cleanupExpiredOverrides')
+        .mockResolvedValue(cleanedCount);
 
       const result = await controller.cleanupExpired();
 
@@ -183,7 +200,9 @@ describe('WeeklyOverridesController', () => {
     it('should handle no expired overrides', async () => {
       const cleanedCount = 0;
 
-      jest.spyOn(service, 'cleanupExpiredOverrides').mockResolvedValue(cleanedCount);
+      jest
+        .spyOn(service, 'cleanupExpiredOverrides')
+        .mockResolvedValue(cleanedCount);
 
       const result = await controller.cleanupExpired();
 
@@ -193,4 +212,4 @@ describe('WeeklyOverridesController', () => {
       });
     });
   });
-}); 
+});

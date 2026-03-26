@@ -7,7 +7,8 @@ import { UpdateCategoryDto } from './dto/update-category.dto';
 import { RedisService } from '../redis/redis.service';
 import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
+const FRONTEND_URL =
+  process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
 const REVALIDATE_SECRET = process.env.REVALIDATE_SECRET || 'changeme';
 const VERCEL_BYPASS_SECRET = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 
@@ -23,16 +24,28 @@ export class CategoriesService {
   ) {
     console.log('[CategoriesService] Initializing NotifyAndRevalidateUtil...');
     console.log('[CategoriesService] FRONTEND_URL:', FRONTEND_URL);
-    console.log('[CategoriesService] REVALIDATE_SECRET:', REVALIDATE_SECRET ? REVALIDATE_SECRET.substring(0, 8) + '...' : 'undefined');
-    console.log('[CategoriesService] VERCEL_BYPASS_SECRET:', VERCEL_BYPASS_SECRET ? VERCEL_BYPASS_SECRET.substring(0, 8) + '...' : 'undefined');
-    
+    console.log(
+      '[CategoriesService] REVALIDATE_SECRET:',
+      REVALIDATE_SECRET
+        ? REVALIDATE_SECRET.substring(0, 8) + '...'
+        : 'undefined',
+    );
+    console.log(
+      '[CategoriesService] VERCEL_BYPASS_SECRET:',
+      VERCEL_BYPASS_SECRET
+        ? VERCEL_BYPASS_SECRET.substring(0, 8) + '...'
+        : 'undefined',
+    );
+
     this.notifyUtil = new NotifyAndRevalidateUtil(
       this.redisService,
       FRONTEND_URL,
       REVALIDATE_SECRET,
       VERCEL_BYPASS_SECRET,
     );
-    console.log('[CategoriesService] NotifyAndRevalidateUtil initialized successfully');
+    console.log(
+      '[CategoriesService] NotifyAndRevalidateUtil initialized successfully',
+    );
   }
 
   async create(createCategoryDto: CreateCategoryDto): Promise<Category> {
@@ -83,20 +96,25 @@ export class CategoriesService {
     });
   }
 
-  async update(id: number, updateCategoryDto: UpdateCategoryDto): Promise<Category> {
+  async update(
+    id: number,
+    updateCategoryDto: UpdateCategoryDto,
+  ): Promise<Category> {
     const category = await this.findOne(id);
     Object.assign(category, updateCategoryDto);
     const updated = await this.categoriesRepository.save(category);
 
     // Notify and revalidate
-    console.log('[CategoriesService] Triggering revalidation for category update...');
+    console.log(
+      '[CategoriesService] Triggering revalidation for category update...',
+    );
     console.log('[CategoriesService] notifyUtil available:', !!this.notifyUtil);
-    
+
     if (!this.notifyUtil) {
       console.error('[CategoriesService] ❌ notifyUtil is not available!');
       return updated;
     }
-    
+
     try {
       await this.notifyUtil.notifyAndRevalidate({
         eventType: 'category_updated',
@@ -130,7 +148,9 @@ export class CategoriesService {
   async searchByName(searchTerm: string): Promise<Category[]> {
     return await this.categoriesRepository
       .createQueryBuilder('category')
-      .where('category.name ILIKE :searchTerm', { searchTerm: `%${searchTerm}%` })
+      .where('category.name ILIKE :searchTerm', {
+        searchTerm: `%${searchTerm}%`,
+      })
       .orderBy('category.name', 'ASC')
       .getMany();
   }
@@ -143,7 +163,9 @@ export class CategoriesService {
     await this.categoriesRepository.save(entities);
 
     // Notify and revalidate
-    console.log('[CategoriesService] Triggering revalidation for categories reorder...');
+    console.log(
+      '[CategoriesService] Triggering revalidation for categories reorder...',
+    );
     await this.notifyUtil.notifyAndRevalidate({
       eventType: 'categories_reordered',
       entity: 'category',

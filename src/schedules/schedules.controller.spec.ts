@@ -116,8 +116,12 @@ describe('SchedulesController', () => {
     });
 
     it('should throw NotFoundException when schedule not found', async () => {
-      (service.update as jest.Mock).mockRejectedValueOnce(new NotFoundException());
-      await expect(controller.update('2', { dayOfWeek: 'tuesday' })).rejects.toThrow(NotFoundException);
+      (service.update as jest.Mock).mockRejectedValueOnce(
+        new NotFoundException(),
+      );
+      await expect(
+        controller.update('2', { dayOfWeek: 'tuesday' }),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -129,7 +133,9 @@ describe('SchedulesController', () => {
     });
 
     it('should throw NotFoundException when schedule not found', async () => {
-      (service.remove as jest.Mock).mockRejectedValueOnce(new NotFoundException());
+      (service.remove as jest.Mock).mockRejectedValueOnce(
+        new NotFoundException(),
+      );
       await expect(controller.remove('2')).rejects.toThrow(NotFoundException);
     });
   });

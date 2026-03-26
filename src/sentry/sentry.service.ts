@@ -27,7 +27,7 @@ export class SentryService implements OnModuleInit {
       tracePropagationTargets: [
         'localhost',
         /^\//,
-        /api\.laguiadelstreaming\.com\.ar/
+        /api\.laguiadelstreaming\.com\.ar/,
       ],
       // Error Monitoring
       beforeSend(event) {
@@ -62,7 +62,11 @@ export class SentryService implements OnModuleInit {
   /**
    * Capture custom messages with severity levels
    */
-  captureMessage(message: string, level: Sentry.SeverityLevel = 'error', context?: Record<string, any>) {
+  captureMessage(
+    message: string,
+    level: Sentry.SeverityLevel = 'error',
+    context?: Record<string, any>,
+  ) {
     // Skip Sentry in non-production environments (staging, development, test) to avoid using quota
     if (this.isStaging) {
       return;
@@ -113,4 +117,4 @@ export class SentryService implements OnModuleInit {
 
     Sentry.addBreadcrumb(breadcrumb);
   }
-} 
+}

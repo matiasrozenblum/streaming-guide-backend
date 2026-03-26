@@ -67,7 +67,9 @@ describe('CategoriesController', () => {
 
       const result = await controller.create(createCategoryDto);
 
-      expect(mockCategoriesService.create).toHaveBeenCalledWith(createCategoryDto);
+      expect(mockCategoriesService.create).toHaveBeenCalledWith(
+        createCategoryDto,
+      );
       expect(result).toEqual(expectedCategory);
     });
 
@@ -120,7 +122,9 @@ describe('CategoriesController', () => {
 
       const result = await controller.search(searchTerm);
 
-      expect(mockCategoriesService.searchByName).toHaveBeenCalledWith(searchTerm);
+      expect(mockCategoriesService.searchByName).toHaveBeenCalledWith(
+        searchTerm,
+      );
       expect(result).toEqual(expectedResults);
     });
 
@@ -151,7 +155,9 @@ describe('CategoriesController', () => {
         new NotFoundException(`Category with ID 999 not found`),
       );
 
-      await expect(controller.findOne(categoryId)).rejects.toThrow(NotFoundException);
+      await expect(controller.findOne(categoryId)).rejects.toThrow(
+        NotFoundException,
+      );
       expect(mockCategoriesService.findOne).toHaveBeenCalledWith(999);
     });
   });
@@ -169,7 +175,10 @@ describe('CategoriesController', () => {
 
       const result = await controller.update(categoryId, updateCategoryDto);
 
-      expect(mockCategoriesService.update).toHaveBeenCalledWith(1, updateCategoryDto);
+      expect(mockCategoriesService.update).toHaveBeenCalledWith(
+        1,
+        updateCategoryDto,
+      );
       expect(result).toEqual(updatedCategory);
     });
 
@@ -183,9 +192,9 @@ describe('CategoriesController', () => {
         new NotFoundException(`Category with ID 999 not found`),
       );
 
-      await expect(controller.update(categoryId, updateCategoryDto)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        controller.update(categoryId, updateCategoryDto),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -205,7 +214,9 @@ describe('CategoriesController', () => {
         new NotFoundException(`Category with ID 999 not found`),
       );
 
-      await expect(controller.remove(categoryId)).rejects.toThrow(NotFoundException);
+      await expect(controller.remove(categoryId)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

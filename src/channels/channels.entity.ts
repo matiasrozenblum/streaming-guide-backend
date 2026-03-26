@@ -1,4 +1,12 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany, ManyToMany, Index, JoinTable } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  OneToMany,
+  ManyToMany,
+  Index,
+  JoinTable,
+} from 'typeorm';
 import { Program } from '../programs/programs.entity';
 import { Category } from '../categories/categories.entity';
 
@@ -35,7 +43,10 @@ export class Channel {
   @Column({ type: 'boolean', default: false })
   show_only_when_scheduled: boolean;
 
-  @OneToMany(() => Program, (program) => program.channel, { cascade: true, onDelete: 'CASCADE' })
+  @OneToMany(() => Program, (program) => program.channel, {
+    cascade: true,
+    onDelete: 'CASCADE',
+  })
   programs: Program[];
 
   @ManyToMany(() => Category, (category) => category.channels)
