@@ -512,10 +512,7 @@ export class WebhookSubscriptionService {
     };
 
     const keysToFetch: string[] = [];
-    const keyToTypeMap = new Map<
-      string,
-      { service: 'twitch' | 'kick'; username: string; type?: string }
-    >();
+    const keyMap: Array<{ key: string; type: 'twitch' | 'kick'; username: string }> = [];
 
     for (const service of services) {
       if (service.service === 'twitch') {
@@ -525,16 +522,8 @@ export class WebhookSubscriptionService {
           const onlineKey = `${this.SUBSCRIPTION_PREFIX}twitch:${username}:stream.online`;
           const offlineKey = `${this.SUBSCRIPTION_PREFIX}twitch:${username}:stream.offline`;
           keysToFetch.push(onlineKey, offlineKey);
-          keyToTypeMap.set(onlineKey, {
-            service: 'twitch',
-            username,
-            type: 'online',
-          });
-          keyToTypeMap.set(offlineKey, {
-            service: 'twitch',
-            username,
-            type: 'offline',
-          });
+          keyMap.push({ key: onlineKey, type: 'twitch', username });
+          keyMap.push({ key: offlineKey, type: 'twitch', username });
         }
       } else if (service.service === 'kick') {
         const username =
@@ -542,21 +531,21 @@ export class WebhookSubscriptionService {
         if (username) {
           const key = `${this.SUBSCRIPTION_PREFIX}kick:${username}`;
           keysToFetch.push(key);
-          keyToTypeMap.set(key, { service: 'kick', username });
+          keyMap.push({ key, type: 'kick', username });
         }
       }
     }
 
     if (keysToFetch.length > 0) {
       const results = await this.redisService.mget<any>(keysToFetch);
-      for (let i = 0; i < keysToFetch.length; i++) {
+      for (let i = 0; i < results.length; i++) {
         const sub = results[i];
         if (sub) {
-          const mapping = keyToTypeMap.get(keysToFetch[i])!;
-          if (mapping.service === 'twitch') {
+          const { type, username } = keyMap[i];
+          if (type === 'twitch') {
             subscriptions.twitch.push(sub.subscriptionId);
-          } else if (mapping.service === 'kick') {
-            subscriptions.kick.push(sub.subscriptionId || mapping.username);
+          } else if (type === 'kick') {
+            subscriptions.kick.push(sub.subscriptionId || username);
           }
         }
       }
@@ -740,13 +729,17 @@ export class WebhookSubscriptionService {
       let active = 0;
       let failed = 0;
 
-      for (const key of keys) {
+      // Batch fetch all stored subscription data in a single Redis call
+      const storedDataBatch = await this.redisService.mget<any>(keys);
+
+      for (let i = 0; i < keys.length; i++) {
+        const key = keys[i];
         try {
           // Extract username from key: webhook:subscription:kick:username
           const username = key.replace(`${this.SUBSCRIPTION_PREFIX}kick:`, '');
 
-          // Get stored data
-          const storedData = (await this.redisService.get(key)) as any;
+          // Get stored data from batch
+          const storedData = storedDataBatch[i] as any;
           const userId = storedData?.userId;
 
           if (!userId) {

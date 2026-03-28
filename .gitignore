@@ -45,6 +45,7 @@ Thumbs.db
 .env.test.local
 .env.production.local
 .env.local
+.env.sync
 
 # temp directory
 .temp
@@ -71,3 +72,6 @@ coverage/
 docs/
 # Firebase credentials
 backend-firebase-key.json
+
+# Claude Code (local settings, not shared)
+.claude/settings.local.json

@@ -302,16 +302,19 @@ describe('WebhookSubscriptionService', () => {
         },
       ];
 
-      mockRedisService.mget = jest
-        .fn()
-        .mockResolvedValue([
-          { subscriptionId: 'sub-online-123' },
-          { subscriptionId: 'sub-offline-456' },
-          { subscriptionId: 'kick-sub-789' },
-        ]);
+      mockRedisService.mget.mockResolvedValueOnce([
+        { subscriptionId: 'sub-online-123' },
+        { subscriptionId: 'sub-offline-456' },
+        { subscriptionId: 'kick-sub-789' },
+      ]);
 
       const result = await service.getSubscriptionsForStreamer(1, services);
 
+      expect(mockRedisService.mget).toHaveBeenCalledWith([
+        'webhook:subscription:twitch:testuser:stream.online',
+        'webhook:subscription:twitch:testuser:stream.offline',
+        'webhook:subscription:kick:kickuser',
+      ]);
       expect(result.twitch).toContain('sub-online-123');
       expect(result.twitch).toContain('sub-offline-456');
       expect(result.kick).toContain('kick-sub-789');

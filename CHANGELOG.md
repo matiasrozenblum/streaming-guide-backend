@@ -17,10 +17,10 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
-## [1.24.6] - 2026-03-24
+## [1.24.6] - 2026-03-28
 
 ### Changed
-- Streamer live status optimization
+- Replaced N+1 Redis GET calls with batched MGET in `getSubscriptionsForStreamer` and `renewExpiredKickSubscriptions`
 
 ## [1.24.5] - 2026-03-23
 

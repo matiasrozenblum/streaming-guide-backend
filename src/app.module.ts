@@ -60,6 +60,7 @@ import { ConfigModule as AppConfigModule } from './config/config.module';
           type: 'postgres',
           url: dbUrl,
           ssl: { rejectUnauthorized: false },
+          schema: 'public',
           autoLoadEntities: true,
           synchronize: false, // Temporarily disabled to prevent schema conflicts
           logging: false,
