@@ -14,6 +14,7 @@ describe('StreamerLiveStatusService', () => {
     get: jest.fn(),
     set: jest.fn(),
     del: jest.fn(),
+    mget: jest.fn(),
   };
 
   const mockConfigService = {
@@ -207,9 +208,7 @@ describe('StreamerLiveStatusService', () => {
         ttl: 604800,
       };
 
-      mockRedisService.get
-        .mockResolvedValueOnce(cache1)
-        .mockResolvedValueOnce(cache2);
+      mockRedisService.mget.mockResolvedValueOnce([cache1, cache2]);
 
       const result = await service.getLiveStatuses([1, 2]);
 
