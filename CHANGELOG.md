@@ -10,13 +10,17 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ### Added
 
 ### Changed
-- Replaced N+1 Redis GET calls with batched MGET in `getSubscriptionsForStreamer` and `renewExpiredKickSubscriptions`
 
 ### Removed
 
 ### Fixed
 
 ---
+
+## [1.24.6] - 2026-03-28
+
+### Changed
+- Replaced N+1 Redis GET calls with batched MGET in `getSubscriptionsForStreamer` and `renewExpiredKickSubscriptions`
 
 ## [1.24.5] - 2026-03-23
 
