@@ -17,6 +17,12 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.24.7] - 2026-03-28
+
+### Changed
+- Replaced N+1 Redis GET calls with batched MGET in `getSubscriptionsForStreamer` and `renewExpiredKickSubscriptions`
+
+
 ## [1.24.6] - 2026-03-24
 
 ### Changed

@@ -71,3 +71,6 @@ coverage/
 docs/
 # Firebase credentials
 backend-firebase-key.json
+
+# Claude Code (local settings, not shared)
+.claude/settings.local.json
