@@ -1,12 +1,24 @@
 import { Controller, Get, Query, Res, Post, Body, Param } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBody, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiQuery,
+  ApiBody,
+  ApiParam,
+} from '@nestjs/swagger';
 import { StatisticsService } from './statistics.service';
 import { ReportsProxyService } from './reports-proxy.service';
 import { UserDemographics, TopProgramsStats } from './statistics.service';
 import { EmailService } from '../email/email.service';
 import { Response } from 'express';
 import { UnifiedReportDto } from './dto/unified-report.dto';
-import { ChannelReportDto, ChannelReportEmailDto, PeriodicReportDto, PeriodicReportEmailDto } from './dto/channel-report.dto';
+import {
+  ChannelReportDto,
+  ChannelReportEmailDto,
+  PeriodicReportDto,
+  PeriodicReportEmailDto,
+} from './dto/channel-report.dto';
 
 @ApiTags('statistics')
 @Controller('statistics')
@@ -19,8 +31,8 @@ export class StatisticsController {
 
   @Get('demographics')
   @ApiOperation({ summary: 'Get user demographics statistics' })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'User demographics data',
     schema: {
       type: 'object',
@@ -56,14 +68,14 @@ export class StatisticsController {
 
   @Get('popular-programs')
   @ApiOperation({ summary: 'Get popular programs by subscription count' })
-  @ApiQuery({ 
-    name: 'limit', 
-    required: false, 
-    type: Number, 
-    description: 'Number of popular programs to return (default: 10)' 
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Number of popular programs to return (default: 10)',
   })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Popular programs by subscription count',
     schema: {
       type: 'array',
@@ -79,16 +91,38 @@ export class StatisticsController {
       },
     },
   })
-  async getTopPrograms(@Query('limit') limit?: number): Promise<TopProgramsStats[]> {
+  async getTopPrograms(
+    @Query('limit') limit?: number,
+  ): Promise<TopProgramsStats[]> {
     return this.statisticsService.getTopPrograms(limit);
   }
 
   @Get('reports/users')
   @ApiOperation({ summary: 'Get paginated list of new users in a date range' })
-  @ApiQuery({ name: 'from', required: true, type: String, description: 'Start date (YYYY-MM-DD)' })
-  @ApiQuery({ name: 'to', required: true, type: String, description: 'End date (YYYY-MM-DD)' })
-  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)' })
-  @ApiQuery({ name: 'pageSize', required: false, type: Number, description: 'Page size (default: 20)' })
+  @ApiQuery({
+    name: 'from',
+    required: true,
+    type: String,
+    description: 'Start date (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'to',
+    required: true,
+    type: String,
+    description: 'End date (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'pageSize',
+    required: false,
+    type: Number,
+    description: 'Page size (default: 20)',
+  })
   async getNewUsersReport(
     @Query('from') from: string,
     @Query('to') to: string,
@@ -99,13 +133,46 @@ export class StatisticsController {
   }
 
   @Get('reports/subscriptions')
-  @ApiOperation({ summary: 'Get paginated list of new subscriptions in a date range, optionally filtered by channel or program' })
-  @ApiQuery({ name: 'from', required: true, type: String, description: 'Start date (YYYY-MM-DD)' })
-  @ApiQuery({ name: 'to', required: true, type: String, description: 'End date (YYYY-MM-DD)' })
-  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)' })
-  @ApiQuery({ name: 'pageSize', required: false, type: Number, description: 'Page size (default: 20)' })
-  @ApiQuery({ name: 'channelId', required: false, type: Number, description: 'Filter by channel ID' })
-  @ApiQuery({ name: 'programId', required: false, type: Number, description: 'Filter by program ID' })
+  @ApiOperation({
+    summary:
+      'Get paginated list of new subscriptions in a date range, optionally filtered by channel or program',
+  })
+  @ApiQuery({
+    name: 'from',
+    required: true,
+    type: String,
+    description: 'Start date (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'to',
+    required: true,
+    type: String,
+    description: 'End date (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'pageSize',
+    required: false,
+    type: Number,
+    description: 'Page size (default: 20)',
+  })
+  @ApiQuery({
+    name: 'channelId',
+    required: false,
+    type: Number,
+    description: 'Filter by channel ID',
+  })
+  @ApiQuery({
+    name: 'programId',
+    required: false,
+    type: Number,
+    description: 'Filter by program ID',
+  })
   async getNewSubscriptionsReport(
     @Query('from') from: string,
     @Query('to') to: string,
@@ -114,14 +181,26 @@ export class StatisticsController {
     @Query('channelId') channelId?: number,
     @Query('programId') programId?: number,
   ) {
-    return this.statisticsService.getNewSubscriptionsReport(from, to, page, pageSize, channelId, programId);
+    return this.statisticsService.getNewSubscriptionsReport(
+      from,
+      to,
+      page,
+      pageSize,
+      channelId,
+      programId,
+    );
   }
 
   @Get('reports/users/download')
   @ApiOperation({ summary: 'Download users report as CSV or PDF' })
   @ApiQuery({ name: 'from', required: true, type: String })
   @ApiQuery({ name: 'to', required: true, type: String })
-  @ApiQuery({ name: 'format', required: true, type: String, enum: ['csv', 'pdf'] })
+  @ApiQuery({
+    name: 'format',
+    required: true,
+    type: String,
+    enum: ['csv', 'pdf'],
+  })
   async downloadUsersReport(
     @Res() res: Response,
     @Query('from') from: string,
@@ -134,9 +213,15 @@ export class StatisticsController {
       from,
       to,
     });
-    
-    res.setHeader('Content-Type', format === 'csv' ? 'text/csv' : 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="users_report_${from}_to_${to}.${format}"`);
+
+    res.setHeader(
+      'Content-Type',
+      format === 'csv' ? 'text/csv' : 'application/pdf',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="users_report_${from}_to_${to}.${format}"`,
+    );
     res.send(result);
   }
 
@@ -144,7 +229,12 @@ export class StatisticsController {
   @ApiOperation({ summary: 'Download subscriptions report as CSV or PDF' })
   @ApiQuery({ name: 'from', required: true, type: String })
   @ApiQuery({ name: 'to', required: true, type: String })
-  @ApiQuery({ name: 'format', required: true, type: String, enum: ['csv', 'pdf'] })
+  @ApiQuery({
+    name: 'format',
+    required: true,
+    type: String,
+    enum: ['csv', 'pdf'],
+  })
   @ApiQuery({ name: 'channelId', required: false, type: Number })
   @ApiQuery({ name: 'programId', required: false, type: Number })
   async downloadSubscriptionsReport(
@@ -163,16 +253,25 @@ export class StatisticsController {
       channelId,
       programId,
     });
-    
-    res.setHeader('Content-Type', format === 'csv' ? 'text/csv' : 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="subscriptions_report_${from}_to_${to}.${format}"`);
+
+    res.setHeader(
+      'Content-Type',
+      format === 'csv' ? 'text/csv' : 'application/pdf',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="subscriptions_report_${from}_to_${to}.${format}"`,
+    );
     res.send(result);
   }
 
   @Post('reports')
   @ApiOperation({ summary: 'Generate and download or email a report' })
   @ApiBody({ type: UnifiedReportDto })
-  @ApiResponse({ status: 200, description: 'Report generated or emailed successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Report generated or emailed successfully',
+  })
   async unifiedReport(@Body() body: UnifiedReportDto, @Res() res: Response) {
     try {
       // Handle array of reports
@@ -184,13 +283,13 @@ export class StatisticsController {
         }
         return res.json({ success: true, results });
       }
-      
+
       // Handle single report
       if (body.report) {
         const result = await this.processSingleReport(body.report);
         return res.json(result);
       }
-      
+
       return res.status(400).json({ error: 'No report data provided' });
     } catch (error) {
       return res.status(400).json({ error: error.message });
@@ -199,35 +298,43 @@ export class StatisticsController {
 
   private async processSingleReport(report: any) {
     const { action, toEmail, ...reportParams } = report;
-    
+
     if (action === 'table') {
       if (report.type === 'users') {
         const result = await this.statisticsService.getNewUsersReport(
-          report.from, report.to, report.page ?? 1, report.pageSize ?? 20
+          report.from,
+          report.to,
+          report.page ?? 1,
+          report.pageSize ?? 20,
         );
         return result;
       } else if (report.type === 'subscriptions') {
         const result = await this.statisticsService.getNewSubscriptionsReport(
-          report.from, report.to, report.page ?? 1, report.pageSize ?? 20, report.channelId, report.programId
+          report.from,
+          report.to,
+          report.page ?? 1,
+          report.pageSize ?? 20,
+          report.channelId,
+          report.programId,
         );
         return result;
       } else {
         throw new Error('Invalid type for table action');
       }
     }
-    
+
     let file = await this.reportsProxyService.generateReport(reportParams);
     if (typeof file === 'string') {
       file = Buffer.from(file);
     }
     const filename = `${report.type}_report_${report.from}_to_${report.to}.${report.format}`;
-    
+
     if (action === 'download') {
-      return { 
-        success: true, 
+      return {
+        success: true,
         filename,
         contentType: report.format === 'csv' ? 'text/csv' : 'application/pdf',
-        data: file.toString('base64')
+        data: file.toString('base64'),
       };
     } else if (action === 'email') {
       const recipient = toEmail || 'admin@laguiadelstreaming.com';
@@ -236,7 +343,14 @@ export class StatisticsController {
         subject: `Reporte solicitado: ${filename}`,
         text: `Adjuntamos el reporte solicitado (${filename}).`,
         html: `<p>Adjuntamos el reporte solicitado (<b>${filename}</b>).</p>`,
-        attachments: [{ filename, content: file, contentType: report.format === 'csv' ? 'text/csv' : 'application/pdf' }],
+        attachments: [
+          {
+            filename,
+            content: file,
+            contentType:
+              report.format === 'csv' ? 'text/csv' : 'application/pdf',
+          },
+        ],
       });
       return { success: true, message: `Reporte enviado a ${recipient}` };
     } else {
@@ -289,15 +403,29 @@ export class StatisticsController {
   @Get('reports/channel/:channelId')
   @ApiOperation({ summary: 'Get channel statistics for a specific date range' })
   @ApiParam({ name: 'channelId', description: 'Channel ID', type: Number })
-  @ApiQuery({ name: 'from', required: true, type: String, description: 'Start date (YYYY-MM-DD)' })
-  @ApiQuery({ name: 'to', required: true, type: String, description: 'End date (YYYY-MM-DD)' })
+  @ApiQuery({
+    name: 'from',
+    required: true,
+    type: String,
+    description: 'Start date (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'to',
+    required: true,
+    type: String,
+    description: 'End date (YYYY-MM-DD)',
+  })
   @ApiResponse({ status: 200, description: 'Channel statistics data' })
   async getChannelStats(
     @Param('channelId') channelId: string,
     @Query('from') from: string,
     @Query('to') to: string,
   ) {
-    return this.statisticsService.getChannelStats(parseInt(channelId), from, to);
+    return this.statisticsService.getChannelStats(
+      parseInt(channelId),
+      from,
+      to,
+    );
   }
 
   @Get('reports/channel/:channelId/download')
@@ -305,7 +433,12 @@ export class StatisticsController {
   @ApiParam({ name: 'channelId', description: 'Channel ID', type: Number })
   @ApiQuery({ name: 'from', required: true, type: String })
   @ApiQuery({ name: 'to', required: true, type: String })
-  @ApiQuery({ name: 'format', required: true, type: String, enum: ['csv', 'pdf'] })
+  @ApiQuery({
+    name: 'format',
+    required: true,
+    type: String,
+    enum: ['csv', 'pdf'],
+  })
   async downloadChannelReport(
     @Res() res: Response,
     @Param('channelId') channelId: string,
@@ -314,10 +447,21 @@ export class StatisticsController {
     @Query('format') format: 'csv' | 'pdf',
   ) {
     const channelIdNum = parseInt(channelId);
-    const result = await this.statisticsService.generateChannelReport(channelIdNum, from, to, format);
-    
-    res.setHeader('Content-Type', format === 'csv' ? 'text/csv' : 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="channel_${channelIdNum}_report_${from}_to_${to}.${format}"`);
+    const result = await this.statisticsService.generateChannelReport(
+      channelIdNum,
+      from,
+      to,
+      format,
+    );
+
+    res.setHeader(
+      'Content-Type',
+      format === 'csv' ? 'text/csv' : 'application/pdf',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="channel_${channelIdNum}_report_${from}_to_${to}.${format}"`,
+    );
     res.send(result);
   }
 
@@ -351,69 +495,102 @@ export class StatisticsController {
     @Query('to') to: string,
     @Query('channelId') channelId?: number,
   ) {
-    const result = await this.statisticsService.generateWeeklyReport(from, to, channelId);
-    
+    const result = await this.statisticsService.generateWeeklyReport(
+      from,
+      to,
+      channelId,
+    );
+
     const channelSuffix = channelId ? `_channel_${channelId}` : '';
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="weekly_report${channelSuffix}_${from}_to_${to}.pdf"`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="weekly_report${channelSuffix}_${from}_to_${to}.pdf"`,
+    );
     res.send(result);
   }
 
   @Post('reports/weekly/email')
   @ApiOperation({ summary: 'Email weekly report' })
   @ApiBody({ type: PeriodicReportEmailDto })
-  async emailWeeklyReport(
-    @Body() body: PeriodicReportEmailDto,
-  ) {
+  async emailWeeklyReport(@Body() body: PeriodicReportEmailDto) {
     // For weekly reports, we need to use the weekly-specific method
-    const result = await this.statisticsService.generateWeeklyReport(body.from, body.to, body.channelId);
-    
+    const result = await this.statisticsService.generateWeeklyReport(
+      body.from,
+      body.to,
+      body.channelId,
+    );
+
     const channelSuffix = body.channelId ? `_channel_${body.channelId}` : '';
     const filename = `weekly_report${channelSuffix}_${body.from}_to_${body.to}.pdf`;
-    
+
     await this.emailService.sendReportWithAttachment({
       to: body.toEmail,
       subject: `Reporte Semanal: ${filename}`,
       text: `Adjuntamos el reporte semanal solicitado (${filename}).`,
       html: `<p>Adjuntamos el reporte semanal solicitado (<b>${filename}</b>).</p>`,
-      attachments: [{ 
-        filename, 
-        content: result, 
-        contentType: 'application/pdf' 
-      }],
+      attachments: [
+        {
+          filename,
+          content: result,
+          contentType: 'application/pdf',
+        },
+      ],
     });
-    
+
     return { success: true, message: `Weekly report sent to ${body.toEmail}` };
   }
 
   @Get('reports/periodic/:type/download')
-  @ApiOperation({ summary: 'Download periodic report (monthly, quarterly, yearly) as PDF' })
-  @ApiParam({ name: 'type', description: 'Report type', enum: ['monthly-summary', 'quarterly-summary', 'yearly-summary'] })
+  @ApiOperation({
+    summary: 'Download periodic report (monthly, quarterly, yearly) as PDF',
+  })
+  @ApiParam({
+    name: 'type',
+    description: 'Report type',
+    enum: ['monthly-summary', 'quarterly-summary', 'yearly-summary'],
+  })
   @ApiQuery({ name: 'from', required: true, type: String })
   @ApiQuery({ name: 'to', required: true, type: String })
   @ApiQuery({ name: 'channelId', required: false, type: Number })
   async downloadPeriodicReport(
     @Res() res: Response,
-    @Param('type') type: 'monthly-summary' | 'quarterly-summary' | 'yearly-summary',
+    @Param('type')
+    type: 'monthly-summary' | 'quarterly-summary' | 'yearly-summary',
     @Query('from') from: string,
     @Query('to') to: string,
     @Query('channelId') channelId?: number,
   ) {
-    const result = await this.statisticsService.generatePeriodicReport(type, from, to, channelId);
-    
+    const result = await this.statisticsService.generatePeriodicReport(
+      type,
+      from,
+      to,
+      channelId,
+    );
+
     const channelSuffix = channelId ? `_channel_${channelId}` : '';
     const reportType = type.replace('-summary', '');
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${reportType}_report${channelSuffix}_${from}_to_${to}.pdf"`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${reportType}_report${channelSuffix}_${from}_to_${to}.pdf"`,
+    );
     res.send(result);
   }
 
   @Post('reports/periodic/:type/email')
-  @ApiOperation({ summary: 'Email periodic report (monthly, quarterly, yearly)' })
-  @ApiParam({ name: 'type', description: 'Report type', enum: ['monthly-summary', 'quarterly-summary', 'yearly-summary'] })
+  @ApiOperation({
+    summary: 'Email periodic report (monthly, quarterly, yearly)',
+  })
+  @ApiParam({
+    name: 'type',
+    description: 'Report type',
+    enum: ['monthly-summary', 'quarterly-summary', 'yearly-summary'],
+  })
   @ApiBody({ type: PeriodicReportEmailDto })
   async emailPeriodicReport(
-    @Param('type') type: 'monthly-summary' | 'quarterly-summary' | 'yearly-summary',
+    @Param('type')
+    type: 'monthly-summary' | 'quarterly-summary' | 'yearly-summary',
     @Body() body: PeriodicReportEmailDto,
   ) {
     await this.statisticsService.emailPeriodicReport(
@@ -423,6 +600,9 @@ export class StatisticsController {
       body.channelId,
       body.toEmail,
     );
-    return { success: true, message: `${type.replace('-summary', '')} report sent to ${body.toEmail}` };
+    return {
+      success: true,
+      message: `${type.replace('-summary', '')} report sent to ${body.toEmail}`,
+    };
   }
-} 
+}

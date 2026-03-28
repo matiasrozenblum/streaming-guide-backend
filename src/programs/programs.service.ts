@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FindOneOptions, Repository } from 'typeorm';
 import { Program } from './programs.entity';
@@ -11,7 +16,8 @@ import { WeeklyOverridesService } from '../schedules/weekly-overrides.service';
 import { SchedulesService } from '../schedules/schedules.service';
 import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
+const FRONTEND_URL =
+  process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
 const REVALIDATE_SECRET = process.env.REVALIDATE_SECRET || 'changeme';
 
 @Injectable()
@@ -33,14 +39,16 @@ export class ProgramsService {
     this.notifyUtil = new NotifyAndRevalidateUtil(
       this.redisService,
       FRONTEND_URL,
-      REVALIDATE_SECRET
+      REVALIDATE_SECRET,
     );
   }
 
   async create(createProgramDto: CreateProgramDto): Promise<any> {
     const channelId = createProgramDto.channel_id;
 
-    const channel = await this.channelsRepository.findOne({ where: { id: channelId } });
+    const channel = await this.channelsRepository.findOne({
+      where: { id: channelId },
+    });
     if (!channel) {
       throw new NotFoundException(`Channel with ID ${channelId} not found`);
     }
@@ -48,10 +56,10 @@ export class ProgramsService {
     const program = this.programsRepository.create(createProgramDto);
     program.channel = channel;
     const savedProgram = await this.programsRepository.save(program);
-    
+
     // Clear unified cache
     await this.redisService.del('schedules:week:complete');
-    
+
     // Warm cache asynchronously (non-blocking)
     this.schedulesService.debouncedWarmSchedulesCache();
 
@@ -87,7 +95,7 @@ export class ProgramsService {
       .leftJoinAndSelect('program.panelists', 'panelists')
       .orderBy('panelists.id', 'ASC')
       .getMany();
-    return programs.map(program => ({
+    return programs.map((program) => ({
       id: program.id,
       name: program.name,
       description: program.description,
@@ -132,14 +140,16 @@ export class ProgramsService {
 
   async update(id: number, updateProgramDto: UpdateProgramDto): Promise<any> {
     const program = await this.findProgramEntity(id);
-    
+
     // Handle channel_id update separately
     if (updateProgramDto.channel_id !== undefined) {
       const newChannel = await this.channelsRepository.findOne({
-        where: { id: updateProgramDto.channel_id }
+        where: { id: updateProgramDto.channel_id },
       });
       if (!newChannel) {
-        throw new NotFoundException(`Channel with ID ${updateProgramDto.channel_id} not found`);
+        throw new NotFoundException(
+          `Channel with ID ${updateProgramDto.channel_id} not found`,
+        );
       }
       program.channel = newChannel;
       // Remove channel_id from DTO to avoid conflicts with Object.assign
@@ -149,12 +159,12 @@ export class ProgramsService {
       // Update other fields normally if no channel_id change
       Object.assign(program, updateProgramDto);
     }
-    
+
     const updatedProgram = await this.programsRepository.save(program);
-    
+
     // Clear unified cache
     await this.redisService.del('schedules:week:complete');
-    
+
     // Warm cache asynchronously (non-blocking)
     this.schedulesService.debouncedWarmSchedulesCache();
 
@@ -185,22 +195,28 @@ export class ProgramsService {
 
   async remove(id: number): Promise<void> {
     // Get all schedule IDs for this program before deleting
-    const program = await this.programsRepository.findOne({ where: { id }, relations: ['schedules'] });
+    const program = await this.programsRepository.findOne({
+      where: { id },
+      relations: ['schedules'],
+    });
     if (!program) {
       throw new NotFoundException(`Program with ID ${id} not found`);
     }
-    const scheduleIds = (program.schedules || []).map(s => s.id);
+    const scheduleIds = (program.schedules || []).map((s) => s.id);
     // Delete all related weekly overrides
-    await this.weeklyOverridesService.deleteOverridesForProgram(id, scheduleIds);
+    await this.weeklyOverridesService.deleteOverridesForProgram(
+      id,
+      scheduleIds,
+    );
     // Delete the program (cascades schedules, panelists, etc.)
     const result = await this.programsRepository.delete(id);
     if (result.affected === 0) {
       throw new NotFoundException(`Program with ID ${id} not found`);
     }
-    
+
     // Clear unified cache
     await this.redisService.del('schedules:week:complete');
-    
+
     // Warm cache asynchronously (non-blocking)
     this.schedulesService.debouncedWarmSchedulesCache();
 
@@ -242,14 +258,14 @@ export class ProgramsService {
       program.panelists = [];
     }
 
-    if (!program.panelists.some(p => p.id === panelist.id)) {
+    if (!program.panelists.some((p) => p.id === panelist.id)) {
       program.panelists.push(panelist);
       await this.programsRepository.save(program);
     }
-    
+
     // Clear unified cache
     await this.redisService.del('schedules:week:complete');
-    
+
     // Warm cache asynchronously (non-blocking)
     this.schedulesService.debouncedWarmSchedulesCache();
 
@@ -267,13 +283,13 @@ export class ProgramsService {
     const program = await this.findProgramEntity(programId);
 
     if (program.panelists) {
-      program.panelists = program.panelists.filter(p => p.id !== panelistId);
+      program.panelists = program.panelists.filter((p) => p.id !== panelistId);
       await this.programsRepository.save(program);
     }
-    
+
     // Clear unified cache
     await this.redisService.del('schedules:week:complete');
-    
+
     // Warm cache asynchronously (non-blocking)
     this.schedulesService.debouncedWarmSchedulesCache();
 

@@ -18,9 +18,12 @@ export class WeeklyReportController {
       to,
       channelId: channelId ? Number(channelId) : undefined,
     });
-    
+
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="weekly_report_${from}_to_${to}.pdf"`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="weekly_report_${from}_to_${to}.pdf"`,
+    );
     res.send(pdfBuffer);
   }
-} 
+}

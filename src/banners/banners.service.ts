@@ -1,6 +1,17 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThanOrEqual, LessThanOrEqual, IsNull, QueryFailedError } from 'typeorm';
+import {
+  Repository,
+  MoreThanOrEqual,
+  LessThanOrEqual,
+  IsNull,
+  QueryFailedError,
+} from 'typeorm';
 import { Banner } from './banners.entity';
 import { CreateBannerDto } from './dto/create-banner.dto';
 import { UpdateBannerDto } from './dto/update-banner.dto';
@@ -8,7 +19,8 @@ import { ReorderBannersDto } from './dto/reorder-banners.dto';
 import { RedisService } from '../redis/redis.service';
 import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
+const FRONTEND_URL =
+  process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
 const REVALIDATE_SECRET = process.env.REVALIDATE_SECRET || 'changeme';
 const VERCEL_BYPASS_SECRET = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 
@@ -46,11 +58,11 @@ export class BannersService {
       const allBanners = await this.bannersRepository.find();
 
       // Separate into timed and fixed banners
-      const timedBanners = allBanners.filter(banner => !banner.is_fixed);
-      const fixedBanners = allBanners.filter(banner => banner.is_fixed);
+      const timedBanners = allBanners.filter((banner) => !banner.is_fixed);
+      const fixedBanners = allBanners.filter((banner) => banner.is_fixed);
 
       // Filter timed banners: must be enabled and within date range
-      const activeTimedBanners = timedBanners.filter(banner => {
+      const activeTimedBanners = timedBanners.filter((banner) => {
         if (!banner.is_enabled) return false;
         if (banner.start_date && banner.start_date > now) return false;
         if (banner.end_date && banner.end_date < now) return false;
@@ -61,13 +73,16 @@ export class BannersService {
       activeTimedBanners.sort((a, b) => a.priority - b.priority);
 
       // Filter fixed banners: only those explicitly enabled
-      const enabledFixedBanners = fixedBanners.filter(banner => banner.is_enabled);
+      const enabledFixedBanners = fixedBanners.filter(
+        (banner) => banner.is_enabled,
+      );
 
       // Sort fixed banners by priority ASC
       enabledFixedBanners.sort((a, b) => a.priority - b.priority);
 
       // Auto-activation logic: ensure minimum 2 banners visible
-      const totalActive = activeTimedBanners.length + enabledFixedBanners.length;
+      const totalActive =
+        activeTimedBanners.length + enabledFixedBanners.length;
       const MIN_BANNERS = 2;
       const MAX_AUTO_FIXED = 2; // Never auto-enable more than 2 fixed banners
 
@@ -76,7 +91,7 @@ export class BannersService {
       if (totalActive < MIN_BANNERS) {
         // Get disabled fixed banners, sorted by priority
         const disabledFixedBanners = fixedBanners
-          .filter(banner => !banner.is_enabled)
+          .filter((banner) => !banner.is_enabled)
           .sort((a, b) => a.priority - b.priority);
 
         // Auto-enable fixed banners until we have at least MIN_BANNERS
@@ -84,7 +99,7 @@ export class BannersService {
         const currentlyEnabledFixedCount = enabledFixedBanners.length;
         const canAutoEnable = Math.min(
           MIN_BANNERS - totalActive, // How many we need
-          MAX_AUTO_FIXED - currentlyEnabledFixedCount // How many we can auto-enable
+          MAX_AUTO_FIXED - currentlyEnabledFixedCount, // How many we can auto-enable
         );
 
         if (canAutoEnable > 0) {
@@ -93,25 +108,33 @@ export class BannersService {
           // Update database to enable these banners
           for (const banner of autoEnabledFixed) {
             banner.is_enabled = true;
-            await this.bannersRepository.save(banner);
           }
+          await this.bannersRepository.save(autoEnabledFixed);
 
           this.logger.debug(
-            `Auto-enabled ${autoEnabledFixed.length} fixed banner(s) to meet minimum requirement: ${autoEnabledFixed.map(b => b.id).join(', ')}`
+            `Auto-enabled ${autoEnabledFixed.length} fixed banner(s) to meet minimum requirement: ${autoEnabledFixed.map((b) => b.id).join(', ')}`,
           );
         }
       }
 
       // Combine all fixed banners (enabled + auto-enabled)
-      const allActiveFixedBanners = [...enabledFixedBanners, ...autoEnabledFixed];
+      const allActiveFixedBanners = [
+        ...enabledFixedBanners,
+        ...autoEnabledFixed,
+      ];
       allActiveFixedBanners.sort((a, b) => a.priority - b.priority);
 
       // Return: timed first, then fixed, both sorted by priority
       return [...activeTimedBanners, ...allActiveFixedBanners];
     } catch (error) {
       // Handle case where banner table doesn't exist yet (e.g., migration not run)
-      if (error instanceof QueryFailedError && (error as any).code === '42P01') {
-        this.logger.debug('Banner table does not exist yet, returning empty array');
+      if (
+        error instanceof QueryFailedError &&
+        (error as any).code === '42P01'
+      ) {
+        this.logger.debug(
+          'Banner table does not exist yet, returning empty array',
+        );
         return [];
       }
       // Re-throw other errors
@@ -150,13 +173,19 @@ export class BannersService {
    * Create a new banner
    */
   async create(createBannerDto: CreateBannerDto): Promise<Banner> {
-    this.logger.log(`Creating banner with data: ${JSON.stringify(createBannerDto)}`);
+    this.logger.log(
+      `Creating banner with data: ${JSON.stringify(createBannerDto)}`,
+    );
 
     // Validate link_url is provided when link_type is not 'none'
     if (createBannerDto.link_type && createBannerDto.link_type !== 'none') {
       if (!createBannerDto.link_url) {
-        this.logger.error('Validation failed: link_url is required when link_type is not "none"');
-        throw new BadRequestException('link_url is required when link_type is not "none"');
+        this.logger.error(
+          'Validation failed: link_url is required when link_type is not "none"',
+        );
+        throw new BadRequestException(
+          'link_url is required when link_type is not "none"',
+        );
       }
     }
 
@@ -172,15 +201,21 @@ export class BannersService {
         const endDate = new Date(createBannerDto.end_date);
 
         if (startDate >= endDate) {
-          this.logger.error(`Validation failed: start_date (${startDate}) must be before end_date (${endDate})`);
+          this.logger.error(
+            `Validation failed: start_date (${startDate}) must be before end_date (${endDate})`,
+          );
           throw new BadRequestException('start_date must be before end_date');
         }
       }
 
       // Timed banners require both start and end dates
       if (!createBannerDto.start_date || !createBannerDto.end_date) {
-        this.logger.error(`Validation failed: start_date and end_date are required for timed banners. Got start_date=${createBannerDto.start_date}, end_date=${createBannerDto.end_date}, is_fixed=${createBannerDto.is_fixed}`);
-        throw new BadRequestException('start_date and end_date are required for timed banners');
+        this.logger.error(
+          `Validation failed: start_date and end_date are required for timed banners. Got start_date=${createBannerDto.start_date}, end_date=${createBannerDto.end_date}, is_fixed=${createBannerDto.is_fixed}`,
+        );
+        throw new BadRequestException(
+          'start_date and end_date are required for timed banners',
+        );
       }
     }
 
@@ -207,8 +242,16 @@ export class BannersService {
     const banner = this.bannersRepository.create({
       ...createBannerDto,
       is_fixed: isFixed,
-      start_date: isFixed ? null : (createBannerDto.start_date ? new Date(createBannerDto.start_date) : null),
-      end_date: isFixed ? null : (createBannerDto.end_date ? new Date(createBannerDto.end_date) : null),
+      start_date: isFixed
+        ? null
+        : createBannerDto.start_date
+          ? new Date(createBannerDto.start_date)
+          : null,
+      end_date: isFixed
+        ? null
+        : createBannerDto.end_date
+          ? new Date(createBannerDto.end_date)
+          : null,
     });
 
     const saved = await this.bannersRepository.save(banner);
@@ -233,14 +276,22 @@ export class BannersService {
 
     // Validate link_url is provided when link_type is not 'none'
     const linkType = updateBannerDto.link_type || banner.link_type;
-    const linkUrl = updateBannerDto.link_url !== undefined ? updateBannerDto.link_url : banner.link_url;
+    const linkUrl =
+      updateBannerDto.link_url !== undefined
+        ? updateBannerDto.link_url
+        : banner.link_url;
 
     if (linkType && linkType !== 'none' && !linkUrl) {
-      throw new BadRequestException('link_url is required when link_type is not "none"');
+      throw new BadRequestException(
+        'link_url is required when link_type is not "none"',
+      );
     }
 
     // Determine if banner is being changed to/from fixed
-    const isFixed = updateBannerDto.is_fixed !== undefined ? updateBannerDto.is_fixed : banner.is_fixed;
+    const isFixed =
+      updateBannerDto.is_fixed !== undefined
+        ? updateBannerDto.is_fixed
+        : banner.is_fixed;
 
     if (isFixed) {
       // Fixed banners: clear dates
@@ -250,8 +301,12 @@ export class BannersService {
       banner.end_date = null;
     } else {
       // Timed banners: validate date range
-      const startDate = updateBannerDto.start_date ? new Date(updateBannerDto.start_date) : banner.start_date;
-      const endDate = updateBannerDto.end_date ? new Date(updateBannerDto.end_date) : banner.end_date;
+      const startDate = updateBannerDto.start_date
+        ? new Date(updateBannerDto.start_date)
+        : banner.start_date;
+      const endDate = updateBannerDto.end_date
+        ? new Date(updateBannerDto.end_date)
+        : banner.end_date;
 
       if (startDate && endDate && startDate >= endDate) {
         throw new BadRequestException('start_date must be before end_date');
@@ -259,7 +314,9 @@ export class BannersService {
 
       // If changing from fixed to timed, require dates
       if (banner.is_fixed && (!startDate || !endDate)) {
-        throw new BadRequestException('start_date and end_date are required for timed banners');
+        throw new BadRequestException(
+          'start_date and end_date are required for timed banners',
+        );
       }
     }
 
@@ -267,8 +324,16 @@ export class BannersService {
     Object.assign(banner, {
       ...updateBannerDto,
       is_fixed: isFixed,
-      start_date: isFixed ? null : (updateBannerDto.start_date ? new Date(updateBannerDto.start_date) : banner.start_date),
-      end_date: isFixed ? null : (updateBannerDto.end_date ? new Date(updateBannerDto.end_date) : banner.end_date),
+      start_date: isFixed
+        ? null
+        : updateBannerDto.start_date
+          ? new Date(updateBannerDto.start_date)
+          : banner.start_date,
+      end_date: isFixed
+        ? null
+        : updateBannerDto.end_date
+          ? new Date(updateBannerDto.end_date)
+          : banner.end_date,
     });
 
     const updated = await this.bannersRepository.save(banner);
@@ -309,13 +374,15 @@ export class BannersService {
     const { banners } = reorderDto;
 
     // Validate all banner IDs exist
-    const bannerIds = banners.map(b => b.id);
+    const bannerIds = banners.map((b) => b.id);
     const existingBanners = await this.bannersRepository.findByIds(bannerIds);
 
     if (existingBanners.length !== bannerIds.length) {
-      const foundIds = existingBanners.map(b => b.id);
-      const missingIds = bannerIds.filter(id => !foundIds.includes(id));
-      throw new NotFoundException(`Banners with IDs ${missingIds.join(', ')} not found`);
+      const foundIds = existingBanners.map((b) => b.id);
+      const missingIds = bannerIds.filter((id) => !foundIds.includes(id));
+      throw new NotFoundException(
+        `Banners with IDs ${missingIds.join(', ')} not found`,
+      );
     }
 
     // Update display orders
@@ -330,7 +397,7 @@ export class BannersService {
       eventType: 'banners_reordered',
       entity: 'banner',
       entityId: 'all',
-      payload: { bannerIds: banners.map(b => b.id) },
+      payload: { bannerIds: banners.map((b) => b.id) },
       revalidatePaths: ['/'],
     });
 

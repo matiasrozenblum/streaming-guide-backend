@@ -1,5 +1,9 @@
 import { validate } from 'class-validator';
-import { CreateScheduleDto, CreateScheduleItemDto, CreateBulkSchedulesDto } from './create-schedule.dto';
+import {
+  CreateScheduleDto,
+  CreateScheduleItemDto,
+  CreateBulkSchedulesDto,
+} from './create-schedule.dto';
 
 describe('CreateScheduleDto', () => {
   it('debería ser válido con todos los campos requeridos', async () => {
@@ -22,7 +26,7 @@ describe('CreateScheduleDto', () => {
     // Falta startTime y endTime
 
     const errors = await validate(dto);
-    const fieldsWithError = errors.map(e => e.property);
+    const fieldsWithError = errors.map((e) => e.property);
 
     expect(fieldsWithError).toContain('channelId');
     expect(fieldsWithError).toContain('startTime');
@@ -59,7 +63,7 @@ describe('CreateScheduleItemDto', () => {
     // Falta startTime y endTime
 
     const errors = await validate(dto);
-    const fieldsWithError = errors.map(e => e.property);
+    const fieldsWithError = errors.map((e) => e.property);
 
     expect(fieldsWithError).toContain('startTime');
     expect(fieldsWithError).toContain('endTime');
@@ -100,7 +104,7 @@ describe('CreateBulkSchedulesDto', () => {
     ];
 
     const errors = await validate(dto);
-    const fieldsWithError = errors.map(e => e.property);
+    const fieldsWithError = errors.map((e) => e.property);
 
     expect(fieldsWithError).toContain('programId');
   });
@@ -112,7 +116,7 @@ describe('CreateBulkSchedulesDto', () => {
     dto.schedules = [];
 
     const errors = await validate(dto);
-    const fieldsWithError = errors.map(e => e.property);
+    const fieldsWithError = errors.map((e) => e.property);
 
     expect(fieldsWithError).toContain('schedules');
   });

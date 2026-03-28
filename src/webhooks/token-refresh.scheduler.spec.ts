@@ -35,7 +35,9 @@ describe('TokenRefreshScheduler', () => {
 
   describe('handleTokenRefresh', () => {
     it('should call checkAndRefreshTokens', async () => {
-      mockTokenRefreshService.checkAndRefreshTokens.mockResolvedValue(undefined);
+      mockTokenRefreshService.checkAndRefreshTokens.mockResolvedValue(
+        undefined,
+      );
 
       await scheduler.handleTokenRefresh();
 
@@ -52,7 +54,3 @@ describe('TokenRefreshScheduler', () => {
     });
   });
 });
-
-
-
-

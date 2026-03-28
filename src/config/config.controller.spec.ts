@@ -12,7 +12,9 @@ describe('ConfigController', () => {
       { key: 'FEATURE_X_PERCENTAGE', value: '50' },
     ]),
     get: jest.fn().mockResolvedValue('true'),
-    set: jest.fn().mockImplementation((key, value) => Promise.resolve({ key, value })),
+    set: jest
+      .fn()
+      .mockImplementation((key, value) => Promise.resolve({ key, value })),
   };
 
   beforeEach(async () => {
@@ -50,7 +52,10 @@ describe('ConfigController', () => {
   });
 
   it('should set a config value', async () => {
-    const result = await controller.set({ key: 'HOTJAR_ENABLED', value: 'false' });
+    const result = await controller.set({
+      key: 'HOTJAR_ENABLED',
+      value: 'false',
+    });
     expect(result).toEqual({ key: 'HOTJAR_ENABLED', value: 'false' });
     expect(service.set).toHaveBeenCalledWith('HOTJAR_ENABLED', 'false');
   });

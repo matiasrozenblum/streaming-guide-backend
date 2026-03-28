@@ -89,7 +89,16 @@ import { ConfigModule as AppConfigModule } from './config/config.module';
         };
       },
     }),
-    TypeOrmModule.forFeature([Channel, Program, Schedule, Panelist, Config, Device, UserSubscription, Category]),
+    TypeOrmModule.forFeature([
+      Channel,
+      Program,
+      Schedule,
+      Panelist,
+      Config,
+      Device,
+      UserSubscription,
+      Category,
+    ]),
     ChannelsModule,
     ProgramsModule,
     SchedulesModule,
@@ -125,4 +134,4 @@ import { ConfigModule as AppConfigModule } from './config/config.module';
     },
   ],
 })
-export class AppModule { }
+export class AppModule {}
