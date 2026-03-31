@@ -19,16 +19,16 @@ import { SentryModule } from '../sentry/sentry.module';
     SentryModule,
   ],
   controllers: [
-    StatisticsController, 
-    WeeklyReportController, 
-    ComprehensiveReportController
+    StatisticsController,
+    WeeklyReportController,
+    ComprehensiveReportController,
   ],
   providers: [
-    StatisticsService, 
+    StatisticsService,
     ComprehensiveReportService,
-    ReportsProxyService, 
-    EmailService
+    ReportsProxyService,
+    EmailService,
   ],
   exports: [StatisticsService, ComprehensiveReportService],
 })
-export class StatisticsModule {} 
+export class StatisticsModule {}

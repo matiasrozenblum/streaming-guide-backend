@@ -32,9 +32,14 @@ export class AuthController {
   ) {
     const { email, password, deviceId } = body;
     const userAgent = req.headers['user-agent'] || 'Unknown';
-    
+
     try {
-      const { access_token, refresh_token } = await this.authService.loginUser(email, password, userAgent, deviceId);
+      const { access_token, refresh_token } = await this.authService.loginUser(
+        email,
+        password,
+        userAgent,
+        deviceId,
+      );
       return { access_token, refresh_token };
     } catch (err) {
       throw new UnauthorizedException(err.message);
@@ -57,34 +62,46 @@ export class AuthController {
   @ApiOperation({ summary: 'Verifica OTP y retorna JWT o registration_token' })
   async verifyCode(
     @Request() req: any,
-    @Body() { identifier, code, deviceId }: { identifier: string; code: string; deviceId?: string },
+    @Body()
+    {
+      identifier,
+      code,
+      deviceId,
+    }: { identifier: string; code: string; deviceId?: string },
   ) {
     console.log('🔍 [AuthController] verify-code called with:', {
       identifier,
       deviceId,
       userAgent: req.headers['user-agent'],
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
 
-    if (!identifier || !code) throw new BadRequestException('Falta identificador o código');
+    if (!identifier || !code)
+      throw new BadRequestException('Falta identificador o código');
     await this.otpService.verifyCode(identifier, code);
 
     // Si existe el usuario, lo logueamos
     const user = await this.usersService.findByEmail(identifier);
     if (user) {
-      console.log('✅ [AuthController] User found, generating token for user:', user.id);
+      console.log(
+        '✅ [AuthController] User found, generating token for user:',
+        user.id,
+      );
       // For OTP login, we don't verify password, so we generate token directly
       // Device creation will be handled by frontend useDeviceId hook with correct user-agent
       const payload = this.authService.buildPayload(user);
       const access_token = await this.authService.signAccessToken(payload);
       const refresh_token = await this.authService.signRefreshToken(payload);
-      console.log('✅ [AuthController] Token generated, device creation delegated to frontend');
+      console.log(
+        '✅ [AuthController] Token generated, device creation delegated to frontend',
+      );
       return { access_token, refresh_token, isNew: false };
     }
 
     console.log('🆕 [AuthController] New user, returning registration token');
     // Si no existe, devolvemos un token de registro
-    const registration_token = await this.authService.signRegistrationToken(identifier);
+    const registration_token =
+      await this.authService.signRegistrationToken(identifier);
     return { registration_token, isNew: true };
   }
 
@@ -95,27 +112,38 @@ export class AuthController {
     @Body() dto: RegisterDto & { deviceId?: string },
   ) {
     if (!dto.gender || !dto.birthDate) {
-      throw new BadRequestException('Género y fecha de nacimiento son obligatorios');
+      throw new BadRequestException(
+        'Género y fecha de nacimiento son obligatorios',
+      );
     }
     console.log('🔍 [AuthController] register called with:', {
       email: dto.registration_token ? 'hidden' : 'none',
       deviceId: dto.deviceId,
       userAgent: req.headers['user-agent'],
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
 
-    const { registration_token, firstName, lastName, password, deviceId, gender, birthDate } = dto;
+    const {
+      registration_token,
+      firstName,
+      lastName,
+      password,
+      deviceId,
+      gender,
+      birthDate,
+    } = dto;
     // 1) Validamos el token y extraemos el email
-    const { email } = await this.authService.verifyRegistrationToken(registration_token);
+    const { email } =
+      await this.authService.verifyRegistrationToken(registration_token);
 
     // 2) Creamos el usuario (hasheo de password incluido en UsersService)
-    const user = await this.usersService.create({ 
+    const user = await this.usersService.create({
       email,
-      firstName, 
-      lastName, 
+      firstName,
+      lastName,
       password,
       gender,
-      birthDate
+      birthDate,
     });
     console.log('✅ [AuthController] User created:', user.id);
 
@@ -123,7 +151,10 @@ export class AuthController {
     if (deviceId) {
       const userAgent = req.headers['user-agent'] || 'Unknown';
       await this.usersService.ensureUserDevice(user, userAgent, deviceId);
-      console.log('✅ [AuthController] Device created/updated for user:', user.id);
+      console.log(
+        '✅ [AuthController] Device created/updated for user:',
+        user.id,
+      );
     }
 
     // 4) Generamos el JWT definitivo
@@ -141,7 +172,7 @@ export class AuthController {
       throw new UnauthorizedException('No refresh token provided');
     }
     const refreshToken = authHeader.split(' ')[1];
-    
+
     try {
       const payload = await this.authService.verifyRefreshToken(refreshToken);
       const userId = payload.sub;
@@ -157,23 +188,34 @@ export class AuthController {
   }
 
   @Post('social-login')
-  @ApiOperation({ summary: 'Social login: upsert user and return backend JWT/access token or registration token if incomplete' })
+  @ApiOperation({
+    summary:
+      'Social login: upsert user and return backend JWT/access token or registration token if incomplete',
+  })
   async socialLogin(
-    @Body() body: { email: string; firstName?: string; lastName?: string; origin: string; gender?: string; birthDate?: string }
+    @Body()
+    body: {
+      email: string;
+      firstName?: string;
+      lastName?: string;
+      origin: string;
+      gender?: string;
+      birthDate?: string;
+    },
   ) {
     // Upsert user by email
     let user = await this.usersService.findByEmail(body.email);
     const firstName = body.firstName || '';
     const lastName = body.lastName || '';
-    
+
     console.log('🔍 [AuthController] socialLogin - Found user:', {
       email: body.email,
       userId: user?.id,
       currentRole: user?.role,
       firstName: user?.firstName,
-      lastName: user?.lastName
+      lastName: user?.lastName,
     });
-    
+
     if (user) {
       // Update user fields if provided, but preserve existing role
       const updateDto: any = {
@@ -183,16 +225,19 @@ export class AuthController {
       };
       if (body.gender) updateDto.gender = body.gender;
       if (body.birthDate) updateDto.birthDate = body.birthDate;
-      
-      console.log('🔍 [AuthController] socialLogin - Updating user with:', updateDto);
-      
+
+      console.log(
+        '🔍 [AuthController] socialLogin - Updating user with:',
+        updateDto,
+      );
+
       user = await this.usersService.update(user.id, updateDto);
-      
+
       console.log('🔍 [AuthController] socialLogin - User after update:', {
         userId: user.id,
         role: user.role,
         firstName: user.firstName,
-        lastName: user.lastName
+        lastName: user.lastName,
       });
     } else {
       user = await this.usersService.createSocialUser({
@@ -207,7 +252,10 @@ export class AuthController {
     // If user is missing gender, birthDate, or password, require profile completion
     if (!user.gender || !user.birthDate) {
       // Issue a registration token (like verify-code flow) with user origin
-      const registration_token = await this.authService.signRegistrationToken(user.email, { origin: user.origin });
+      const registration_token = await this.authService.signRegistrationToken(
+        user.email,
+        { origin: user.origin },
+      );
       return {
         profileIncomplete: true,
         registration_token,
@@ -216,15 +264,15 @@ export class AuthController {
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
-        }
+        },
       };
     }
     // Issue backend JWT/access token
     const payload = this.authService.buildPayload(user);
     const access_token = await this.authService.signAccessToken(payload);
     const refresh_token = await this.authService.signRefreshToken(payload);
-    return { 
-      access_token, 
+    return {
+      access_token,
       refresh_token,
       user: {
         id: user.id,
@@ -232,32 +280,36 @@ export class AuthController {
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
-      }
+      },
     };
   }
 
-
-
-
-
   @Post('complete-profile')
-  @ApiOperation({ summary: 'Complete social signup profile with all data and return backend JWT/access token' })
+  @ApiOperation({
+    summary:
+      'Complete social signup profile with all data and return backend JWT/access token',
+  })
   async completeProfile(
     @Request() req: any,
-    @Body() dto: { 
-      registration_token: string; 
-      firstName: string; 
-      lastName: string; 
-      gender: string; 
-      birthDate: string; 
+    @Body()
+    dto: {
+      registration_token: string;
+      firstName: string;
+      lastName: string;
+      gender: string;
+      birthDate: string;
       password?: string;
-      deviceId?: string 
-    }
+      deviceId?: string;
+    },
   ) {
     const startTime = Date.now();
-    console.log('🚀 [AuthController] completeProfile started:', { timestamp: new Date().toISOString() });
+    console.log('🚀 [AuthController] completeProfile started:', {
+      timestamp: new Date().toISOString(),
+    });
     if (!dto.gender || !dto.birthDate) {
-      throw new BadRequestException('Género y fecha de nacimiento son obligatorios');
+      throw new BadRequestException(
+        'Género y fecha de nacimiento son obligatorios',
+      );
     }
 
     // Validate age
@@ -269,27 +321,50 @@ export class AuthController {
       age--;
     }
     if (age < 18) {
-      throw new BadRequestException('Debes ser mayor de 18 años para registrarte');
+      throw new BadRequestException(
+        'Debes ser mayor de 18 años para registrarte',
+      );
     }
 
     // Validate registration token and get email and origin
     const tokenStart = Date.now();
-    const { email, origin } = await this.authService.verifyRegistrationToken(dto.registration_token);
-    console.log('⏱️ [AuthController] Token verification took:', Date.now() - tokenStart, 'ms');
-    
+    const { email, origin } = await this.authService.verifyRegistrationToken(
+      dto.registration_token,
+    );
+    console.log(
+      '⏱️ [AuthController] Token verification took:',
+      Date.now() - tokenStart,
+      'ms',
+    );
+
     // Find the user by email (fast lookup without relations for profile completion)
     const userStart = Date.now();
     let user = await this.usersService.findByEmailFast(email);
-    console.log('⏱️ [AuthController] User lookup took:', Date.now() - userStart, 'ms');
+    console.log(
+      '⏱️ [AuthController] User lookup took:',
+      Date.now() - userStart,
+      'ms',
+    );
     if (!user) {
-      throw new BadRequestException('Usuario no encontrado para completar el perfil');
+      throw new BadRequestException(
+        'Usuario no encontrado para completar el perfil',
+      );
     }
 
     // Validate gender
     const allowedGenders = ['male', 'female', 'non_binary', 'rather_not_say'];
-    let gender: 'male' | 'female' | 'non_binary' | 'rather_not_say' | undefined = undefined;
+    let gender:
+      | 'male'
+      | 'female'
+      | 'non_binary'
+      | 'rather_not_say'
+      | undefined = undefined;
     if (dto.gender && allowedGenders.includes(dto.gender)) {
-      gender = dto.gender as 'male' | 'female' | 'non_binary' | 'rather_not_say';
+      gender = dto.gender as
+        | 'male'
+        | 'female'
+        | 'non_binary'
+        | 'rather_not_say';
     } else {
       throw new BadRequestException('Género no válido');
     }
@@ -301,12 +376,12 @@ export class AuthController {
       gender,
       birthDate: dto.birthDate,
     };
-    
+
     // Only include password if provided (for traditional users)
     if (dto.password) {
       updateData.password = dto.password; // Password hashing is handled in UsersService
     }
-    
+
     const updateStart = Date.now();
     // Use optimized profile update method
     user = await this.usersService.updateProfile(user.id, {
@@ -314,18 +389,29 @@ export class AuthController {
       lastName: dto.lastName,
       gender,
       birthDate: dto.birthDate,
-      ...(dto.password && { password: dto.password })
+      ...(dto.password && { password: dto.password }),
     });
-    console.log('⏱️ [AuthController] User update took:', Date.now() - updateStart, 'ms');
+    console.log(
+      '⏱️ [AuthController] User update took:',
+      Date.now() - updateStart,
+      'ms',
+    );
 
     // Optionally register device (moved to background to improve performance)
     if (dto.deviceId) {
       const userAgent = req.headers['user-agent'] || 'Unknown';
       // Fire and forget - don't wait for device registration
-      this.usersService.ensureUserDevice(user, userAgent, dto.deviceId).catch(error => {
-        console.warn('⚠️ [AuthController] Device registration failed (non-blocking):', error);
-      });
-      console.log('⏱️ [AuthController] Device registration queued (non-blocking)');
+      this.usersService
+        .ensureUserDevice(user, userAgent, dto.deviceId)
+        .catch((error) => {
+          console.warn(
+            '⚠️ [AuthController] Device registration failed (non-blocking):',
+            error,
+          );
+        });
+      console.log(
+        '⏱️ [AuthController] Device registration queued (non-blocking)',
+      );
     }
 
     // Issue backend JWT/access token (user is now complete)
@@ -333,13 +419,21 @@ export class AuthController {
     const payload = this.authService.buildPayload(user);
     const access_token = await this.authService.signAccessToken(payload);
     const refresh_token = await this.authService.signRefreshToken(payload);
-    console.log('⏱️ [AuthController] JWT generation took:', Date.now() - jwtStart, 'ms');
-    
+    console.log(
+      '⏱️ [AuthController] JWT generation took:',
+      Date.now() - jwtStart,
+      'ms',
+    );
+
     const totalTime = Date.now() - startTime;
-    console.log('✅ [AuthController] completeProfile completed in:', totalTime, 'ms');
-    
-    return { 
-      access_token, 
+    console.log(
+      '✅ [AuthController] completeProfile completed in:',
+      totalTime,
+      'ms',
+    );
+
+    return {
+      access_token,
       refresh_token,
       user: {
         id: user.id,
@@ -348,7 +442,7 @@ export class AuthController {
         lastName: user.lastName,
         gender: user.gender,
         birthDate: user.birthDate,
-      }
+      },
     };
   }
 }

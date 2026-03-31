@@ -1,4 +1,9 @@
-import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
+import {
+  Injectable,
+  NestInterceptor,
+  ExecutionContext,
+  CallHandler,
+} from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { tap, catchError } from 'rxjs/operators';
 import { SentryService } from '../sentry/sentry.service';
@@ -11,17 +16,18 @@ export class PerformanceInterceptor implements NestInterceptor {
     const request = context.switchToHttp().getRequest();
     const response = context.switchToHttp().getResponse();
     const startTime = Date.now();
-    
+
     // Generate unique request ID for tracing
     const requestId = Math.random().toString(36).substr(2, 9);
     request.id = requestId; // Attach to request for downstream access
-    
+
     // Ensure we get the correct route path, not the full URL
-    const routePath = request.route?.path || request.path || request.url.split('?')[0];
+    const routePath =
+      request.route?.path || request.path || request.url.split('?')[0];
     const endpoint = `${request.method} ${routePath}`;
     const userAgent = request.headers['user-agent'] || 'unknown';
     const ip = request.ip || request.connection?.remoteAddress || 'unknown';
-    
+
     // Log request start with ID
     console.log(`[${requestId}] 📥 Starting request: ${endpoint}`);
 
@@ -42,10 +48,12 @@ export class PerformanceInterceptor implements NestInterceptor {
     return next.handle().pipe(
       tap((data) => {
         const responseTime = Date.now() - startTime;
-        
+
         // Log performance metrics with request ID
-        console.log(`[${requestId}] 📊 API Performance: ${endpoint} - ${responseTime}ms`);
-        
+        console.log(
+          `[${requestId}] 📊 API Performance: ${endpoint} - ${responseTime}ms`,
+        );
+
         // Alert on slow responses (P3 - Medium Priority) - COMMENTED OUT
         // Temporarily disabled due to known performance issues with channels/schedules endpoint
         // TODO: Re-enable after performance optimization branch
@@ -71,7 +79,7 @@ export class PerformanceInterceptor implements NestInterceptor {
           this.sentryService.setTag('endpoint', endpoint);
         }
         */
-        
+
         // Alert on very slow responses (P2 - High Priority)
         /*if (responseTime > 15000) { // 15+ seconds
           this.sentryService.captureMessage(
@@ -96,10 +104,12 @@ export class PerformanceInterceptor implements NestInterceptor {
       }),
       catchError((error) => {
         const responseTime = Date.now() - startTime;
-        
+
         // Log error performance metrics with request ID
-        console.error(`[${requestId}] ❌ API Error: ${endpoint} - ${responseTime}ms - ${error.message}`);
-        
+        console.error(
+          `[${requestId}] ❌ API Error: ${endpoint} - ${responseTime}ms - ${error.message}`,
+        );
+
         // Alert on API errors (P2 - High Priority)
         this.sentryService.captureMessage(
           `API Error - ${endpoint} failed after ${responseTime}ms`,
@@ -114,15 +124,15 @@ export class PerformanceInterceptor implements NestInterceptor {
             user_agent: userAgent,
             ip,
             timestamp: new Date().toISOString(),
-          }
+          },
         );
-        
+
         this.sentryService.setTag('service', 'api');
         this.sentryService.setTag('error_type', 'api_error');
         this.sentryService.setTag('endpoint', endpoint);
-        
+
         throw error;
-      })
+      }),
     );
   }
-} 
+}

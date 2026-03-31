@@ -19,14 +19,18 @@ export class RedisService implements OnModuleInit {
     // Set up Redis error handlers
     this.client.on('error', (error) => {
       console.error('❌ Redis connection error:', error);
-      this.sentryService.captureMessage('Redis connection error - Cache service unavailable', 'error', {
-        service: 'redis',
-        error_type: 'connection_error',
-        error_message: error.message,
-        redis_url: process.env.REDIS_URL?.split('@')[1] || 'unknown',
-        timestamp: new Date().toISOString(),
-      });
-      
+      this.sentryService.captureMessage(
+        'Redis connection error - Cache service unavailable',
+        'error',
+        {
+          service: 'redis',
+          error_type: 'connection_error',
+          error_message: error.message,
+          redis_url: process.env.REDIS_URL?.split('@')[1] || 'unknown',
+          timestamp: new Date().toISOString(),
+        },
+      );
+
       this.sentryService.setTag('service', 'redis');
       this.sentryService.setTag('error_type', 'connection_error');
     });
@@ -60,7 +64,13 @@ export class RedisService implements OnModuleInit {
    */
   async setNX(key: string, value: any, ttlSeconds: number): Promise<boolean> {
     const serialized = JSON.stringify(value);
-    const result = await this.client.set(key, serialized, 'EX', ttlSeconds, 'NX');
+    const result = await this.client.set(
+      key,
+      serialized,
+      'EX',
+      ttlSeconds,
+      'NX',
+    );
     return result === 'OK';
   }
 
@@ -71,7 +81,7 @@ export class RedisService implements OnModuleInit {
   async mget<T>(keys: string[]): Promise<(T | null)[]> {
     if (keys.length === 0) return [];
     const values = await this.client.mget(...keys);
-    return values.map(v => (v ? JSON.parse(v) : null));
+    return values.map((v) => (v ? JSON.parse(v) : null));
   }
 
   async del(key: string): Promise<void> {

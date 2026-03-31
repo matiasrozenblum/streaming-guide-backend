@@ -29,7 +29,9 @@ describe('PanelistsService', () => {
     panelistRepository = {
       find: jest.fn().mockResolvedValue([mockPanelist]),
       findOne: jest.fn().mockImplementation(({ where }) => {
-        return where.id === 1 ? Promise.resolve(mockPanelist) : Promise.resolve(null);
+        return where.id === 1
+          ? Promise.resolve(mockPanelist)
+          : Promise.resolve(null);
       }),
       create: jest.fn().mockReturnValue(mockPanelist),
       save: jest.fn().mockResolvedValue(mockPanelist),
@@ -52,7 +54,7 @@ describe('PanelistsService', () => {
     notifyUtil = new NotifyAndRevalidateUtil(
       redisService as any,
       'https://frontend.test',
-      'testsecret'
+      'testsecret',
     );
 
     const module: TestingModule = await Test.createTestingModule({
@@ -122,41 +124,73 @@ describe('PanelistsService', () => {
 
   describe('notifyAndRevalidate integration', () => {
     it('calls notifyAndRevalidate on create', async () => {
-      const spy = jest.spyOn(notifyUtil, 'notifyAndRevalidate').mockResolvedValue(undefined as any);
-      jest.spyOn(panelistRepository, 'create').mockReturnValue({ id: 1 } as any);
-      jest.spyOn(panelistRepository, 'save').mockResolvedValue({ id: 1 } as any);
+      const spy = jest
+        .spyOn(notifyUtil, 'notifyAndRevalidate')
+        .mockResolvedValue(undefined as any);
+      jest
+        .spyOn(panelistRepository, 'create')
+        .mockReturnValue({ id: 1 } as any);
+      jest
+        .spyOn(panelistRepository, 'save')
+        .mockResolvedValue({ id: 1 } as any);
       await service.create({ name: 'Test' });
       expect(spy).toHaveBeenCalled();
     });
     it('calls notifyAndRevalidate on update', async () => {
-      const spy = jest.spyOn(notifyUtil, 'notifyAndRevalidate').mockResolvedValue(undefined as any);
+      const spy = jest
+        .spyOn(notifyUtil, 'notifyAndRevalidate')
+        .mockResolvedValue(undefined as any);
       jest.spyOn(service, 'findOne').mockResolvedValue({ id: 1 } as any);
-      jest.spyOn(panelistRepository, 'save').mockResolvedValue({ id: 1 } as any);
+      jest
+        .spyOn(panelistRepository, 'save')
+        .mockResolvedValue({ id: 1 } as any);
       await service.update('1', { name: 'Updated' });
       expect(spy).toHaveBeenCalled();
     });
     it('calls notifyAndRevalidate on remove', async () => {
-      const spy = jest.spyOn(notifyUtil, 'notifyAndRevalidate').mockResolvedValue(undefined as any);
-      jest.spyOn(panelistRepository, 'delete').mockResolvedValue({ affected: 1 } as any);
+      const spy = jest
+        .spyOn(notifyUtil, 'notifyAndRevalidate')
+        .mockResolvedValue(undefined as any);
+      jest
+        .spyOn(panelistRepository, 'delete')
+        .mockResolvedValue({ affected: 1 } as any);
       await service.remove('1');
       expect(spy).toHaveBeenCalled();
     });
     it('calls notifyAndRevalidate on addToProgram', async () => {
-      const spy = jest.spyOn(notifyUtil, 'notifyAndRevalidate').mockResolvedValue(undefined as any);
-      jest.spyOn(service, 'findOne').mockResolvedValue({ id: 1, programs: [] } as any);
-      jest.spyOn(programRepository, 'findOne').mockResolvedValue({ id: 2 } as any);
-      jest.spyOn(panelistRepository, 'save').mockResolvedValue({ id: 1, programs: [{ id: 2 }] } as any);
+      const spy = jest
+        .spyOn(notifyUtil, 'notifyAndRevalidate')
+        .mockResolvedValue(undefined as any);
+      jest
+        .spyOn(service, 'findOne')
+        .mockResolvedValue({ id: 1, programs: [] } as any);
+      jest
+        .spyOn(programRepository, 'findOne')
+        .mockResolvedValue({ id: 2 } as any);
+      jest
+        .spyOn(panelistRepository, 'save')
+        .mockResolvedValue({ id: 1, programs: [{ id: 2 }] } as any);
       jest.spyOn(redisService, 'del').mockResolvedValue(undefined as any);
-      jest.spyOn(redisService, 'delByPattern').mockResolvedValue(undefined as any);
+      jest
+        .spyOn(redisService, 'delByPattern')
+        .mockResolvedValue(undefined as any);
       await service.addToProgram(1, 2);
       expect(spy).toHaveBeenCalled();
     });
     it('calls notifyAndRevalidate on removeFromProgram', async () => {
-      const spy = jest.spyOn(notifyUtil, 'notifyAndRevalidate').mockResolvedValue(undefined as any);
-      jest.spyOn(service, 'findOne').mockResolvedValue({ id: 1, programs: [{ id: 2 }] } as any);
-      jest.spyOn(panelistRepository, 'save').mockResolvedValue({ id: 1, programs: [] } as any);
+      const spy = jest
+        .spyOn(notifyUtil, 'notifyAndRevalidate')
+        .mockResolvedValue(undefined as any);
+      jest
+        .spyOn(service, 'findOne')
+        .mockResolvedValue({ id: 1, programs: [{ id: 2 }] } as any);
+      jest
+        .spyOn(panelistRepository, 'save')
+        .mockResolvedValue({ id: 1, programs: [] } as any);
       jest.spyOn(redisService, 'del').mockResolvedValue(undefined as any);
-      jest.spyOn(redisService, 'delByPattern').mockResolvedValue(undefined as any);
+      jest
+        .spyOn(redisService, 'delByPattern')
+        .mockResolvedValue(undefined as any);
       await service.removeFromProgram(1, 2);
       expect(spy).toHaveBeenCalled();
     });

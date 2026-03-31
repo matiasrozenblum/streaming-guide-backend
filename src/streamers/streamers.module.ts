@@ -20,7 +20,14 @@ import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Streamer, Category, UserStreamerSubscription, User, Device, PushSubscriptionEntity]),
+    TypeOrmModule.forFeature([
+      Streamer,
+      Category,
+      UserStreamerSubscription,
+      User,
+      Device,
+      PushSubscriptionEntity,
+    ]),
     RedisModule,
     ConfigModule,
     forwardRef(() => WebhooksModule),
@@ -28,8 +35,16 @@ import { EmailModule } from '../email/email.module';
     EmailModule,
   ],
   controllers: [StreamersController, StreamerSubscriptionController],
-  providers: [StreamersService, StreamerLiveStatusService, SupabaseStorageService, StreamerSubscriptionService],
-  exports: [StreamersService, StreamerLiveStatusService, StreamerSubscriptionService],
+  providers: [
+    StreamersService,
+    StreamerLiveStatusService,
+    SupabaseStorageService,
+    StreamerSubscriptionService,
+  ],
+  exports: [
+    StreamersService,
+    StreamerLiveStatusService,
+    StreamerSubscriptionService,
+  ],
 })
-export class StreamersModule { }
-
+export class StreamersModule {}

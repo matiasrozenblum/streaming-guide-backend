@@ -47,7 +47,9 @@ describe('Channels Endpoints Integration Tests', () => {
   ];
 
   const mockChannelsService = {
-    getChannelsWithSchedules: jest.fn().mockResolvedValue(mockChannelWithSchedules),
+    getChannelsWithSchedules: jest
+      .fn()
+      .mockResolvedValue(mockChannelWithSchedules),
     getTodaySchedules: jest.fn().mockResolvedValue(mockChannelWithSchedules),
     getWeekSchedules: jest.fn().mockResolvedValue(mockChannelWithSchedules),
   };
@@ -74,13 +76,17 @@ describe('Channels Endpoints Integration Tests', () => {
   });
 
   describe('GET /channels/with-schedules/today', () => {
-    it('should return today\'s schedules', async () => {
+    it("should return today's schedules", async () => {
       const response = await request(app.getHttpServer())
         .get('/channels/with-schedules/today')
         .expect(200);
 
       expect(response.body).toEqual(mockChannelWithSchedules);
-      expect(channelsService.getTodaySchedules).toHaveBeenCalledWith(undefined, undefined, undefined);
+      expect(channelsService.getTodaySchedules).toHaveBeenCalledWith(
+        undefined,
+        undefined,
+        undefined,
+      );
     });
 
     it('should pass query parameters correctly', async () => {
@@ -97,7 +103,7 @@ describe('Channels Endpoints Integration Tests', () => {
       expect(channelsService.getTodaySchedules).toHaveBeenCalledWith(
         'test-device-123',
         true,
-        'false'
+        'false',
       );
     });
 
@@ -112,7 +118,7 @@ describe('Channels Endpoints Integration Tests', () => {
       expect(channelsService.getTodaySchedules).toHaveBeenCalledWith(
         undefined,
         false,
-        undefined
+        undefined,
       );
     });
 
@@ -124,19 +130,23 @@ describe('Channels Endpoints Integration Tests', () => {
       expect(channelsService.getTodaySchedules).toHaveBeenCalledWith(
         undefined,
         undefined,
-        undefined
+        undefined,
       );
     });
   });
 
   describe('GET /channels/with-schedules/week', () => {
-    it('should return week\'s schedules', async () => {
+    it("should return week's schedules", async () => {
       const response = await request(app.getHttpServer())
         .get('/channels/with-schedules/week')
         .expect(200);
 
       expect(response.body).toEqual(mockChannelWithSchedules);
-      expect(channelsService.getWeekSchedules).toHaveBeenCalledWith(undefined, undefined, undefined);
+      expect(channelsService.getWeekSchedules).toHaveBeenCalledWith(
+        undefined,
+        undefined,
+        undefined,
+      );
     });
 
     it('should pass query parameters correctly', async () => {
@@ -153,7 +163,7 @@ describe('Channels Endpoints Integration Tests', () => {
       expect(channelsService.getWeekSchedules).toHaveBeenCalledWith(
         'test-device-456',
         true,
-        'true'
+        'true',
       );
     });
 
@@ -168,7 +178,7 @@ describe('Channels Endpoints Integration Tests', () => {
       expect(channelsService.getWeekSchedules).toHaveBeenCalledWith(
         'partial-device',
         undefined,
-        undefined
+        undefined,
       );
     });
   });
@@ -189,7 +199,7 @@ describe('Channels Endpoints Integration Tests', () => {
         'tuesday',
         'legacy-device',
         true,
-        undefined
+        undefined,
       );
     });
 
@@ -203,14 +213,16 @@ describe('Channels Endpoints Integration Tests', () => {
         undefined,
         undefined,
         undefined,
-        undefined
+        undefined,
       );
     });
   });
 
   describe('Error Handling', () => {
     it('should handle service errors gracefully', async () => {
-      mockChannelsService.getTodaySchedules.mockRejectedValue(new Error('Service error'));
+      mockChannelsService.getTodaySchedules.mockRejectedValue(
+        new Error('Service error'),
+      );
 
       await request(app.getHttpServer())
         .get('/channels/with-schedules/today')
@@ -220,7 +232,7 @@ describe('Channels Endpoints Integration Tests', () => {
     it('should handle invalid query parameters', async () => {
       // Mock the service to return success for invalid parameters
       mockChannelsService.getTodaySchedules.mockResolvedValue([]);
-      
+
       const response = await request(app.getHttpServer())
         .get('/channels/with-schedules/today')
         .query({
@@ -232,7 +244,7 @@ describe('Channels Endpoints Integration Tests', () => {
       expect(channelsService.getTodaySchedules).toHaveBeenCalledWith(
         undefined,
         undefined,
-        undefined
+        undefined,
       );
     });
   });
@@ -240,46 +252,49 @@ describe('Channels Endpoints Integration Tests', () => {
   describe('Performance and Logging', () => {
     it('should log with correct prefixes', async () => {
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
-      
+
       // Mock the service to actually log and return success
       mockChannelsService.getTodaySchedules.mockImplementation(async () => {
-        console.log('[SCHEDULES-TODAY] Starting optimized today\'s schedules fetch for monday');
+        console.log(
+          "[SCHEDULES-TODAY] Starting optimized today's schedules fetch for monday",
+        );
         console.log('[SCHEDULES-TODAY] Completed in 5ms');
         return [];
       });
-      
+
       await request(app.getHttpServer())
         .get('/channels/with-schedules/today')
         .expect(200);
 
       // The service should log with the correct prefix
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[SCHEDULES-TODAY]')
+        expect.stringContaining('[SCHEDULES-TODAY]'),
       );
-      
+
       consoleSpy.mockRestore();
     });
 
     it('should log performance metrics', async () => {
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
-      
+
       // Mock the service to actually log performance metrics
       mockChannelsService.getWeekSchedules.mockImplementation(async () => {
         console.log('[SCHEDULES-WEEK] Starting optimized week schedules fetch');
         console.log('[SCHEDULES-WEEK] Completed in 10ms');
         return [];
       });
-      
+
       await request(app.getHttpServer())
         .get('/channels/with-schedules/week')
         .expect(200);
 
       // Should contain performance metrics
       const logCalls = consoleSpy.mock.calls;
-      const hasPerformanceLogs = logCalls.some(call => 
-        call[0] && typeof call[0] === 'string' && call[0].includes('ms')
+      const hasPerformanceLogs = logCalls.some(
+        (call) =>
+          call[0] && typeof call[0] === 'string' && call[0].includes('ms'),
       );
-      
+
       expect(hasPerformanceLogs).toBe(true);
       consoleSpy.mockRestore();
     });

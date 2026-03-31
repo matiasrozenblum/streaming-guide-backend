@@ -7,7 +7,15 @@ export interface VorterixProgram {
   endTime: string;
 }
 
-const dayOrder = ['LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO', 'DOMINGO'];
+const dayOrder = [
+  'LUNES',
+  'MARTES',
+  'MIÉRCOLES',
+  'JUEVES',
+  'VIERNES',
+  'SÁBADO',
+  'DOMINGO',
+];
 
 function getNextDay(day: string): string {
   const index = dayOrder.indexOf(day.toUpperCase());
@@ -33,20 +41,30 @@ export async function scrapeVorterixSchedule(): Promise<VorterixProgram[]> {
   const data = await page.$$eval(
     '.mb-2.md\\:flex-1.md\\:min-w-\\[200px\\]',
     (columns) => {
-      const results: { name: string; startTime: string; endTime: string; days: string[] }[] = [];
+      const results: {
+        name: string;
+        startTime: string;
+        endTime: string;
+        days: string[];
+      }[] = [];
 
       columns.forEach((column) => {
         const dayBlock = column.querySelector('.title.bg-primary');
-        const dayName = dayBlock?.querySelector('h2')?.textContent?.trim().toUpperCase() || '';
+        const dayName =
+          dayBlock?.querySelector('h2')?.textContent?.trim().toUpperCase() ||
+          '';
         const programs = column.querySelectorAll('.showP');
 
         programs.forEach((block) => {
           const name = block.querySelector('h3')?.textContent?.trim() || '';
-          const horarioRaw = block.querySelector('h4')?.textContent?.trim() || '';
+          const horarioRaw =
+            block.querySelector('h4')?.textContent?.trim() || '';
 
           if (!name || !horarioRaw.includes('-')) return;
 
-          const [startTime, endTime] = horarioRaw.split('-').map((s) => s.trim());
+          const [startTime, endTime] = horarioRaw
+            .split('-')
+            .map((s) => s.trim());
 
           results.push({
             name,
@@ -58,7 +76,7 @@ export async function scrapeVorterixSchedule(): Promise<VorterixProgram[]> {
       });
 
       return results;
-    }
+    },
   );
 
   await browser.close();
@@ -90,15 +108,18 @@ export async function scrapeVorterixSchedule(): Promise<VorterixProgram[]> {
     }
   }
 
-  const grouped = normalized.reduce((acc, curr) => {
-    const key = `${curr.name}_${curr.startTime}_${curr.endTime}`;
-    if (!acc[key]) {
-      acc[key] = { ...curr };
-    } else {
-      acc[key].days.push(...curr.days);
-    }
-    return acc;
-  }, {} as Record<string, VorterixProgram>);
+  const grouped = normalized.reduce(
+    (acc, curr) => {
+      const key = `${curr.name}_${curr.startTime}_${curr.endTime}`;
+      if (!acc[key]) {
+        acc[key] = { ...curr };
+      } else {
+        acc[key].days.push(...curr.days);
+      }
+      return acc;
+    },
+    {} as Record<string, VorterixProgram>,
+  );
 
   return Object.values(grouped);
 }

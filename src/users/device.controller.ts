@@ -1,4 +1,13 @@
-import { Controller, Delete, Param, UseGuards, NotFoundException, Post, Body, Req } from '@nestjs/common';
+import {
+  Controller,
+  Delete,
+  Param,
+  UseGuards,
+  NotFoundException,
+  Post,
+  Body,
+  Req,
+} from '@nestjs/common';
 import { Roles } from '../auth/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -15,7 +24,7 @@ export class DeviceController {
     @InjectRepository(Device)
     private readonly deviceRepository: Repository<Device>,
     private readonly deviceService: DeviceService,
-  ) { }
+  ) {}
 
   @Post('register')
   async register(@Req() req, @Body() body: any) {
@@ -23,7 +32,7 @@ export class DeviceController {
     console.log('📱 [DeviceController] Registering device:', {
       userId: req.user.id,
       deviceId,
-      platform
+      platform,
     });
 
     return await this.deviceService.findOrCreateDevice(
@@ -32,7 +41,7 @@ export class DeviceController {
       deviceId,
       platform,
       fcmToken,
-      appVersion
+      appVersion,
     );
   }
 
@@ -43,4 +52,4 @@ export class DeviceController {
       throw new NotFoundException(`Device with ID ${id} not found`);
     }
   }
-} 
+}
