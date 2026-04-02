@@ -153,13 +153,14 @@ export class StreamerLiveStatusService {
       const keys = reply[1];
 
       if (keys.length > 0) {
-        // Fetch values for these keys
-        for (const key of keys) {
-          const data = await this.redisService.get<StreamerLiveStatusCache>(key);
+        // Fetch values for these keys using mget to avoid N+1 queries
+        const statuses =
+          await this.redisService.mget<StreamerLiveStatusCache>(keys);
+        statuses.forEach((data) => {
           if (data && data.isLive) {
             result.set(data.streamerId, true);
           }
-        }
+        });
       }
     } while (cursor !== '0');
 

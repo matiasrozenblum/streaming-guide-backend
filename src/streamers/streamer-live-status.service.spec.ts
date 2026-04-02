@@ -15,6 +15,9 @@ describe('StreamerLiveStatusService', () => {
     set: jest.fn(),
     del: jest.fn(),
     mget: jest.fn(),
+    client: {
+      scan: jest.fn(),
+    },
   };
 
   const mockConfigService = {
@@ -215,6 +218,45 @@ describe('StreamerLiveStatusService', () => {
       expect(result.size).toBe(2);
       expect(result.get(1)).toEqual(cache1);
       expect(result.get(2)).toEqual(cache2);
+    });
+  });
+
+  describe('getAllLiveStatuses', () => {
+    it('should use mget to avoid N+1 query patterns', async () => {
+      // Mock scan to return 2 keys on first call, then 0 to stop
+      mockRedisService.client.scan.mockResolvedValueOnce([
+        '0',
+        ['streamer_live:1', 'streamer_live:2'],
+      ]);
+
+      const cache1: StreamerLiveStatusCache = {
+        streamerId: 1,
+        isLive: true,
+        services: [],
+        lastUpdated: Date.now(),
+        ttl: 604800,
+      };
+
+      const cache2: StreamerLiveStatusCache = {
+        streamerId: 2,
+        isLive: false, // This one is not live
+        services: [],
+        lastUpdated: Date.now(),
+        ttl: 604800,
+      };
+
+      mockRedisService.mget.mockResolvedValueOnce([cache1, cache2]);
+
+      const result = await service.getAllLiveStatuses();
+
+      expect(mockRedisService.client.scan).toHaveBeenCalled();
+      expect(mockRedisService.mget).toHaveBeenCalledWith([
+        'streamer_live:1',
+        'streamer_live:2',
+      ]);
+      expect(result.size).toBe(1);
+      expect(result.get(1)).toBe(true);
+      expect(result.has(2)).toBe(false);
     });
   });
 
