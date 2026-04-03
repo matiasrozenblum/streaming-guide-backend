@@ -50,7 +50,9 @@ describe('StreamerLiveStatusService', () => {
 
     service = module.get<StreamerLiveStatusService>(StreamerLiveStatusService);
     redisService = module.get<RedisService>(RedisService);
-    subscriptionService = module.get<StreamerSubscriptionService>(StreamerSubscriptionService);
+    subscriptionService = module.get<StreamerSubscriptionService>(
+      StreamerSubscriptionService,
+    );
   });
 
   afterEach(() => {
@@ -80,9 +82,12 @@ describe('StreamerLiveStatusService', () => {
             }),
           ]),
         }),
-        604800
+        604800,
       );
-      expect(mockSubscriptionService.notifySubscribers).toHaveBeenCalledWith(1, 'twitch');
+      expect(mockSubscriptionService.notifySubscribers).toHaveBeenCalledWith(
+        1,
+        'twitch',
+      );
     });
 
     it('should update existing cache entry', async () => {
@@ -117,9 +122,12 @@ describe('StreamerLiveStatusService', () => {
             }),
           ]),
         }),
-        604800
+        604800,
       );
-      expect(mockSubscriptionService.notifySubscribers).toHaveBeenCalledWith(1, 'twitch');
+      expect(mockSubscriptionService.notifySubscribers).toHaveBeenCalledWith(
+        1,
+        'twitch',
+      );
     });
 
     it('should add new service to existing cache', async () => {
@@ -151,7 +159,7 @@ describe('StreamerLiveStatusService', () => {
           ]),
           isLive: true, // Should be true if any service is live
         }),
-        604800
+        604800,
       );
     });
   });
@@ -178,7 +186,9 @@ describe('StreamerLiveStatusService', () => {
       const result = await service.getLiveStatus(1);
 
       expect(result).toEqual(cache);
-      expect(mockRedisService.get).toHaveBeenCalledWith('streamer:live-status:1');
+      expect(mockRedisService.get).toHaveBeenCalledWith(
+        'streamer:live-status:1',
+      );
     });
 
     it('should return null when no cache exists', async () => {
@@ -222,15 +232,25 @@ describe('StreamerLiveStatusService', () => {
     it('should delete cache entry', async () => {
       await service.clearLiveStatus(1);
 
-      expect(mockRedisService.del).toHaveBeenCalledWith('streamer:live-status:1');
+      expect(mockRedisService.del).toHaveBeenCalledWith(
+        'streamer:live-status:1',
+      );
     });
   });
 
   describe('initializeCache', () => {
     it('should create initial cache entry with all services', async () => {
       const services = [
-        { service: 'twitch' as const, url: 'https://twitch.tv/test', username: 'test' },
-        { service: 'kick' as const, url: 'https://kick.com/test', username: 'kickuser' },
+        {
+          service: 'twitch' as const,
+          url: 'https://twitch.tv/test',
+          username: 'test',
+        },
+        {
+          service: 'kick' as const,
+          url: 'https://kick.com/test',
+          username: 'kickuser',
+        },
       ];
 
       await service.initializeCache(1, services);
@@ -245,9 +265,8 @@ describe('StreamerLiveStatusService', () => {
             expect.objectContaining({ service: 'kick', isLive: false }),
           ]),
         }),
-        604800
+        604800,
       );
     });
   });
 });
-

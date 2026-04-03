@@ -6,7 +6,11 @@ import { User } from './users.entity';
 import { DeviceService } from './device.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { NotFoundException, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import {
+  NotFoundException,
+  UnauthorizedException,
+  BadRequestException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 
 describe('UsersService', () => {
@@ -72,21 +76,21 @@ describe('UsersService', () => {
         firstName: 'John',
         lastName: 'Doe',
         gender: 'male' as const,
-        birthDate: '1990-01-01'
+        birthDate: '1990-01-01',
       };
 
       const hashedPassword = 'hashedPassword123';
       jest.spyOn(bcrypt, 'hash').mockResolvedValue(hashedPassword as never);
-      mockRepository.create.mockReturnValue({ 
-        ...createUserDto, 
+      mockRepository.create.mockReturnValue({
+        ...createUserDto,
         password: hashedPassword,
-        birthDate: new Date(createUserDto.birthDate!)
+        birthDate: new Date(createUserDto.birthDate!),
       });
-      mockRepository.save.mockResolvedValue({ 
-        ...mockUser, 
+      mockRepository.save.mockResolvedValue({
+        ...mockUser,
         password: hashedPassword,
         gender: createUserDto.gender,
-        birthDate: new Date(createUserDto.birthDate!)
+        birthDate: new Date(createUserDto.birthDate!),
       });
 
       const result = await service.create(createUserDto);
@@ -95,14 +99,14 @@ describe('UsersService', () => {
       expect(mockRepository.create).toHaveBeenCalledWith({
         ...createUserDto,
         password: hashedPassword,
-        birthDate: new Date(createUserDto.birthDate!)
+        birthDate: new Date(createUserDto.birthDate!),
       });
       expect(mockRepository.save).toHaveBeenCalled();
-      expect(result).toEqual({ 
-        ...mockUser, 
+      expect(result).toEqual({
+        ...mockUser,
         password: hashedPassword,
         gender: createUserDto.gender,
-        birthDate: new Date(createUserDto.birthDate!)
+        birthDate: new Date(createUserDto.birthDate!),
       });
     });
 
@@ -118,16 +122,16 @@ describe('UsersService', () => {
 
       const hashedPassword = 'hashedPassword123';
       jest.spyOn(bcrypt, 'hash').mockResolvedValue(hashedPassword as never);
-      mockRepository.create.mockReturnValue({ 
-        ...createUserDto, 
+      mockRepository.create.mockReturnValue({
+        ...createUserDto,
         password: hashedPassword,
-        birthDate: new Date(createUserDto.birthDate!)
+        birthDate: new Date(createUserDto.birthDate!),
       });
-      mockRepository.save.mockResolvedValue({ 
-        ...mockUser, 
+      mockRepository.save.mockResolvedValue({
+        ...mockUser,
         password: hashedPassword,
         gender: createUserDto.gender,
-        birthDate: new Date(createUserDto.birthDate!)
+        birthDate: new Date(createUserDto.birthDate!),
       });
 
       const result = await service.create(createUserDto);
@@ -136,14 +140,14 @@ describe('UsersService', () => {
       expect(mockRepository.create).toHaveBeenCalledWith({
         ...createUserDto,
         password: hashedPassword,
-        birthDate: new Date(createUserDto.birthDate!)
+        birthDate: new Date(createUserDto.birthDate!),
       });
       expect(mockRepository.save).toHaveBeenCalled();
-      expect(result).toEqual({ 
-        ...mockUser, 
+      expect(result).toEqual({
+        ...mockUser,
         password: hashedPassword,
         gender: createUserDto.gender,
-        birthDate: new Date(createUserDto.birthDate!)
+        birthDate: new Date(createUserDto.birthDate!),
       });
     });
 
@@ -156,7 +160,9 @@ describe('UsersService', () => {
         gender: 'male' as const,
         // birthDate missing
       };
-      await expect(service.create(createUserDto as any)).rejects.toThrow('La fecha de nacimiento es obligatoria');
+      await expect(service.create(createUserDto as any)).rejects.toThrow(
+        'La fecha de nacimiento es obligatoria',
+      );
     });
   });
 
@@ -210,7 +216,7 @@ describe('UsersService', () => {
 
       const result = await service.findOne(1);
 
-      expect(mockRepository.findOne).toHaveBeenCalledWith({ 
+      expect(mockRepository.findOne).toHaveBeenCalledWith({
         where: { id: 1 },
         relations: ['devices', 'subscriptions'],
       });
@@ -234,13 +240,21 @@ describe('UsersService', () => {
       const hashedPassword = 'newHashedPassword';
       jest.spyOn(bcrypt, 'hash').mockResolvedValue(hashedPassword as never);
       mockRepository.findOne.mockResolvedValue(mockUser);
-      mockRepository.save.mockResolvedValue({ ...mockUser, ...updateUserDto, password: hashedPassword });
+      mockRepository.save.mockResolvedValue({
+        ...mockUser,
+        ...updateUserDto,
+        password: hashedPassword,
+      });
 
       const result = await service.update(1, updateUserDto);
 
       expect(bcrypt.hash).toHaveBeenCalledWith('newPassword123', 10);
       expect(mockRepository.save).toHaveBeenCalled();
-      expect(result).toEqual({ ...mockUser, ...updateUserDto, password: hashedPassword });
+      expect(result).toEqual({
+        ...mockUser,
+        ...updateUserDto,
+        password: hashedPassword,
+      });
     });
   });
 
@@ -266,7 +280,7 @@ describe('UsersService', () => {
 
       const result = await service.findByEmail('test@example.com');
 
-      expect(mockRepository.findOne).toHaveBeenCalledWith({ 
+      expect(mockRepository.findOne).toHaveBeenCalledWith({
         where: { email: 'test@example.com' },
         relations: ['devices', 'subscriptions'],
       });
@@ -278,7 +292,7 @@ describe('UsersService', () => {
 
       const result = await service.findByEmailFast('test@example.com');
 
-      expect(mockRepository.findOne).toHaveBeenCalledWith({ 
+      expect(mockRepository.findOne).toHaveBeenCalledWith({
         where: { email: 'test@example.com' },
       });
       expect(result).toEqual(mockUser);
@@ -291,7 +305,9 @@ describe('UsersService', () => {
 
       const result = await service.findByPhone('1234567890');
 
-      expect(mockRepository.findOne).toHaveBeenCalledWith({ where: { phone: '1234567890' } });
+      expect(mockRepository.findOne).toHaveBeenCalledWith({
+        where: { phone: '1234567890' },
+      });
       expect(result).toEqual(mockUser);
     });
   });
@@ -303,14 +319,23 @@ describe('UsersService', () => {
       const hashedCurrentPassword = 'hashedCurrentPassword';
       const hashedNewPassword = 'hashedNewPassword';
 
-      mockRepository.findOne.mockResolvedValue({ ...mockUser, password: hashedCurrentPassword });
+      mockRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        password: hashedCurrentPassword,
+      });
       jest.spyOn(bcrypt, 'compare').mockResolvedValue(true as never);
       jest.spyOn(bcrypt, 'hash').mockResolvedValue(hashedNewPassword as never);
-      mockRepository.save.mockResolvedValue({ ...mockUser, password: hashedNewPassword });
+      mockRepository.save.mockResolvedValue({
+        ...mockUser,
+        password: hashedNewPassword,
+      });
 
       await service.changePassword(1, currentPassword, newPassword);
 
-      expect(bcrypt.compare).toHaveBeenCalledWith(currentPassword, hashedCurrentPassword);
+      expect(bcrypt.compare).toHaveBeenCalledWith(
+        currentPassword,
+        hashedCurrentPassword,
+      );
       expect(bcrypt.hash).toHaveBeenCalledWith(newPassword, 10);
       expect(mockRepository.save).toHaveBeenCalled();
     });
@@ -320,11 +345,15 @@ describe('UsersService', () => {
       const newPassword = 'newPassword';
       const hashedCurrentPassword = 'hashedCurrentPassword';
 
-      mockRepository.findOne.mockResolvedValue({ ...mockUser, password: hashedCurrentPassword });
+      mockRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        password: hashedCurrentPassword,
+      });
       jest.spyOn(bcrypt, 'compare').mockResolvedValue(false as never);
 
-      await expect(service.changePassword(1, currentPassword, newPassword))
-        .rejects.toThrow(UnauthorizedException);
+      await expect(
+        service.changePassword(1, currentPassword, newPassword),
+      ).rejects.toThrow(UnauthorizedException);
     });
   });
 
@@ -336,9 +365,17 @@ describe('UsersService', () => {
 
       mockDeviceService.findOrCreateDevice.mockResolvedValue(mockDevice);
 
-      const result = await service.ensureUserDevice(mockUser as User, userAgent, deviceId);
+      const result = await service.ensureUserDevice(
+        mockUser as User,
+        userAgent,
+        deviceId,
+      );
 
-      expect(mockDeviceService.findOrCreateDevice).toHaveBeenCalledWith(mockUser, userAgent, deviceId);
+      expect(mockDeviceService.findOrCreateDevice).toHaveBeenCalledWith(
+        mockUser,
+        userAgent,
+        deviceId,
+      );
       expect(result).toBe('created-device-id');
     });
 
@@ -348,10 +385,17 @@ describe('UsersService', () => {
 
       mockDeviceService.findOrCreateDevice.mockResolvedValue(mockDevice);
 
-      const result = await service.ensureUserDevice(mockUser as User, userAgent);
+      const result = await service.ensureUserDevice(
+        mockUser as User,
+        userAgent,
+      );
 
-      expect(mockDeviceService.findOrCreateDevice).toHaveBeenCalledWith(mockUser, userAgent, undefined);
+      expect(mockDeviceService.findOrCreateDevice).toHaveBeenCalledWith(
+        mockUser,
+        userAgent,
+        undefined,
+      );
       expect(result).toBe('auto-generated-device-id');
     });
   });
-}); 
+});

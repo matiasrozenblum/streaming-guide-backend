@@ -16,7 +16,7 @@ describe('CreateChannelDto', () => {
   it('should fail if name is missing', async () => {
     const dto = new CreateChannelDto();
     const errors = await validate(dto);
-    const nameError = errors.find(e => e.property === 'name');
+    const nameError = errors.find((e) => e.property === 'name');
     expect(nameError).toBeDefined();
     expect(nameError!.constraints).toHaveProperty('isNotEmpty');
   });
@@ -28,7 +28,7 @@ describe('CreateChannelDto', () => {
     // handle is not set at all
 
     const errors = await validate(dto);
-    const handleError = errors.find(e => e.property === 'handle');
+    const handleError = errors.find((e) => e.property === 'handle');
     expect(handleError).toBeDefined();
     expect(handleError!.constraints).toHaveProperty('isNotEmpty');
   });
@@ -42,7 +42,9 @@ describe('CreateChannelDto', () => {
     const errors = await validate(dto);
     expect(errors).toHaveLength(1);
     expect(errors[0].property).toBe('handle');
-    expect(errors[0].constraints).toEqual({ isNotEmpty: 'handle should not be empty' });
+    expect(errors[0].constraints).toEqual({
+      isNotEmpty: 'handle should not be empty',
+    });
   });
 
   it('should allow description and logo_url to be optional', async () => {

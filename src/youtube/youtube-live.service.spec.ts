@@ -37,11 +37,20 @@ describe('YoutubeLiveService', () => {
       setTag: jest.fn(),
       addBreadcrumb: jest.fn(),
     } as any;
-    
+
     // Mock TimezoneUtil methods
-    jest.spyOn(require('@/utils/timezone.util').TimezoneUtil, 'currentDayOfWeek').mockReturnValue('monday');
-    jest.spyOn(require('@/utils/timezone.util').TimezoneUtil, 'currentTimeInMinutes').mockReturnValue(8 * 60 + 30); // 08:30
-    jest.spyOn(require('@/utils/timezone.util').TimezoneUtil, 'currentTimeString').mockReturnValue('08:30:00');
+    jest
+      .spyOn(require('@/utils/timezone.util').TimezoneUtil, 'currentDayOfWeek')
+      .mockReturnValue('monday');
+    jest
+      .spyOn(
+        require('@/utils/timezone.util').TimezoneUtil,
+        'currentTimeInMinutes',
+      )
+      .mockReturnValue(8 * 60 + 30); // 08:30
+    jest
+      .spyOn(require('@/utils/timezone.util').TimezoneUtil, 'currentTimeString')
+      .mockReturnValue('08:30:00');
     const mockChannelsRepository = {
       find: jest.fn(),
       save: jest.fn(),
@@ -52,8 +61,15 @@ describe('YoutubeLiveService', () => {
     const mockEmailService = {
       sendEmail: jest.fn(),
     } as any;
-    
-    service = new YoutubeLiveService(configService, schedulesService, redisService, sentryService, mockEmailService, mockChannelsRepository);
+
+    service = new YoutubeLiveService(
+      configService,
+      schedulesService,
+      redisService,
+      sentryService,
+      mockEmailService,
+      mockChannelsRepository,
+    );
   });
 
   afterEach(() => {
@@ -72,28 +88,38 @@ describe('YoutubeLiveService', () => {
     });
 
     it('returns __SKIPPED__ if notFoundKey is set in redis', async () => {
-      redisService.get.mockImplementation(async (key: string) => key === 'videoIdNotFound:handle' ? '1' : null);
+      redisService.get.mockImplementation(async (key: string) =>
+        key === 'videoIdNotFound:handle' ? '1' : null,
+      );
       const result = await service.getLiveVideoId('cid', 'handle', 100, 'cron');
       expect(result).toBe('__SKIPPED__');
     });
 
     it('returns cached primary videoId if it is live', async () => {
-      const cachedStatus = { 
-        channelId: 'cid', 
-        handle: 'handle', 
-        isLive: true, 
+      const cachedStatus = {
+        channelId: 'cid',
+        handle: 'handle',
+        isLive: true,
         streamUrl: 'https://www.youtube.com/embed/cachedId?autoplay=1',
-        videoId: 'cachedId', 
+        videoId: 'cachedId',
         streamCount: 1,
-        streams: [{ videoId: 'cachedId', title: '', description: '', publishedAt: '', thumbnailUrl: '' }],
+        streams: [
+          {
+            videoId: 'cachedId',
+            title: '',
+            description: '',
+            publishedAt: '',
+            thumbnailUrl: '',
+          },
+        ],
         lastUpdated: Date.now(),
         ttl: 100,
         blockEndTime: 1440,
         validationCooldown: Date.now() + 1800000,
-        lastValidation: Date.now()
+        lastValidation: Date.now(),
       };
-      redisService.get.mockImplementation(async (key: string) => 
-        key === 'liveStatusByHandle:handle' ? cachedStatus : null
+      redisService.get.mockImplementation(async (key: string) =>
+        key === 'liveStatusByHandle:handle' ? cachedStatus : null,
       );
       jest.spyOn(service as any, 'isVideoLive').mockResolvedValue(true);
       const result = await service.getLiveVideoId('cid', 'handle', 100, 'cron');
@@ -101,44 +127,62 @@ describe('YoutubeLiveService', () => {
     });
 
     it('deletes cached status if it is not live', async () => {
-      const cachedStatus = { 
-        channelId: 'cid', 
-        handle: 'handle', 
-        isLive: true, 
+      const cachedStatus = {
+        channelId: 'cid',
+        handle: 'handle',
+        isLive: true,
         streamUrl: 'https://www.youtube.com/embed/cachedId?autoplay=1',
-        videoId: 'cachedId', 
+        videoId: 'cachedId',
         streamCount: 1,
-        streams: [{ videoId: 'cachedId', title: '', description: '', publishedAt: '', thumbnailUrl: '' }],
+        streams: [
+          {
+            videoId: 'cachedId',
+            title: '',
+            description: '',
+            publishedAt: '',
+            thumbnailUrl: '',
+          },
+        ],
         lastUpdated: Date.now(),
         ttl: 100,
         blockEndTime: 1440,
         validationCooldown: Date.now() + 1800000,
-        lastValidation: Date.now()
+        lastValidation: Date.now(),
       };
-      redisService.get.mockImplementation(async (key: string) => 
-        key === 'liveStatusByHandle:handle' ? cachedStatus : null
+      redisService.get.mockImplementation(async (key: string) =>
+        key === 'liveStatusByHandle:handle' ? cachedStatus : null,
       );
       jest.spyOn(service as any, 'isVideoLive').mockResolvedValue(false);
       redisService.del.mockResolvedValue(undefined);
       jest.spyOn(axios, 'get').mockResolvedValue({ data: { items: [] } });
       const result = await service.getLiveVideoId('cid', 'handle', 100, 'cron');
-      expect(redisService.del).toHaveBeenCalledWith('liveStatusByHandle:handle');
+      expect(redisService.del).toHaveBeenCalledWith(
+        'liveStatusByHandle:handle',
+      );
       expect(result).toBe(null);
     });
 
     it('fetches from YouTube and caches status', async () => {
       redisService.get.mockResolvedValue(null);
-      jest.spyOn(axios, 'get').mockResolvedValue({ data: { items: [{ id: { videoId: 'vid123' } }] } });
+      jest
+        .spyOn(axios, 'get')
+        .mockResolvedValue({
+          data: { items: [{ id: { videoId: 'vid123' } }] },
+        });
       jest.spyOn(service as any, 'isVideoLive').mockResolvedValue(false);
       const result = await service.getLiveVideoId('cid', 'handle', 100, 'cron');
-      expect(redisService.set).toHaveBeenCalledWith('liveStatusByHandle:handle', expect.objectContaining({
-        channelId: 'cid',
-        handle: 'handle',
-        videoId: 'vid123',
-        isLive: true,
-        streams: expect.any(Array),
-        streamCount: 1
-      }), 100);
+      expect(redisService.set).toHaveBeenCalledWith(
+        'liveStatusByHandle:handle',
+        expect.objectContaining({
+          channelId: 'cid',
+          handle: 'handle',
+          videoId: 'vid123',
+          isLive: true,
+          streams: expect.any(Array),
+          streamCount: 1,
+        }),
+        100,
+      );
       // Should clear both not-found keys when video is found
       expect(redisService.del).toHaveBeenCalledWith('videoIdNotFound:handle');
       expect(redisService.del).toHaveBeenCalledWith('notFoundAttempts:handle');
@@ -150,8 +194,16 @@ describe('YoutubeLiveService', () => {
       jest.spyOn(axios, 'get').mockResolvedValue({ data: { items: [] } });
       const result = await service.getLiveVideoId('cid', 'handle', 100, 'cron');
       // Should set both the not-found key and attempt tracking
-      expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:handle', '1', 900);
-      expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:handle', expect.any(Object), expect.any(Number));
+      expect(redisService.set).toHaveBeenCalledWith(
+        'videoIdNotFound:handle',
+        '1',
+        900,
+      );
+      expect(redisService.set).toHaveBeenCalledWith(
+        'notFoundAttempts:handle',
+        expect.any(Object),
+        expect.any(Number),
+      );
       expect(result).toBe(null);
     });
 
@@ -173,51 +225,133 @@ describe('YoutubeLiveService', () => {
 
     it('calls getLiveStreams for channels with schedule', async () => {
       const schedules = [
-        { program: { channel: { youtube_channel_id: 'cid1', handle: 'h1', is_visible: true }, is_live: true, name: 'Test Program 1' }, start_time: '08:00', end_time: '10:00', day_of_week: 'monday' },
-        { program: { channel: { youtube_channel_id: 'cid2', handle: 'h2', is_visible: true }, is_live: true, name: 'Test Program 2' }, start_time: '08:00', end_time: '12:00', day_of_week: 'monday' },
-      ];
-      schedulesService.findAll.mockResolvedValue(schedules as any);
-      
-      const individualResults = [
         {
-          streams: [{ videoId: 'vid1', title: 'Test Stream 1', publishedAt: '2023-01-01', description: 'Test' }],
-          primaryVideoId: 'vid1',
-          streamCount: 1
+          program: {
+            channel: {
+              youtube_channel_id: 'cid1',
+              handle: 'h1',
+              is_visible: true,
+            },
+            is_live: true,
+            name: 'Test Program 1',
+          },
+          start_time: '08:00',
+          end_time: '10:00',
+          day_of_week: 'monday',
         },
         {
-          streams: [{ videoId: 'vid2', title: 'Test Stream 2', publishedAt: '2023-01-01', description: 'Test' }],
-          primaryVideoId: 'vid2',
-          streamCount: 1
-        }
+          program: {
+            channel: {
+              youtube_channel_id: 'cid2',
+              handle: 'h2',
+              is_visible: true,
+            },
+            is_live: true,
+            name: 'Test Program 2',
+          },
+          start_time: '08:00',
+          end_time: '12:00',
+          day_of_week: 'monday',
+        },
       ];
-      
-      jest.spyOn(service, 'getLiveStreamsMain').mockResolvedValueOnce(individualResults[0]);
-      jest.spyOn(service, 'getLiveStreamsMain').mockResolvedValueOnce(individualResults[1]);
-      jest.spyOn(require('@/utils/getBlockTTL.util'), 'getCurrentBlockTTL').mockResolvedValue(100);
-      
+      schedulesService.findAll.mockResolvedValue(schedules as any);
+
+      const individualResults = [
+        {
+          streams: [
+            {
+              videoId: 'vid1',
+              title: 'Test Stream 1',
+              publishedAt: '2023-01-01',
+              description: 'Test',
+            },
+          ],
+          primaryVideoId: 'vid1',
+          streamCount: 1,
+        },
+        {
+          streams: [
+            {
+              videoId: 'vid2',
+              title: 'Test Stream 2',
+              publishedAt: '2023-01-01',
+              description: 'Test',
+            },
+          ],
+          primaryVideoId: 'vid2',
+          streamCount: 1,
+        },
+      ];
+
+      jest
+        .spyOn(service, 'getLiveStreamsMain')
+        .mockResolvedValueOnce(individualResults[0]);
+      jest
+        .spyOn(service, 'getLiveStreamsMain')
+        .mockResolvedValueOnce(individualResults[1]);
+      jest
+        .spyOn(require('@/utils/getBlockTTL.util'), 'getCurrentBlockTTL')
+        .mockResolvedValue(100);
+
       await service.fetchLiveVideoIdsMain();
-      
+
       expect(service.getLiveStreamsMain).toHaveBeenCalledTimes(2);
-      expect(service.getLiveStreamsMain).toHaveBeenCalledWith('cid1', 'h1', 100);
-      expect(service.getLiveStreamsMain).toHaveBeenCalledWith('cid2', 'h2', 100);
+      expect(service.getLiveStreamsMain).toHaveBeenCalledWith(
+        'cid1',
+        'h1',
+        100,
+      );
+      expect(service.getLiveStreamsMain).toHaveBeenCalledWith(
+        'cid2',
+        'h2',
+        100,
+      );
     });
 
     it('passes SentryService to getCurrentBlockTTL', async () => {
       const schedules = [
-        { program: { channel: { youtube_channel_id: 'cid1', handle: 'h1', is_visible: true }, is_live: true, name: 'Test Program' }, start_time: '08:00', end_time: '10:00', day_of_week: 'monday' },
+        {
+          program: {
+            channel: {
+              youtube_channel_id: 'cid1',
+              handle: 'h1',
+              is_visible: true,
+            },
+            is_live: true,
+            name: 'Test Program',
+          },
+          start_time: '08:00',
+          end_time: '10:00',
+          day_of_week: 'monday',
+        },
       ];
       schedulesService.findAll.mockResolvedValue(schedules as any);
       jest.spyOn(service, 'getLiveStreamsMain').mockResolvedValue({
-        streams: [{ videoId: 'vid1', title: 'Test Stream', publishedAt: '2023-01-01', description: 'Test', thumbnailUrl: '', channelTitle: 'Test Channel' }],
+        streams: [
+          {
+            videoId: 'vid1',
+            title: 'Test Stream',
+            publishedAt: '2023-01-01',
+            description: 'Test',
+            thumbnailUrl: '',
+            channelTitle: 'Test Channel',
+          },
+        ],
         primaryVideoId: 'vid1',
-        streamCount: 1
+        streamCount: 1,
       });
-      
-      const getCurrentBlockTTLSpy = jest.spyOn(require('@/utils/getBlockTTL.util'), 'getCurrentBlockTTL').mockResolvedValue(100);
-      
+
+      const getCurrentBlockTTLSpy = jest
+        .spyOn(require('@/utils/getBlockTTL.util'), 'getCurrentBlockTTL')
+        .mockResolvedValue(100);
+
       await service.fetchLiveVideoIdsMain();
-      
-      expect(getCurrentBlockTTLSpy).toHaveBeenCalledWith('cid1', schedules, sentryService);
+
+      expect(getCurrentBlockTTLSpy).toHaveBeenCalledWith(
+        'cid1',
+        schedules,
+        sentryService,
+      );
     });
   });
 
@@ -225,7 +359,7 @@ describe('YoutubeLiveService', () => {
     it('passes SentryService to getCurrentBlockTTL when refreshing video ID', async () => {
       const channelId = 'test-channel';
       const handle = 'test-handle';
-      
+
       // Mock that there's a cached video ID with unified cache structure
       redisService.get.mockImplementation(async (key: string) => {
         if (key === 'liveStatusByHandle:test-handle') {
@@ -240,31 +374,44 @@ describe('YoutubeLiveService', () => {
             validationCooldown: Date.now() + 1800000,
             lastValidation: Date.now(),
             streams: [],
-            streamCount: 0
+            streamCount: 0,
           };
         }
         return null;
       });
-      
+
       // Mock that the video is no longer live by mocking the private method
       (service as any).isVideoLive = jest.fn().mockResolvedValue(false);
-      
+
       // Mock schedules service
       schedulesService.findByDay.mockResolvedValue([]);
-      
+
       // Mock getLiveStreams to return a new streams result
       jest.spyOn(service, 'getLiveStreamsMain').mockResolvedValue({
-        streams: [{ videoId: 'new-video-id', title: 'Test Stream', publishedAt: '2023-01-01', description: 'Test' }],
+        streams: [
+          {
+            videoId: 'new-video-id',
+            title: 'Test Stream',
+            publishedAt: '2023-01-01',
+            description: 'Test',
+          },
+        ],
         primaryVideoId: 'new-video-id',
-        streamCount: 1
+        streamCount: 1,
       });
-      
-      const getCurrentBlockTTLSpy = jest.spyOn(require('@/utils/getBlockTTL.util'), 'getCurrentBlockTTL').mockResolvedValue(100);
-      
+
+      const getCurrentBlockTTLSpy = jest
+        .spyOn(require('@/utils/getBlockTTL.util'), 'getCurrentBlockTTL')
+        .mockResolvedValue(100);
+
       // Call the private method through the service
       await (service as any).validateCachedVideoId(channelId, handle);
-      
-      expect(getCurrentBlockTTLSpy).toHaveBeenCalledWith(channelId, [], sentryService);
+
+      expect(getCurrentBlockTTLSpy).toHaveBeenCalledWith(
+        channelId,
+        [],
+        sentryService,
+      );
     });
   });
 
@@ -280,15 +427,27 @@ describe('YoutubeLiveService', () => {
     });
 
     it('returns __SKIPPED__ if notFoundKey is set in redis', async () => {
-      redisService.get.mockImplementation(async (key: string) => key === 'videoIdNotFound:handle' ? '1' : null);
+      redisService.get.mockImplementation(async (key: string) =>
+        key === 'videoIdNotFound:handle' ? '1' : null,
+      );
       const result = await service.getLiveStreamsMain('cid', 'handle', 100);
       expect(result).toBe('__SKIPPED__');
     });
 
     it('returns cached streams if they are still live', async () => {
       const mockStreams = [
-        { videoId: 'vid1', title: 'Stream 1', publishedAt: '2023-01-01', description: 'Desc 1' },
-        { videoId: 'vid2', title: 'Stream 2', publishedAt: '2023-01-01', description: 'Desc 2' }
+        {
+          videoId: 'vid1',
+          title: 'Stream 1',
+          publishedAt: '2023-01-01',
+          description: 'Desc 1',
+        },
+        {
+          videoId: 'vid2',
+          title: 'Stream 2',
+          publishedAt: '2023-01-01',
+          description: 'Desc 2',
+        },
       ];
       const cachedStatus = {
         channelId: 'cid',
@@ -302,24 +461,31 @@ describe('YoutubeLiveService', () => {
         ttl: 100,
         blockEndTime: 1440,
         validationCooldown: Date.now() + 1800000,
-        lastValidation: Date.now()
+        lastValidation: Date.now(),
       };
-      redisService.get.mockImplementation(async (key: string) => 
-        key === 'liveStatusByHandle:handle' ? cachedStatus : null
+      redisService.get.mockImplementation(async (key: string) =>
+        key === 'liveStatusByHandle:handle' ? cachedStatus : null,
       );
       jest.spyOn(service as any, 'isVideoLive').mockResolvedValue(true);
-      
+
       const result = await service.getLiveStreamsMain('cid', 'handle', 100);
-      
+
       expect(result).toEqual({
         streams: mockStreams,
         primaryVideoId: 'vid1',
-        streamCount: 2
+        streamCount: 2,
       });
     });
 
     it('deletes cached status if it is not live', async () => {
-      const mockStreams = [{ videoId: 'vid1', title: 'Stream 1', publishedAt: '2023-01-01', description: 'Desc 1' }];
+      const mockStreams = [
+        {
+          videoId: 'vid1',
+          title: 'Stream 1',
+          publishedAt: '2023-01-01',
+          description: 'Desc 1',
+        },
+      ];
       const cachedStatus = {
         channelId: 'cid',
         handle: 'handle',
@@ -332,18 +498,20 @@ describe('YoutubeLiveService', () => {
         ttl: 100,
         blockEndTime: 1440,
         validationCooldown: Date.now() + 1800000,
-        lastValidation: Date.now()
+        lastValidation: Date.now(),
       };
-      redisService.get.mockImplementation(async (key: string) => 
-        key === 'liveStatusByHandle:handle' ? cachedStatus : null
+      redisService.get.mockImplementation(async (key: string) =>
+        key === 'liveStatusByHandle:handle' ? cachedStatus : null,
       );
       jest.spyOn(service as any, 'isVideoLive').mockResolvedValue(false);
       redisService.del.mockResolvedValue(undefined);
       jest.spyOn(axios, 'get').mockResolvedValue({ data: { items: [] } });
-      
+
       const result = await service.getLiveStreamsMain('cid', 'handle', 100);
-      
-      expect(redisService.del).toHaveBeenCalledWith('liveStatusByHandle:handle');
+
+      expect(redisService.del).toHaveBeenCalledWith(
+        'liveStatusByHandle:handle',
+      );
       expect(result).toBe(null);
     });
 
@@ -358,8 +526,8 @@ describe('YoutubeLiveService', () => {
                 publishedAt: '2023-01-01T00:00:00Z',
                 description: 'Description 1',
                 thumbnails: { medium: { url: 'thumb1.jpg' } },
-                channelTitle: 'Test Channel'
-              }
+                channelTitle: 'Test Channel',
+              },
             },
             {
               id: { videoId: 'vid2' },
@@ -368,19 +536,19 @@ describe('YoutubeLiveService', () => {
                 publishedAt: '2023-01-01T01:00:00Z',
                 description: 'Description 2',
                 thumbnails: { medium: { url: 'thumb2.jpg' } },
-                channelTitle: 'Test Channel'
-              }
-            }
-          ]
-        }
+                channelTitle: 'Test Channel',
+              },
+            },
+          ],
+        },
       };
-      
+
       redisService.get.mockResolvedValue(null);
       jest.spyOn(axios, 'get').mockResolvedValue(mockApiResponse);
       jest.spyOn(service as any, 'isVideoLive').mockResolvedValue(true);
-      
+
       const result = await service.getLiveStreamsMain('cid', 'handle', 100);
-      
+
       expect(redisService.set).toHaveBeenCalledWith(
         'liveStatusByHandle:handle',
         expect.objectContaining({
@@ -401,7 +569,7 @@ describe('YoutubeLiveService', () => {
               publishedAt: '2023-01-01T00:00:00Z',
               description: 'Description 1',
               thumbnailUrl: 'thumb1.jpg',
-              channelTitle: 'Test Channel'
+              channelTitle: 'Test Channel',
             }),
             expect.objectContaining({
               videoId: 'vid2',
@@ -409,14 +577,14 @@ describe('YoutubeLiveService', () => {
               publishedAt: '2023-01-01T01:00:00Z',
               description: 'Description 2',
               thumbnailUrl: 'thumb2.jpg',
-              channelTitle: 'Test Channel'
-            })
+              channelTitle: 'Test Channel',
+            }),
           ]),
-          streamCount: 2
+          streamCount: 2,
         }),
-        100
+        100,
       );
-      
+
       expect(result).toEqual({
         streams: [
           {
@@ -425,7 +593,7 @@ describe('YoutubeLiveService', () => {
             publishedAt: '2023-01-01T00:00:00Z',
             description: 'Description 1',
             thumbnailUrl: 'thumb1.jpg',
-            channelTitle: 'Test Channel'
+            channelTitle: 'Test Channel',
           },
           {
             videoId: 'vid2',
@@ -433,43 +601,49 @@ describe('YoutubeLiveService', () => {
             publishedAt: '2023-01-01T01:00:00Z',
             description: 'Description 2',
             thumbnailUrl: 'thumb2.jpg',
-            channelTitle: 'Test Channel'
-          }
+            channelTitle: 'Test Channel',
+          },
         ],
         primaryVideoId: 'vid1',
-        streamCount: 2
+        streamCount: 2,
       });
     });
 
     it('returns null and sets notFoundKey if no streams found', async () => {
       redisService.get.mockResolvedValue(null);
       jest.spyOn(axios, 'get').mockResolvedValue({ data: { items: [] } });
-      
+
       const result = await service.getLiveStreamsMain('cid', 'handle', 100);
-      
-      expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:handle', '1', 900);
+
+      expect(redisService.set).toHaveBeenCalledWith(
+        'videoIdNotFound:handle',
+        '1',
+        900,
+      );
       expect(result).toBe(null);
     });
 
     it('returns null on axios error', async () => {
       redisService.get.mockResolvedValue(null);
       jest.spyOn(axios, 'get').mockRejectedValue(new Error('API Error'));
-      
+
       const result = await service.getLiveStreamsMain('cid', 'handle', 100);
-      
+
       expect(result).toBe(null);
     });
 
     it('handles malformed cached status gracefully', async () => {
-      redisService.get.mockImplementation(async (key: string) => 
-        key === 'liveStatusByHandle:handle' ? 'invalid-json' : null
+      redisService.get.mockImplementation(async (key: string) =>
+        key === 'liveStatusByHandle:handle' ? 'invalid-json' : null,
       );
       redisService.del.mockResolvedValue(undefined);
       jest.spyOn(axios, 'get').mockResolvedValue({ data: { items: [] } });
-      
+
       const result = await service.getLiveStreamsMain('cid', 'handle', 100);
-      
-      expect(redisService.del).toHaveBeenCalledWith('liveStatusByHandle:handle');
+
+      expect(redisService.del).toHaveBeenCalledWith(
+        'liveStatusByHandle:handle',
+      );
       expect(result).toBe(null);
     });
   });
@@ -481,9 +655,16 @@ describe('YoutubeLiveService', () => {
       mockEmailService = {
         sendEmail: jest.fn(),
       };
-      service = new YoutubeLiveService(configService, schedulesService, redisService, sentryService, mockEmailService, {
-        findOne: jest.fn(),
-      } as any);
+      service = new YoutubeLiveService(
+        configService,
+        schedulesService,
+        redisService,
+        sentryService,
+        mockEmailService,
+        {
+          findOne: jest.fn(),
+        } as any,
+      );
       configService.canFetchLive.mockResolvedValue(true);
     });
 
@@ -492,19 +673,33 @@ describe('YoutubeLiveService', () => {
         redisService.get.mockResolvedValue(null);
         redisService.set.mockResolvedValue(undefined);
 
-        await (service as any).handleNotFoundEscalationMain('cid', 'handle', 'videoIdNotFound:handle');
+        await (service as any).handleNotFoundEscalationMain(
+          'cid',
+          'handle',
+          'videoIdNotFound:handle',
+        );
 
-        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:handle', expect.any(Object), expect.any(Number));
-        expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:handle', '1', 900);
-        
-        const trackingCall = redisService.set.mock.calls.find(call => call[0] === 'notFoundAttempts:handle');
+        expect(redisService.set).toHaveBeenCalledWith(
+          'notFoundAttempts:handle',
+          expect.any(Object),
+          expect.any(Number),
+        );
+        expect(redisService.set).toHaveBeenCalledWith(
+          'videoIdNotFound:handle',
+          '1',
+          900,
+        );
+
+        const trackingCall = redisService.set.mock.calls.find(
+          (call) => call[0] === 'notFoundAttempts:handle',
+        );
         expect(trackingCall).toBeDefined();
         const trackingData = trackingCall![1];
         expect(trackingData).toMatchObject({
           attempts: 1,
           firstAttempt: expect.any(Number),
           lastAttempt: expect.any(Number),
-          escalated: false
+          escalated: false,
         });
       });
 
@@ -513,17 +708,31 @@ describe('YoutubeLiveService', () => {
           attempts: 1,
           firstAttempt: Date.now() - 10000,
           lastAttempt: Date.now() - 10000,
-          escalated: false
+          escalated: false,
         };
         redisService.get.mockResolvedValue(existingTracking);
         redisService.set.mockResolvedValue(undefined);
 
-        await (service as any).handleNotFoundEscalationMain('cid', 'handle', 'videoIdNotFound:handle');
+        await (service as any).handleNotFoundEscalationMain(
+          'cid',
+          'handle',
+          'videoIdNotFound:handle',
+        );
 
-        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:handle', expect.any(Object), expect.any(Number));
-        expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:handle', '1', 900);
-        
-        const trackingCall = redisService.set.mock.calls.find(call => call[0] === 'notFoundAttempts:handle');
+        expect(redisService.set).toHaveBeenCalledWith(
+          'notFoundAttempts:handle',
+          expect.any(Object),
+          expect.any(Number),
+        );
+        expect(redisService.set).toHaveBeenCalledWith(
+          'videoIdNotFound:handle',
+          '1',
+          900,
+        );
+
+        const trackingCall = redisService.set.mock.calls.find(
+          (call) => call[0] === 'notFoundAttempts:handle',
+        );
         expect(trackingCall).toBeDefined();
         const trackingData = trackingCall![1];
         expect(trackingData.attempts).toBe(2);
@@ -535,28 +744,49 @@ describe('YoutubeLiveService', () => {
           attempts: 2,
           firstAttempt: Date.now() - 20000,
           lastAttempt: Date.now() - 10000,
-          escalated: false
+          escalated: false,
         };
         redisService.get.mockResolvedValue(existingTracking);
         redisService.set.mockResolvedValue(undefined);
-        
+
         // Mock getCurrentProgramEndTime to return a future timestamp
-        jest.spyOn(service as any, 'getCurrentProgramEndTime').mockResolvedValue(Date.now() + 3600000); // 1 hour from now
-        jest.spyOn(service as any, 'sendEscalationEmail').mockResolvedValue(undefined);
+        jest
+          .spyOn(service as any, 'getCurrentProgramEndTime')
+          .mockResolvedValue(Date.now() + 3600000); // 1 hour from now
+        jest
+          .spyOn(service as any, 'sendEscalationEmail')
+          .mockResolvedValue(undefined);
 
-        await (service as any).handleNotFoundEscalationMain('cid', 'handle', 'videoIdNotFound:handle');
+        await (service as any).handleNotFoundEscalationMain(
+          'cid',
+          'handle',
+          'videoIdNotFound:handle',
+        );
 
-        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:handle', expect.any(Object), expect.any(Number));
-        expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:handle', '1', expect.any(Number));
-        
-        const trackingCall = redisService.set.mock.calls.find(call => call[0] === 'notFoundAttempts:handle');
+        expect(redisService.set).toHaveBeenCalledWith(
+          'notFoundAttempts:handle',
+          expect.any(Object),
+          expect.any(Number),
+        );
+        expect(redisService.set).toHaveBeenCalledWith(
+          'videoIdNotFound:handle',
+          '1',
+          expect.any(Number),
+        );
+
+        const trackingCall = redisService.set.mock.calls.find(
+          (call) => call[0] === 'notFoundAttempts:handle',
+        );
         expect(trackingCall).toBeDefined();
         const trackingData = trackingCall![1];
         expect(trackingData.attempts).toBe(3);
         expect(trackingData.escalated).toBe(true);
         expect(trackingData.programEndTime).toBeDefined();
-        
-        expect((service as any).sendEscalationEmail).toHaveBeenCalledWith('cid', 'handle');
+
+        expect((service as any).sendEscalationEmail).toHaveBeenCalledWith(
+          'cid',
+          'handle',
+        );
       });
 
       it('falls back to 1 hour TTL when program end time cannot be determined', async () => {
@@ -564,27 +794,51 @@ describe('YoutubeLiveService', () => {
           attempts: 2,
           firstAttempt: Date.now() - 20000,
           lastAttempt: Date.now() - 10000,
-          escalated: false
+          escalated: false,
         };
         redisService.get.mockResolvedValue(existingTracking);
         redisService.set.mockResolvedValue(undefined);
-        
-        jest.spyOn(service as any, 'getCurrentProgramEndTime').mockResolvedValue(null);
 
-        await (service as any).handleNotFoundEscalationMain('cid', 'handle', 'videoIdNotFound:handle');
+        jest
+          .spyOn(service as any, 'getCurrentProgramEndTime')
+          .mockResolvedValue(null);
 
-        expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:handle', '1', 3600);
+        await (service as any).handleNotFoundEscalationMain(
+          'cid',
+          'handle',
+          'videoIdNotFound:handle',
+        );
+
+        expect(redisService.set).toHaveBeenCalledWith(
+          'videoIdNotFound:handle',
+          '1',
+          3600,
+        );
       });
 
       it('does not set not-found mark for back-to-back-fix cron on first attempt', async () => {
         redisService.get.mockResolvedValue(null);
         redisService.set.mockResolvedValue(undefined);
-        jest.spyOn(service as any, 'getCurrentProgramEndTime').mockResolvedValue(Date.now() + 3600000);
+        jest
+          .spyOn(service as any, 'getCurrentProgramEndTime')
+          .mockResolvedValue(Date.now() + 3600000);
 
-        await (service as any).handleNotFoundEscalationBackToBack('cid', 'handle', 'videoIdNotFound:handle');
+        await (service as any).handleNotFoundEscalationBackToBack(
+          'cid',
+          'handle',
+          'videoIdNotFound:handle',
+        );
 
-        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:handle', expect.any(Object), expect.any(Number));
-        expect(redisService.set).not.toHaveBeenCalledWith('videoIdNotFound:handle', '1', 900);
+        expect(redisService.set).toHaveBeenCalledWith(
+          'notFoundAttempts:handle',
+          expect.any(Object),
+          expect.any(Number),
+        );
+        expect(redisService.set).not.toHaveBeenCalledWith(
+          'videoIdNotFound:handle',
+          '1',
+          900,
+        );
       });
 
       it('does not renew not-found mark for back-to-back-fix cron on second attempt', async () => {
@@ -592,16 +846,30 @@ describe('YoutubeLiveService', () => {
           attempts: 1,
           firstAttempt: Date.now() - 20000,
           lastAttempt: Date.now() - 10000,
-          escalated: false
+          escalated: false,
         };
         redisService.get.mockResolvedValue(existingTracking);
         redisService.set.mockResolvedValue(undefined);
-        jest.spyOn(service as any, 'getCurrentProgramEndTime').mockResolvedValue(Date.now() + 3600000);
+        jest
+          .spyOn(service as any, 'getCurrentProgramEndTime')
+          .mockResolvedValue(Date.now() + 3600000);
 
-        await (service as any).handleNotFoundEscalationBackToBack('cid', 'handle', 'videoIdNotFound:handle');
+        await (service as any).handleNotFoundEscalationBackToBack(
+          'cid',
+          'handle',
+          'videoIdNotFound:handle',
+        );
 
-        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:handle', expect.any(Object), expect.any(Number));
-        expect(redisService.set).not.toHaveBeenCalledWith('videoIdNotFound:handle', '1', 900);
+        expect(redisService.set).toHaveBeenCalledWith(
+          'notFoundAttempts:handle',
+          expect.any(Object),
+          expect.any(Number),
+        );
+        expect(redisService.set).not.toHaveBeenCalledWith(
+          'videoIdNotFound:handle',
+          '1',
+          900,
+        );
       });
     });
 
@@ -611,20 +879,32 @@ describe('YoutubeLiveService', () => {
           {
             program: { channel: { youtube_channel_id: 'cid' } },
             start_time: '14:30',
-            end_time: '16:30'
-          }
+            end_time: '16:30',
+          },
         ];
         schedulesService.findAll.mockResolvedValue(mockSchedules as any);
-        
+
         // Mock TimezoneUtil methods directly
-        jest.spyOn(require('@/utils/timezone.util').TimezoneUtil, 'currentDayOfWeek').mockReturnValue('tuesday'); // Tuesday
-        jest.spyOn(require('@/utils/timezone.util').TimezoneUtil, 'currentTimeInMinutes').mockReturnValue(15 * 60); // 15:00
-        jest.spyOn(require('@/utils/timezone.util').TimezoneUtil, 'todayAtTime').mockImplementation((time: string) => {
-          const [hours, minutes] = time.split(':').map(Number);
-          const date = new Date();
-          date.setHours(hours, minutes, 0, 0);
-          return { valueOf: () => date.getTime() };
-        });
+        jest
+          .spyOn(
+            require('@/utils/timezone.util').TimezoneUtil,
+            'currentDayOfWeek',
+          )
+          .mockReturnValue('tuesday'); // Tuesday
+        jest
+          .spyOn(
+            require('@/utils/timezone.util').TimezoneUtil,
+            'currentTimeInMinutes',
+          )
+          .mockReturnValue(15 * 60); // 15:00
+        jest
+          .spyOn(require('@/utils/timezone.util').TimezoneUtil, 'todayAtTime')
+          .mockImplementation((time: string) => {
+            const [hours, minutes] = time.split(':').map(Number);
+            const date = new Date();
+            date.setHours(hours, minutes, 0, 0);
+            return { valueOf: () => date.getTime() };
+          });
 
         const result = await (service as any).getCurrentProgramEndTime('cid');
 
@@ -653,31 +933,48 @@ describe('YoutubeLiveService', () => {
       it('sends escalation email with correct details', async () => {
         const originalEnv = process.env.NODE_ENV;
         process.env.NODE_ENV = 'production';
-        
+
         const mockChannel = {
           name: 'Test Channel',
-          programs: []
+          programs: [],
         };
         const mockChannelsRepository = {
-          findOne: jest.fn().mockResolvedValue(mockChannel)
+          findOne: jest.fn().mockResolvedValue(mockChannel),
         } as any;
-        service = new YoutubeLiveService(configService, schedulesService, redisService, sentryService, mockEmailService, mockChannelsRepository);
+        service = new YoutubeLiveService(
+          configService,
+          schedulesService,
+          redisService,
+          sentryService,
+          mockEmailService,
+          mockChannelsRepository,
+        );
 
         const mockSchedules = [
           {
-            program: { 
+            program: {
               channel: { youtube_channel_id: 'cid' },
-              name: 'Test Program'
+              name: 'Test Program',
             },
             start_time: '14:00', // Start at 14:00
-            end_time: '16:00'    // End at 16:00
-          }
+            end_time: '16:00', // End at 16:00
+          },
         ];
         schedulesService.findAll.mockResolvedValue(mockSchedules as any);
-        
+
         // Mock TimezoneUtil methods directly
-        jest.spyOn(require('@/utils/timezone.util').TimezoneUtil, 'currentDayOfWeek').mockReturnValue('tuesday'); // Tuesday
-        jest.spyOn(require('@/utils/timezone.util').TimezoneUtil, 'currentTimeInMinutes').mockReturnValue(15 * 60); // 15:00 (900 minutes)
+        jest
+          .spyOn(
+            require('@/utils/timezone.util').TimezoneUtil,
+            'currentDayOfWeek',
+          )
+          .mockReturnValue('tuesday'); // Tuesday
+        jest
+          .spyOn(
+            require('@/utils/timezone.util').TimezoneUtil,
+            'currentTimeInMinutes',
+          )
+          .mockReturnValue(15 * 60); // 15:00 (900 minutes)
 
         await (service as any).sendEscalationEmail('cid', 'test_handle');
 
@@ -687,72 +984,103 @@ describe('YoutubeLiveService', () => {
           html: expect.stringContaining('Test Program'),
           emailType: 'admin_alert',
         });
-        
+
         process.env.NODE_ENV = originalEnv;
       });
 
       it('skips email when channel is not visible', async () => {
         const originalEnv = process.env.NODE_ENV;
         process.env.NODE_ENV = 'production';
-        
+
         const mockChannel = {
           name: 'Hidden Channel',
           programs: [],
           is_visible: false,
         };
         const mockChannelsRepository = {
-          findOne: jest.fn().mockResolvedValue(mockChannel)
+          findOne: jest.fn().mockResolvedValue(mockChannel),
         } as any;
-        service = new YoutubeLiveService(configService, schedulesService, redisService, sentryService, mockEmailService, mockChannelsRepository);
+        service = new YoutubeLiveService(
+          configService,
+          schedulesService,
+          redisService,
+          sentryService,
+          mockEmailService,
+          mockChannelsRepository,
+        );
 
         schedulesService.findAll.mockResolvedValue([]);
-        
+
         await (service as any).sendEscalationEmail('cid', 'hidden_handle');
         expect(mockEmailService.sendEmail).not.toHaveBeenCalled();
-        
+
         process.env.NODE_ENV = originalEnv;
       });
 
       it('skips email when current program is not visible', async () => {
         const originalEnv = process.env.NODE_ENV;
         process.env.NODE_ENV = 'production';
-        
+
         const mockChannel = {
           name: 'Visible Channel',
           programs: [],
           is_visible: true,
         };
         const mockChannelsRepository = {
-          findOne: jest.fn().mockResolvedValue(mockChannel)
+          findOne: jest.fn().mockResolvedValue(mockChannel),
         } as any;
-        service = new YoutubeLiveService(configService, schedulesService, redisService, sentryService, mockEmailService, mockChannelsRepository);
+        service = new YoutubeLiveService(
+          configService,
+          schedulesService,
+          redisService,
+          sentryService,
+          mockEmailService,
+          mockChannelsRepository,
+        );
 
         const mockSchedules = [
           {
-            program: { 
+            program: {
               channel: { youtube_channel_id: 'cid' },
               name: 'Hidden Program',
               is_visible: false,
             },
             start_time: '14:00',
-            end_time: '16:00'
-          }
+            end_time: '16:00',
+          },
         ];
         schedulesService.findAll.mockResolvedValue(mockSchedules as any);
-        jest.spyOn(require('@/utils/timezone.util').TimezoneUtil, 'currentDayOfWeek').mockReturnValue('tuesday');
-        jest.spyOn(require('@/utils/timezone.util').TimezoneUtil, 'currentTimeInMinutes').mockReturnValue(15 * 60);
-        
+        jest
+          .spyOn(
+            require('@/utils/timezone.util').TimezoneUtil,
+            'currentDayOfWeek',
+          )
+          .mockReturnValue('tuesday');
+        jest
+          .spyOn(
+            require('@/utils/timezone.util').TimezoneUtil,
+            'currentTimeInMinutes',
+          )
+          .mockReturnValue(15 * 60);
+
         await (service as any).sendEscalationEmail('cid', 'handle');
         expect(mockEmailService.sendEmail).not.toHaveBeenCalled();
-        
+
         process.env.NODE_ENV = originalEnv;
       });
 
       it('handles missing channel gracefully', async () => {
         const mockChannelsRepository = {
-          findOne: jest.fn().mockResolvedValue(null)
+          findOne: jest.fn().mockResolvedValue(null),
         } as any;
-        service = new YoutubeLiveService(configService, schedulesService, redisService, sentryService, mockEmailService, mockChannelsRepository);
+        service = new YoutubeLiveService(
+          configService,
+          schedulesService,
+          redisService,
+          sentryService,
+          mockEmailService,
+          mockChannelsRepository,
+        );
 
         await (service as any).sendEscalationEmail('cid', 'test_handle');
 
@@ -762,15 +1090,22 @@ describe('YoutubeLiveService', () => {
       it('handles email sending errors gracefully', async () => {
         const originalEnv = process.env.NODE_ENV;
         process.env.NODE_ENV = 'production';
-        
+
         const mockChannel = {
           name: 'Test Channel',
-          programs: []
+          programs: [],
         };
         const mockChannelsRepository = {
-          findOne: jest.fn().mockResolvedValue(mockChannel)
+          findOne: jest.fn().mockResolvedValue(mockChannel),
         } as any;
-        service = new YoutubeLiveService(configService, schedulesService, redisService, sentryService, mockEmailService, mockChannelsRepository);
+        service = new YoutubeLiveService(
+          configService,
+          schedulesService,
+          redisService,
+          sentryService,
+          mockEmailService,
+          mockChannelsRepository,
+        );
 
         mockEmailService.sendEmail.mockRejectedValue(new Error('Email error'));
         schedulesService.findAll.mockResolvedValue([]);
@@ -778,7 +1113,7 @@ describe('YoutubeLiveService', () => {
         await (service as any).sendEscalationEmail('cid', 'test_handle');
 
         expect(sentryService.captureException).toHaveBeenCalled();
-        
+
         process.env.NODE_ENV = originalEnv;
       });
     });
@@ -803,7 +1138,7 @@ describe('YoutubeLiveService', () => {
           'cron',
           new Map([['cid', 100]]),
           new Map([['cid', 'handle']]),
-          'main'
+          'main',
         );
 
         expect(result.get('cid')).toBe('__SKIPPED__');
@@ -814,39 +1149,60 @@ describe('YoutubeLiveService', () => {
           attempts: 2,
           firstAttempt: Date.now() - 20000,
           lastAttempt: Date.now() - 10000,
-          escalated: false
+          escalated: false,
         };
-        
+
         redisService.get.mockImplementation(async (key: string) => {
           if (key === 'notFoundAttempts:handle') return attemptTracking;
           return null; // No active not-found flag (expired)
         });
-        
+
         redisService.set.mockResolvedValue(undefined);
-        jest.spyOn(service as any, 'getCurrentProgramEndTime').mockResolvedValue(Date.now() + 3600000);
-        jest.spyOn(service as any, 'sendEscalationEmail').mockResolvedValue(undefined);
+        jest
+          .spyOn(service as any, 'getCurrentProgramEndTime')
+          .mockResolvedValue(Date.now() + 3600000);
+        jest
+          .spyOn(service as any, 'sendEscalationEmail')
+          .mockResolvedValue(undefined);
 
         const result = await (service as any).getBatchLiveStreams(
           ['cid'],
           'cron',
           new Map([['cid', 100]]),
           new Map([['cid', 'handle']]),
-          'main'
+          'main',
         );
 
         expect(result.get('cid')).toBe('__SKIPPED__');
-        expect(redisService.set).toHaveBeenCalledWith('videoIdNotFound:handle', '1', expect.any(Number));
-        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:handle', expect.any(Object), expect.any(Number));
-        expect((service as any).sendEscalationEmail).toHaveBeenCalledWith('cid', 'handle');
+        expect(redisService.set).toHaveBeenCalledWith(
+          'videoIdNotFound:handle',
+          '1',
+          expect.any(Number),
+        );
+        expect(redisService.set).toHaveBeenCalledWith(
+          'notFoundAttempts:handle',
+          expect.any(Object),
+          expect.any(Number),
+        );
+        expect((service as any).sendEscalationEmail).toHaveBeenCalledWith(
+          'cid',
+          'handle',
+        );
       });
 
       it('ignores not-found flags for back-to-back-fix cron and increments attempt counter', async () => {
         redisService.get.mockImplementation(async (key: string) => {
           if (key === 'videoIdNotFound:handle') return '1';
-          if (key === 'notFoundAttempts:handle') return { attempts: 1, firstAttempt: Date.now(), lastAttempt: Date.now(), escalated: false };
+          if (key === 'notFoundAttempts:handle')
+            return {
+              attempts: 1,
+              firstAttempt: Date.now(),
+              lastAttempt: Date.now(),
+              escalated: false,
+            };
           return null;
         });
-        
+
         jest.spyOn(axios, 'get').mockResolvedValue({ data: { items: [] } });
 
         const result = await (service as any).getBatchLiveStreams(
@@ -854,15 +1210,23 @@ describe('YoutubeLiveService', () => {
           'cron',
           new Map([['cid', 100]]),
           new Map([['cid', 'handle']]),
-          'back-to-back-fix'
+          'back-to-back-fix',
         );
 
         expect(result.get('cid')).toBe(null); // Should attempt fetch, not skip
-        
+
         // Should call incrementNotFoundAttempts which updates attempt counter without setting new not-found flags
-        expect(redisService.set).toHaveBeenCalledWith('notFoundAttempts:handle', expect.any(Object), expect.any(Number));
+        expect(redisService.set).toHaveBeenCalledWith(
+          'notFoundAttempts:handle',
+          expect.any(Object),
+          expect.any(Number),
+        );
         // Should NOT set videoIdNotFound since back-to-back-fix doesn't set new not-found flags
-        expect(redisService.set).not.toHaveBeenCalledWith('videoIdNotFound:handle', '1', 900);
+        expect(redisService.set).not.toHaveBeenCalledWith(
+          'videoIdNotFound:handle',
+          '1',
+          900,
+        );
       });
 
       it('ignores not-found flags for manual cron', async () => {
@@ -870,7 +1234,7 @@ describe('YoutubeLiveService', () => {
           if (key === 'videoIdNotFound:handle') return '1';
           return null;
         });
-        
+
         jest.spyOn(axios, 'get').mockResolvedValue({ data: { items: [] } });
 
         const result = await (service as any).getBatchLiveStreams(
@@ -878,7 +1242,7 @@ describe('YoutubeLiveService', () => {
           'cron',
           new Map([['cid', 100]]),
           new Map([['cid', 'handle']]),
-          'manual'
+          'manual',
         );
 
         expect(result.get('cid')).toBe(null); // Should attempt fetch, not skip
@@ -890,12 +1254,13 @@ describe('YoutubeLiveService', () => {
           firstAttempt: Date.now() - 30000,
           lastAttempt: Date.now() - 20000,
           escalated: true,
-          programEndTime: Date.now() + 1800000 // 30 minutes from now
+          programEndTime: Date.now() + 1800000, // 30 minutes from now
         };
-        
+
         redisService.get.mockImplementation(async (key: string) => {
           if (key === 'videoIdNotFound:handle') return '1';
-          if (key === 'notFoundAttempts:handle') return JSON.stringify(attemptTracking);
+          if (key === 'notFoundAttempts:handle')
+            return JSON.stringify(attemptTracking);
           return null;
         });
 
@@ -904,7 +1269,7 @@ describe('YoutubeLiveService', () => {
           'cron',
           new Map([['cid', 100]]),
           new Map([['cid', 'handle']]),
-          'main'
+          'main',
         );
 
         expect(result.get('cid')).toBe('__SKIPPED__');
@@ -915,13 +1280,17 @@ describe('YoutubeLiveService', () => {
       it('skips sending email in non-production environments', async () => {
         const originalEnv = process.env.NODE_ENV;
         process.env.NODE_ENV = 'staging';
-        
-        const loggerSpy = jest.spyOn(service['logger'], 'debug').mockImplementation();
-        
+
+        const loggerSpy = jest
+          .spyOn(service['logger'], 'debug')
+          .mockImplementation();
+
         await (service as any).sendEscalationEmail('cid', 'handle');
-        
-        expect(loggerSpy).toHaveBeenCalledWith(expect.stringContaining('Escalation email skipped'));
-        
+
+        expect(loggerSpy).toHaveBeenCalledWith(
+          expect.stringContaining('Escalation email skipped'),
+        );
+
         process.env.NODE_ENV = originalEnv;
         loggerSpy.mockRestore();
       });
@@ -929,20 +1298,27 @@ describe('YoutubeLiveService', () => {
       it('sends email in production environment', async () => {
         const originalEnv = process.env.NODE_ENV;
         process.env.NODE_ENV = 'production';
-        
+
         const mockChannel = { name: 'Test Channel', programs: [] };
         const mockChannelsRepository = {
-          findOne: jest.fn().mockResolvedValue(mockChannel)
+          findOne: jest.fn().mockResolvedValue(mockChannel),
         } as any;
-        
-        service = new YoutubeLiveService(configService, schedulesService, redisService, sentryService, mockEmailService, mockChannelsRepository);
+
+        service = new YoutubeLiveService(
+          configService,
+          schedulesService,
+          redisService,
+          sentryService,
+          mockEmailService,
+          mockChannelsRepository,
+        );
         schedulesService.findAll.mockResolvedValue([]);
         mockEmailService.sendEmail.mockResolvedValue(undefined);
-        
+
         await (service as any).sendEscalationEmail('cid', 'handle');
-        
+
         expect(mockEmailService.sendEmail).toHaveBeenCalled();
-        
+
         process.env.NODE_ENV = originalEnv;
       });
     });
@@ -950,9 +1326,16 @@ describe('YoutubeLiveService', () => {
     describe('visibility guards in getLiveStreamsMain', () => {
       it('returns __SKIPPED__ when channel is not visible', async () => {
         const mockChannelsRepository = {
-          findOne: jest.fn().mockResolvedValue({ is_visible: false })
+          findOne: jest.fn().mockResolvedValue({ is_visible: false }),
         } as any;
-        service = new YoutubeLiveService(configService, schedulesService, redisService, sentryService, mockEmailService, mockChannelsRepository);
+        service = new YoutubeLiveService(
+          configService,
+          schedulesService,
+          redisService,
+          sentryService,
+          mockEmailService,
+          mockChannelsRepository,
+        );
         schedulesService.findAll.mockResolvedValue([]);
         const result = await service.getLiveStreamsMain('cid', 'handle', 300);
         expect(result).toBe('__SKIPPED__');
@@ -960,28 +1343,49 @@ describe('YoutubeLiveService', () => {
 
       it('returns __SKIPPED__ when current program is not visible', async () => {
         const mockChannelsRepository = {
-          findOne: jest.fn().mockResolvedValue({ is_visible: true })
+          findOne: jest.fn().mockResolvedValue({ is_visible: true }),
         } as any;
-        service = new YoutubeLiveService(configService, schedulesService, redisService, sentryService, mockEmailService, mockChannelsRepository);
+        service = new YoutubeLiveService(
+          configService,
+          schedulesService,
+          redisService,
+          sentryService,
+          mockEmailService,
+          mockChannelsRepository,
+        );
         const mockSchedules = [
           {
-            program: { 
-              channel: { youtube_channel_id: 'cid', handle: 'handle', is_visible: true },
+            program: {
+              channel: {
+                youtube_channel_id: 'cid',
+                handle: 'handle',
+                is_visible: true,
+              },
               name: 'Hidden Program',
               is_visible: false,
             },
             start_time: '14:00',
             end_time: '16:00',
             day_of_week: 'tuesday',
-          }
+          },
         ];
         schedulesService.findAll.mockResolvedValue(mockSchedules as any);
-        jest.spyOn(require('@/utils/timezone.util').TimezoneUtil, 'currentDayOfWeek').mockReturnValue('tuesday');
-        jest.spyOn(require('@/utils/timezone.util').TimezoneUtil, 'currentTimeInMinutes').mockReturnValue(15 * 60);
-        
+        jest
+          .spyOn(
+            require('@/utils/timezone.util').TimezoneUtil,
+            'currentDayOfWeek',
+          )
+          .mockReturnValue('tuesday');
+        jest
+          .spyOn(
+            require('@/utils/timezone.util').TimezoneUtil,
+            'currentTimeInMinutes',
+          )
+          .mockReturnValue(15 * 60);
+
         const result = await service.getLiveStreamsMain('cid', 'handle', 300);
         expect(result).toBe('__SKIPPED__');
       });
     });
   });
-}); 
+});

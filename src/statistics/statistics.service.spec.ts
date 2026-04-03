@@ -24,7 +24,11 @@ describe('StatisticsService', () => {
         StatisticsService,
         {
           provide: getRepositoryToken(User),
-          useValue: { find: jest.fn(), count: jest.fn(), createQueryBuilder: jest.fn() },
+          useValue: {
+            find: jest.fn(),
+            count: jest.fn(),
+            createQueryBuilder: jest.fn(),
+          },
         },
         {
           provide: getRepositoryToken(UserSubscription),
@@ -40,18 +44,24 @@ describe('StatisticsService', () => {
         },
         {
           provide: ReportsProxyService,
-          useValue: { generateReport: jest.fn().mockResolvedValue(Buffer.from('test')) },
+          useValue: {
+            generateReport: jest.fn().mockResolvedValue(Buffer.from('test')),
+          },
         },
         {
           provide: EmailService,
-          useValue: { sendReportWithAttachment: jest.fn().mockResolvedValue(true) },
+          useValue: {
+            sendReportWithAttachment: jest.fn().mockResolvedValue(true),
+          },
         },
       ],
     }).compile();
 
     service = module.get<StatisticsService>(StatisticsService);
     userRepo = module.get<Repository<User>>(getRepositoryToken(User));
-    subscriptionRepo = module.get<Repository<UserSubscription>>(getRepositoryToken(UserSubscription));
+    subscriptionRepo = module.get<Repository<UserSubscription>>(
+      getRepositoryToken(UserSubscription),
+    );
     programRepo = module.get<Repository<Program>>(getRepositoryToken(Program));
     channelRepo = module.get<Repository<Channel>>(getRepositoryToken(Channel));
     reportsProxyService = module.get<ReportsProxyService>(ReportsProxyService);
@@ -64,7 +74,9 @@ describe('StatisticsService', () => {
 
   // Add basic tests for each method (mocking query builders and dependencies)
   it('should get user demographics', async () => {
-    (userRepo.find as jest.Mock).mockResolvedValue([{ gender: 'male', subscriptions: [{}], birthDate: '1990-01-01' }]);
+    (userRepo.find as jest.Mock).mockResolvedValue([
+      { gender: 'male', subscriptions: [{}], birthDate: '1990-01-01' },
+    ]);
     const result = await service.getUserDemographics();
     expect(result.totalUsers).toBe(1);
   });
@@ -77,7 +89,16 @@ describe('StatisticsService', () => {
       groupBy: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
       limit: jest.fn().mockReturnThis(),
-      getRawMany: jest.fn().mockResolvedValue([{ programid: 1, programname: 'Test', channelname: 'Test', subscriptioncount: 5 }]),
+      getRawMany: jest
+        .fn()
+        .mockResolvedValue([
+          {
+            programid: 1,
+            programname: 'Test',
+            channelname: 'Test',
+            subscriptioncount: 5,
+          },
+        ]),
     };
     (subscriptionRepo.createQueryBuilder as jest.Mock).mockReturnValue(mockQB);
     const result = await service.getTopPrograms(10);
@@ -95,7 +116,12 @@ describe('StatisticsService', () => {
       getManyAndCount: jest.fn().mockResolvedValue([[{ id: 1 }], 1]),
     };
     (userRepo.createQueryBuilder as jest.Mock).mockReturnValue(mockQB);
-    const result = await service.getNewUsersReport('2024-01-01', '2024-01-31', 1, 20);
+    const result = await service.getNewUsersReport(
+      '2024-01-01',
+      '2024-01-31',
+      1,
+      20,
+    );
     expect(result.total).toBe(1);
     expect(result.users[0].id).toBe(1);
   });
@@ -108,40 +134,84 @@ describe('StatisticsService', () => {
       orderBy: jest.fn().mockReturnThis(),
       skip: jest.fn().mockReturnThis(),
       take: jest.fn().mockReturnThis(),
-      getManyAndCount: jest.fn().mockResolvedValue([[{ id: 1, user: {}, program: { id: 1, name: 'Test', channel: { id: 1, name: 'Test' } } }], 1]),
+      getManyAndCount: jest
+        .fn()
+        .mockResolvedValue([
+          [
+            {
+              id: 1,
+              user: {},
+              program: {
+                id: 1,
+                name: 'Test',
+                channel: { id: 1, name: 'Test' },
+              },
+            },
+          ],
+          1,
+        ]),
     };
     (subscriptionRepo.createQueryBuilder as jest.Mock).mockReturnValue(mockQB);
-    const result = await service.getNewSubscriptionsReport('2024-01-01', '2024-01-31', 1, 20);
+    const result = await service.getNewSubscriptionsReport(
+      '2024-01-01',
+      '2024-01-31',
+      1,
+      20,
+    );
     expect(result.total).toBe(1);
     expect(result.subscriptions[0].id).toBe(1);
   });
 
   it('should download users report', async () => {
-    const result = await service.downloadUsersReport('2024-01-01', '2024-01-31', 'csv');
+    const result = await service.downloadUsersReport(
+      '2024-01-01',
+      '2024-01-31',
+      'csv',
+    );
     expect(reportsProxyService.generateReport).toHaveBeenCalled();
     expect(result).toBeInstanceOf(Buffer);
   });
 
   it('should download subscriptions report', async () => {
-    const result = await service.downloadSubscriptionsReport('2024-01-01', '2024-01-31', 'csv', 1, 1);
+    const result = await service.downloadSubscriptionsReport(
+      '2024-01-01',
+      '2024-01-31',
+      'csv',
+      1,
+      1,
+    );
     expect(reportsProxyService.generateReport).toHaveBeenCalled();
     expect(result).toBeInstanceOf(Buffer);
   });
 
   it('should email users report', async () => {
-    const result = await service.emailUsersReport('2024-01-01', '2024-01-31', 'csv', 'test@example.com');
+    const result = await service.emailUsersReport(
+      '2024-01-01',
+      '2024-01-31',
+      'csv',
+      'test@example.com',
+    );
     expect(reportsProxyService.generateReport).toHaveBeenCalled();
     expect(result).toBeInstanceOf(Buffer);
   });
 
   it('should email subscriptions report', async () => {
-    const result = await service.emailSubscriptionsReport('2024-01-01', '2024-01-31', 'csv', 1, 1, 'test@example.com');
+    const result = await service.emailSubscriptionsReport(
+      '2024-01-01',
+      '2024-01-31',
+      'csv',
+      1,
+      1,
+      'test@example.com',
+    );
     expect(reportsProxyService.generateReport).toHaveBeenCalled();
     expect(result).toBeInstanceOf(Buffer);
   });
 
   it('should get all programs stats', async () => {
-    (programRepo.find as jest.Mock).mockResolvedValue([{ id: 1, name: 'Test', channel: { name: 'Test' } }]);
+    (programRepo.find as jest.Mock).mockResolvedValue([
+      { id: 1, name: 'Test', channel: { name: 'Test' } },
+    ]);
     (subscriptionRepo.createQueryBuilder as jest.Mock).mockReturnValue({
       leftJoinAndSelect: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
@@ -150,4 +220,4 @@ describe('StatisticsService', () => {
     const result = await service.getAllProgramsStats();
     expect(Array.isArray(result)).toBe(true);
   });
-}); 
+});

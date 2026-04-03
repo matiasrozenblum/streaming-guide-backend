@@ -18,7 +18,7 @@ describe('ResourceMonitorService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    
+
     mockSentryService = {
       captureMessage: jest.fn(),
       captureException: jest.fn(),
@@ -57,11 +57,11 @@ describe('ResourceMonitorService', () => {
   describe('onModuleInit', () => {
     it('starts monitoring interval', () => {
       const setIntervalSpy = jest.spyOn(global, 'setInterval');
-      
+
       service.onModuleInit();
-      
+
       expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 30000);
-      
+
       // Clean up the interval immediately
       if (service['monitoringInterval']) {
         clearInterval(service['monitoringInterval']);
@@ -72,11 +72,11 @@ describe('ResourceMonitorService', () => {
   describe('checkResources', () => {
     it('logs current resource usage', () => {
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
-      
+
       service['checkResources']();
-      
+
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('📊 Resources: Memory 50.0%, CPU')
+        expect.stringContaining('📊 Resources: Memory 50.0%, CPU'),
       );
     });
 
@@ -84,47 +84,63 @@ describe('ResourceMonitorService', () => {
       // Mock 90% memory usage
       (os.totalmem as jest.Mock).mockReturnValue(1000);
       (os.freemem as jest.Mock).mockReturnValue(100); // 10% free = 90% used
-      
+
       service['checkResources']();
-      
+
       expect(mockSentryService.captureMessage).toHaveBeenCalledWith(
-        expect.stringContaining('Server Resource Warning - Memory usage at 90.0%'),
+        expect.stringContaining(
+          'Server Resource Warning - Memory usage at 90.0%',
+        ),
         'warning',
         expect.objectContaining({
           service: 'server',
           error_type: 'high_memory_usage',
           memory_percentage: 90,
           threshold: 85,
-        })
+        }),
       );
-      
-      expect(mockSentryService.setTag).toHaveBeenCalledWith('service', 'server');
-      expect(mockSentryService.setTag).toHaveBeenCalledWith('error_type', 'high_memory_usage');
+
+      expect(mockSentryService.setTag).toHaveBeenCalledWith(
+        'service',
+        'server',
+      );
+      expect(mockSentryService.setTag).toHaveBeenCalledWith(
+        'error_type',
+        'high_memory_usage',
+      );
     });
 
     it('triggers critical memory usage alert when memory > 95%', () => {
       // Mock 97% memory usage
       (os.totalmem as jest.Mock).mockReturnValue(1000);
       (os.freemem as jest.Mock).mockReturnValue(30); // 3% free = 97% used
-      
+
       // Reset the last alert time to ensure critical alert can fire
       (service as any).lastCriticalMemoryAlert = 0;
-      
+
       service['checkResources']();
-      
+
       expect(mockSentryService.captureMessage).toHaveBeenCalledWith(
-        expect.stringContaining('Server Resource Critical - Memory usage at 97.0%'),
+        expect.stringContaining(
+          'Server Resource Critical - Memory usage at 97.0%',
+        ),
         'error',
         expect.objectContaining({
           service: 'server',
           error_type: 'critical_memory_usage',
           memory_percentage: 97,
           threshold: 95,
-        })
+        }),
       );
-      
-      expect(mockSentryService.setTag).toHaveBeenCalledWith('service', 'server');
-      expect(mockSentryService.setTag).toHaveBeenCalledWith('error_type', 'critical_memory_usage');
+
+      expect(mockSentryService.setTag).toHaveBeenCalledWith(
+        'service',
+        'server',
+      );
+      expect(mockSentryService.setTag).toHaveBeenCalledWith(
+        'error_type',
+        'critical_memory_usage',
+      );
     });
 
     it('triggers critical CPU usage alert when CPU > 90%', () => {
@@ -134,12 +150,12 @@ describe('ResourceMonitorService', () => {
           times: { user: 950, nice: 0, sys: 30, idle: 20, irq: 0 },
         },
       ]);
-      
+
       // Reset the last alert time to ensure critical alert can fire
       (service as any).lastCriticalCpuAlert = 0;
-      
+
       service['checkResources']();
-      
+
       expect(mockSentryService.captureMessage).toHaveBeenCalledWith(
         expect.stringContaining('Server Resource Critical - CPU usage at'),
         'error',
@@ -147,11 +163,17 @@ describe('ResourceMonitorService', () => {
           service: 'server',
           error_type: 'critical_cpu_usage',
           threshold: 90,
-        })
+        }),
       );
-      
-      expect(mockSentryService.setTag).toHaveBeenCalledWith('service', 'server');
-      expect(mockSentryService.setTag).toHaveBeenCalledWith('error_type', 'critical_cpu_usage');
+
+      expect(mockSentryService.setTag).toHaveBeenCalledWith(
+        'service',
+        'server',
+      );
+      expect(mockSentryService.setTag).toHaveBeenCalledWith(
+        'error_type',
+        'critical_cpu_usage',
+      );
     });
 
     it('does not trigger alerts when resources are normal', () => {
@@ -163,9 +185,9 @@ describe('ResourceMonitorService', () => {
           times: { user: 300, nice: 0, sys: 100, idle: 600, irq: 0 },
         },
       ]);
-      
+
       service['checkResources']();
-      
+
       expect(mockSentryService.captureMessage).not.toHaveBeenCalled();
     });
 
@@ -173,11 +195,11 @@ describe('ResourceMonitorService', () => {
       // Mock high memory usage
       (os.totalmem as jest.Mock).mockReturnValue(1000);
       (os.freemem as jest.Mock).mockReturnValue(100);
-      
+
       // First call
       service['checkResources']();
       expect(mockSentryService.captureMessage).toHaveBeenCalledTimes(1);
-      
+
       // Second call immediately after (should not trigger)
       service['checkResources']();
       expect(mockSentryService.captureMessage).toHaveBeenCalledTimes(1);
@@ -188,9 +210,9 @@ describe('ResourceMonitorService', () => {
     it('calculates memory usage correctly', () => {
       (os.totalmem as jest.Mock).mockReturnValue(8 * 1024 * 1024 * 1024); // 8GB
       (os.freemem as jest.Mock).mockReturnValue(4 * 1024 * 1024 * 1024); // 4GB
-      
+
       const result = service['getMemoryUsage']();
-      
+
       expect(result).toEqual({
         total: '8 GB',
         used: '4 GB',
@@ -202,9 +224,9 @@ describe('ResourceMonitorService', () => {
     it('handles zero memory', () => {
       (os.totalmem as jest.Mock).mockReturnValue(0);
       (os.freemem as jest.Mock).mockReturnValue(0);
-      
+
       const result = service['getMemoryUsage']();
-      
+
       // When total is 0, percentage should be 0 to avoid NaN
       expect(result.percentage).toBe(0);
     });
@@ -212,9 +234,9 @@ describe('ResourceMonitorService', () => {
     it('handles edge case where total memory is very small', () => {
       (os.totalmem as jest.Mock).mockReturnValue(1);
       (os.freemem as jest.Mock).mockReturnValue(0);
-      
+
       const result = service['getMemoryUsage']();
-      
+
       expect(result.percentage).toBe(100);
     });
   });
@@ -226,9 +248,9 @@ describe('ResourceMonitorService', () => {
           times: { user: 100, nice: 0, sys: 50, idle: 850, irq: 0 },
         },
       ]);
-      
+
       const result = service['getCpuUsage']();
-      
+
       // Expected: (1000 - 850) / 1000 * 100 = 15%
       expect(result).toBeCloseTo(15, 1);
     });
@@ -242,9 +264,9 @@ describe('ResourceMonitorService', () => {
           times: { user: 200, nice: 0, sys: 100, idle: 700, irq: 0 },
         },
       ]);
-      
+
       const result = service['getCpuUsage']();
-      
+
       // Average of both cores
       expect(result).toBeGreaterThan(0);
       expect(result).toBeLessThan(100);
@@ -263,7 +285,7 @@ describe('ResourceMonitorService', () => {
   describe('getResourceStats', () => {
     it('returns comprehensive resource statistics', () => {
       const result = service.getResourceStats();
-      
+
       expect(result).toEqual({
         memory: {
           total: '8 GB',
@@ -284,12 +306,12 @@ describe('ResourceMonitorService', () => {
     it('clears monitoring interval', () => {
       // First initialize the service to set up the interval
       service.onModuleInit();
-      
+
       const clearIntervalSpy = jest.spyOn(global, 'clearInterval');
-      
+
       service.onModuleDestroy();
-      
+
       expect(clearIntervalSpy).toHaveBeenCalled();
     });
   });
-}); 
+});

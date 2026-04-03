@@ -8,7 +8,7 @@ async function testPerformance() {
   // Obtener un ID válido primero
   const schedules = await axios.get(`${API_URL}/schedules`);
   const validId = schedules.data[0]?.id;
-  
+
   if (!validId) {
     console.log('No se encontraron schedules para probar');
     return;
@@ -48,10 +48,14 @@ async function testPerformance() {
   console.log('Resumen de rendimiento:');
   console.log(`- Primera consulta (sin caché): ${time1}ms`);
   console.log(`- Segunda consulta (con caché): ${time2}ms`);
-  console.log(`- Mejora: ${((time1 - time2) / time1 * 100).toFixed(2)}% más rápido`);
+  console.log(
+    `- Mejora: ${(((time1 - time2) / time1) * 100).toFixed(2)}% más rápido`,
+  );
   console.log(`\n- Consulta individual (sin caché): ${time3}ms`);
   console.log(`- Consulta individual (con caché): ${time4}ms`);
-  console.log(`- Mejora: ${((time3 - time4) / time3 * 100).toFixed(2)}% más rápido`);
+  console.log(
+    `- Mejora: ${(((time3 - time4) / time3) * 100).toFixed(2)}% más rápido`,
+  );
 }
 
-testPerformance().catch(console.error); 
+testPerformance().catch(console.error);

@@ -16,4 +16,4 @@ export class UpdatePanelistDto {
   @IsString()
   @IsOptional()
   bio?: string;
-} 
+}
