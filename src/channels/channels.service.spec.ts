@@ -192,9 +192,17 @@ describe('ChannelsService - Channel Handle Change Detection', () => {
       // Assert
       expect(youtubeDiscoveryService.getChannelIdFromHandle).toHaveBeenCalledWith('@newhandle');
       // Should invalidate old handle cache when handle changes
-      expect(redisService.del).toHaveBeenCalledWith('liveStatusByHandle:@oldhandle');
+      expect(redisService.del).toHaveBeenCalledWith([
+        'liveStatusByHandle:@oldhandle',
+        'videoIdNotFound:@oldhandle',
+        'notFoundAttempts:@oldhandle'
+      ]);
       // Should also invalidate new handle cache when YouTube channel ID changes (wrong channel ID was cached)
-      expect(redisService.del).toHaveBeenCalledWith('liveStatusByHandle:@newhandle');
+      expect(redisService.del).toHaveBeenCalledWith([
+        'liveStatusByHandle:@newhandle',
+        'videoIdNotFound:@newhandle',
+        'notFoundAttempts:@newhandle'
+      ]);
     });
 
     it('should not invalidate live status caches when handle does not change', async () => {
@@ -238,7 +246,11 @@ describe('ChannelsService - Channel Handle Change Detection', () => {
       // Assert
       expect(youtubeDiscoveryService.getChannelIdFromHandle).toHaveBeenCalledWith('@newhandle');
       // Should still invalidate old handle cache even if new channel ID resolution fails
-      expect(redisService.del).toHaveBeenCalledWith('liveStatusByHandle:@oldhandle');
+      expect(redisService.del).toHaveBeenCalledWith([
+        'liveStatusByHandle:@oldhandle',
+        'videoIdNotFound:@oldhandle',
+        'notFoundAttempts:@oldhandle'
+      ]);
       // Note: New handle cache won't be invalidated if channel ID resolution fails (no new channel ID to compare)
     });
 
@@ -312,10 +324,11 @@ describe('ChannelsService - Channel Handle Change Detection', () => {
       const result = await service.clearChannelCache(handle);
 
       // Assert
-      expect(redisService.del).toHaveBeenCalledWith('liveStatusByHandle:@testhandle');
-      expect(redisService.del).toHaveBeenCalledWith('videoIdNotFound:@testhandle');
-      expect(redisService.del).toHaveBeenCalledWith('notFoundAttempts:@testhandle');
-      expect(redisService.del).toHaveBeenCalledTimes(3);
+      expect(redisService.del).toHaveBeenCalledWith([
+        'liveStatusByHandle:@testhandle',
+        'videoIdNotFound:@testhandle',
+        'notFoundAttempts:@testhandle'
+      ]);
       expect(result.cleared).toEqual(['liveStatusByHandle', 'videoIdNotFound', 'notFoundAttempts']);
     });
 

@@ -74,8 +74,13 @@ export class RedisService implements OnModuleInit {
     return values.map(v => (v ? JSON.parse(v) : null));
   }
 
-  async del(key: string): Promise<void> {
-    await this.client.del(key);
+  async del(key: string | string[]): Promise<void> {
+    if (Array.isArray(key)) {
+      if (key.length === 0) return;
+      await this.client.del(...key);
+    } else {
+      await this.client.del(key);
+    }
   }
 
   async incr(key: string): Promise<number> {

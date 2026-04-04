@@ -148,8 +148,10 @@ export class ChannelsService {
   
     // Clear unified cache
     try {
-      await this.redisService.del('schedules:week:complete');
-      await this.redisService.del('channels:visible_with_categories');
+      await this.redisService.del([
+        'schedules:week:complete',
+        'channels:visible_with_categories'
+      ]);
     } catch (error) {
       console.error('❌ Error clearing caches:', error.message);
     }
@@ -219,8 +221,10 @@ export class ChannelsService {
 
     // Clear unified cache
     try {
-      await this.redisService.del('schedules:week:complete');
-      await this.redisService.del('channels:visible_with_categories');
+      await this.redisService.del([
+        'schedules:week:complete',
+        'channels:visible_with_categories'
+      ]);
     } catch (error) {
       console.error('❌ Error clearing caches:', error.message);
     }
@@ -319,8 +323,10 @@ export class ChannelsService {
     
     // Clear unified cache
     try {
-      await this.redisService.del('schedules:week:complete');
-      await this.redisService.del('channels:visible_with_categories');
+      await this.redisService.del([
+        'schedules:week:complete',
+        'channels:visible_with_categories'
+      ]);
     } catch (error) {
       console.error('❌ Error clearing caches:', error.message);
     }
@@ -347,8 +353,10 @@ export class ChannelsService {
     
     // Clear unified cache
     try {
-      await this.redisService.del('schedules:week:complete');
-      await this.redisService.del('channels:visible_with_categories');
+      await this.redisService.del([
+        'schedules:week:complete',
+        'channels:visible_with_categories'
+      ]);
     } catch (error) {
       console.error('❌ Error clearing caches:', error.message);
     }
@@ -664,9 +672,11 @@ export class ChannelsService {
     try {
       // Invalidate unified cache and related keys
       // Note: liveStreamsByChannel no longer exists (unified into liveStatusByHandle)
-      await this.redisService.del(`liveStatusByHandle:${handle}`);
-      await this.redisService.del(`videoIdNotFound:${handle}`);
-      await this.redisService.del(`notFoundAttempts:${handle}`);
+      await this.redisService.del([
+        `liveStatusByHandle:${handle}`,
+        `videoIdNotFound:${handle}`,
+        `notFoundAttempts:${handle}`
+      ]);
       console.log(`🗑️ Invalidated cache keys for: ${handle}`);
     } catch (error) {
       console.error(`❌ Error invalidating live status cache for ${handle}:`, error.message);
@@ -686,14 +696,12 @@ export class ChannelsService {
     
     try {
       // Clear all channel-related cache entries
-      await this.redisService.del(`liveStatusByHandle:${handle}`);
-      cleared.push('liveStatusByHandle');
-      
-      await this.redisService.del(`videoIdNotFound:${handle}`);
-      cleared.push('videoIdNotFound');
-      
-      await this.redisService.del(`notFoundAttempts:${handle}`);
-      cleared.push('notFoundAttempts');
+      await this.redisService.del([
+        `liveStatusByHandle:${handle}`,
+        `videoIdNotFound:${handle}`,
+        `notFoundAttempts:${handle}`
+      ]);
+      cleared.push('liveStatusByHandle', 'videoIdNotFound', 'notFoundAttempts');
       
       console.log(`🗑️ Manually cleared cache keys for: ${handle}`);
       return { cleared };

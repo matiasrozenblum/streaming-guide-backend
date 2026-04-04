@@ -110,10 +110,10 @@ export class PanelistsService {
     Object.assign(panelist, updatePanelistDto);
     const updatedPanelist = await this.panelistsRepository.save(panelist);
     
-    await Promise.all([
-      this.redisService.del('panelists:all'),
-      this.redisService.del(`panelists:${id}`),
-      this.redisService.del('schedules:week:complete'), // Clear unified schedule cache since panelist info appears in schedules
+    await this.redisService.del([
+      'panelists:all',
+      `panelists:${id}`,
+      'schedules:week:complete', // Clear unified schedule cache since panelist info appears in schedules
     ]);
     
     // Warm cache asynchronously (non-blocking)
@@ -134,9 +134,9 @@ export class PanelistsService {
   async remove(id: string): Promise<boolean> {
     const result = await this.panelistsRepository.delete(id);
     if ((result?.affected ?? 0) > 0) {
-      await Promise.all([
-        this.redisService.del('panelists:all'),
-        this.redisService.del(`panelists:${id}`),
+      await this.redisService.del([
+        'panelists:all',
+        `panelists:${id}`,
       ]);
       // Notify and revalidate
       await this.notifyUtil.notifyAndRevalidate({
@@ -169,8 +169,10 @@ export class PanelistsService {
       panelist.programs.push(program);
       await this.panelistsRepository.save(panelist);
       console.log(`[Cache] Invalidating cache for panelist ${panelistId} after adding to program ${programId}`);
-      await this.redisService.del(`panelists:${panelistId}`);
-      await this.redisService.del('schedules:week:complete');
+      await this.redisService.del([
+        `panelists:${panelistId}`,
+        'schedules:week:complete'
+      ]);
       
       // Warm cache asynchronously (non-blocking)
       this.schedulesService.debouncedWarmSchedulesCache();
@@ -193,8 +195,10 @@ export class PanelistsService {
       panelist.programs = panelist.programs.filter(p => p.id !== Number(programId));
       await this.panelistsRepository.save(panelist);
       console.log(`[Cache] Invalidating cache for panelist ${panelistId} after removing from program ${programId}`);
-      await this.redisService.del(`panelists:${panelistId}`);
-      await this.redisService.del('schedules:week:complete');
+      await this.redisService.del([
+        `panelists:${panelistId}`,
+        'schedules:week:complete'
+      ]);
       
       // Warm cache asynchronously (non-blocking)
       this.schedulesService.debouncedWarmSchedulesCache();

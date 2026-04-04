@@ -666,8 +666,10 @@ export class WeeklyOverridesService {
       return false;
     }
 
-    await this.redisService.del(`weekly_override:${overrideId}`);
-    await this.redisService.del('schedules:week:complete');
+    await this.redisService.del([
+      `weekly_override:${overrideId}`,
+      'schedules:week:complete'
+    ]);
     
     // Smart weekly cache update: update instead of invalidate
     await this.updateWeeklyCacheForWeek(exists.weekStartDate);

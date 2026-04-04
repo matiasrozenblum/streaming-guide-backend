@@ -71,6 +71,16 @@ describe('RedisService', () => {
       await service.del('key');
       expect(mockClient.del).toHaveBeenCalledWith('key');
     });
+
+    it('deletes multiple keys when array is provided', async () => {
+      await service.del(['key1', 'key2']);
+      expect(mockClient.del).toHaveBeenCalledWith('key1', 'key2');
+    });
+
+    it('does nothing when empty array is provided', async () => {
+      await service.del([]);
+      expect(mockClient.del).not.toHaveBeenCalled();
+    });
   });
 
   describe('incr', () => {
