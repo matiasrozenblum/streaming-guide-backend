@@ -50,52 +50,75 @@ export class YoutubeController {
           const sixtySecondsAgo = Date.now() - 60000;
           const keys = await this.redisService.client.keys('live_notification:*');
 
-          for (const key of keys) {
-            const parts = key.split(':');
-            const timestamp = parseInt(parts[parts.length - 1]);
+          if (keys.length > 0) {
+            const keysToFetch: string[] = [];
+            const keysToDelete: string[] = [];
 
-            if (isNaN(timestamp)) {
-              this.logger.warn(`Invalid timestamp in notification key: ${key}`);
-              continue;
+            // First pass: identify which keys to fetch and which to delete based on timestamp
+            for (const key of keys) {
+              const parts = key.split(':');
+              const timestamp = parseInt(parts[parts.length - 1]);
+
+              if (isNaN(timestamp)) {
+                this.logger.warn(`Invalid timestamp in notification key: ${key}`);
+                continue;
+              }
+
+              if (timestamp > sixtySecondsAgo) {
+                keysToFetch.push(key);
+              } else {
+                keysToDelete.push(key);
+              }
             }
 
-            if (timestamp > sixtySecondsAgo) {
-              const notificationString = await this.redisService.get(key);
-              if (notificationString && typeof notificationString === 'string') {
-                try {
-                  const notification = JSON.parse(notificationString) as LiveNotification;
+            // Batch fetch only valid notifications to avoid N+1 queries and over-fetching
+            if (keysToFetch.length > 0) {
+              const notificationStrings = await this.redisService.client.mget(...keysToFetch);
 
-                  // Create a unique identifier for this notification
-                  const notificationId = notification.channelId
-                    ? `${notification.type}:${notification.channelId}:${notification.timestamp}`
-                    : `${notification.type}:${notification.entity}:${notification.entityId}:${notification.timestamp}`;
+              for (const notificationString of notificationStrings) {
+                if (
+                  notificationString &&
+                  typeof notificationString === 'string'
+                ) {
+                  try {
+                    const notification = JSON.parse(
+                      notificationString,
+                    ) as LiveNotification;
 
-                  // Only send if we haven't sent this notification before (per-connection)
-                  if (!this.sentNotifications.has(notificationId)) {
-                    this.sentNotifications.add(notificationId);
+                    // Create a unique identifier for this notification
+                    const notificationId = notification.channelId
+                      ? `${notification.type}:${notification.channelId}:${notification.timestamp}`
+                      : `${notification.type}:${notification.entity}:${notification.entityId}:${notification.timestamp}`;
 
-                    subscriber.next({
-                      data: JSON.stringify(notification),
-                      type: 'message',
-                    } as MessageEvent);
+                    // Only send if we haven't sent this notification before (per-connection)
+                    if (!this.sentNotifications.has(notificationId)) {
+                      this.sentNotifications.add(notificationId);
 
-                    // IMPORTANT: Do NOT delete the Redis key here.
-                    // We want ALL connected clients to receive the notification.
-                    // Each connection tracks what it has already sent via sentNotifications.
-                    // Old notifications are cleaned up below (timestamp check) or by TTL.
+                      subscriber.next({
+                        data: JSON.stringify(notification),
+                        type: 'message',
+                      } as MessageEvent);
 
-                    // Clean up the tracking set after 1 minute to prevent memory leaks
-                    setTimeout(() => {
-                      this.sentNotifications.delete(notificationId);
-                    }, 60000);
+                      // IMPORTANT: Do NOT delete the Redis key here.
+                      // We want ALL connected clients to receive the notification.
+                      // Each connection tracks what it has already sent via sentNotifications.
+                      // Old notifications are cleaned up below (timestamp check) or by TTL.
+
+                      // Clean up the tracking set after 1 minute to prevent memory leaks
+                      setTimeout(() => {
+                        this.sentNotifications.delete(notificationId);
+                      }, 60000);
+                    }
+                  } catch (error) {
+                    this.logger.error('Error parsing notification:', error);
                   }
-                } catch (error) {
-                  this.logger.error('Error parsing notification:', error);
                 }
               }
-            } else {
-              // Clean up old notifications
-              await this.redisService.del(key);
+            }
+
+            // Batch delete old notifications
+            if (keysToDelete.length > 0) {
+              await this.redisService.client.del(...keysToDelete);
             }
           }
         } catch (error) {
