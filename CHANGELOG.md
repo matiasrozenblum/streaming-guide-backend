@@ -23,12 +23,15 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 - Per-program live stream selection when a channel has multiple simultaneous live streams. Both concurrent programs now independently pick the best-matching stream via title similarity scoring instead of both receiving the same cached primary stream URL.
 - Set TypeORM schema to `public` to fix `search_path` issue on Supabase staging.
 
----
-
-## [1.24.6] - 2026-03-28
+## [1.24.7] - 2026-03-28
 
 ### Changed
 - Replaced N+1 Redis GET calls with batched MGET in `getSubscriptionsForStreamer` and `renewExpiredKickSubscriptions`
+
+## [1.24.6] - 2026-03-24
+
+### Changed
+- Streamer live status optimization
 
 ## [1.24.5] - 2026-03-23
 
