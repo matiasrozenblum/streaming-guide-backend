@@ -17,6 +17,13 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.24.7] - 2026-04-07
+
+### Fixed
+- Per-program live stream selection when a channel has multiple simultaneous live streams. Previously both programs received the same `stream_url` (always `streams[0]`). Now each program independently picks the best-matching stream using title similarity scoring via `SimilarityUtil`.
+
+---
+
 ## [1.24.6] - 2026-03-28
 
 ### Changed
