@@ -636,6 +636,7 @@ export class YoutubeLiveService {
       const currentProgram = schedules.find(s => {
         const chId = s.program?.channel?.youtube_channel_id;
         if (chId !== channelId) return false;
+        if (s.program?.is_visible === false) return false; // Skip invisible programs
         const startNum = this.convertTimeToMinutes(s.start_time);
         const endNum = this.convertTimeToMinutes(s.end_time);
         return currentTimeInMinutes >= startNum && currentTimeInMinutes < endNum;
@@ -643,11 +644,6 @@ export class YoutubeLiveService {
 
       if (currentProgram?.program) {
         currentProgramName = currentProgram.program.name; // Capture name for sorting logic
-
-        if (currentProgram.program.is_visible === false) {
-          this.logger.debug(`🚫 Skipping ${handle} (${channelId}) - current program marked as not visible`);
-          return '__SKIPPED__';
-        }
       }
     } catch (visErr) {
       // Non-fatal: if visibility check fails, proceed as before
