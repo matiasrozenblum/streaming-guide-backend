@@ -17,10 +17,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
-## [1.24.7] - 2026-04-07
+## [1.24.8] - 2026-04-08
 
 ### Fixed
-- Per-program live stream selection when a channel has multiple simultaneous live streams. Previously both programs received the same `stream_url` (always `streams[0]`). Now each program independently picks the best-matching stream using title similarity scoring via `SimilarityUtil`.
+- Per-program live stream selection when a channel has multiple simultaneous live streams. Both concurrent programs now independently pick the best-matching stream via title similarity scoring instead of both receiving the same cached primary stream URL.
+- Set TypeORM schema to `public` to fix `search_path` issue on Supabase staging.
 
 ---
 
