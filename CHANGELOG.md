@@ -14,6 +14,12 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ### Removed
 
 ### Fixed
+
+---
+
+## [1.24.9] - 2026-04-08
+
+### Fixed
 - Channels with invisible overlapping schedules are no longer incorrectly skipped during YouTube live fetch. The current-program lookup now excludes invisible programs so a visible concurrent program is correctly used.
 
 ---
