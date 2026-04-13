@@ -90,11 +90,9 @@ export class BannersService {
         if (canAutoEnable > 0) {
           autoEnabledFixed = disabledFixedBanners.slice(0, canAutoEnable);
 
-          // Update database to enable these banners
-          for (const banner of autoEnabledFixed) {
-            banner.is_enabled = true;
-            await this.bannersRepository.save(banner);
-          }
+          // Update database to enable these banners (single batch save)
+          autoEnabledFixed.forEach(banner => { banner.is_enabled = true; });
+          await this.bannersRepository.save(autoEnabledFixed);
 
           this.logger.debug(
             `Auto-enabled ${autoEnabledFixed.length} fixed banner(s) to meet minimum requirement: ${autoEnabledFixed.map(b => b.id).join(', ')}`

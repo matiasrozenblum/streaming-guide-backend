@@ -198,8 +198,7 @@ export class YoutubeLiveService {
       await this.redisService.set(statusCacheKey, cacheData, cacheData.ttl);
 
       // Clear the "not-found" flag and attempt tracking since we found live streams
-      await this.redisService.del(notFoundKey);
-      await this.redisService.del(`notFoundAttempts:${handle}`);
+      await this.redisService.del([notFoundKey, `notFoundAttempts:${handle}`]);
       this.logger.debug(`📌 Cached ${handle} → ${videoId} (TTL ${blockTTL}s)`);
 
       // Notify clients about the new video ID
@@ -633,17 +632,23 @@ export class YoutubeLiveService {
 
 
 
-      const currentProgram = schedules.find(s => {
+      const currentScheduleEntries = schedules.filter(s => {
         const chId = s.program?.channel?.youtube_channel_id;
         if (chId !== channelId) return false;
-        if (s.program?.is_visible === false) return false; // Skip invisible programs
         const startNum = this.convertTimeToMinutes(s.start_time);
         const endNum = this.convertTimeToMinutes(s.end_time);
         return currentTimeInMinutes >= startNum && currentTimeInMinutes < endNum;
       });
 
-      if (currentProgram?.program) {
-        currentProgramName = currentProgram.program.name; // Capture name for sorting logic
+      const visibleCurrentSchedule = currentScheduleEntries.find(s => s.program?.is_visible !== false);
+
+      if (currentScheduleEntries.length > 0 && !visibleCurrentSchedule) {
+        this.logger.debug(`🚫 Skipping ${handle} (${channelId}) - current program is not visible`);
+        return '__SKIPPED__';
+      }
+
+      if (visibleCurrentSchedule?.program) {
+        currentProgramName = visibleCurrentSchedule.program.name; // Capture name for sorting logic
       }
     } catch (visErr) {
       // Non-fatal: if visibility check fails, proceed as before

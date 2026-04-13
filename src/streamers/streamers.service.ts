@@ -418,83 +418,96 @@ export class StreamersService {
       kick: [] as Array<{ username: string; subscriptionId: string; status: string; fromApi: boolean }>,
     };
 
-    // Get subscriptions from Redis
-    const redisSubscriptions = await this.webhookSubscriptionService.getSubscriptionsForStreamer(
-      streamerId,
-      streamer.services
-    );
+    // Collect all Redis keys upfront to batch fetch with mget
+    const redisKeys: string[] = [];
+    const twitchEntries: Array<{ username: string; eventType: 'stream.online' | 'stream.offline'; redisKey: string }> = [];
+    const kickEntries: Array<{ username: string; redisKey: string }> = [];
 
-    // For Twitch: Check status from API
     for (const service of streamer.services) {
       if (service.service === 'twitch') {
         const username = service.username || extractTwitchUsername(service.url);
         if (username) {
-          // Get subscriptions from Twitch API
-          const apiSubscriptions = await this.webhookSubscriptionService.getTwitchEventSubSubscriptions();
-
-          // Check for both online and offline subscriptions
           for (const eventType of ['stream.online', 'stream.offline'] as const) {
             const redisKey = `webhook:subscription:twitch:${username}:${eventType}`;
-            const redisSub = await this.redisService.get(redisKey) as any;
-            const subscriptionId = redisSub?.subscriptionId;
-
-            if (subscriptionId) {
-              // Find matching subscription in API response
-              const apiSub = apiSubscriptions.find(
-                (s: any) => s.id === subscriptionId && s.type === eventType
-              );
-
-              status.twitch.push({
-                username,
-                eventType,
-                subscriptionId,
-                status: apiSub?.status || 'unknown',
-                fromApi: !!apiSub,
-              });
-            }
+            redisKeys.push(redisKey);
+            twitchEntries.push({ username, eventType, redisKey });
           }
         }
       } else if (service.service === 'kick') {
         const username = service.username || extractKickUsername(service.url);
         if (username) {
           const redisKey = `webhook:subscription:kick:${username}`;
-          const redisSub = await this.redisService.get(redisKey) as any;
-          const subscriptionId = redisSub?.subscriptionId;
-          const userId = redisSub?.userId;
+          redisKeys.push(redisKey);
+          kickEntries.push({ username, redisKey });
+        }
+      }
+    }
 
-          if (subscriptionId) {
-            // Verify with Kick API if we have the user ID
-            let verified = false;
-            let apiStatus = 'unknown';
+    // Single mget call instead of N individual get calls
+    const redisResults = redisKeys.length > 0 ? await this.redisService.mget<any>(redisKeys) : [];
+    const redisDataByKey = new Map<string, any>(
+      redisKeys.map((key, i) => [key, redisResults[i]])
+    );
 
-            if (userId) {
-              try {
-                const apiSubscriptions = await this.webhookSubscriptionService.getKickSubscriptions(userId);
-                const matchingSub = apiSubscriptions.find(
-                  sub => sub.subscription_id === subscriptionId || sub.event === 'livestream.status.updated'
-                );
-                if (matchingSub) {
-                  verified = true;
-                  apiStatus = 'enabled';
-                } else if (apiSubscriptions.length > 0) {
-                  // Has subscriptions but different ID - subscription was recreated
-                  apiStatus = 'different_id';
-                } else {
-                  apiStatus = 'not_found';
-                }
-              } catch (error) {
-                apiStatus = 'api_error';
-              }
+    // For Twitch: Check status from API (single API call for all Twitch subs)
+    if (twitchEntries.length > 0) {
+      const apiSubscriptions = await this.webhookSubscriptionService.getTwitchEventSubSubscriptions();
+
+      for (const { username, eventType, redisKey } of twitchEntries) {
+        const redisSub = redisDataByKey.get(redisKey) as any;
+        const subscriptionId = redisSub?.subscriptionId;
+
+        if (subscriptionId) {
+          const apiSub = apiSubscriptions.find(
+            (s: any) => s.id === subscriptionId && s.type === eventType
+          );
+
+          status.twitch.push({
+            username,
+            eventType,
+            subscriptionId,
+            status: apiSub?.status || 'unknown',
+            fromApi: !!apiSub,
+          });
+        }
+      }
+    }
+
+    // For Kick: Check status from API
+    for (const { username, redisKey } of kickEntries) {
+      const redisSub = redisDataByKey.get(redisKey) as any;
+      const subscriptionId = redisSub?.subscriptionId;
+      const userId = redisSub?.userId;
+
+      if (subscriptionId) {
+        let verified = false;
+        let apiStatus = 'unknown';
+
+        if (userId) {
+          try {
+            const apiSubscriptions = await this.webhookSubscriptionService.getKickSubscriptions(userId);
+            const matchingSub = apiSubscriptions.find(
+              sub => sub.subscription_id === subscriptionId || sub.event === 'livestream.status.updated'
+            );
+            if (matchingSub) {
+              verified = true;
+              apiStatus = 'enabled';
+            } else if (apiSubscriptions.length > 0) {
+              apiStatus = 'different_id';
+            } else {
+              apiStatus = 'not_found';
             }
-
-            status.kick.push({
-              username,
-              subscriptionId,
-              status: apiStatus,
-              fromApi: verified,
-            });
+          } catch (error) {
+            apiStatus = 'api_error';
           }
         }
+
+        status.kick.push({
+          username,
+          subscriptionId,
+          status: apiStatus,
+          fromApi: verified,
+        });
       }
     }
 

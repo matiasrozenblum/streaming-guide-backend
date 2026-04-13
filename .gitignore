@@ -75,3 +75,6 @@ backend-firebase-key.json
 
 # Claude Code (local settings, not shared)
 .claude/settings.local.json
+
+# Active story context (operational, not code)
+STORY.md

@@ -372,8 +372,7 @@ describe('WeeklyOverridesService', () => {
       const result = await service.deleteWeeklyOverride(overrideId);
 
       expect(result).toBe(true);
-      expect(redisService.del).toHaveBeenCalledWith(`weekly_override:${overrideId}`);
-      expect(redisService.del).toHaveBeenCalledWith('schedules:week:complete');
+      expect(redisService.del).toHaveBeenCalledWith([`weekly_override:${overrideId}`, 'schedules:week:complete']);
     });
 
     it('should return false when override does not exist', async () => {
