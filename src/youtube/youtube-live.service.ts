@@ -198,8 +198,7 @@ export class YoutubeLiveService {
       await this.redisService.set(statusCacheKey, cacheData, cacheData.ttl);
 
       // Clear the "not-found" flag and attempt tracking since we found live streams
-      await this.redisService.del(notFoundKey);
-      await this.redisService.del(`notFoundAttempts:${handle}`);
+      await this.redisService.del([notFoundKey, `notFoundAttempts:${handle}`]);
       this.logger.debug(`📌 Cached ${handle} → ${videoId} (TTL ${blockTTL}s)`);
 
       // Notify clients about the new video ID

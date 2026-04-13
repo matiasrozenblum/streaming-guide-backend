@@ -10,25 +10,39 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ### Added
 
 ### Changed
+- `RedisService.del` now accepts `string | string[]` enabling batch key deletion in a single Redis round-trip
+- Replaced N+1 sequential `del()` calls with batched array calls in `ChannelsService`, `PanelistsService`, `WeeklyOverridesService`, and `YoutubeLiveService`
+- Replaced N+1 sequential `get()` calls with single `mget()` in `YoutubeController` SSE polling loop
+- Replaced N+1 sequential `get()` calls with single `mget()` in `StreamerLiveStatusService.getAllLiveStatuses`
+- Replaced N+1 sequential `get()` calls with single `mget()` in `StreamersService.getWebhookStatus`
+- Replaced per-banner sequential `save()` loop with single batch `save()` call in `BannersService.findAllActive`
 
 ### Removed
 
 ### Fixed
-- Channels with invisible overlapping schedules are no longer incorrectly skipped during YouTube live fetch. The current-program lookup now excludes invisible programs so a visible concurrent program is correctly used.
 
 ---
 
-## [1.24.7] - 2026-04-07
+## [1.24.9] - 2026-04-08
 
 ### Fixed
-- Per-program live stream selection when a channel has multiple simultaneous live streams. Previously both programs received the same `stream_url` (always `streams[0]`). Now each program independently picks the best-matching stream using title similarity scoring via `SimilarityUtil`.
+- Channels with invisible overlapping schedules are no longer incorrectly skipped during YouTube live fetch. The current-program lookup now excludes invisible programs so a visible concurrent program is correctly used.
 
----
+## [1.24.8] - 2026-04-08
 
-## [1.24.6] - 2026-03-28
+### Fixed
+- Per-program live stream selection when a channel has multiple simultaneous live streams. Both concurrent programs now independently pick the best-matching stream via title similarity scoring instead of both receiving the same cached primary stream URL.
+- Set TypeORM schema to `public` to fix `search_path` issue on Supabase staging.
+
+## [1.24.7] - 2026-03-28
 
 ### Changed
 - Replaced N+1 Redis GET calls with batched MGET in `getSubscriptionsForStreamer` and `renewExpiredKickSubscriptions`
+
+## [1.24.6] - 2026-03-24
+
+### Changed
+- Streamer live status optimization
 
 ## [1.24.5] - 2026-03-23
 
