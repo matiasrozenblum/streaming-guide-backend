@@ -185,15 +185,21 @@ describe('BannersService', () => {
       };
 
       mockRepository.find.mockResolvedValue([timedBanner, disabledFixedBanner]);
-      // Mock save to return the updated banner
-      mockRepository.save.mockImplementation((banner) => Promise.resolve({ ...banner, is_enabled: true }));
+      // Mock save to handle batch array call
+      mockRepository.save.mockImplementation((banners) =>
+        Array.isArray(banners)
+          ? Promise.resolve(banners.map(b => ({ ...b, is_enabled: true })))
+          : Promise.resolve({ ...banners, is_enabled: true })
+      );
 
       const result = await service.findAllActive();
 
       // Should have at least 2 banners
       expect(result.length).toBeGreaterThanOrEqual(2);
-      // Should have called save to enable the fixed banner
-      expect(mockRepository.save).toHaveBeenCalled();
+      // Should have called save once with array to enable the fixed banner
+      expect(mockRepository.save).toHaveBeenCalledWith(
+        expect.arrayContaining([expect.objectContaining({ id: 2, is_enabled: true })])
+      );
     });
 
     it('should not auto-enable more than 2 fixed banners', async () => {
@@ -235,7 +241,11 @@ describe('BannersService', () => {
       };
 
       mockRepository.find.mockResolvedValue([timedBanner, disabledFixed1, disabledFixed2, disabledFixed3]);
-      mockRepository.save.mockImplementation((banner) => Promise.resolve({ ...banner, is_enabled: true }));
+      mockRepository.save.mockImplementation((banners) =>
+        Array.isArray(banners)
+          ? Promise.resolve(banners.map(b => ({ ...b, is_enabled: true })))
+          : Promise.resolve({ ...banners, is_enabled: true })
+      );
 
       const result = await service.findAllActive();
 

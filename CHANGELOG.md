@@ -10,6 +10,12 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ### Added
 
 ### Changed
+- `RedisService.del` now accepts `string | string[]` enabling batch key deletion in a single Redis round-trip
+- Replaced N+1 sequential `del()` calls with batched array calls in `ChannelsService`, `PanelistsService`, `WeeklyOverridesService`, and `YoutubeLiveService`
+- Replaced N+1 sequential `get()` calls with single `mget()` in `YoutubeController` SSE polling loop
+- Replaced N+1 sequential `get()` calls with single `mget()` in `StreamerLiveStatusService.getAllLiveStatuses`
+- Replaced N+1 sequential `get()` calls with single `mget()` in `StreamersService.getWebhookStatus`
+- Replaced per-banner sequential `save()` loop with single batch `save()` call in `BannersService.findAllActive`
 
 ### Removed
 

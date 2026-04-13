@@ -140,8 +140,7 @@ describe('YoutubeLiveService', () => {
         streamCount: 1
       }), 100);
       // Should clear both not-found keys when video is found
-      expect(redisService.del).toHaveBeenCalledWith('videoIdNotFound:handle');
-      expect(redisService.del).toHaveBeenCalledWith('notFoundAttempts:handle');
+      expect(redisService.del).toHaveBeenCalledWith(['videoIdNotFound:handle', 'notFoundAttempts:handle']);
       expect(result).toBe('vid123');
     });
 
