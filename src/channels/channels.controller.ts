@@ -1,21 +1,51 @@
-import { Controller, Get, Post, Body, Param, Delete, Patch, UseGuards, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Delete,
+  Patch,
+  UseGuards,
+  Query,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ChannelsService } from './channels.service';
 import { CreateChannelDto } from './dto/create-channel.dto';
 import { UpdateChannelDto } from './dto/update-channel.dto';
 import { Channel } from './channels.entity';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiBody,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { SupabaseStorageService } from '../banners/supabase-storage.service';
 
-@ApiTags('channels')  // Etiqueta para los canales
+@ApiTags('channels') // Etiqueta para los canales
 @Controller('channels')
 export class ChannelsController {
-  constructor(private readonly channelsService: ChannelsService) {}
+  constructor(
+    private readonly channelsService: ChannelsService,
+    private readonly supabaseStorageService: SupabaseStorageService,
+  ) {}
 
   @Get()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Obtener todos los canales' })  // Descripción de la operación
-  @ApiResponse({ status: 200, description: 'Lista de canales', type: [Channel] })  // Respuesta esperada
+  @ApiOperation({ summary: 'Obtener todos los canales' }) // Descripción de la operación
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de canales',
+    type: [Channel],
+  }) // Respuesta esperada
   findAll(): Promise<Channel[]> {
     return this.channelsService.findAll();
   }
@@ -25,45 +55,77 @@ export class ChannelsController {
     @Query('day') day?: string,
     @Query('deviceId') deviceId?: string,
     @Query('live_status') liveStatus?: string,
-    @Query('raw') raw?: string
+    @Query('raw') raw?: string,
   ) {
-    const liveStatusBool = liveStatus === 'true' ? true : liveStatus === 'false' ? false : undefined;
-    return this.channelsService.getChannelsWithSchedules(day, deviceId, liveStatusBool, raw);
+    const liveStatusBool =
+      liveStatus === 'true' ? true : liveStatus === 'false' ? false : undefined;
+    return this.channelsService.getChannelsWithSchedules(
+      day,
+      deviceId,
+      liveStatusBool,
+      raw,
+    );
   }
 
   @Get('with-schedules/today')
-  @ApiOperation({ summary: 'Get today\'s schedules only (optimized for initial load)' })
-  @ApiResponse({ status: 200, description: 'Today\'s schedules for all channels' })
+  @ApiOperation({
+    summary: "Get today's schedules only (optimized for initial load)",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Today's schedules for all channels",
+  })
   async getTodaySchedules(
     @Query('deviceId') deviceId?: string,
     @Query('live_status') liveStatus?: string,
-    @Query('raw') raw?: string
+    @Query('raw') raw?: string,
   ) {
-    const liveStatusBool = liveStatus === 'true' ? true : liveStatus === 'false' ? false : undefined;
-    return this.channelsService.getTodaySchedules(deviceId, liveStatusBool, raw);
+    const liveStatusBool =
+      liveStatus === 'true' ? true : liveStatus === 'false' ? false : undefined;
+    return this.channelsService.getTodaySchedules(
+      deviceId,
+      liveStatusBool,
+      raw,
+    );
   }
 
   @Get('with-schedules/today/v2')
-  @ApiOperation({ summary: 'V2: Get today\'s schedules with batched Redis reads (fast)' })
-  @ApiResponse({ status: 200, description: 'Today\'s schedules with optimized live status' })
+  @ApiOperation({
+    summary: "V2: Get today's schedules with batched Redis reads (fast)",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Today's schedules with optimized live status",
+  })
   async getTodaySchedulesV2(
     @Query('deviceId') deviceId?: string,
     @Query('live_status') liveStatus?: string,
-    @Query('raw') raw?: string
+    @Query('raw') raw?: string,
   ) {
-    const liveStatusBool = liveStatus === 'true' ? true : liveStatus === 'false' ? false : undefined;
-    return this.channelsService.getTodaySchedulesV2(deviceId, liveStatusBool, raw);
+    const liveStatusBool =
+      liveStatus === 'true' ? true : liveStatus === 'false' ? false : undefined;
+    return this.channelsService.getTodaySchedulesV2(
+      deviceId,
+      liveStatusBool,
+      raw,
+    );
   }
 
   @Get('with-schedules/week')
-  @ApiOperation({ summary: 'Get full week schedules (optimized for background loading)' })
-  @ApiResponse({ status: 200, description: 'Full week schedules for all channels' })
+  @ApiOperation({
+    summary: 'Get full week schedules (optimized for background loading)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Full week schedules for all channels',
+  })
   async getWeekSchedules(
     @Query('deviceId') deviceId?: string,
     @Query('live_status') liveStatus?: string,
-    @Query('raw') raw?: string
+    @Query('raw') raw?: string,
   ) {
-    const liveStatusBool = liveStatus === 'true' ? true : liveStatus === 'false' ? false : undefined;
+    const liveStatusBool =
+      liveStatus === 'true' ? true : liveStatus === 'false' ? false : undefined;
     return this.channelsService.getWeekSchedules(deviceId, liveStatusBool, raw);
   }
 
@@ -74,6 +136,58 @@ export class ChannelsController {
   @ApiResponse({ status: 200, description: 'Canal encontrado', type: Channel })
   findOne(@Param('id') id: number): Promise<Channel> {
     return this.channelsService.findOne(id);
+  }
+
+  @Post('upload')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiBearerAuth()
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({
+    summary: 'Upload channel logo',
+    description:
+      'Uploads an image file to Supabase Storage (channel-logos bucket) and returns the public URL (admin only)',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Image uploaded successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        url: {
+          type: 'string',
+          description: 'Public URL of the uploaded image',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request (invalid file type or size)',
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  async uploadLogo(
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<{ url: string }> {
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+    const url = await this.supabaseStorageService.uploadImage(
+      file,
+      'channel-logos',
+    );
+    return { url };
   }
 
   @Post()
@@ -90,7 +204,10 @@ export class ChannelsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Actualizar un canal' })
   @ApiResponse({ status: 200, description: 'Canal actualizado', type: Channel })
-  update(@Param('id') id: number, @Body() updateChannelDto: UpdateChannelDto): Promise<Channel> {
+  update(
+    @Param('id') id: number,
+    @Body() updateChannelDto: UpdateChannelDto,
+  ): Promise<Channel> {
     return this.channelsService.update(id, updateChannelDto);
   }
 

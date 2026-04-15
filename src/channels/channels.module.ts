@@ -13,10 +13,18 @@ import { UserSubscription } from '../users/user-subscription.entity';
 import { Device } from '../users/device.entity';
 import { ConfigModule } from '../config/config.module';
 import { Category } from '../categories/categories.entity';
+import { SupabaseStorageService } from '../banners/supabase-storage.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Channel, Program, Schedule, UserSubscription, Device, Category]),
+    TypeOrmModule.forFeature([
+      Channel,
+      Program,
+      Schedule,
+      UserSubscription,
+      Device,
+      Category,
+    ]),
     forwardRef(() => YoutubeLiveModule),
     forwardRef(() => SchedulesModule),
     RedisModule,
@@ -24,6 +32,6 @@ import { Category } from '../categories/categories.entity';
     ConfigModule,
   ],
   controllers: [ChannelsController],
-  providers: [ChannelsService],
+  providers: [ChannelsService, SupabaseStorageService],
 })
 export class ChannelsModule {}
