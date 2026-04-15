@@ -632,17 +632,23 @@ export class YoutubeLiveService {
 
 
 
-      const currentProgram = schedules.find(s => {
+      const currentScheduleEntries = schedules.filter(s => {
         const chId = s.program?.channel?.youtube_channel_id;
         if (chId !== channelId) return false;
-        if (s.program?.is_visible === false) return false; // Skip invisible programs
         const startNum = this.convertTimeToMinutes(s.start_time);
         const endNum = this.convertTimeToMinutes(s.end_time);
         return currentTimeInMinutes >= startNum && currentTimeInMinutes < endNum;
       });
 
-      if (currentProgram?.program) {
-        currentProgramName = currentProgram.program.name; // Capture name for sorting logic
+      const visibleCurrentSchedule = currentScheduleEntries.find(s => s.program?.is_visible !== false);
+
+      if (currentScheduleEntries.length > 0 && !visibleCurrentSchedule) {
+        this.logger.debug(`🚫 Skipping ${handle} (${channelId}) - current program is not visible`);
+        return '__SKIPPED__';
+      }
+
+      if (visibleCurrentSchedule?.program) {
+        currentProgramName = visibleCurrentSchedule.program.name; // Capture name for sorting logic
       }
     } catch (visErr) {
       // Non-fatal: if visibility check fails, proceed as before

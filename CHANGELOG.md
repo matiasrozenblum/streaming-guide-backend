@@ -8,6 +8,17 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ## [Unreleased]
 
 ### Added
+- `POST /channels/upload` endpoint to upload channel logo images to Supabase Storage (`channel-logos` bucket), returning `{ url: string }` (admin only, mirrors `/streamers/upload`)
+
+### Changed
+
+### Removed
+
+### Fixed
+
+---
+
+## [1.24.10] - 2026-04-12
 
 ### Changed
 - `RedisService.del` now accepts `string | string[]` enabling batch key deletion in a single Redis round-trip
@@ -16,10 +27,6 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 - Replaced N+1 sequential `get()` calls with single `mget()` in `StreamerLiveStatusService.getAllLiveStatuses`
 - Replaced N+1 sequential `get()` calls with single `mget()` in `StreamersService.getWebhookStatus`
 - Replaced per-banner sequential `save()` loop with single batch `save()` call in `BannersService.findAllActive`
-
-### Removed
-
-### Fixed
 
 ---
 
