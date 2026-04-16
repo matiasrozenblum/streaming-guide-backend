@@ -5,6 +5,7 @@ import { CreateChannelDto } from './dto/create-channel.dto';
 import { UpdateChannelDto } from './dto/update-channel.dto';
 import { Channel } from './channels.entity';
 import { NotFoundException } from '@nestjs/common';
+import { SupabaseStorageService } from '../banners/supabase-storage.service';
 
 describe('ChannelsController', () => {
   let controller: ChannelsController;
@@ -34,7 +35,13 @@ describe('ChannelsController', () => {
     getChannelsWithSchedules: jest.fn().mockResolvedValue([]),
     getTodaySchedules: jest.fn().mockResolvedValue([]),
     getWeekSchedules: jest.fn().mockResolvedValue([]),
-    clearChannelCache: jest.fn().mockResolvedValue({ cleared: ['liveStatusByHandle', 'videoIdNotFound', 'notFoundAttempts'] }),
+    clearChannelCache: jest.fn().mockResolvedValue({
+      cleared: ['liveStatusByHandle', 'videoIdNotFound', 'notFoundAttempts'],
+    }),
+  };
+
+  const mockSupabaseStorageService = {
+    uploadImage: jest.fn().mockResolvedValue('https://supabase.test/channel-logos/file.png'),
   };
 
   beforeEach(async () => {
@@ -44,6 +51,10 @@ describe('ChannelsController', () => {
         {
           provide: ChannelsService,
           useValue: mockChannelsService,
+        },
+        {
+          provide: SupabaseStorageService,
+          useValue: mockSupabaseStorageService,
         },
       ],
     }).compile();
@@ -127,77 +138,133 @@ describe('ChannelsController', () => {
 
   describe('getChannelsWithSchedules', () => {
     it('should call service with correct parameters', async () => {
-      const result = await controller.getChannelsWithSchedules('monday', 'device123', 'true', 'false');
-      
+      const result = await controller.getChannelsWithSchedules(
+        'monday',
+        'device123',
+        'true',
+        'false',
+      );
+
       expect(result).toEqual([]);
-      expect(service.getChannelsWithSchedules).toHaveBeenCalledWith('monday', 'device123', true, 'false');
+      expect(service.getChannelsWithSchedules).toHaveBeenCalledWith(
+        'monday',
+        'device123',
+        true,
+        'false',
+      );
     });
 
     it('should handle undefined parameters', async () => {
       const result = await controller.getChannelsWithSchedules();
-      
+
       expect(result).toEqual([]);
-      expect(service.getChannelsWithSchedules).toHaveBeenCalledWith(undefined, undefined, undefined, undefined);
+      expect(service.getChannelsWithSchedules).toHaveBeenCalledWith(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      );
     });
 
     it('should handle partial parameters', async () => {
-      const result = await controller.getChannelsWithSchedules('tuesday', undefined, 'false');
-      
+      const result = await controller.getChannelsWithSchedules(
+        'tuesday',
+        undefined,
+        'false',
+      );
+
       expect(result).toEqual([]);
-      expect(service.getChannelsWithSchedules).toHaveBeenCalledWith('tuesday', undefined, false, undefined);
+      expect(service.getChannelsWithSchedules).toHaveBeenCalledWith(
+        'tuesday',
+        undefined,
+        false,
+        undefined,
+      );
     });
   });
 
   describe('getTodaySchedules', () => {
     it('should call getTodaySchedules service method', async () => {
-      const result = await controller.getTodaySchedules('device123', 'true', 'false');
-      
+      const result = await controller.getTodaySchedules(
+        'device123',
+        'true',
+        'false',
+      );
+
       expect(result).toEqual([]);
-      expect(service.getTodaySchedules).toHaveBeenCalledWith('device123', true, 'false');
+      expect(service.getTodaySchedules).toHaveBeenCalledWith(
+        'device123',
+        true,
+        'false',
+      );
     });
 
     it('should handle undefined parameters', async () => {
       const result = await controller.getTodaySchedules();
-      
+
       expect(result).toEqual([]);
-      expect(service.getTodaySchedules).toHaveBeenCalledWith(undefined, undefined, undefined);
+      expect(service.getTodaySchedules).toHaveBeenCalledWith(
+        undefined,
+        undefined,
+        undefined,
+      );
     });
 
     it('should handle partial parameters', async () => {
       const result = await controller.getTodaySchedules('device456', 'true');
-      
+
       expect(result).toEqual([]);
-      expect(service.getTodaySchedules).toHaveBeenCalledWith('device456', true, undefined);
+      expect(service.getTodaySchedules).toHaveBeenCalledWith(
+        'device456',
+        true,
+        undefined,
+      );
     });
   });
 
   describe('getWeekSchedules', () => {
     it('should call getWeekSchedules service method', async () => {
-      const result = await controller.getWeekSchedules('device123', 'true', 'false');
-      
+      const result = await controller.getWeekSchedules(
+        'device123',
+        'true',
+        'false',
+      );
+
       expect(result).toEqual([]);
-      expect(service.getWeekSchedules).toHaveBeenCalledWith('device123', true, 'false');
+      expect(service.getWeekSchedules).toHaveBeenCalledWith(
+        'device123',
+        true,
+        'false',
+      );
     });
 
     it('should handle undefined parameters', async () => {
       const result = await controller.getWeekSchedules();
-      
+
       expect(result).toEqual([]);
-      expect(service.getWeekSchedules).toHaveBeenCalledWith(undefined, undefined, undefined);
+      expect(service.getWeekSchedules).toHaveBeenCalledWith(
+        undefined,
+        undefined,
+        undefined,
+      );
     });
 
     it('should handle partial parameters', async () => {
       const result = await controller.getWeekSchedules('device789', 'false');
-      
+
       expect(result).toEqual([]);
-      expect(service.getWeekSchedules).toHaveBeenCalledWith('device789', false, undefined);
+      expect(service.getWeekSchedules).toHaveBeenCalledWith(
+        'device789',
+        false,
+        undefined,
+      );
     });
   });
 
   describe('clearCache', () => {
     it('should clear cache for a channel with handle', async () => {
       const result = await controller.clearCache(1);
-      
+
       expect(result).toEqual({
         message: 'Cache cleared successfully',
         cleared: ['liveStatusByHandle', 'videoIdNotFound', 'notFoundAttempts'],
@@ -208,19 +275,27 @@ describe('ChannelsController', () => {
 
     it('should throw error if channel does not have handle', async () => {
       const channelWithoutHandle = { ...mockChannel, handle: null };
-      jest.spyOn(service, 'findOne').mockResolvedValueOnce(channelWithoutHandle as any);
+      jest
+        .spyOn(service, 'findOne')
+        .mockResolvedValueOnce(channelWithoutHandle as any);
       jest.spyOn(service, 'clearChannelCache');
-      
-      await expect(controller.clearCache(1)).rejects.toThrow('Channel does not have a handle');
+
+      await expect(controller.clearCache(1)).rejects.toThrow(
+        'Channel does not have a handle',
+      );
       expect(service.findOne).toHaveBeenCalledWith(1);
       expect(service.clearChannelCache).not.toHaveBeenCalled();
     });
 
     it('should throw error if channel not found', async () => {
-      jest.spyOn(service, 'findOne').mockRejectedValueOnce(new NotFoundException('Channel not found'));
+      jest
+        .spyOn(service, 'findOne')
+        .mockRejectedValueOnce(new NotFoundException('Channel not found'));
       jest.spyOn(service, 'clearChannelCache');
-      
-      await expect(controller.clearCache(999)).rejects.toThrow('Channel not found');
+
+      await expect(controller.clearCache(999)).rejects.toThrow(
+        'Channel not found',
+      );
       expect(service.findOne).toHaveBeenCalledWith(999);
       expect(service.clearChannelCache).not.toHaveBeenCalled();
     });
