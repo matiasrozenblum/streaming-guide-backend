@@ -951,9 +951,9 @@ export class WeeklyOverridesService {
       });
       
       // Delete expired overrides
-      for (const key of expiredKeys) {
-        await this.redisService.del(key);
-        cleaned++;
+      if (expiredKeys.length > 0) {
+        await this.redisService.del(expiredKeys);
+        cleaned = expiredKeys.length;
       }
     }
 
@@ -977,18 +977,30 @@ export class WeeklyOverridesService {
     for await (const keyChunk of stream) {
       keys.push(...keyChunk);
     }
-    let deleted = 0;
-    for (const key of keys) {
-      const override = await this.redisService.get<WeeklyOverride>(key);
-      if (!override) continue;
-      if (
-        (override.programId && override.programId === programId) ||
-        (override.scheduleId && scheduleIds.includes(override.scheduleId))
-      ) {
-        await this.redisService.del(key);
-        deleted++;
-      }
+    const keysToDelete: string[] = [];
+    const BATCH_SIZE = 500;
+
+    // Batch retrieve keys to avoid N+1 Redis gets
+    for (let i = 0; i < keys.length; i += BATCH_SIZE) {
+      const batchKeys = keys.slice(i, i + BATCH_SIZE);
+      const batchValues = await this.redisService.mget<WeeklyOverride>(batchKeys);
+
+      batchValues.forEach((override, index) => {
+        if (!override) return;
+        if (
+          (override.programId && override.programId === programId) ||
+          (override.scheduleId && scheduleIds.includes(override.scheduleId))
+        ) {
+          keysToDelete.push(batchKeys[index]);
+        }
+      });
     }
+
+    if (keysToDelete.length > 0) {
+      // Batch delete to avoid N+1 Redis dels
+      await this.redisService.del(keysToDelete);
+    }
+    const deleted = keysToDelete.length;
     if (deleted > 0) {
       await this.redisService.del('schedules:week:complete');
       
