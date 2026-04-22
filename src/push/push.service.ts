@@ -330,16 +330,24 @@ export class PushService {
   }
 
   async sendNotificationToDevices(devices: Device[], payload: any): Promise<void> {
+    const pushTasks: Promise<void>[] = [];
+
     for (const device of devices) {
       if (device.pushSubscriptions && device.pushSubscriptions.length > 0) {
         for (const subscription of device.pushSubscriptions) {
-          try {
-            await this.sendNotification(subscription, payload);
-          } catch (error) {
-            console.error(`Failed to send push notification to device ${device.deviceId}:`, error);
-          }
+          pushTasks.push((async () => {
+            try {
+              await this.sendNotification(subscription, payload);
+            } catch (error) {
+              console.error(`Failed to send push notification to device ${device.deviceId}:`, error);
+            }
+          })());
         }
       }
+    }
+
+    if (pushTasks.length > 0) {
+      await Promise.allSettled(pushTasks);
     }
   }
 
