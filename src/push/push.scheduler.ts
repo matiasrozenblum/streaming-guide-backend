@@ -87,14 +87,29 @@ export class PushScheduler {
       return;
     }
 
-    // 5) Enviar notificaciones por programa + usuario
+    // Pre-fetch gating checks for all unique channel handles in parallel
+    const uniqueHandles = Array.from(new Set(dueSchedules.map(s => s.program.channel?.handle).filter(Boolean))) as string[];
+    const canFetchLiveMap = new Map<string, boolean>();
+
+    if (uniqueHandles.length > 0) {
+      const fetchResults = await Promise.all(
+        uniqueHandles.map(handle => this.configService.canFetchLive(handle))
+      );
+      uniqueHandles.forEach((handle, i) => {
+        canFetchLiveMap.set(handle, fetchResults[i]);
+      });
+    }
+
+    // 5) Enviar notificaciones por programa + usuario (with concurrency)
+    const pushTasks: Promise<void>[] = [];
+
     for (const schedule of dueSchedules) {
       const program = schedule.program;
       const title = program.name;
       const channelHandle = program.channel?.handle;
 
       // Gating: skip notifications if channel is not fetchable (holiday/flag)
-      if (channelHandle && !(await this.configService.canFetchLive(channelHandle))) {
+      if (channelHandle && canFetchLiveMap.has(channelHandle) && !canFetchLiveMap.get(channelHandle)) {
         this.logger.log(`⏸️ Notificaciones suspendidas para canal ${channelHandle} por holiday/flag`);
         continue;
       }
@@ -105,7 +120,7 @@ export class PushScheduler {
       for (const subscription of programSubscriptions) {
         const user = subscription.user;
 
-        // Send push notifications
+        // Log user devices
         this.logger.log(`📱 User ${user.email}: ${user.devices?.length || 0} devices found`);
         if (user.devices && user.devices.length > 0) {
           for (const device of user.devices) {
@@ -115,28 +130,36 @@ export class PushScheduler {
               for (const pushSub of device.pushSubscriptions) {
                 const isNative = !pushSub.p256dh && !pushSub.auth;
                 this.logger.log(`    🔔 Subscription type: ${isNative ? 'NATIVE/FCM' : 'WEB'}, endpoint prefix: ${pushSub.endpoint?.substring(0, 30)}...`);
-                try {
-                  const success = await this.pushService.sendNotification(pushSub, {
-                    title,
-                    options: {
-                      body: `¡En 10 minutos comienza ${title}!`,
-                      icon: '/img/logo-192x192.png',
-                    },
-                  });
 
-                  if (success) {
-                    this.logger.log(`✅ Push notification enviada a usuario ${user.email} (device: ${device.deviceId}) para "${title}"`);
-                  } else {
-                    this.logger.warn(`⚠️ No se pudo enviar push notification a usuario ${user.email} (device: ${device.deviceId})`);
+                // Add to parallel tasks
+                pushTasks.push((async () => {
+                  try {
+                    const success = await this.pushService.sendNotification(pushSub, {
+                      title,
+                      options: {
+                        body: `¡En 10 minutos comienza ${title}!`,
+                        icon: '/img/logo-192x192.png',
+                      },
+                    });
+
+                    if (success) {
+                      this.logger.log(`✅ Push notification enviada a usuario ${user.email} (device: ${device.deviceId}) para "${title}"`);
+                    } else {
+                      this.logger.warn(`⚠️ No se pudo enviar push notification a usuario ${user.email} (device: ${device.deviceId})`);
+                    }
+                  } catch (err) {
+                    this.logger.error(`❌ Falló push notification a usuario ${user.email} (device: ${device.deviceId})`, err as any);
                   }
-                } catch (err) {
-                  this.logger.error(`❌ Falló push notification a usuario ${user.email} (device: ${device.deviceId})`, err as any);
-                }
+                })());
               }
             }
           }
         }
       }
+    }
+
+    if (pushTasks.length > 0) {
+      await Promise.allSettled(pushTasks);
     }
   }
 }
