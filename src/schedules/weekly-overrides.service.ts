@@ -978,17 +978,35 @@ export class WeeklyOverridesService {
       keys.push(...keyChunk);
     }
     let deleted = 0;
-    for (const key of keys) {
-      const override = await this.redisService.get<WeeklyOverride>(key);
-      if (!override) continue;
-      if (
-        (override.programId && override.programId === programId) ||
-        (override.scheduleId && scheduleIds.includes(override.scheduleId))
-      ) {
-        await this.redisService.del(key);
-        deleted++;
+
+    // Process in batches to avoid maximum call stack size limits or Redis overload
+    const batchSize = 500;
+    const keysToDelete: string[] = [];
+
+    for (let i = 0; i < keys.length; i += batchSize) {
+      const batchKeys = keys.slice(i, i + batchSize);
+      if (batchKeys.length === 0) continue;
+
+      const overrides = await this.redisService.mget<WeeklyOverride>(batchKeys);
+
+      for (let j = 0; j < batchKeys.length; j++) {
+        const override = overrides[j];
+        if (!override) continue;
+
+        if (
+          (override.programId && override.programId === programId) ||
+          (override.scheduleId && scheduleIds.includes(override.scheduleId))
+        ) {
+          keysToDelete.push(batchKeys[j]);
+        }
       }
     }
+
+    if (keysToDelete.length > 0) {
+      await this.redisService.del(keysToDelete);
+      deleted = keysToDelete.length;
+    }
+
     if (deleted > 0) {
       await this.redisService.del('schedules:week:complete');
       
