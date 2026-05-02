@@ -5,4 +5,4 @@ import { YoutubeDiscoveryService } from './youtube-discovery.service';
   providers: [YoutubeDiscoveryService],
   exports: [YoutubeDiscoveryService],
 })
-export class YoutubeDiscoveryModule {} 
+export class YoutubeDiscoveryModule {}

@@ -1,9 +1,17 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindOneOptions, FindManyOptions, FindOptionsWhere } from 'typeorm';
+import {
+  Repository,
+  FindOneOptions,
+  FindManyOptions,
+  FindOptionsWhere,
+} from 'typeorm';
 import { Schedule } from './schedules.entity';
 import { Program } from '../programs/programs.entity';
-import { CreateScheduleDto, CreateBulkSchedulesDto } from './dto/create-schedule.dto';
+import {
+  CreateScheduleDto,
+  CreateBulkSchedulesDto,
+} from './dto/create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { YoutubeLiveService } from '../youtube/youtube-live.service';
 import { LiveStream } from '../youtube/interfaces/live-stream.interface';
@@ -19,7 +27,8 @@ import { ConfigService } from '../config/config.service';
 import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
 import { TimezoneUtil } from '../utils/timezone.util';
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
+const FRONTEND_URL =
+  process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
 const REVALIDATE_SECRET = process.env.REVALIDATE_SECRET || 'changeme';
 
 interface FindAllOptions {
@@ -59,29 +68,38 @@ export class SchedulesService {
     this.notifyUtil = new NotifyAndRevalidateUtil(
       this.redisService,
       FRONTEND_URL,
-      REVALIDATE_SECRET
+      REVALIDATE_SECRET,
     );
   }
 
   async findAll(options: FindAllOptions = {}): Promise<any[]> {
     const startTime = Date.now();
-    const { dayOfWeek, relations = ['program', 'program.channel', 'program.panelists'], select, skipCache = false, applyOverrides = true, liveStatus = false } = options;
+    const {
+      dayOfWeek,
+      relations = ['program', 'program.channel', 'program.panelists'],
+      select,
+      skipCache = false,
+      applyOverrides = true,
+      liveStatus = false,
+    } = options;
 
     // UNIFIED CACHE KEY: Always cache complete week data
     const cacheKey = 'schedules:week:complete';
     let schedules: Schedule[] | null = null;
-    
+
     // Try cache first (unless skipCache is true)
     if (!skipCache) {
       schedules = await this.redisService.get<Schedule[]>(cacheKey);
       if (schedules) {
-        this.logger.debug(`Cache HIT: ${schedules.length} schedules (${Date.now() - startTime}ms)`);
-        
+        this.logger.debug(
+          `Cache HIT: ${schedules.length} schedules (${Date.now() - startTime}ms)`,
+        );
+
         // Filter by day if requested (after cache hit)
         if (dayOfWeek) {
-          schedules = schedules.filter(s => s.day_of_week === dayOfWeek);
+          schedules = schedules.filter((s) => s.day_of_week === dayOfWeek);
         }
-        
+
         // Cache hit - proceed to process schedules (overrides + enrichment)
         return this.processSchedules(schedules, options, startTime);
       }
@@ -91,29 +109,29 @@ export class SchedulesService {
     this.logger.debug(`Cache MISS: ${cacheKey}`);
     const lockKey = `lock:${cacheKey}`;
     let lockAcquired = false;
-    
+
     if (!skipCache) {
       // Try to acquire lock (10 second TTL)
       lockAcquired = await this.redisService.setNX(lockKey, '1', 10);
-      
+
       if (!lockAcquired) {
         // Another request is fetching - wait and retry from cache
         this.logger.debug(`Lock held by another request, waiting for cache...`);
-        
+
         // Wait up to 8 seconds for the other request to populate cache
         for (let i = 0; i < 80; i++) {
-          await new Promise(r => setTimeout(r, 100));
+          await new Promise((r) => setTimeout(r, 100));
           schedules = await this.redisService.get<Schedule[]>(cacheKey);
           if (schedules) {
             // Filter by day if requested (after cache hit)
             if (dayOfWeek) {
-              schedules = schedules.filter(s => s.day_of_week === dayOfWeek);
+              schedules = schedules.filter((s) => s.day_of_week === dayOfWeek);
             }
-            
+
             return this.processSchedules(schedules, options, startTime);
           }
         }
-        
+
         // Timeout waiting for cache - log warning and proceed to fetch
         this.logger.warn(`Lock timeout after 8s, proceeding to fetch`);
       }
@@ -123,15 +141,15 @@ export class SchedulesService {
     try {
       // Always fetch complete week data (ignore dayOfWeek filter for DB query)
       schedules = await this.fetchSchedulesFromDatabase(undefined, relations); // No day filter
-      
+
       // Store complete week in unified cache
       await this.redisService.set(cacheKey, schedules, 1800);
-      
+
       // Filter by day if requested (after storing complete data)
       if (dayOfWeek) {
-        schedules = schedules.filter(s => s.day_of_week === dayOfWeek);
+        schedules = schedules.filter((s) => s.day_of_week === dayOfWeek);
       }
-      
+
       // Process and return
       return this.processSchedules(schedules, options, startTime);
     } finally {
@@ -146,9 +164,12 @@ export class SchedulesService {
    * Fetch schedules from database with all relations
    * Separated method to ensure data consistency
    */
-  private async fetchSchedulesFromDatabase(dayOfWeek?: string, relations?: string[]): Promise<Schedule[]> {
+  private async fetchSchedulesFromDatabase(
+    dayOfWeek?: string,
+    relations?: string[],
+  ): Promise<Schedule[]> {
     const dbStart = Date.now();
-    
+
     // Optimized query structure - selective panelists join to prevent data explosion
     // CRITICAL: This preserves ALL data - channel, program, panelists, categories
     const queryBuilder = this.schedulesRepository
@@ -160,17 +181,20 @@ export class SchedulesService {
       .addSelect(['panelists.id', 'panelists.name']) // Only select id and name to prevent data explosion
       .orderBy('schedule.start_time', 'ASC')
       .addOrderBy('panelists.id', 'ASC');
-    
+
     if (dayOfWeek) {
       queryBuilder.where('schedule.day_of_week = :dayOfWeek', { dayOfWeek });
     }
-    
+
     const schedules = await queryBuilder.getMany();
     const dbQueryTime = Date.now() - dbStart;
-    this.logger.debug(`DB query: ${schedules.length} schedules (${dbQueryTime}ms)`);
-    
+    this.logger.debug(
+      `DB query: ${schedules.length} schedules (${dbQueryTime}ms)`,
+    );
+
     // Alert on slow database queries
-    if (dbQueryTime > 3000) { // 3 seconds
+    if (dbQueryTime > 3000) {
+      // 3 seconds
       this.sentryService.captureMessage(
         `Slow database query in schedules service - ${dbQueryTime}ms`,
         'warning',
@@ -180,13 +204,13 @@ export class SchedulesService {
           query_time: dbQueryTime,
           day_of_week: dayOfWeek,
           timestamp: new Date().toISOString(),
-        }
+        },
       );
-      
+
       this.sentryService.setTag('service', 'schedules');
       this.sentryService.setTag('error_type', 'slow_database_query');
     }
-    
+
     // Original sorting logic
     schedules.sort((a, b) => {
       const aOrder = a.program?.channel?.order ?? 999;
@@ -194,7 +218,7 @@ export class SchedulesService {
       if (aOrder !== bOrder) return aOrder - bOrder;
       return a.start_time.localeCompare(b.start_time);
     });
-    
+
     return schedules;
   }
 
@@ -202,27 +226,37 @@ export class SchedulesService {
    * Process schedules: apply overrides and enrich with live status
    * Ensures consistent data processing regardless of cache hit/miss
    */
-  private async processSchedules(schedules: Schedule[], options: FindAllOptions, startTime: number): Promise<any[]> {
+  private async processSchedules(
+    schedules: Schedule[],
+    options: FindAllOptions,
+    startTime: number,
+  ): Promise<any[]> {
     // Apply weekly overrides for current week (unless raw=true)
     if (options.applyOverrides) {
-      const currentWeekStart = this.weeklyOverridesService.getWeekStartDate('current');
-      schedules = await this.weeklyOverridesService.applyWeeklyOverrides(schedules, currentWeekStart);
-      
+      const currentWeekStart =
+        this.weeklyOverridesService.getWeekStartDate('current');
+      schedules = await this.weeklyOverridesService.applyWeeklyOverrides(
+        schedules,
+        currentWeekStart,
+      );
+
       // Re-filter by day_of_week after applying overrides
       // This is necessary because applyWeeklyOverrides adds ALL create overrides regardless of day
       if (options.dayOfWeek) {
-        schedules = schedules.filter(s => s.day_of_week === options.dayOfWeek);
+        schedules = schedules.filter(
+          (s) => s.day_of_week === options.dayOfWeek,
+        );
       }
     }
 
     // Enrich with live status if requested
-    const enriched = await this.enrichSchedules(schedules, options.liveStatus || false);
+    const enriched = await this.enrichSchedules(
+      schedules,
+      options.liveStatus || false,
+    );
     this.logger.debug(`Completed in ${Date.now() - startTime}ms`);
     return enriched;
   }
-
-
-
 
   /**
    * Warm unified cache after invalidation to prevent thundering herd
@@ -231,14 +265,14 @@ export class SchedulesService {
    */
   async warmSchedulesCache(): Promise<void> {
     const warmStart = Date.now();
-    
+
     try {
       // Warm unified cache (complete week data)
       // This single call populates the cache for ALL services (users, background jobs, YouTube service)
-      await this.findAll({ 
-        skipCache: true, 
-        liveStatus: false, 
-        applyOverrides: true 
+      await this.findAll({
+        skipCache: true,
+        liveStatus: false,
+        applyOverrides: true,
       });
       this.logger.debug(`Cache warmed (${Date.now() - warmStart}ms)`);
     } catch (error) {
@@ -263,7 +297,10 @@ export class SchedulesService {
     }, SchedulesService.WARM_CACHE_DEBOUNCE_MS);
   }
 
-  async enrichSchedules(schedules: Schedule[], liveStatus: boolean = false): Promise<any[]> {
+  async enrichSchedules(
+    schedules: Schedule[],
+    liveStatus: boolean = false,
+  ): Promise<any[]> {
     const now = TimezoneUtil.now();
     const currentNum = TimezoneUtil.currentTimeInMinutes();
     const currentDay = TimezoneUtil.currentDayOfWeek();
@@ -286,30 +323,34 @@ export class SchedulesService {
     // Live status will be handled by OptimizedSchedulesService using cached data
     let batchStreamsResults = new Map<string, any>();
     if (liveStatus && channelGroups.size > 0) {
-      
       // Trigger async background fetch for live status (non-blocking)
       const liveChannelIds: string[] = [];
       for (const [channelId, channelSchedules] of channelGroups) {
-        const liveSchedules = channelSchedules.filter(schedule => {
+        const liveSchedules = channelSchedules.filter((schedule) => {
           const startNum = this.convertTimeToNumber(schedule.start_time);
           const endNum = this.convertTimeToNumber(schedule.end_time);
-          return schedule.day_of_week === currentDay &&
-                 currentNum >= startNum &&
-                 currentNum < endNum;
+          return (
+            schedule.day_of_week === currentDay &&
+            currentNum >= startNum &&
+            currentNum < endNum
+          );
         });
-        
+
         if (liveSchedules.length > 0) {
           liveChannelIds.push(channelId);
         }
       }
-      
+
       if (liveChannelIds.length > 0) {
         // Trigger async background fetch (non-blocking)
         setImmediate(async () => {
           try {
             // Background live status will be handled by OptimizedSchedulesService
           } catch (error) {
-            this.logger.error('Error in async live status fetch', error.message);
+            this.logger.error(
+              'Error in async live status fetch',
+              error.message,
+            );
           }
         });
       }
@@ -322,13 +363,15 @@ export class SchedulesService {
         currentDay,
         currentNum,
         liveStatus,
-        batchStreamsResults.get(channelId)
+        batchStreamsResults.get(channelId),
       );
       enriched.push(...enrichedChannelSchedules);
     }
 
     // Add schedules without channels (no grouping needed)
-    const schedulesWithoutChannels = schedules.filter(s => !s.program.channel?.youtube_channel_id);
+    const schedulesWithoutChannels = schedules.filter(
+      (s) => !s.program.channel?.youtube_channel_id,
+    );
     for (const schedule of schedulesWithoutChannels) {
       const { program } = schedule;
       const startNum = this.convertTimeToNumber(schedule.start_time);
@@ -338,13 +381,14 @@ export class SchedulesService {
       let streamUrl = program.stream_url || program.youtube_url;
 
       // Only set isLive if liveStatus is enabled
-      if (liveStatus && (
+      if (
+        liveStatus &&
         schedule.day_of_week === currentDay &&
         currentNum >= startNum &&
         currentNum < endNum &&
-        program.name && 
+        program.name &&
         program.name.trim() !== ''
-      )) {
+      ) {
         isLive = true;
       }
 
@@ -369,33 +413,44 @@ export class SchedulesService {
     currentDay: string,
     currentNum: number,
     liveStatus: boolean,
-    batchStreamsResult?: any
+    batchStreamsResult?: any,
   ): Promise<any[]> {
     const enriched: any[] = [];
-    
+
     // Get channel info from first schedule
     const channel = schedules[0].program.channel;
     const channelId = channel?.youtube_channel_id;
     const handle = channel?.handle;
-    
+
     if (!channelId || !handle) {
       // No channel info, process individually
       for (const schedule of schedules) {
-        enriched.push(await this.enrichScheduleIndividually(schedule, currentDay, currentNum, liveStatus));
+        enriched.push(
+          await this.enrichScheduleIndividually(
+            schedule,
+            currentDay,
+            currentNum,
+            liveStatus,
+          ),
+        );
       }
       return enriched;
     }
 
     // Find live schedules for this channel (only if liveStatus is enabled)
-    const liveSchedules = liveStatus ? schedules.filter(schedule => {
-      const startNum = this.convertTimeToNumber(schedule.start_time);
-      const endNum = this.convertTimeToNumber(schedule.end_time);
-      return schedule.day_of_week === currentDay &&
-             currentNum >= startNum &&
-             currentNum < endNum &&
-             schedule.program.name && 
-             schedule.program.name.trim() !== '';
-    }) : [];
+    const liveSchedules = liveStatus
+      ? schedules.filter((schedule) => {
+          const startNum = this.convertTimeToNumber(schedule.start_time);
+          const endNum = this.convertTimeToNumber(schedule.end_time);
+          return (
+            schedule.day_of_week === currentDay &&
+            currentNum >= startNum &&
+            currentNum < endNum &&
+            schedule.program.name &&
+            schedule.program.name.trim() !== ''
+          );
+        })
+      : [];
 
     let allStreams: any[] = [];
     let channelStreamCount = 0;
@@ -403,20 +458,36 @@ export class SchedulesService {
     // Use batch results or fetch streams individually if needed
     if (liveSchedules.length > 0 && liveStatus) {
       const canFetch = await this.configService.canFetchLive(handle);
-      
+
       if (canFetch) {
         // Use batch results if available
-        if (batchStreamsResult && batchStreamsResult !== '__SKIPPED__' && batchStreamsResult.streams) {
+        if (
+          batchStreamsResult &&
+          batchStreamsResult !== '__SKIPPED__' &&
+          batchStreamsResult.streams
+        ) {
           allStreams = batchStreamsResult.streams;
           channelStreamCount = batchStreamsResult.streamCount;
-          this.logger.debug(`Using batch results: ${handle} (${allStreams.length} streams)`);
-          
+          this.logger.debug(
+            `Using batch results: ${handle} (${allStreams.length} streams)`,
+          );
+
           // Unified cache - write LiveStatusCache (replaces liveStreamsByChannel)
           const statusCacheKey = `liveStatusByHandle:${handle}`;
-          const ttl = await getCurrentBlockTTL(channelId, schedules, this.sentryService);
+          const ttl = await getCurrentBlockTTL(
+            channelId,
+            schedules,
+            this.sentryService,
+          );
           // Import dynamically to avoid circular dependency
-          const { createLiveStatusCacheFromStreams } = await import('../youtube/interfaces/live-status-cache.interface');
-          const cacheData = createLiveStatusCacheFromStreams(channelId, handle, batchStreamsResult, ttl);
+          const { createLiveStatusCacheFromStreams } =
+            await import('../youtube/interfaces/live-status-cache.interface');
+          const cacheData = createLiveStatusCacheFromStreams(
+            channelId,
+            handle,
+            batchStreamsResult,
+            ttl,
+          );
           // Use cacheData.ttl to ensure Redis TTL matches the cache object's TTL field
           await this.redisService.set(statusCacheKey, cacheData, cacheData.ttl);
         } else {
@@ -424,29 +495,38 @@ export class SchedulesService {
           // Unified cache - read from liveStatusByHandle (replaces liveStreamsByChannel)
           const statusCacheKey = `liveStatusByHandle:${handle}`;
           const cachedStatus = await this.redisService.get<any>(statusCacheKey);
-          
+
           if (cachedStatus) {
             try {
               // Support both old format (LiveStreamsResult) and new format (LiveStatusCache)
               if (cachedStatus.streams && cachedStatus.streams.length > 0) {
                 allStreams = cachedStatus.streams;
-                channelStreamCount = cachedStatus.streamCount || cachedStatus.streams.length;
+                channelStreamCount =
+                  cachedStatus.streamCount || cachedStatus.streams.length;
               }
             } catch (error) {
-              this.logger.warn(`Failed to parse cached status for ${handle}:`, error);
+              this.logger.warn(
+                `Failed to parse cached status for ${handle}:`,
+                error,
+              );
             }
           }
 
           // Fetch on-demand if no cached streams
           if (allStreams.length === 0) {
-            const ttl = await getCurrentBlockTTL(channelId, schedules, this.sentryService);
-            
-            const streamsResult = await this.youtubeLiveService.getLiveStreamsMain(
+            const ttl = await getCurrentBlockTTL(
               channelId,
-              handle,
-              ttl
+              schedules,
+              this.sentryService,
             );
-            
+
+            const streamsResult =
+              await this.youtubeLiveService.getLiveStreamsMain(
+                channelId,
+                handle,
+                ttl,
+              );
+
             if (streamsResult && streamsResult !== '__SKIPPED__') {
               allStreams = streamsResult.streams;
               channelStreamCount = streamsResult.streamCount;
@@ -463,16 +543,19 @@ export class SchedulesService {
 
     // Distribute streams to live schedules using title matching
     const usedStreams = new Set<string>();
-    
+
     for (const schedule of schedules) {
       const isLive = liveSchedules.includes(schedule);
       let assignedStream: any = null;
-      let streamUrl = schedule.program.stream_url || schedule.program.youtube_url;
+      let streamUrl =
+        schedule.program.stream_url || schedule.program.youtube_url;
 
       if (isLive) {
         if (allStreams.length > 0) {
-          const availableStreams = allStreams.filter(s => !usedStreams.has(s.videoId));
-          
+          const availableStreams = allStreams.filter(
+            (s) => !usedStreams.has(s.videoId),
+          );
+
           // Skip title matching if there's only one live program and one stream
           if (liveSchedules.length === 1 && availableStreams.length === 1) {
             assignedStream = availableStreams[0];
@@ -482,9 +565,9 @@ export class SchedulesService {
             // Find best matching stream for this program when multiple options exist
             assignedStream = this.findBestMatchingStream(
               schedule.program.name,
-              availableStreams
+              availableStreams,
             );
-            
+
             if (assignedStream) {
               usedStreams.add(assignedStream.videoId);
               streamUrl = `https://www.youtube.com/embed/${assignedStream.videoId}?autoplay=1`;
@@ -496,12 +579,13 @@ export class SchedulesService {
             schedule,
             currentDay,
             currentNum,
-            liveStatus
+            liveStatus,
           );
-          
+
           if (individualEnriched.program.stream_url !== streamUrl) {
             streamUrl = individualEnriched.program.stream_url;
-            assignedStream = individualEnriched.program.live_streams?.[0] || null;
+            assignedStream =
+              individualEnriched.program.live_streams?.[0] || null;
           }
         }
       }
@@ -525,7 +609,7 @@ export class SchedulesService {
     schedule: Schedule,
     currentDay: string,
     currentNum: number,
-    liveStatus: boolean
+    liveStatus: boolean,
   ): Promise<any> {
     const { program } = schedule;
     const channel = program.channel;
@@ -552,26 +636,38 @@ export class SchedulesService {
         try {
           const canFetch = await this.configService.canFetchLive(handle);
           if (canFetch) {
-        // Try to get multiple streams first
-        const liveStreams = await this.youtubeLiveService.getLiveStreamsMain(
-          channelId,
-          handle,
-          100 // Default TTL
-        );
-        
-        
-        if (liveStreams && typeof liveStreams === 'object' && 'streams' in liveStreams && liveStreams.streams.length > 0) {
-          // Use the first stream for individual enrichment
-          const firstStream = liveStreams.streams[0];
-          streamUrl = `https://www.youtube.com/embed/${firstStream.videoId}?autoplay=1`;
-        } else {
-              // Fallback to getLiveStreams method (same as bulk enrichment)
-              const streamsResult = await this.youtubeLiveService.getLiveStreamsMain(
+            // Try to get multiple streams first
+            const liveStreams =
+              await this.youtubeLiveService.getLiveStreamsMain(
                 channelId,
                 handle,
-                100 // Default TTL
+                100, // Default TTL
               );
-              if (streamsResult && streamsResult !== '__SKIPPED__' && typeof streamsResult === 'object' && 'streams' in streamsResult && streamsResult.streams.length > 0) {
+
+            if (
+              liveStreams &&
+              typeof liveStreams === 'object' &&
+              'streams' in liveStreams &&
+              liveStreams.streams.length > 0
+            ) {
+              // Use the first stream for individual enrichment
+              const firstStream = liveStreams.streams[0];
+              streamUrl = `https://www.youtube.com/embed/${firstStream.videoId}?autoplay=1`;
+            } else {
+              // Fallback to getLiveStreams method (same as bulk enrichment)
+              const streamsResult =
+                await this.youtubeLiveService.getLiveStreamsMain(
+                  channelId,
+                  handle,
+                  100, // Default TTL
+                );
+              if (
+                streamsResult &&
+                streamsResult !== '__SKIPPED__' &&
+                typeof streamsResult === 'object' &&
+                'streams' in streamsResult &&
+                streamsResult.streams.length > 0
+              ) {
                 const firstStream = streamsResult.streams[0];
                 streamUrl = `https://www.youtube.com/embed/${firstStream.videoId}?autoplay=1`;
                 assignedStream = firstStream;
@@ -595,18 +691,21 @@ export class SchedulesService {
         panelists: program.panelists || [], // Preserve panelists data
       },
     };
-    
+
     return result;
   }
 
-  private findBestMatchingStream(programName: string, availableStreams: any[]): any | null {
+  private findBestMatchingStream(
+    programName: string,
+    availableStreams: any[],
+  ): any | null {
     if (availableStreams.length === 0) return null;
-    
+
     // Simple title similarity matching (Jaccard similarity)
     const calculateSimilarity = (str1: string, str2: string): number => {
       const words1 = new Set(str1.toLowerCase().split(/\s+/));
       const words2 = new Set(str2.toLowerCase().split(/\s+/));
-      const intersection = new Set([...words1].filter(x => words2.has(x)));
+      const intersection = new Set([...words1].filter((x) => words2.has(x)));
       const union = new Set([...words1, ...words2]);
       return intersection.size / union.size;
     };
@@ -636,7 +735,10 @@ export class SchedulesService {
     return h * 60 + m;
   }
 
-  async findOne(id: string | number, options: { relations?: string[]; select?: string[] } = {}): Promise<Schedule> {
+  async findOne(
+    id: string | number,
+    options: { relations?: string[]; select?: string[] } = {},
+  ): Promise<Schedule> {
     const cacheKey = `schedules:${id}`;
     const cached = await this.redisService.get<Schedule>(cacheKey);
     if (cached) return cached;
@@ -646,7 +748,8 @@ export class SchedulesService {
       relations: options.relations,
     };
     const schedule = await this.schedulesRepository.findOne(findOptions);
-    if (!schedule) throw new NotFoundException(`Schedule with ID ${id} not found`);
+    if (!schedule)
+      throw new NotFoundException(`Schedule with ID ${id} not found`);
 
     await this.redisService.set(cacheKey, schedule, 1800);
     return schedule;
@@ -672,7 +775,7 @@ export class SchedulesService {
   /**
    * Find schedules by channel handle, optionally filtered by day
    * Includes weekly overrides and live status enrichment
-   * 
+   *
    * @param channelHandle The channel handle (e.g., 'luzutv')
    * @param dayOfWeek Optional day filter (e.g., 'friday')
    * @param options Optional configuration (liveStatus, applyOverrides, etc.)
@@ -680,10 +783,10 @@ export class SchedulesService {
   async findByChannel(
     channelHandle: string,
     dayOfWeek?: string,
-    options: { liveStatus?: boolean; applyOverrides?: boolean } = {}
+    options: { liveStatus?: boolean; applyOverrides?: boolean } = {},
   ): Promise<any[]> {
     const { liveStatus = false, applyOverrides = true } = options;
-    
+
     // Get all schedules and filter by channel handle
     // Use findAll to leverage caching and weekly overrides
     const allSchedules = await this.findAll({
@@ -694,7 +797,7 @@ export class SchedulesService {
 
     // Filter by channel handle
     const channelSchedules = allSchedules.filter(
-      schedule => schedule.program?.channel?.handle === channelHandle
+      (schedule) => schedule.program?.channel?.handle === channelHandle,
     );
 
     return channelSchedules;
@@ -702,7 +805,7 @@ export class SchedulesService {
 
   /**
    * Find schedules by program name
-   * 
+   *
    * @param programName The program name (e.g., 'Patria y Familia')
    * @param dayOfWeek Optional day filter
    * @param options Optional configuration (liveStatus, applyOverrides, etc.)
@@ -710,10 +813,10 @@ export class SchedulesService {
   async findByProgramName(
     programName: string,
     dayOfWeek?: string,
-    options: { liveStatus?: boolean; applyOverrides?: boolean } = {}
+    options: { liveStatus?: boolean; applyOverrides?: boolean } = {},
   ): Promise<any[]> {
     const { liveStatus = false, applyOverrides = true } = options;
-    
+
     // Get all schedules
     const allSchedules = await this.findAll({
       dayOfWeek,
@@ -722,17 +825,19 @@ export class SchedulesService {
     });
 
     // Filter by program name (case-insensitive partial match)
-    const programSchedules = allSchedules.filter(
-      schedule => 
-        schedule.program?.name?.toLowerCase().includes(programName.toLowerCase())
+    const programSchedules = allSchedules.filter((schedule) =>
+      schedule.program?.name?.toLowerCase().includes(programName.toLowerCase()),
     );
 
     return programSchedules;
   }
 
   async create(dto: CreateScheduleDto): Promise<Schedule> {
-    const program = await this.programsRepository.findOne({ where: { id: +dto.programId } });
-    if (!program) throw new NotFoundException(`Program with ID ${dto.programId} not found`);
+    const program = await this.programsRepository.findOne({
+      where: { id: +dto.programId },
+    });
+    if (!program)
+      throw new NotFoundException(`Program with ID ${dto.programId} not found`);
     const schedule = this.schedulesRepository.create({
       day_of_week: dto.dayOfWeek,
       start_time: dto.startTime,
@@ -740,10 +845,10 @@ export class SchedulesService {
       program,
     });
     const saved = await this.schedulesRepository.save(schedule);
-    
+
     // Clear unified cache
     await this.redisService.del('schedules:week:complete');
-    
+
     // Warm cache asynchronously (non-blocking)
     this.debouncedWarmSchedulesCache();
 
@@ -765,10 +870,10 @@ export class SchedulesService {
     if (dto.startTime) schedule.start_time = dto.startTime;
     if (dto.endTime) schedule.end_time = dto.endTime;
     const updated = await this.schedulesRepository.save(schedule);
-    
+
     // Clear unified cache
     await this.redisService.del('schedules:week:complete');
-    
+
     // Warm cache asynchronously (non-blocking)
     this.debouncedWarmSchedulesCache();
 
@@ -790,10 +895,10 @@ export class SchedulesService {
     if ((result?.affected ?? 0) > 0) {
       // Clear cache
       await this.redisService.delByPattern('schedules:all:*');
-      
+
       // Warm cache asynchronously (non-blocking)
       this.debouncedWarmSchedulesCache();
-      
+
       // Notify and revalidate
       await this.notifyUtil.notifyAndRevalidate({
         eventType: 'schedule_deleted',
@@ -816,13 +921,18 @@ export class SchedulesService {
       where: { program: { id: programId } },
       relations: ['program'],
     });
-    const scheduleIds = schedules.map(s => s.id);
+    const scheduleIds = schedules.map((s) => s.id);
 
     // Delete related weekly overrides first
     try {
-      await this.weeklyOverridesService.deleteOverridesForProgram(programId, scheduleIds);
+      await this.weeklyOverridesService.deleteOverridesForProgram(
+        programId,
+        scheduleIds,
+      );
     } catch (error) {
-      this.logger.warn(`Failed deleting weekly overrides for program ${programId}: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.warn(
+        `Failed deleting weekly overrides for program ${programId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
 
     // Delete schedules
@@ -857,23 +967,27 @@ export class SchedulesService {
   }
 
   async createBulk(dto: CreateBulkSchedulesDto): Promise<Schedule[]> {
-    const program = await this.programsRepository.findOne({ where: { id: +dto.programId } });
+    const program = await this.programsRepository.findOne({
+      where: { id: +dto.programId },
+    });
     if (!program) {
       throw new NotFoundException(`Program with ID ${dto.programId} not found`);
     }
 
-    const schedules = dto.schedules.map(scheduleDto => this.schedulesRepository.create({
-      day_of_week: scheduleDto.dayOfWeek,
-      start_time: scheduleDto.startTime,
-      end_time: scheduleDto.endTime,
-      program,
-    }));
+    const schedules = dto.schedules.map((scheduleDto) =>
+      this.schedulesRepository.create({
+        day_of_week: scheduleDto.dayOfWeek,
+        start_time: scheduleDto.startTime,
+        end_time: scheduleDto.endTime,
+        program,
+      }),
+    );
 
     const savedSchedules = await this.schedulesRepository.save(schedules);
-    
+
     // Clear unified cache
     await this.redisService.del('schedules:week:complete');
-    
+
     // Warm cache asynchronously (non-blocking)
     this.debouncedWarmSchedulesCache();
 
@@ -894,7 +1008,10 @@ export class SchedulesService {
    * Used for program start detection to validate cached video IDs
    * OPTIMIZED: Uses cached schedules instead of database query
    */
-  async findByStartTime(dayOfWeek: string, startTime: string): Promise<Schedule[]> {
+  async findByStartTime(
+    dayOfWeek: string,
+    startTime: string,
+  ): Promise<Schedule[]> {
     try {
       // Use cached schedules instead of database query
       const allSchedules = await this.findAll({
@@ -902,16 +1019,23 @@ export class SchedulesService {
         applyOverrides: true,
         liveStatus: false,
       });
-      
+
       // Filter by start time
-      const matchingSchedules = allSchedules.filter(schedule => 
-        schedule.start_time === startTime || schedule.start_time.startsWith(startTime)
+      const matchingSchedules = allSchedules.filter(
+        (schedule) =>
+          schedule.start_time === startTime ||
+          schedule.start_time.startsWith(startTime),
       );
 
-      this.logger.debug(`Found ${matchingSchedules.length} programs at ${startTime} on ${dayOfWeek}`);
+      this.logger.debug(
+        `Found ${matchingSchedules.length} programs at ${startTime} on ${dayOfWeek}`,
+      );
       return matchingSchedules;
     } catch (error) {
-      this.logger.error(`Error finding schedules for ${dayOfWeek} at ${startTime}:`, error);
+      this.logger.error(
+        `Error finding schedules for ${dayOfWeek} at ${startTime}:`,
+        error,
+      );
       this.sentryService.captureException(error);
       return [];
     }

@@ -17,12 +17,23 @@ import { AdminSubscriptionController } from './admin-subscription.controller';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Device, UserSubscription, UserStreamerSubscription, Program]),
+    TypeOrmModule.forFeature([
+      User,
+      Device,
+      UserSubscription,
+      UserStreamerSubscription,
+      Program,
+    ]),
     forwardRef(() => AuthModule),
     PushModule,
   ],
-  controllers: [UsersController, SubscriptionController, DeviceController, AdminSubscriptionController],
+  controllers: [
+    UsersController,
+    SubscriptionController,
+    DeviceController,
+    AdminSubscriptionController,
+  ],
   providers: [UsersService, DeviceService, SubscriptionService],
   exports: [UsersService, DeviceService, SubscriptionService],
 })
-export class UsersModule { }
+export class UsersModule {}

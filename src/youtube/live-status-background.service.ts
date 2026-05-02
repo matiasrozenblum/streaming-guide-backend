@@ -51,7 +51,7 @@ export class LiveStatusBackgroundService {
     private readonly sentryService: SentryService,
     @InjectRepository(Channel)
     private readonly channelsRepository: Repository<Channel>,
-  ) { }
+  ) {}
 
   /**
    * Background job that runs every 2 minutes to pre-fetch live status
@@ -65,14 +65,22 @@ export class LiveStatusBackgroundService {
     const lockKey = 'cron:live-status-background:lock';
     const lockTTL = 90; // 90 seconds (less than 2-minute cron interval)
 
-    const acquired = await this.redisService.setNX(lockKey, { timestamp: Date.now() }, lockTTL);
+    const acquired = await this.redisService.setNX(
+      lockKey,
+      { timestamp: Date.now() },
+      lockTTL,
+    );
 
     if (!acquired) {
-      this.logger.log('⏸️  Skipping background update - another replica is already running');
+      this.logger.log(
+        '⏸️  Skipping background update - another replica is already running',
+      );
       return;
     }
 
-    this.logger.log('🔄 Starting background live status update (lock acquired)');
+    this.logger.log(
+      '🔄 Starting background live status update (lock acquired)',
+    );
 
     try {
       const currentDay = TimezoneUtil.currentDayOfWeek();
@@ -87,7 +95,10 @@ export class LiveStatusBackgroundService {
       });
 
       const channelsToUpdate: string[] = [];
-      const liveChannels = new Map<string, { channelId: string; handle: string }>();
+      const liveChannels = new Map<
+        string,
+        { channelId: string; handle: string }
+      >();
 
       // Find channels with programs running right now (including special programs)
       for (const schedule of allSchedules) {
@@ -108,7 +119,9 @@ export class LiveStatusBackgroundService {
 
       // Check which channels need cache updates
       for (const [channelId, channelInfo] of liveChannels) {
-        this.logger.debug(`[LIVE-STATUS-BG] Checking cache for channel ${channelInfo.handle} (${channelId})`);
+        this.logger.debug(
+          `[LIVE-STATUS-BG] Checking cache for channel ${channelInfo.handle} (${channelId})`,
+        );
         const cached = await this.getCachedLiveStatus(channelInfo.handle);
 
         if (!cached) {
@@ -117,8 +130,9 @@ export class LiveStatusBackgroundService {
         }
 
         // Find current program name for this channel
-        const currentSchedule = allSchedules.find(schedule => {
-          const scheduleChannelId = schedule.program?.channel?.youtube_channel_id;
+        const currentSchedule = allSchedules.find((schedule) => {
+          const scheduleChannelId =
+            schedule.program?.channel?.youtube_channel_id;
           if (scheduleChannelId !== channelId) return false;
           const startNum = this.convertTimeToNumber(schedule.start_time);
           const endNum = this.convertTimeToNumber(schedule.end_time);
@@ -130,19 +144,32 @@ export class LiveStatusBackgroundService {
         // Some channels use a single unified live stream for all programs
         let shouldCheckTitle = true;
         try {
-          shouldCheckTitle = !(await this.configService.isTitleMatchDisabled(channelInfo.handle));
+          shouldCheckTitle = !(await this.configService.isTitleMatchDisabled(
+            channelInfo.handle,
+          ));
         } catch (error) {
           // If we can't check the config, assume title matching is enabled
-          this.logger.debug(`[LIVE-STATUS-BG] Error checking title match config for ${channelInfo.handle}, assuming enabled`);
+          this.logger.debug(
+            `[LIVE-STATUS-BG] Error checking title match config for ${channelInfo.handle}, assuming enabled`,
+          );
         }
 
-        if (await this.shouldUpdateCache(cached, shouldCheckTitle ? currentProgramName : undefined)) {
-          this.logger.debug(`[LIVE-STATUS-BG] Cache update needed for channel ${channelInfo.handle} (${channelId})`);
+        if (
+          await this.shouldUpdateCache(
+            cached,
+            shouldCheckTitle ? currentProgramName : undefined,
+          )
+        ) {
+          this.logger.debug(
+            `[LIVE-STATUS-BG] Cache update needed for channel ${channelInfo.handle} (${channelId})`,
+          );
           channelsToUpdate.push(channelId);
         }
       }
 
-      this.logger.log(`📊 Found ${liveChannels.size} channels with live programs, ${channelsToUpdate.length} needing update`);
+      this.logger.log(
+        `📊 Found ${liveChannels.size} channels with live programs, ${channelsToUpdate.length} needing update`,
+      );
 
       if (channelsToUpdate.length === 0) {
         this.logger.log('✅ All channels up to date, skipping update');
@@ -156,8 +183,9 @@ export class LiveStatusBackgroundService {
       await this.updateLiveStatusForAllChannels();
 
       const duration = Date.now() - startTime;
-      this.logger.log(`✅ Background live status update completed in ${duration}ms`);
-
+      this.logger.log(
+        `✅ Background live status update completed in ${duration}ms`,
+      );
     } catch (error) {
       this.logger.error('❌ Error in background live status update:', error);
     }
@@ -185,13 +213,16 @@ export class LiveStatusBackgroundService {
   /**
    * Get live status for multiple channels (uses background cache when available)
    * Migration complete - now accepts handles instead of channelIds
-   * 
+   *
    * Uses unified cache (liveStatusByHandle) - no longer uses liveStreamsByChannel
-   * 
+   *
    * @param handles Array of channel handles to get status for
    * @param handleToChannelId Optional map of handle -> channelId for accurate sync
    */
-  async getLiveStatusForChannels(handles: string[], handleToChannelId?: Map<string, string>): Promise<Map<string, LiveStatusCache>> {
+  async getLiveStatusForChannels(
+    handles: string[],
+    handleToChannelId?: Map<string, string>,
+  ): Promise<Map<string, LiveStatusCache>> {
     const results = new Map<string, LiveStatusCache>();
     const handlesNeedingUpdate: string[] = [];
 
@@ -213,11 +244,15 @@ export class LiveStatusBackgroundService {
           if (ageMinutes < 30) {
             // Return stale cache - better than triggering expensive API calls
             // Background cron (runs every 2 min) will refresh it soon
-            this.logger.debug(`[LIVE-STATUS-BG] Returning stale cache for ${handle} (${Math.round(ageMinutes)}min old) to prevent async fetch`);
+            this.logger.debug(
+              `[LIVE-STATUS-BG] Returning stale cache for ${handle} (${Math.round(ageMinutes)}min old) to prevent async fetch`,
+            );
             results.set(handle, cached);
           } else {
             // Cache is very old (>30 min) - don't return it, let async fetch happen
-            this.logger.debug(`[LIVE-STATUS-BG] Cache for ${handle} too old (${Math.round(ageMinutes)}min), not returning to allow refresh`);
+            this.logger.debug(
+              `[LIVE-STATUS-BG] Cache for ${handle} too old (${Math.round(ageMinutes)}min), not returning to allow refresh`,
+            );
             handlesNeedingUpdate.push(handle);
           }
         }
@@ -237,17 +272,23 @@ export class LiveStatusBackgroundService {
   /**
    * Update channels in batches to avoid API rate limits
    */
-  private async updateChannelsInBatches(channelIds: string[]): Promise<Map<string, LiveStatusCache>> {
+  private async updateChannelsInBatches(
+    channelIds: string[],
+  ): Promise<Map<string, LiveStatusCache>> {
     const results = new Map<string, LiveStatusCache>();
     const batchSize = 10; // Process 10 channels at a time
 
     for (let i = 0; i < channelIds.length; i += batchSize) {
       this.logger.debug(`[LIVE-STATUS-BG] Updating channel ${channelIds[i]}`);
       const batch = channelIds.slice(i, i + batchSize);
-      this.logger.log(`🔄 Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(channelIds.length / batchSize)}: ${batch.length} channels`);
+      this.logger.log(
+        `🔄 Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(channelIds.length / batchSize)}: ${batch.length} channels`,
+      );
 
       // Process batch in parallel
-      const batchPromises = batch.map(channelId => this.updateChannelLiveStatus(channelId));
+      const batchPromises = batch.map((channelId) =>
+        this.updateChannelLiveStatus(channelId),
+      );
       const batchResults = await Promise.allSettled(batchPromises);
 
       // Collect successful results
@@ -259,7 +300,7 @@ export class LiveStatusBackgroundService {
 
       // Small delay between batches to be respectful to YouTube API
       if (i + batchSize < channelIds.length) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       }
     }
 
@@ -269,7 +310,9 @@ export class LiveStatusBackgroundService {
   /**
    * Update live status for a single channel
    */
-  private async updateChannelLiveStatus(channelId: string): Promise<LiveStatusCache | null> {
+  private async updateChannelLiveStatus(
+    channelId: string,
+  ): Promise<LiveStatusCache | null> {
     try {
       // Get current day and time
       const currentDay = TimezoneUtil.currentDayOfWeek();
@@ -283,7 +326,7 @@ export class LiveStatusBackgroundService {
       });
 
       // Find ALL schedules for this channel today (not just live ones)
-      const channelSchedules = allSchedules.filter(schedule => {
+      const channelSchedules = allSchedules.filter((schedule) => {
         const scheduleChannelId = schedule.program?.channel?.youtube_channel_id;
         return scheduleChannelId === channelId;
       });
@@ -306,12 +349,15 @@ export class LiveStatusBackgroundService {
         }
       } catch (error) {
         // If we can't check the config (e.g., database connection issue), log and skip
-        this.logger.error(`❌ Error checking fetch config for ${handle}: with error ${error.message}`, error.message);
+        this.logger.error(
+          `❌ Error checking fetch config for ${handle}: with error ${error.message}`,
+          error.message,
+        );
         return null;
       }
 
       // Now filter for currently live schedules
-      const liveSchedules = channelSchedules.filter(schedule => {
+      const liveSchedules = channelSchedules.filter((schedule) => {
         const startNum = this.convertTimeToNumber(schedule.start_time);
         const endNum = this.convertTimeToNumber(schedule.end_time);
         return currentTime >= startNum && currentTime < endNum;
@@ -328,7 +374,7 @@ export class LiveStatusBackgroundService {
           lastUpdated: Date.now(),
           ttl: 5 * 60, // 5 minutes
           blockEndTime: null, // No current program - unknown when next one starts
-          validationCooldown: Date.now() + (30 * 60 * 1000),
+          validationCooldown: Date.now() + 30 * 60 * 1000,
           lastValidation: Date.now(),
           // Unified stream data
           streams: [],
@@ -341,50 +387,71 @@ export class LiveStatusBackgroundService {
       // Calculate TTL using block TTL logic for accurate timing
       // ✅ CRITICAL: Use channelSchedules (from allSchedules with overrides) instead of findByDay
       // findByDay doesn't include weekly overrides, which is why futurock's cache was failing
-      const ttl = await getCurrentBlockTTL(channelId, channelSchedules, this.sentryService);
+      const ttl = await getCurrentBlockTTL(
+        channelId,
+        channelSchedules,
+        this.sentryService,
+      );
 
       // Calculate block end time for cache metadata
-      const blockEndTime = this.calculateBlockEndTime(liveSchedules, currentTime);
+      const blockEndTime = this.calculateBlockEndTime(
+        liveSchedules,
+        currentTime,
+      );
 
       // Check unified cache (liveStatusByHandle replaces liveStreamsByChannel)
       const statusCacheKey = `${this.CACHE_PREFIX}${handle}`;
-      const cachedStatus = await this.redisService.get<LiveStatusCache>(statusCacheKey);
+      const cachedStatus =
+        await this.redisService.get<LiveStatusCache>(statusCacheKey);
 
       // CRITICAL: Detect program block transitions
       // If blockEndTime changed, we've transitioned between programs - need to validate/fetch new video
       // Skip if blockEndTime is null (cache needs enrichment from background cron)
-      const programBlockChanged = cachedStatus &&
+      const programBlockChanged =
+        cachedStatus &&
         cachedStatus.blockEndTime !== null &&
         blockEndTime !== null &&
         cachedStatus.blockEndTime !== blockEndTime;
 
       if (programBlockChanged) {
-        this.logger.debug(`[LIVE-STATUS-BG] Program block changed for ${handle}: blockEndTime ${cachedStatus.blockEndTime} → ${blockEndTime}`);
+        this.logger.debug(
+          `[LIVE-STATUS-BG] Program block changed for ${handle}: blockEndTime ${cachedStatus.blockEndTime} → ${blockEndTime}`,
+        );
 
         // Check if cached video ID is still live
         if (cachedStatus.videoId) {
-          this.logger.debug(`[LIVE-STATUS-BG] Checking if cached video ${cachedStatus.videoId} is still live after program transition`);
-          const isStillLive = await this.youtubeLiveService.isVideoLive(cachedStatus.videoId);
+          this.logger.debug(
+            `[LIVE-STATUS-BG] Checking if cached video ${cachedStatus.videoId} is still live after program transition`,
+          );
+          const isStillLive = await this.youtubeLiveService.isVideoLive(
+            cachedStatus.videoId,
+          );
 
           if (isStillLive) {
             // Video is still live but program changed - set 7-minute cooldown to catch rotation soon
-            this.logger.debug(`[LIVE-STATUS-BG] Video ${cachedStatus.videoId} still live after program transition for ${handle}, setting 7-minute validation cooldown`);
+            this.logger.debug(
+              `[LIVE-STATUS-BG] Video ${cachedStatus.videoId} still live after program transition for ${handle}, setting 7-minute validation cooldown`,
+            );
             cachedStatus.ttl = ttl;
             cachedStatus.blockEndTime = blockEndTime;
             cachedStatus.lastValidation = Date.now();
-            cachedStatus.validationCooldown = Date.now() + (7 * 60 * 1000); // 7 minutes
+            cachedStatus.validationCooldown = Date.now() + 7 * 60 * 1000; // 7 minutes
             cachedStatus.lastUpdated = Date.now();
             await this.cacheLiveStatus(channelId, cachedStatus);
             return cachedStatus;
           } else {
             // Video is no longer live - fetch new one
-            this.logger.debug(`[LIVE-STATUS-BG] Video ${cachedStatus.videoId} no longer live after program transition for ${handle}, fetching new one`);
+            this.logger.debug(
+              `[LIVE-STATUS-BG] Video ${cachedStatus.videoId} no longer live after program transition for ${handle}, fetching new one`,
+            );
             await this.redisService.del(statusCacheKey);
             // Continue to fetch fresh data below
           }
         } else {
           // No cached video ID - invalidate and fetch
-          this.logger.debug(`[LIVE-STATUS-BG] No cached video ID after program transition, invalidating cache`);
+          this.logger.debug(
+            `[LIVE-STATUS-BG] No cached video ID after program transition, invalidating cache`,
+          );
           await this.redisService.del(statusCacheKey);
           // Continue to fetch fresh data below
         }
@@ -401,11 +468,17 @@ export class LiveStatusBackgroundService {
         if (needsValidation) {
           // Validation needed - video is >30 minutes old, check if it's still live
           // Use videos API (cheaper than search) to validate
-          this.logger.debug(`[LIVE-STATUS-BG] Video ID ${cachedStatus.videoId} is ${Math.round(videoAgeMinutes)}min old, validating if still live for ${handle}`);
-          const isStillLive = await this.youtubeLiveService.isVideoLive(cachedStatus.videoId);
+          this.logger.debug(
+            `[LIVE-STATUS-BG] Video ID ${cachedStatus.videoId} is ${Math.round(videoAgeMinutes)}min old, validating if still live for ${handle}`,
+          );
+          const isStillLive = await this.youtubeLiveService.isVideoLive(
+            cachedStatus.videoId,
+          );
           if (isStillLive) {
             // Video is still live, update cache with current schedules metadata
-            this.logger.debug(`[LIVE-STATUS-BG] Video ID ${cachedStatus.videoId} still live for ${handle}`);
+            this.logger.debug(
+              `[LIVE-STATUS-BG] Video ID ${cachedStatus.videoId} still live for ${handle}`,
+            );
             // Update TTL and blockEndTime from current schedules, update lastValidation time
             cachedStatus.ttl = ttl;
             cachedStatus.blockEndTime = blockEndTime;
@@ -420,13 +493,21 @@ export class LiveStatusBackgroundService {
 
             if (hasLiveSchedules) {
               // Program still scheduled, video might have rotated - fetch new one
-              this.logger.debug(`[LIVE-STATUS-BG] Video ID ${cachedStatus.videoId} no longer live for ${handle}, but program still scheduled - fetching new one`);
+              this.logger.debug(
+                `[LIVE-STATUS-BG] Video ID ${cachedStatus.videoId} no longer live for ${handle}, but program still scheduled - fetching new one`,
+              );
               await this.redisService.del(statusCacheKey);
               // Continue to fetch fresh data below
             } else {
               // Program ended, don't waste API quota - just mark as not live
-              this.logger.debug(`[LIVE-STATUS-BG] Video ID ${cachedStatus.videoId} no longer live for ${handle}, and program ended - marking as not live`);
-              const notLiveData = this.createNotLiveCacheData(channelId, handle, ttl);
+              this.logger.debug(
+                `[LIVE-STATUS-BG] Video ID ${cachedStatus.videoId} no longer live for ${handle}, and program ended - marking as not live`,
+              );
+              const notLiveData = this.createNotLiveCacheData(
+                channelId,
+                handle,
+                ttl,
+              );
               await this.cacheLiveStatus(channelId, notLiveData);
               return notLiveData;
             }
@@ -434,28 +515,40 @@ export class LiveStatusBackgroundService {
         } else {
           // Validation not needed - video is fresh (<30 minutes old), but check title match
           // If video title doesn't match current program, ignore cooldown and validate anyway
-          const programName = liveSchedules.length > 0 ? liveSchedules[0].program.name : '';
+          const programName =
+            liveSchedules.length > 0 ? liveSchedules[0].program.name : '';
           const videoTitle = cachedStatus.streams[0]?.title || '';
-          const titleSimilarity = programName && videoTitle ? SimilarityUtil.calculateTitleSimilarity(programName, videoTitle) : 1;
+          const titleSimilarity =
+            programName && videoTitle
+              ? SimilarityUtil.calculateTitleSimilarity(programName, videoTitle)
+              : 1;
 
           if (titleSimilarity < 0.3) {
             // Title doesn't match well (<30%) - this might be a previous program's video, validate now
             // CRITICAL: Validate first to see if the old video is still live
             // If it's no longer live, we'll fetch and get the new one
             // If it's still live, we'll keep it (don't fetch) since search would likely return the same video ID
-            this.logger.debug(`[LIVE-STATUS-BG] Video title '${videoTitle}' doesn't match program '${programName}' (${Math.round(titleSimilarity * 100)}%), forcing validation despite cooldown`);
-            const isStillLive = await this.youtubeLiveService.isVideoLive(cachedStatus.videoId);
+            this.logger.debug(
+              `[LIVE-STATUS-BG] Video title '${videoTitle}' doesn't match program '${programName}' (${Math.round(titleSimilarity * 100)}%), forcing validation despite cooldown`,
+            );
+            const isStillLive = await this.youtubeLiveService.isVideoLive(
+              cachedStatus.videoId,
+            );
 
             if (!isStillLive) {
               // Old video is no longer live - fetch new one
-              this.logger.debug(`[LIVE-STATUS-BG] Video ${cachedStatus.videoId} no longer live for ${handle} (title mismatch), fetching new one`);
+              this.logger.debug(
+                `[LIVE-STATUS-BG] Video ${cachedStatus.videoId} no longer live for ${handle} (title mismatch), fetching new one`,
+              );
               await this.redisService.del(statusCacheKey);
               // Continue to fetch fresh data below
             } else {
               // Old video is still live but title doesn't match
               // CRITICAL: Don't fetch - search would likely return the same video ID anyway, which is costly
               // Just update metadata (TTL, blockEndTime) and keep the cached video
-              this.logger.debug(`[LIVE-STATUS-BG] Video ${cachedStatus.videoId} still live for ${handle} but title doesn't match program. Keeping cached video (fetch would return same ID)`);
+              this.logger.debug(
+                `[LIVE-STATUS-BG] Video ${cachedStatus.videoId} still live for ${handle} but title doesn't match program. Keeping cached video (fetch would return same ID)`,
+              );
               cachedStatus.ttl = ttl;
               cachedStatus.blockEndTime = blockEndTime;
               cachedStatus.lastUpdated = Date.now();
@@ -464,7 +557,9 @@ export class LiveStatusBackgroundService {
             }
           } else {
             // Title matches well - just update metadata (TTL, blockEndTime) from current schedules
-            this.logger.debug(`[LIVE-STATUS-BG] Using cached video ID ${cachedStatus.videoId} for ${handle} (fresh video, ${Math.round(videoAgeMinutes)}min old, title match ${Math.round(titleSimilarity * 100)}%)`);
+            this.logger.debug(
+              `[LIVE-STATUS-BG] Using cached video ID ${cachedStatus.videoId} for ${handle} (fresh video, ${Math.round(videoAgeMinutes)}min old, title match ${Math.round(titleSimilarity * 100)}%)`,
+            );
             cachedStatus.ttl = ttl;
             cachedStatus.blockEndTime = blockEndTime;
             cachedStatus.lastUpdated = Date.now();
@@ -480,44 +575,71 @@ export class LiveStatusBackgroundService {
 
       if (notFoundData) {
         // Channel is marked as not-found, skip fetching
-        this.logger.debug(`[LIVE-STATUS-BG] Skipping ${handle} - marked as not-found`);
+        this.logger.debug(
+          `[LIVE-STATUS-BG] Skipping ${handle} - marked as not-found`,
+        );
         return this.createNotLiveCacheData(channelId, handle, ttl);
       }
 
       // Fetch live streams from YouTube using main cron method (should extend not-found marks)
-      this.logger.debug(`[LIVE-STATUS-BG] Fetching live streams for ${handle} (${channelId})`);
+      this.logger.debug(
+        `[LIVE-STATUS-BG] Fetching live streams for ${handle} (${channelId})`,
+      );
       const liveStreams = await this.youtubeLiveService.getLiveStreamsMain(
         channelId,
         handle,
-        ttl
+        ttl,
       );
-      this.logger.debug(`[LIVE-STATUS-BG] Live streams result for ${handle}:`, liveStreams);
+      this.logger.debug(
+        `[LIVE-STATUS-BG] Live streams result for ${handle}:`,
+        liveStreams,
+      );
 
       const cacheData: LiveStatusCache = {
         channelId,
         handle,
-        isLive: liveStreams !== null && liveStreams !== '__SKIPPED__' && liveStreams.streams.length > 0,
-        streamUrl: liveStreams && liveStreams !== '__SKIPPED__' && liveStreams.streams.length > 0
-          ? `https://www.youtube.com/embed/${liveStreams.primaryVideoId}?autoplay=1`
-          : null,
-        videoId: liveStreams && liveStreams !== '__SKIPPED__' ? liveStreams.primaryVideoId : null,
+        isLive:
+          liveStreams !== null &&
+          liveStreams !== '__SKIPPED__' &&
+          liveStreams.streams.length > 0,
+        streamUrl:
+          liveStreams &&
+          liveStreams !== '__SKIPPED__' &&
+          liveStreams.streams.length > 0
+            ? `https://www.youtube.com/embed/${liveStreams.primaryVideoId}?autoplay=1`
+            : null,
+        videoId:
+          liveStreams && liveStreams !== '__SKIPPED__'
+            ? liveStreams.primaryVideoId
+            : null,
         lastUpdated: Date.now(),
         ttl,
         blockEndTime,
-        validationCooldown: Date.now() + (30 * 60 * 1000), // Can validate again in 30 minutes
+        validationCooldown: Date.now() + 30 * 60 * 1000, // Can validate again in 30 minutes
         lastValidation: Date.now(),
         // Unified stream data
-        streams: liveStreams && liveStreams !== '__SKIPPED__' ? liveStreams.streams : [],
-        streamCount: liveStreams && liveStreams !== '__SKIPPED__' ? liveStreams.streamCount : 0,
+        streams:
+          liveStreams && liveStreams !== '__SKIPPED__'
+            ? liveStreams.streams
+            : [],
+        streamCount:
+          liveStreams && liveStreams !== '__SKIPPED__'
+            ? liveStreams.streamCount
+            : 0,
       };
 
-      this.logger.debug(`[LIVE-STATUS-BG] Cache data for ${handle}:`, cacheData);
+      this.logger.debug(
+        `[LIVE-STATUS-BG] Cache data for ${handle}:`,
+        cacheData,
+      );
 
       await this.cacheLiveStatus(channelId, cacheData);
       return cacheData;
-
     } catch (error) {
-      this.logger.error(`❌ Error updating live status for channel ${channelId}:`, error);
+      this.logger.error(
+        `❌ Error updating live status for channel ${channelId}:`,
+        error,
+      );
       return null;
     }
   }
@@ -526,7 +648,10 @@ export class LiveStatusBackgroundService {
    * Cache live status data
    * Migration complete - only uses handle-based format
    */
-  private async cacheLiveStatus(channelId: string, data: LiveStatusCache): Promise<void> {
+  private async cacheLiveStatus(
+    channelId: string,
+    data: LiveStatusCache,
+  ): Promise<void> {
     if (!data.handle) {
       return;
     }
@@ -534,21 +659,26 @@ export class LiveStatusBackgroundService {
     const cacheKey = `${this.CACHE_PREFIX}${data.handle}`;
     await this.redisService.set(cacheKey, data, data.ttl);
     this.logger.debug(`✅ Live status cache updated for ${data.handle}`);
-    this.logger.log(`✅ Live status cache updated for channel ${data.handle} (${channelId}): isLive=${data.isLive}, streams=${data.streamCount}`);
+    this.logger.log(
+      `✅ Live status cache updated for channel ${data.handle} (${channelId}): isLive=${data.isLive}, streams=${data.streamCount}`,
+    );
   }
 
   /**
    * Check if cache should be updated
    * Considers TTL, program block changes, and title similarity with current program
    * Validation is done separately in updateChannelLiveStatus to avoid excessive API calls
-   * 
+   *
    * IMPORTANT: Returns false (cache is valid) for slightly stale cache to prevent excessive async fetches
    * The background cron will handle updates, and we don't want every request triggering fetches
-   * 
+   *
    * @param cached The cached live status
    * @param currentProgramName The name of the program currently scheduled (optional, for title comparison)
    */
-  private async shouldUpdateCache(cached: LiveStatusCache, currentProgramName?: string): Promise<boolean> {
+  private async shouldUpdateCache(
+    cached: LiveStatusCache,
+    currentProgramName?: string,
+  ): Promise<boolean> {
     const now = Date.now();
     const age = now - cached.lastUpdated;
 
@@ -559,13 +689,23 @@ export class LiveStatusBackgroundService {
 
     // CRITICAL: Check title similarity if we have both cached video title and current program name
     // If title doesn't match current program, force update to validate and potentially refresh
-    if (currentProgramName && cached.streams && cached.streams.length > 0 && cached.streams[0]?.title) {
+    if (
+      currentProgramName &&
+      cached.streams &&
+      cached.streams.length > 0 &&
+      cached.streams[0]?.title
+    ) {
       const videoTitle = cached.streams[0].title;
-      const titleSimilarity = SimilarityUtil.calculateTitleSimilarity(currentProgramName, videoTitle);
+      const titleSimilarity = SimilarityUtil.calculateTitleSimilarity(
+        currentProgramName,
+        videoTitle,
+      );
 
       if (titleSimilarity < 0.3) {
         // Title doesn't match current program - force update to validate video status
-        this.logger.debug(`[LIVE-STATUS-BG] Title mismatch for ${cached.handle}: cached '${videoTitle}' vs program '${currentProgramName}' (${Math.round(titleSimilarity * 100)}%), forcing update`);
+        this.logger.debug(
+          `[LIVE-STATUS-BG] Title mismatch for ${cached.handle}: cached '${videoTitle}' vs program '${currentProgramName}' (${Math.round(titleSimilarity * 100)}%), forcing update`,
+        );
         return true;
       }
     }
@@ -576,7 +716,9 @@ export class LiveStatusBackgroundService {
       const ageMinutes = age / (60 * 1000);
       if (ageMinutes > 2) {
         // Cache is >2 minutes old and still needs enrichment - refresh it
-        this.logger.debug(`[LIVE-STATUS-BG] Cache needs enrichment (null blockEndTime, ${Math.round(ageMinutes)}min old), forcing refresh`);
+        this.logger.debug(
+          `[LIVE-STATUS-BG] Cache needs enrichment (null blockEndTime, ${Math.round(ageMinutes)}min old), forcing refresh`,
+        );
         return true;
       }
     }
@@ -588,7 +730,9 @@ export class LiveStatusBackgroundService {
     if (cached.blockEndTime !== null) {
       const currentTimeInMinutes = this.convertTimeToMinutes(now);
       if (currentTimeInMinutes >= cached.blockEndTime) {
-        this.logger.debug(`[LIVE-STATUS-BG] Block ended for ${cached.handle}: blockEndTime (${cached.blockEndTime}) passed (current: ${currentTimeInMinutes}), refreshing metadata`);
+        this.logger.debug(
+          `[LIVE-STATUS-BG] Block ended for ${cached.handle}: blockEndTime (${cached.blockEndTime}) passed (current: ${currentTimeInMinutes}), refreshing metadata`,
+        );
         return true;
       }
     }
@@ -616,10 +760,13 @@ export class LiveStatusBackgroundService {
    * Calculate block end time for cache metadata
    * Uses the same logic as getCurrentBlockTTL but returns the end time in minutes
    */
-  private calculateBlockEndTime(schedules: any[], currentTime: number): number | null {
+  private calculateBlockEndTime(
+    schedules: any[],
+    currentTime: number,
+  ): number | null {
     // Sort schedules by start time
     const sortedSchedules = schedules
-      .map(s => ({
+      .map((s) => ({
         start: this.convertTimeToNumber(s.start_time),
         end: this.convertTimeToNumber(s.end_time),
       }))
@@ -665,20 +812,21 @@ export class LiveStatusBackgroundService {
     handle: string,
     streams: any,
     ttl: number,
-    blockEndTime: number
+    blockEndTime: number,
   ): LiveStatusCache {
     return {
       channelId,
       handle,
       isLive: streams.streams && streams.streams.length > 0,
-      streamUrl: streams.streams && streams.streams.length > 0
-        ? `https://www.youtube.com/embed/${streams.primaryVideoId}?autoplay=1`
-        : null,
+      streamUrl:
+        streams.streams && streams.streams.length > 0
+          ? `https://www.youtube.com/embed/${streams.primaryVideoId}?autoplay=1`
+          : null,
       videoId: streams.primaryVideoId || null,
       lastUpdated: Date.now(),
       ttl,
       blockEndTime,
-      validationCooldown: Date.now() + (30 * 60 * 1000),
+      validationCooldown: Date.now() + 30 * 60 * 1000,
       lastValidation: Date.now(),
       streams: streams.streams || [],
       streamCount: streams.streamCount || 0,
@@ -688,7 +836,11 @@ export class LiveStatusBackgroundService {
   /**
    * Create cache data for not-live channels
    */
-  private createNotLiveCacheData(channelId: string, handle: string, ttl: number): LiveStatusCache {
+  private createNotLiveCacheData(
+    channelId: string,
+    handle: string,
+    ttl: number,
+  ): LiveStatusCache {
     return {
       channelId,
       handle,
@@ -698,7 +850,7 @@ export class LiveStatusBackgroundService {
       lastUpdated: Date.now(),
       ttl,
       blockEndTime: null, // No current program - unknown when next one starts
-      validationCooldown: Date.now() + (30 * 60 * 1000),
+      validationCooldown: Date.now() + 30 * 60 * 1000,
       lastValidation: Date.now(),
       streams: [],
       streamCount: 0,
@@ -711,16 +863,18 @@ export class LiveStatusBackgroundService {
    */
   private async updateLiveStatusForAllChannels(): Promise<void> {
     try {
-      this.logger.log('[LIVE-STATUS-UPDATE] Skipping bulk update - only updating channels with live programs');
+      this.logger.log(
+        '[LIVE-STATUS-UPDATE] Skipping bulk update - only updating channels with live programs',
+      );
 
       // This method was causing excessive API calls by updating ALL channels
       // Instead, we only update channels that have live programs (handled in main loop)
       // No action needed here - the main updateLiveStatusBackground method handles this correctly
-
     } catch (error) {
-      this.logger.error('[LIVE-STATUS-UPDATE] Error in live status update:', error);
+      this.logger.error(
+        '[LIVE-STATUS-UPDATE] Error in live status update:',
+        error,
+      );
     }
   }
-
-
 }

@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from './jwt.service';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
@@ -13,7 +10,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly usersService: UsersService,
-  ) { }
+  ) {}
 
   async loginUser(
     email: string,
@@ -85,14 +82,23 @@ export class AuthService {
     return await this.jwtService.sign(payload);
   }
 
-  async signRegistrationToken(identifier: string, additionalData?: Record<string, any>): Promise<string> {
+  async signRegistrationToken(
+    identifier: string,
+    additionalData?: Record<string, any>,
+  ): Promise<string> {
     identifier = identifier.toLowerCase().trim();
     // firmamos un token que contiene el email, un flag y datos adicionales
-    const payload = { email: identifier, type: 'registration', ...additionalData };
+    const payload = {
+      email: identifier,
+      type: 'registration',
+      ...additionalData,
+    };
     return await this.jwtService.sign(payload, { expiresIn: '1h' });
   }
 
-  async verifyRegistrationToken(token: string): Promise<{ email: string;[key: string]: any }> {
+  async verifyRegistrationToken(
+    token: string,
+  ): Promise<{ email: string; [key: string]: any }> {
     try {
       const payload: any = await this.jwtService.verify(token);
       if (payload.type !== 'registration' || !payload.email) {

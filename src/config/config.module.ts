@@ -6,10 +6,7 @@ import { ConfigController } from './config.controller';
 import { RedisModule } from '../redis/redis.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Config]),
-    RedisModule,
-  ],
+  imports: [TypeOrmModule.forFeature([Config]), RedisModule],
   providers: [ConfigService],
   controllers: [ConfigController],
   exports: [ConfigService],

@@ -71,7 +71,9 @@ describe('KickWebhookController', () => {
     }).compile();
 
     controller = module.get<KickWebhookController>(KickWebhookController);
-    streamerLiveStatusService = module.get<StreamerLiveStatusService>(StreamerLiveStatusService);
+    streamerLiveStatusService = module.get<StreamerLiveStatusService>(
+      StreamerLiveStatusService,
+    );
     streamersService = module.get<StreamersService>(StreamersService);
   });
 
@@ -112,7 +114,7 @@ describe('KickWebhookController', () => {
         'livestream.started',
         'test-subscription-id',
         payload,
-        req
+        req,
       );
 
       expect(result).toEqual({ success: true });
@@ -120,7 +122,7 @@ describe('KickWebhookController', () => {
         1,
         'kick',
         true,
-        'testuser'
+        'testuser',
       );
     });
 
@@ -151,7 +153,7 @@ describe('KickWebhookController', () => {
         'livestream.ended',
         'test-subscription-id',
         payload,
-        req
+        req,
       );
 
       expect(result).toEqual({ success: true });
@@ -159,7 +161,7 @@ describe('KickWebhookController', () => {
         1,
         'kick',
         false,
-        'testuser'
+        'testuser',
       );
     });
 
@@ -189,7 +191,7 @@ describe('KickWebhookController', () => {
         'livestream.started',
         'test-subscription-id',
         payload,
-        req
+        req,
       );
 
       expect(result).toEqual({ success: false, error: 'Streamer not found' });
@@ -215,7 +217,7 @@ describe('KickWebhookController', () => {
         'livestream.started',
         'test-subscription-id',
         payload,
-        req
+        req,
       );
 
       expect(result).toEqual({ success: false, error: 'Invalid payload' });
@@ -223,4 +225,3 @@ describe('KickWebhookController', () => {
     });
   });
 });
-

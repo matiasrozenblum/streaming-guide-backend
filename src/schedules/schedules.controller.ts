@@ -1,12 +1,32 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, NotFoundException, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Delete,
+  Put,
+  NotFoundException,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { SchedulesService } from './schedules.service';
-import { CreateScheduleDto, CreateBulkSchedulesDto } from './dto/create-schedule.dto';
+import {
+  CreateScheduleDto,
+  CreateBulkSchedulesDto,
+} from './dto/create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { Schedule } from './schedules.entity';
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiQuery,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
-@ApiTags('schedules')  // Etiqueta para los horarios
+@ApiTags('schedules') // Etiqueta para los horarios
 @Controller('schedules')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
@@ -15,15 +35,24 @@ export class SchedulesController {
 
   @Get()
   @ApiOperation({ summary: 'Obtener todos los horarios o filtrar por día' })
-  @ApiQuery({ name: 'day', required: false, description: 'Día de la semana para filtrar (ej: monday, tuesday, etc.)' })
+  @ApiQuery({
+    name: 'day',
+    required: false,
+    description: 'Día de la semana para filtrar (ej: monday, tuesday, etc.)',
+  })
   @ApiQuery({
     name: 'raw',
     required: false,
-    description: 'Si es true, devuelve los horarios sin aplicar weekly overrides',
+    description:
+      'Si es true, devuelve los horarios sin aplicar weekly overrides',
   })
-  @ApiResponse({ status: 200, description: 'Lista de horarios', type: [Schedule] })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de horarios',
+    type: [Schedule],
+  })
   async findAll(
-    @Query('day') day?: string, 
+    @Query('day') day?: string,
     @Query('live_status') liveStatus?: string,
     @Query('raw') raw?: string,
   ): Promise<Schedule[]> {
@@ -41,17 +70,38 @@ export class SchedulesController {
 
   @Get('program/:programId')
   @ApiOperation({ summary: 'Obtener horarios por programa (ID)' })
-  @ApiResponse({ status: 200, description: 'Lista de horarios del programa', type: [Schedule] })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de horarios del programa',
+    type: [Schedule],
+  })
   findByProgram(@Param('programId') programId: string): Promise<Schedule[]> {
     return this.schedulesService.findByProgram(programId);
   }
 
   @Get('program-name/:programName')
   @ApiOperation({ summary: 'Obtener horarios por nombre de programa' })
-  @ApiQuery({ name: 'day', required: false, description: 'Día de la semana para filtrar (ej: monday, tuesday, etc.)' })
-  @ApiQuery({ name: 'live_status', required: false, description: 'Si es true, incluye estado de transmisión en vivo' })
-  @ApiQuery({ name: 'raw', required: false, description: 'Si es true, devuelve los horarios sin aplicar weekly overrides' })
-  @ApiResponse({ status: 200, description: 'Lista de horarios del programa', type: [Schedule] })
+  @ApiQuery({
+    name: 'day',
+    required: false,
+    description: 'Día de la semana para filtrar (ej: monday, tuesday, etc.)',
+  })
+  @ApiQuery({
+    name: 'live_status',
+    required: false,
+    description: 'Si es true, incluye estado de transmisión en vivo',
+  })
+  @ApiQuery({
+    name: 'raw',
+    required: false,
+    description:
+      'Si es true, devuelve los horarios sin aplicar weekly overrides',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de horarios del programa',
+    type: [Schedule],
+  })
   async findByProgramName(
     @Param('programName') programName: string,
     @Query('day') day?: string,
@@ -60,25 +110,50 @@ export class SchedulesController {
   ): Promise<Schedule[]> {
     const liveStatusBool = liveStatus === 'true';
     const applyOverrides = raw !== 'true';
-    return this.schedulesService.findByProgramName(programName, day?.toLowerCase(), {
-      liveStatus: liveStatusBool,
-      applyOverrides,
-    });
+    return this.schedulesService.findByProgramName(
+      programName,
+      day?.toLowerCase(),
+      {
+        liveStatus: liveStatusBool,
+        applyOverrides,
+      },
+    );
   }
 
   @Get('day/:dayOfWeek')
   @ApiOperation({ summary: 'Obtener horarios por día de la semana' })
-  @ApiResponse({ status: 200, description: 'Lista de horarios del día', type: [Schedule] })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de horarios del día',
+    type: [Schedule],
+  })
   findByDay(@Param('dayOfWeek') dayOfWeek: string): Promise<Schedule[]> {
     return this.schedulesService.findByDay(dayOfWeek);
   }
 
   @Get('channel/:channelHandle')
   @ApiOperation({ summary: 'Obtener horarios por canal (handle)' })
-  @ApiQuery({ name: 'day', required: false, description: 'Día de la semana para filtrar (ej: monday, tuesday, etc.)' })
-  @ApiQuery({ name: 'live_status', required: false, description: 'Si es true, incluye estado de transmisión en vivo' })
-  @ApiQuery({ name: 'raw', required: false, description: 'Si es true, devuelve los horarios sin aplicar weekly overrides' })
-  @ApiResponse({ status: 200, description: 'Lista de horarios del canal', type: [Schedule] })
+  @ApiQuery({
+    name: 'day',
+    required: false,
+    description: 'Día de la semana para filtrar (ej: monday, tuesday, etc.)',
+  })
+  @ApiQuery({
+    name: 'live_status',
+    required: false,
+    description: 'Si es true, incluye estado de transmisión en vivo',
+  })
+  @ApiQuery({
+    name: 'raw',
+    required: false,
+    description:
+      'Si es true, devuelve los horarios sin aplicar weekly overrides',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de horarios del canal',
+    type: [Schedule],
+  })
   async findByChannel(
     @Param('channelHandle') channelHandle: string,
     @Query('day') day?: string,
@@ -87,15 +162,23 @@ export class SchedulesController {
   ): Promise<Schedule[]> {
     const liveStatusBool = liveStatus === 'true';
     const applyOverrides = raw !== 'true';
-    return this.schedulesService.findByChannel(channelHandle, day?.toLowerCase(), {
-      liveStatus: liveStatusBool,
-      applyOverrides,
-    });
+    return this.schedulesService.findByChannel(
+      channelHandle,
+      day?.toLowerCase(),
+      {
+        liveStatus: liveStatusBool,
+        applyOverrides,
+      },
+    );
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Obtener un horario por ID' })
-  @ApiResponse({ status: 200, description: 'Horario encontrado', type: Schedule })
+  @ApiResponse({
+    status: 200,
+    description: 'Horario encontrado',
+    type: Schedule,
+  })
   async findOne(@Param('id') id: string): Promise<Schedule> {
     const schedule = await this.schedulesService.findOne(id);
     if (!schedule) {
@@ -113,14 +196,24 @@ export class SchedulesController {
 
   @Post('bulk')
   @ApiOperation({ summary: 'Crear múltiples horarios para un programa' })
-  @ApiResponse({ status: 201, description: 'Horarios creados', type: [Schedule] })
-  createBulk(@Body() createBulkSchedulesDto: CreateBulkSchedulesDto): Promise<Schedule[]> {
+  @ApiResponse({
+    status: 201,
+    description: 'Horarios creados',
+    type: [Schedule],
+  })
+  createBulk(
+    @Body() createBulkSchedulesDto: CreateBulkSchedulesDto,
+  ): Promise<Schedule[]> {
     return this.schedulesService.createBulk(createBulkSchedulesDto);
   }
 
   @Put(':id')
   @ApiOperation({ summary: 'Actualizar un horario' })
-  @ApiResponse({ status: 200, description: 'Horario actualizado', type: Schedule })
+  @ApiResponse({
+    status: 200,
+    description: 'Horario actualizado',
+    type: Schedule,
+  })
   async update(
     @Param('id') id: string,
     @Body() updateScheduleDto: UpdateScheduleDto,
@@ -145,8 +238,13 @@ export class SchedulesController {
 
   @Delete('program/:programId')
   @ApiOperation({ summary: 'Eliminar todos los horarios de un programa' })
-  @ApiResponse({ status: 200, description: 'Horarios eliminados para el programa' })
-  async removeByProgram(@Param('programId') programId: string): Promise<{ deletedCount: number }> {
+  @ApiResponse({
+    status: 200,
+    description: 'Horarios eliminados para el programa',
+  })
+  async removeByProgram(
+    @Param('programId') programId: string,
+  ): Promise<{ deletedCount: number }> {
     return this.schedulesService.removeByProgram(Number(programId));
   }
 }

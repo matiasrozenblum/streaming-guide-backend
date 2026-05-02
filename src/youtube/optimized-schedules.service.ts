@@ -571,9 +571,8 @@ export class OptimizedSchedulesService {
                     `[OPTIMIZED-SCHEDULES] Triggering async fetch for ${handle} (stale cache)...`,
                   );
                   // Use program-aware TTL instead of hardcoded 300
-                  const { getCurrentBlockTTL } = await import(
-                    '../utils/getBlockTTL.util'
-                  );
+                  const { getCurrentBlockTTL } =
+                    await import('../utils/getBlockTTL.util');
                   const schedulesForTTL = schedules.filter(
                     (s) => s.program.channel?.youtube_channel_id === channelId,
                   );
@@ -699,9 +698,8 @@ export class OptimizedSchedulesService {
                   `[OPTIMIZED-SCHEDULES] Triggering async fetch for ${handle} (no cache data)...`,
                 );
                 // Use program-aware TTL instead of hardcoded 300
-                const { getCurrentBlockTTL } = await import(
-                  '../utils/getBlockTTL.util'
-                );
+                const { getCurrentBlockTTL } =
+                  await import('../utils/getBlockTTL.util');
                 const schedulesForTTL = schedules.filter(
                   (s) => s.program.channel?.youtube_channel_id === channelId,
                 );

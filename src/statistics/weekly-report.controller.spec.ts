@@ -15,7 +15,9 @@ describe('WeeklyReportController', () => {
         {
           provide: ReportsProxyService,
           useValue: {
-            generateWeeklyReport: jest.fn().mockResolvedValue(Buffer.from('test')),
+            generateWeeklyReport: jest
+              .fn()
+              .mockResolvedValue(Buffer.from('test')),
           },
         },
       ],
@@ -34,10 +36,21 @@ describe('WeeklyReportController', () => {
   });
 
   it('should download weekly report', async () => {
-    await controller.downloadWeeklyReport('2024-01-01', '2024-01-31', '1', res as Response);
+    await controller.downloadWeeklyReport(
+      '2024-01-01',
+      '2024-01-31',
+      '1',
+      res as Response,
+    );
     expect(reportsProxyService.generateWeeklyReport).toHaveBeenCalled();
-    expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/pdf');
-    expect(res.setHeader).toHaveBeenCalledWith('Content-Disposition', expect.stringContaining('weekly_report_2024-01-01_to_2024-01-31.pdf'));
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'Content-Type',
+      'application/pdf',
+    );
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'Content-Disposition',
+      expect.stringContaining('weekly_report_2024-01-01_to_2024-01-31.pdf'),
+    );
     expect(res.send).toHaveBeenCalled();
   });
-}); 
+});

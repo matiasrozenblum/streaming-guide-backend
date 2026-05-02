@@ -21,7 +21,15 @@ import { Channel } from '../channels/channels.entity';
     TypeOrmModule.forFeature([Channel]),
   ],
   controllers: [YoutubeController],
-  providers: [YoutubeLiveService, LiveStatusBackgroundService, OptimizedSchedulesService],
-  exports: [YoutubeLiveService, LiveStatusBackgroundService, OptimizedSchedulesService],
+  providers: [
+    YoutubeLiveService,
+    LiveStatusBackgroundService,
+    OptimizedSchedulesService,
+  ],
+  exports: [
+    YoutubeLiveService,
+    LiveStatusBackgroundService,
+    OptimizedSchedulesService,
+  ],
 })
 export class YoutubeLiveModule {}

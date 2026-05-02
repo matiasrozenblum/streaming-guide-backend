@@ -22,17 +22,23 @@ export class EmailService {
    */
   private shouldSend(emailType: string = 'general'): boolean {
     // Prioritize process.env for test detection regardless of ConfigService mocks
-    if (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID) return true;
+    if (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID)
+      return true;
     const env =
       this.configService.get<string>('NODE_ENV') ||
       this.configService.get<string>('ENVIRONMENT') ||
       process.env.NODE_ENV ||
       'development';
-    const isProd = env === 'production' || this.configService.get('IS_PRODUCTION') === 'true';
+    const isProd =
+      env === 'production' ||
+      this.configService.get('IS_PRODUCTION') === 'true';
     if (isProd) return true;
     // Always allow OTP in non-prod to avoid blocking logins
     if (emailType === 'otp_code') return true;
-    const allowNonProd = (this.configService.get<string>('EMAILS_ENABLE_NON_PROD') || '').toString() === 'true';
+    const allowNonProd =
+      (
+        this.configService.get<string>('EMAILS_ENABLE_NON_PROD') || ''
+      ).toString() === 'true';
     return allowNonProd;
   }
 
@@ -43,16 +49,25 @@ export class EmailService {
     // Use environment variables if set, otherwise use defaults
     switch (emailType) {
       case 'otp_code':
-        return this.configService.get('EMAIL_SENDER_NOREPLY') || 'noreply@laguiadelstreaming.com';
+        return (
+          this.configService.get('EMAIL_SENDER_NOREPLY') ||
+          'noreply@laguiadelstreaming.com'
+        );
       case 'program_notification':
       case 'proposed_changes_report':
       case 'report_with_attachment':
       case 'admin_alert':
       case 'escalation':
-        return this.configService.get('EMAIL_SENDER_NOTIFICATIONS') || 'notifications@laguiadelstreaming.com';
+        return (
+          this.configService.get('EMAIL_SENDER_NOTIFICATIONS') ||
+          'notifications@laguiadelstreaming.com'
+        );
       case 'general':
       default:
-        return this.configService.get('EMAIL_SENDER_GENERAL') || 'hola@laguiadelstreaming.com';
+        return (
+          this.configService.get('EMAIL_SENDER_GENERAL') ||
+          'hola@laguiadelstreaming.com'
+        );
     }
   }
 
@@ -63,20 +78,28 @@ export class EmailService {
     }
 
     if (!this.shouldSend('proposed_changes_report')) {
-      console.log('✉️ [Non-prod] Skipping proposed changes report email (EMAILS_ENABLE_NON_PROD not enabled)');
+      console.log(
+        '✉️ [Non-prod] Skipping proposed changes report email (EMAILS_ENABLE_NON_PROD not enabled)',
+      );
       return;
     }
 
     const htmlContent = buildProposedChangesReportHtml(changes);
-    const to = this.configService.get('EMAIL_ADMIN') || 'admin@laguiadelstreaming.com';
+    const to =
+      this.configService.get('EMAIL_ADMIN') || 'admin@laguiadelstreaming.com';
     const subject = '📋 Nuevos cambios detectados en la programación';
 
     // Try SendGrid first if configured, fallback to SMTP
     const sendGridApiKey = this.configService.get('SENDGRID_API_KEY');
-    
+
     if (sendGridApiKey) {
       try {
-        await this.sendViaSendGrid(to, subject, htmlContent, 'proposed_changes_report');
+        await this.sendViaSendGrid(
+          to,
+          subject,
+          htmlContent,
+          'proposed_changes_report',
+        );
         console.log('📬 Email de cambios enviado via SendGrid.');
         return;
       } catch (error) {
@@ -97,19 +120,23 @@ export class EmailService {
       console.log('📬 Email de cambios enviado via SMTP.');
     } catch (error) {
       console.error('❌ Error sending proposed changes email:', error);
-      
-      this.sentryService.captureMessage('Email service failure - Proposed changes report failed', 'error', {
-        service: 'email',
-        error_type: 'send_failure',
-        error_message: error.message,
-        email_type: 'proposed_changes_report',
-        recipient: to,
-        timestamp: new Date().toISOString(),
-      });
-      
+
+      this.sentryService.captureMessage(
+        'Email service failure - Proposed changes report failed',
+        'error',
+        {
+          service: 'email',
+          error_type: 'send_failure',
+          error_message: error.message,
+          email_type: 'proposed_changes_report',
+          recipient: to,
+          timestamp: new Date().toISOString(),
+        },
+      );
+
       this.sentryService.setTag('service', 'email');
       this.sentryService.setTag('error_type', 'send_failure');
-      
+
       throw error; // Re-throw to maintain original behavior
     }
   }
@@ -117,17 +144,24 @@ export class EmailService {
   async sendOtpCode(to: string, code: string, ttlMinutes: number) {
     // OTP is allowed in non-prod (see shouldSend)
     if (!this.shouldSend('otp_code')) {
-      console.log(`✉️ [Non-prod] Skipping OTP email to ${to} (EMAILS_ENABLE_NON_PROD not enabled)`);
+      console.log(
+        `✉️ [Non-prod] Skipping OTP email to ${to} (EMAILS_ENABLE_NON_PROD not enabled)`,
+      );
       return;
     }
     const html = this.buildOtpHtml(code, ttlMinutes);
-    
+
     // Try SendGrid first if configured, fallback to SMTP
     const sendGridApiKey = this.configService.get('SENDGRID_API_KEY');
-    
-      if (sendGridApiKey) {
-        try {
-        await this.sendViaSendGrid(to, 'Tu código de acceso • La Guía del Streaming', html, 'otp_code');
+
+    if (sendGridApiKey) {
+      try {
+        await this.sendViaSendGrid(
+          to,
+          'Tu código de acceso • La Guía del Streaming',
+          html,
+          'otp_code',
+        );
         console.log(`OTP enviado a ${to} via SendGrid: ${code}`);
         return;
       } catch (error) {
@@ -135,7 +169,7 @@ export class EmailService {
         // Fall through to SMTP
       }
     }
-    
+
     // Fallback to SMTP
     try {
       await this.mailerService.sendMail({
@@ -147,76 +181,89 @@ export class EmailService {
       console.log(`OTP enviado a ${to} via SMTP: ${code}`);
     } catch (error) {
       console.error('❌ Error sending OTP email:', error);
-      
-      this.sentryService.captureMessage('Email service failure - OTP code failed to send', 'error', {
-        service: 'email',
-        error_type: 'send_failure',
-        error_message: error.message,
-        email_type: 'otp_code',
-        recipient: to,
-        timestamp: new Date().toISOString(),
-      });
-      
+
+      this.sentryService.captureMessage(
+        'Email service failure - OTP code failed to send',
+        'error',
+        {
+          service: 'email',
+          error_type: 'send_failure',
+          error_message: error.message,
+          email_type: 'otp_code',
+          recipient: to,
+          timestamp: new Date().toISOString(),
+        },
+      );
+
       this.sentryService.setTag('service', 'email');
       this.sentryService.setTag('error_type', 'send_failure');
-      
+
       throw error; // Re-throw to maintain original behavior
     }
   }
 
-  private async sendViaSendGrid(to: string, subject: string, html: string, emailType: string = 'general') {
+  private async sendViaSendGrid(
+    to: string,
+    subject: string,
+    html: string,
+    emailType: string = 'general',
+  ) {
     const sgMail = require('@sendgrid/mail');
     const apiKey = this.configService.get('SENDGRID_API_KEY');
-    
+
     sgMail.setApiKey(apiKey);
-    
+
     // Generate appropriate text version based on email type
     let textContent = 'Mensaje de La Guía del Streaming.';
     let categories = ['general'];
-    let customArgs = { 'source': 'general', 'app': 'streaming_guide' };
-    
+    let customArgs = { source: 'general', app: 'streaming_guide' };
+
     if (emailType === 'otp_code') {
-      textContent = 'Tu código de acceso para La Guía del Streaming. Este código expirará en 5 minutos. Si no solicitaste este código, puedes ignorar este mensaje.';
+      textContent =
+        'Tu código de acceso para La Guía del Streaming. Este código expirará en 5 minutos. Si no solicitaste este código, puedes ignorar este mensaje.';
       categories = ['otp', 'authentication'];
-      customArgs = { 'source': 'password_recovery', 'app': 'streaming_guide' };
+      customArgs = { source: 'password_recovery', app: 'streaming_guide' };
     } else if (emailType === 'program_notification') {
       textContent = `Notificación de programa: ${subject}`;
       categories = ['notifications', 'program_alerts'];
-      customArgs = { 'source': 'program_notification', 'app': 'streaming_guide' };
+      customArgs = { source: 'program_notification', app: 'streaming_guide' };
     } else if (emailType === 'proposed_changes_report') {
-      textContent = 'Nuevos cambios detectados en la programación. Revisa el contenido HTML para más detalles.';
+      textContent =
+        'Nuevos cambios detectados en la programación. Revisa el contenido HTML para más detalles.';
       categories = ['reports', 'programming_changes'];
-      customArgs = { 'source': 'programming_changes', 'app': 'streaming_guide' };
+      customArgs = { source: 'programming_changes', app: 'streaming_guide' };
     }
-    
+
     const senderEmail = this.getSenderEmail(emailType);
-    
+
     // Configure headers based on email type
     // Program notifications should be treated as transactional (Primary inbox) not bulk
-    const isTransactional = emailType === 'program_notification' || emailType === 'otp_code';
+    const isTransactional =
+      emailType === 'program_notification' || emailType === 'otp_code';
     const baseHeaders = {
       'X-Mailer': 'La Guía del Streaming',
       'X-Priority': '1',
       'X-MSMail-Priority': 'High',
       'X-Auto-Response-Suppress': 'All',
     };
-    
+
     // Only add Precedence: bulk for non-transactional emails
-    const headers = isTransactional 
+    const headers = isTransactional
       ? baseHeaders
-      : { ...baseHeaders, 'Precedence': 'bulk' };
-    
+      : { ...baseHeaders, Precedence: 'bulk' };
+
     // Add List-Unsubscribe for better deliverability (even for transactional emails)
     if (emailType === 'program_notification') {
-      headers['List-Unsubscribe'] = '<https://laguiadelstreaming.com/subscriptions>, <mailto:hola@laguiadelstreaming.com?subject=Unsubscribe>';
+      headers['List-Unsubscribe'] =
+        '<https://laguiadelstreaming.com/subscriptions>, <mailto:hola@laguiadelstreaming.com?subject=Unsubscribe>';
       headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
     }
-    
+
     const msg = {
       to,
       from: {
         email: senderEmail,
-        name: 'La Guía del Streaming'
+        name: 'La Guía del Streaming',
       },
       subject,
       html,
@@ -227,42 +274,50 @@ export class EmailService {
       // Add custom headers for better deliverability
       headers,
       // Add reply-to for better deliverability (use general contact for replies)
-      replyTo: emailType === 'otp_code' ? this.getSenderEmail('general') : senderEmail,
+      replyTo:
+        emailType === 'otp_code' ? this.getSenderEmail('general') : senderEmail,
       // Add custom args for tracking
-      customArgs
+      customArgs,
     };
-    
+
     await sgMail.send(msg);
   }
 
-  private async sendViaSendGridWithAttachments(to: string, subject: string, html: string, text: string, attachments: { filename: string, content: Buffer, contentType: string }[], emailType: string = 'general') {
+  private async sendViaSendGridWithAttachments(
+    to: string,
+    subject: string,
+    html: string,
+    text: string,
+    attachments: { filename: string; content: Buffer; contentType: string }[],
+    emailType: string = 'general',
+  ) {
     const sgMail = require('@sendgrid/mail');
     const apiKey = this.configService.get('SENDGRID_API_KEY');
-    
+
     sgMail.setApiKey(apiKey);
-    
+
     // Convert attachments to SendGrid format
-    const sendGridAttachments = attachments.map(attachment => ({
+    const sendGridAttachments = attachments.map((attachment) => ({
       content: attachment.content.toString('base64'),
       filename: attachment.filename,
       type: attachment.contentType,
-      disposition: 'attachment'
+      disposition: 'attachment',
     }));
-    
+
     let categories = ['reports'];
-    let customArgs = { 'source': 'reports', 'app': 'streaming_guide' };
-    
+    let customArgs = { source: 'reports', app: 'streaming_guide' };
+
     if (emailType === 'report_with_attachment') {
       categories = ['reports', 'attachments'];
-      customArgs = { 'source': 'reports', 'app': 'streaming_guide' };
+      customArgs = { source: 'reports', app: 'streaming_guide' };
     }
-    
+
     const senderEmail = this.getSenderEmail(emailType);
     const msg = {
       to,
       from: {
         email: senderEmail,
-        name: 'La Guía del Streaming'
+        name: 'La Guía del Streaming',
       },
       subject,
       html,
@@ -276,14 +331,14 @@ export class EmailService {
         'X-Priority': '1',
         'X-MSMail-Priority': 'High',
         'X-Auto-Response-Suppress': 'All',
-        'Precedence': 'bulk'
+        Precedence: 'bulk',
       },
       // Add reply-to for better deliverability
       replyTo: senderEmail,
       // Add custom args for tracking
-      customArgs
+      customArgs,
     };
-    
+
     await sgMail.send(msg);
   }
 
@@ -333,17 +388,38 @@ export class EmailService {
     `;
   }
 
-  async sendReportWithAttachment({ to, subject, text, html, attachments }: { to: string, subject: string, text: string, html: string, attachments: { filename: string, content: Buffer, contentType: string }[] }) {
+  async sendReportWithAttachment({
+    to,
+    subject,
+    text,
+    html,
+    attachments,
+  }: {
+    to: string;
+    subject: string;
+    text: string;
+    html: string;
+    attachments: { filename: string; content: Buffer; contentType: string }[];
+  }) {
     if (!this.shouldSend('report_with_attachment')) {
-      console.log(`✉️ [Non-prod] Skipping report-with-attachment email to ${to} (EMAILS_ENABLE_NON_PROD not enabled)`);
+      console.log(
+        `✉️ [Non-prod] Skipping report-with-attachment email to ${to} (EMAILS_ENABLE_NON_PROD not enabled)`,
+      );
       return;
     }
     // Try SendGrid first if configured, fallback to SMTP
     const sendGridApiKey = this.configService.get('SENDGRID_API_KEY');
-    
+
     if (sendGridApiKey) {
       try {
-        await this.sendViaSendGridWithAttachments(to, subject, html, text, attachments, 'report_with_attachment');
+        await this.sendViaSendGridWithAttachments(
+          to,
+          subject,
+          html,
+          text,
+          attachments,
+          'report_with_attachment',
+        );
         console.log(`📬 Report with attachment enviado a ${to} via SendGrid.`);
         return;
       } catch (error) {
@@ -365,37 +441,55 @@ export class EmailService {
       console.log(`📬 Report with attachment enviado a ${to} via SMTP.`);
     } catch (error) {
       console.error('❌ Error sending report with attachment:', error);
-      
-      this.sentryService.captureMessage('Email service failure - Report with attachment failed', 'error', {
-        service: 'email',
-        error_type: 'send_failure',
-        error_message: error.message,
-        email_type: 'report_with_attachment',
-        recipient: to,
-        subject: subject,
-        timestamp: new Date().toISOString(),
-      });
-      
+
+      this.sentryService.captureMessage(
+        'Email service failure - Report with attachment failed',
+        'error',
+        {
+          service: 'email',
+          error_type: 'send_failure',
+          error_message: error.message,
+          email_type: 'report_with_attachment',
+          recipient: to,
+          subject: subject,
+          timestamp: new Date().toISOString(),
+        },
+      );
+
       this.sentryService.setTag('service', 'email');
       this.sentryService.setTag('error_type', 'send_failure');
-      
+
       throw error; // Re-throw to maintain original behavior
     }
   }
 
   // Alias for backward compatibility (in case of cached builds)
   async sendReportWithAttachments(
-    toOrParams: string | { to: string, subject: string, text: string, html: string, attachments: { filename: string, content: Buffer, contentType: string }[] },
-    attachments?: { filename: string, content: Buffer, contentType: string }[]
+    toOrParams:
+      | string
+      | {
+          to: string;
+          subject: string;
+          text: string;
+          html: string;
+          attachments: {
+            filename: string;
+            content: Buffer;
+            contentType: string;
+          }[];
+        },
+    attachments?: { filename: string; content: Buffer; contentType: string }[],
   ) {
     // Handle both calling patterns:
     // 1. sendReportWithAttachments(params) - single object
     // 2. sendReportWithAttachments(to, attachments) - separate parameters
-    
+
     if (typeof toOrParams === 'string') {
       // Called with separate parameters: sendReportWithAttachments(to, attachments)
       if (!attachments) {
-        throw new Error('Attachments parameter is required when calling with separate parameters');
+        throw new Error(
+          'Attachments parameter is required when calling with separate parameters',
+        );
       }
       return this.sendReportWithAttachment({
         to: toOrParams,
@@ -413,16 +507,24 @@ export class EmailService {
   /**
    * Generic method to send emails
    */
-  async sendEmail(params: { to: string; subject: string; html: string; text?: string; emailType?: string }) {
+  async sendEmail(params: {
+    to: string;
+    subject: string;
+    html: string;
+    text?: string;
+    emailType?: string;
+  }) {
     const { to, subject, html, text, emailType = 'general' } = params;
     if (!this.shouldSend(emailType)) {
-      console.log(`✉️ [Non-prod] Skipping ${emailType} email to ${to} (EMAILS_ENABLE_NON_PROD not enabled)`);
+      console.log(
+        `✉️ [Non-prod] Skipping ${emailType} email to ${to} (EMAILS_ENABLE_NON_PROD not enabled)`,
+      );
       return;
     }
-    
+
     // Try SendGrid first if configured, fallback to SMTP
     const sendGridApiKey = this.configService.get('SENDGRID_API_KEY');
-    
+
     if (sendGridApiKey) {
       try {
         await this.sendViaSendGrid(to, subject, html, emailType);
@@ -433,7 +535,7 @@ export class EmailService {
         // Fall through to SMTP
       }
     }
-    
+
     // Fallback to SMTP
     try {
       await this.mailerService.sendMail({
@@ -446,19 +548,23 @@ export class EmailService {
       console.log(`Email enviado a ${to} via SMTP`);
     } catch (error) {
       console.error('❌ Error sending email:', error);
-      
-      this.sentryService.captureMessage('Email service failure - generic email failed to send', 'error', {
-        service: 'email',
-        error_type: 'send_failure',
-        error_message: error.message,
-        email_type: 'general',
-        recipient: to,
-        timestamp: new Date().toISOString(),
-      });
-      
+
+      this.sentryService.captureMessage(
+        'Email service failure - generic email failed to send',
+        'error',
+        {
+          service: 'email',
+          error_type: 'send_failure',
+          error_message: error.message,
+          email_type: 'general',
+          recipient: to,
+          timestamp: new Date().toISOString(),
+        },
+      );
+
       this.sentryService.setTag('service', 'email');
       this.sentryService.setTag('error_type', 'send_failure');
-      
+
       throw error;
     }
   }
@@ -467,6 +573,9 @@ export class EmailService {
    * Strip HTML tags to create plain text version
    */
   private stripHtml(html: string): string {
-    return html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+    return html
+      .replace(/<[^>]*>/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 }

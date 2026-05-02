@@ -195,7 +195,9 @@ describe('BannersController', () => {
       const result = await controller.uploadImage(mockFile);
 
       expect(result).toEqual({ url: expectedUrl });
-      expect(mockSupabaseStorageService.uploadImage).toHaveBeenCalledWith(mockFile);
+      expect(mockSupabaseStorageService.uploadImage).toHaveBeenCalledWith(
+        mockFile,
+      );
     });
 
     it('should throw BadRequestException if no file provided', async () => {

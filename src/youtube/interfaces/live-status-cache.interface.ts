@@ -36,22 +36,27 @@ export interface LiveStatusCache {
 export function createLiveStatusCacheFromStreams(
   channelId: string,
   handle: string,
-  streamsResult: { streams: LiveStream[]; primaryVideoId: string | null; streamCount: number },
-  ttl: number
+  streamsResult: {
+    streams: LiveStream[];
+    primaryVideoId: string | null;
+    streamCount: number;
+  },
+  ttl: number,
 ): LiveStatusCache {
   const hasStreams = streamsResult.streams && streamsResult.streams.length > 0;
   return {
     channelId,
     handle,
     isLive: hasStreams,
-    streamUrl: hasStreams && streamsResult.primaryVideoId
-      ? `https://www.youtube.com/embed/${streamsResult.primaryVideoId}?autoplay=1`
-      : null,
+    streamUrl:
+      hasStreams && streamsResult.primaryVideoId
+        ? `https://www.youtube.com/embed/${streamsResult.primaryVideoId}?autoplay=1`
+        : null,
     videoId: streamsResult.primaryVideoId || null,
     lastUpdated: Date.now(),
     ttl,
     blockEndTime: null, // Unknown - will be set by background service when it has schedule context
-    validationCooldown: Date.now() + (30 * 60 * 1000), // 30 min default cooldown
+    validationCooldown: Date.now() + 30 * 60 * 1000, // 30 min default cooldown
     lastValidation: Date.now(),
     streams: streamsResult.streams || [],
     streamCount: streamsResult.streamCount || 0,
@@ -73,4 +78,3 @@ export function extractLiveStreamsResult(cache: LiveStatusCache): {
     streamCount: cache.streamCount || 0,
   };
 }
-

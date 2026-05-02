@@ -24,11 +24,11 @@ jest.mock('dayjs', () => {
     isAfter: jest.fn().mockReturnValue(true),
     isBefore: jest.fn().mockReturnValue(false),
   }));
-  
+
   // Add static methods to the mock function
   (mockDayjs as any).extend = jest.fn();
   (mockDayjs as any).tz = jest.fn().mockReturnThis();
-  
+
   return mockDayjs;
 });
 
@@ -40,7 +40,7 @@ describe('TimezoneUtil', () => {
   describe('now', () => {
     it('should return current time in Argentina timezone', () => {
       const result = TimezoneUtil.now();
-      
+
       expect(dayjs).toHaveBeenCalled();
       expect(result.tz).toHaveBeenCalledWith('America/Argentina/Buenos_Aires');
     });
@@ -50,7 +50,7 @@ describe('TimezoneUtil', () => {
     it('should convert date to Argentina timezone', () => {
       const testDate = new Date('2024-01-15T18:30:00Z');
       const result = TimezoneUtil.toArgentinaTime(testDate);
-      
+
       expect(dayjs).toHaveBeenCalledWith(testDate);
       expect(result.tz).toHaveBeenCalledWith('America/Argentina/Buenos_Aires');
     });
@@ -58,7 +58,7 @@ describe('TimezoneUtil', () => {
     it('should handle string input', () => {
       const testString = '2024-01-15T18:30:00Z';
       const result = TimezoneUtil.toArgentinaTime(testString);
-      
+
       expect(dayjs).toHaveBeenCalledWith(testString);
       expect(result.tz).toHaveBeenCalledWith('America/Argentina/Buenos_Aires');
     });
@@ -67,7 +67,7 @@ describe('TimezoneUtil', () => {
   describe('currentTimeString', () => {
     it('should return formatted time string', () => {
       const result = TimezoneUtil.currentTimeString();
-      
+
       expect(result).toBe('15:30:00');
     });
   });
@@ -75,7 +75,7 @@ describe('TimezoneUtil', () => {
   describe('currentDayOfWeek', () => {
     it('should return current day of week in lowercase', () => {
       const result = TimezoneUtil.currentDayOfWeek();
-      
+
       expect(result).toBe('monday');
     });
   });
@@ -83,7 +83,7 @@ describe('TimezoneUtil', () => {
   describe('currentDateString', () => {
     it('should return formatted date string', () => {
       const result = TimezoneUtil.currentDateString();
-      
+
       expect(result).toBe('2024-01-15');
     });
   });
@@ -91,7 +91,7 @@ describe('TimezoneUtil', () => {
   describe('currentTimeInMinutes', () => {
     it('should return current time in minutes since midnight', () => {
       const result = TimezoneUtil.currentTimeInMinutes();
-      
+
       // 15 hours * 60 + 30 minutes = 930 minutes
       expect(result).toBe(930);
     });
@@ -100,7 +100,7 @@ describe('TimezoneUtil', () => {
   describe('todayAtTime', () => {
     it('should create moment for today at specific time', () => {
       const result = TimezoneUtil.todayAtTime('14:30');
-      
+
       expect(dayjs).toHaveBeenCalled();
       expect(result.startOf).toHaveBeenCalledWith('day');
       expect(result.add).toHaveBeenCalledWith(14, 'hour');
@@ -111,7 +111,7 @@ describe('TimezoneUtil', () => {
   describe('ttlUntilTime', () => {
     it('should calculate TTL until specific time', () => {
       const result = TimezoneUtil.ttlUntilTime('16:30');
-      
+
       expect(result).toBe(3600); // Mocked diff result
     });
   });
@@ -119,7 +119,7 @@ describe('TimezoneUtil', () => {
   describe('ttlUntilEndOfDay', () => {
     it('should calculate TTL until end of day', () => {
       const result = TimezoneUtil.ttlUntilEndOfDay();
-      
+
       expect(result).toBe(3600); // Mocked diff result
     });
   });
@@ -133,9 +133,9 @@ describe('TimezoneUtil', () => {
           return '2024-01-15 15:30:00';
         }),
       };
-      
+
       const result = TimezoneUtil.formatForLogging(mockMoment as any);
-      
+
       expect(result).toBe('2024-01-15 15:30:00 (-03:00)');
     });
   });
@@ -143,7 +143,7 @@ describe('TimezoneUtil', () => {
   describe('isWithinTimeRange', () => {
     it('should check if current time is within range', () => {
       const result = TimezoneUtil.isWithinTimeRange('14:00', '16:00');
-      
+
       expect(result).toBe(false); // Mocked isAfter/isBefore results
     });
   });
@@ -151,7 +151,7 @@ describe('TimezoneUtil', () => {
   describe('getTimezone', () => {
     it('should return Argentina timezone string', () => {
       const result = TimezoneUtil.getTimezone();
-      
+
       expect(result).toBe('America/Argentina/Buenos_Aires');
     });
   });

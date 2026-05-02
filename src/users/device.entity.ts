@@ -44,7 +44,10 @@ export class Device {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @OneToMany(() => PushSubscriptionEntity, (subscription) => subscription.device)
+  @OneToMany(
+    () => PushSubscriptionEntity,
+    (subscription) => subscription.device,
+  )
   pushSubscriptions: PushSubscriptionEntity[];
 
   @CreateDateColumn({ name: 'created_at' })
@@ -52,4 +55,4 @@ export class Device {
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
-} 
+}

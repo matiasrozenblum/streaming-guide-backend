@@ -5,4 +5,4 @@ import { SentryService } from './sentry.service';
   providers: [SentryService],
   exports: [SentryService],
 })
-export class SentryModule {} 
+export class SentryModule {}

@@ -16,9 +16,19 @@ describe('ProgramsController', () => {
         {
           provide: ProgramsService,
           useValue: {
-            findAll: jest.fn().mockResolvedValue([{ name: 'Programa 1', description: 'Descripción del programa' }]),
-            findOne: jest.fn().mockResolvedValue({ name: 'Programa 1', description: 'Descripción del programa' }),
-            create: jest.fn().mockResolvedValue({ name: 'Programa 1', description: 'Descripción del programa' }),
+            findAll: jest
+              .fn()
+              .mockResolvedValue([
+                { name: 'Programa 1', description: 'Descripción del programa' },
+              ]),
+            findOne: jest.fn().mockResolvedValue({
+              name: 'Programa 1',
+              description: 'Descripción del programa',
+            }),
+            create: jest.fn().mockResolvedValue({
+              name: 'Programa 1',
+              description: 'Descripción del programa',
+            }),
             remove: jest.fn().mockResolvedValue(null),
           },
         },
@@ -44,22 +54,30 @@ describe('ProgramsController', () => {
 
   it('should return an array of programs', async () => {
     const result = await controller.findAll();
-    expect(result).toEqual([{ name: 'Programa 1', description: 'Descripción del programa' }]);
+    expect(result).toEqual([
+      { name: 'Programa 1', description: 'Descripción del programa' },
+    ]);
   });
 
   it('should return a single program', async () => {
     const result = await controller.findOne('1');
-    expect(result).toEqual({ name: 'Programa 1', description: 'Descripción del programa' });
+    expect(result).toEqual({
+      name: 'Programa 1',
+      description: 'Descripción del programa',
+    });
   });
 
   it('should create a new program', async () => {
-    const createProgramDto: CreateProgramDto = { 
+    const createProgramDto: CreateProgramDto = {
       name: 'Programa 1',
       description: 'Descripción del programa',
       channel_id: 1,
     };
     const result = await controller.create(createProgramDto);
-    expect(result).toEqual({ name: 'Programa 1', description: 'Descripción del programa' });
+    expect(result).toEqual({
+      name: 'Programa 1',
+      description: 'Descripción del programa',
+    });
   });
 
   it('should delete a program', async () => {

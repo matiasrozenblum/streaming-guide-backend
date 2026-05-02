@@ -1,5 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsUrl, ValidateIf, IsBoolean, IsArray, IsNumber, IsNotEmpty } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsUrl,
+  ValidateIf,
+  IsBoolean,
+  IsArray,
+  IsNumber,
+  IsNotEmpty,
+} from 'class-validator';
 
 export class UpdateChannelDto {
   @ApiProperty({ required: false })
@@ -7,7 +16,10 @@ export class UpdateChannelDto {
   @IsOptional()
   name?: string;
 
-  @ApiProperty({ required: false, description: 'Handle de YouTube, sin arroba ni prefijo' })
+  @ApiProperty({
+    required: false,
+    description: 'Handle de YouTube, sin arroba ni prefijo',
+  })
   @IsString()
   @IsOptional()
   handle?: string;
@@ -15,7 +27,7 @@ export class UpdateChannelDto {
   @ApiProperty({ required: false })
   @IsString()
   @IsOptional()
-  @ValidateIf(o => o.logo_url !== '')
+  @ValidateIf((o) => o.logo_url !== '')
   @IsUrl()
   logo_url?: string;
 
@@ -24,34 +36,53 @@ export class UpdateChannelDto {
   @IsOptional()
   description?: string;
 
-  @ApiProperty({ required: false, description: 'Whether the channel is visible on the frontend' })
+  @ApiProperty({
+    required: false,
+    description: 'Whether the channel is visible on the frontend',
+  })
   @IsBoolean()
   @IsOptional()
   is_visible?: boolean;
 
-  @ApiProperty({ required: false, description: 'Background color for the channel logo (hex color or CSS gradient)' })
+  @ApiProperty({
+    required: false,
+    description:
+      'Background color for the channel logo (hex color or CSS gradient)',
+  })
   @IsString()
   @IsOptional()
   background_color?: string;
 
-  @ApiProperty({ required: false, description: 'Whether the channel should only show on days it has programming' })
+  @ApiProperty({
+    required: false,
+    description:
+      'Whether the channel should only show on days it has programming',
+  })
   @IsBoolean()
   @IsOptional()
   show_only_when_scheduled?: boolean;
 
-  @ApiProperty({ description: 'Array of category IDs to associate with this channel', required: false })
+  @ApiProperty({
+    description: 'Array of category IDs to associate with this channel',
+    required: false,
+  })
   @IsArray()
   @IsNumber({}, { each: true })
   @IsOptional()
   category_ids?: number[];
 
-  @ApiProperty({ description: 'Whether YouTube fetching is enabled for this channel' })
+  @ApiProperty({
+    description: 'Whether YouTube fetching is enabled for this channel',
+  })
   @IsBoolean()
   @IsNotEmpty()
   youtube_fetch_enabled: boolean;
 
-  @ApiProperty({ description: 'Whether YouTube fetching is enabled on holidays for this channel' })
+  @ApiProperty({
+    description:
+      'Whether YouTube fetching is enabled on holidays for this channel',
+  })
   @IsBoolean()
   @IsNotEmpty()
   youtube_fetch_override_holiday: boolean;
-} 
+}

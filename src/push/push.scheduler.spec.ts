@@ -164,12 +164,14 @@ describe('PushScheduler', () => {
     scheduler = module.get<PushScheduler>(PushScheduler);
     pushService = module.get<PushService>(PushService);
     emailService = module.get<EmailService>(EmailService);
-    scheduleRepository = module.get<Repository<Schedule>>(getRepositoryToken(Schedule));
+    scheduleRepository = module.get<Repository<Schedule>>(
+      getRepositoryToken(Schedule),
+    );
     userSubscriptionRepository = module.get<Repository<UserSubscription>>(
-      getRepositoryToken(UserSubscription)
+      getRepositoryToken(UserSubscription),
     );
     pushSubscriptionRepository = module.get<Repository<PushSubscriptionEntity>>(
-      getRepositoryToken(PushSubscriptionEntity)
+      getRepositoryToken(PushSubscriptionEntity),
     );
 
     // Mock logger methods
@@ -190,7 +192,9 @@ describe('PushScheduler', () => {
     it('should send push notifications for due schedules', async () => {
       const schedulesService = module.get(SchedulesService);
       jest.spyOn(schedulesService, 'findAll').mockResolvedValue([mockSchedule]);
-      mockUserSubscriptionRepository.find.mockResolvedValue([mockUserSubscription]);
+      mockUserSubscriptionRepository.find.mockResolvedValue([
+        mockUserSubscription,
+      ]);
       mockPushService.sendNotification.mockResolvedValue(undefined);
 
       await scheduler.handleNotificationsCron();
@@ -200,7 +204,13 @@ describe('PushScheduler', () => {
           program: { id: In([mockProgram.id]) },
           isActive: true,
         },
-        relations: ['user', 'user.devices', 'user.devices.pushSubscriptions', 'program', 'program.channel'],
+        relations: [
+          'user',
+          'user.devices',
+          'user.devices.pushSubscriptions',
+          'program',
+          'program.channel',
+        ],
       });
 
       expect(mockPushService.sendNotification).toHaveBeenCalledWith(
@@ -211,18 +221,27 @@ describe('PushScheduler', () => {
             body: `¡En 10 minutos comienza ${mockProgram.name}!`,
             icon: '/img/logo-192x192.png',
           },
-        }
+        },
       );
     });
 
     it('should handle multiple schedules for different programs', async () => {
       const program2 = { ...mockProgram, id: 2, name: 'Program 2' };
       const schedule2 = { ...mockSchedule, id: 2, program: program2 };
-      const subscription2 = { ...mockUserSubscription, id: 'sub-2', program: program2 };
+      const subscription2 = {
+        ...mockUserSubscription,
+        id: 'sub-2',
+        program: program2,
+      };
 
       const schedulesService = module.get(SchedulesService);
-      jest.spyOn(schedulesService, 'findAll').mockResolvedValue([mockSchedule, schedule2]);
-      mockUserSubscriptionRepository.find.mockResolvedValue([mockUserSubscription, subscription2]);
+      jest
+        .spyOn(schedulesService, 'findAll')
+        .mockResolvedValue([mockSchedule, schedule2]);
+      mockUserSubscriptionRepository.find.mockResolvedValue([
+        mockUserSubscription,
+        subscription2,
+      ]);
       mockPushService.sendNotification.mockResolvedValue(undefined);
 
       await scheduler.handleNotificationsCron();
@@ -232,13 +251,13 @@ describe('PushScheduler', () => {
         expect.any(Object),
         expect.objectContaining({
           title: mockProgram.name,
-        })
+        }),
       );
       expect(mockPushService.sendNotification).toHaveBeenCalledWith(
         expect.any(Object),
         expect.objectContaining({
           title: program2.name,
-        })
+        }),
       );
     });
 
@@ -269,7 +288,9 @@ describe('PushScheduler', () => {
 
       const schedulesService = module.get(SchedulesService);
       jest.spyOn(schedulesService, 'findAll').mockResolvedValue([mockSchedule]);
-      mockUserSubscriptionRepository.find.mockResolvedValue([subscriptionWithMultipleDevices]);
+      mockUserSubscriptionRepository.find.mockResolvedValue([
+        subscriptionWithMultipleDevices,
+      ]);
       mockPushService.sendNotification.mockResolvedValue(undefined);
 
       await scheduler.handleNotificationsCron();
@@ -324,7 +345,9 @@ describe('PushScheduler', () => {
 
       const schedulesService = module.get(SchedulesService);
       jest.spyOn(schedulesService, 'findAll').mockResolvedValue([mockSchedule]);
-      mockUserSubscriptionRepository.find.mockResolvedValue([subscriptionWithoutDevices]);
+      mockUserSubscriptionRepository.find.mockResolvedValue([
+        subscriptionWithoutDevices,
+      ]);
 
       await scheduler.handleNotificationsCron();
 
@@ -359,14 +382,18 @@ describe('PushScheduler', () => {
     it('should handle push notification failures gracefully', async () => {
       const schedulesService = module.get(SchedulesService);
       jest.spyOn(schedulesService, 'findAll').mockResolvedValue([mockSchedule]);
-      mockUserSubscriptionRepository.find.mockResolvedValue([mockUserSubscription]);
-      mockPushService.sendNotification.mockRejectedValue(new Error('Push failed'));
+      mockUserSubscriptionRepository.find.mockResolvedValue([
+        mockUserSubscription,
+      ]);
+      mockPushService.sendNotification.mockRejectedValue(
+        new Error('Push failed'),
+      );
 
       await scheduler.handleNotificationsCron();
 
       expect(scheduler['logger'].error).toHaveBeenCalledWith(
         expect.stringContaining('❌ Falló push notification'),
-        expect.any(Error)
+        expect.any(Error),
       );
     });
 
@@ -376,7 +403,9 @@ describe('PushScheduler', () => {
 
       await scheduler.handleNotificationsCron();
 
-      expect(scheduler['logger'].debug).toHaveBeenCalledWith('Ningún programa coincide.');
+      expect(scheduler['logger'].debug).toHaveBeenCalledWith(
+        'Ningún programa coincide.',
+      );
       expect(mockUserSubscriptionRepository.find).not.toHaveBeenCalled();
     });
 
@@ -388,7 +417,7 @@ describe('PushScheduler', () => {
       await scheduler.handleNotificationsCron();
 
       expect(scheduler['logger'].debug).toHaveBeenCalledWith(
-        'No hay subscripciones activas para estos programas.'
+        'No hay subscripciones activas para estos programas.',
       );
       expect(mockPushService.sendNotification).not.toHaveBeenCalled();
     });
@@ -410,8 +439,12 @@ describe('PushScheduler', () => {
       };
 
       const schedulesService = module.get(SchedulesService);
-      jest.spyOn(schedulesService, 'findAll').mockResolvedValue([scheduleWithoutChannel]);
-      mockUserSubscriptionRepository.find.mockResolvedValue([subscriptionWithoutChannel]);
+      jest
+        .spyOn(schedulesService, 'findAll')
+        .mockResolvedValue([scheduleWithoutChannel]);
+      mockUserSubscriptionRepository.find.mockResolvedValue([
+        subscriptionWithoutChannel,
+      ]);
       mockPushService.sendNotification.mockResolvedValue(undefined);
 
       await scheduler.handleNotificationsCron();
@@ -420,20 +453,22 @@ describe('PushScheduler', () => {
         expect.any(Object),
         expect.objectContaining({
           title: programWithoutChannel.name,
-        })
+        }),
       );
     });
 
     it('should log successful notifications', async () => {
       const schedulesService = module.get(SchedulesService);
       jest.spyOn(schedulesService, 'findAll').mockResolvedValue([mockSchedule]);
-      mockUserSubscriptionRepository.find.mockResolvedValue([mockUserSubscription]);
+      mockUserSubscriptionRepository.find.mockResolvedValue([
+        mockUserSubscription,
+      ]);
       mockPushService.sendNotification.mockResolvedValue(true);
 
       await scheduler.handleNotificationsCron();
 
       expect(scheduler['logger'].log).toHaveBeenCalledWith(
-        expect.stringContaining('✅ Push notification enviada')
+        expect.stringContaining('✅ Push notification enviada'),
       );
     });
 
@@ -449,7 +484,9 @@ describe('PushScheduler', () => {
       };
 
       mockScheduleRepository.find.mockResolvedValue([mockSchedule]);
-      mockUserSubscriptionRepository.find.mockResolvedValue([subscriptionWithNullDevices]);
+      mockUserSubscriptionRepository.find.mockResolvedValue([
+        subscriptionWithNullDevices,
+      ]);
 
       await scheduler.handleNotificationsCron();
 
@@ -480,4 +517,4 @@ describe('PushScheduler', () => {
       expect(mockPushService.sendNotification).not.toHaveBeenCalled();
     });
   });
-}); 
+});

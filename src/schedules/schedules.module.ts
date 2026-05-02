@@ -25,19 +25,19 @@ import { WeeklyScheduleManagerController } from './weekly-schedule-manager.contr
     SentryModule,
   ],
   controllers: [
-    SchedulesController, 
+    SchedulesController,
     WeeklyOverridesController,
-    WeeklyScheduleManagerController
+    WeeklyScheduleManagerController,
   ],
   providers: [
-    SchedulesService, 
-    WeeklyOverridesService, 
-    WeeklyScheduleManagerService
+    SchedulesService,
+    WeeklyOverridesService,
+    WeeklyScheduleManagerService,
   ],
   exports: [
-    SchedulesService, 
-    WeeklyOverridesService, 
-    WeeklyScheduleManagerService
+    SchedulesService,
+    WeeklyOverridesService,
+    WeeklyScheduleManagerService,
   ],
 })
 export class SchedulesModule {}

@@ -10,14 +10,17 @@ import { RedisModule } from '../redis/redis.module';
 import { ConfigModule } from '../config/config.module';
 
 @Module({
-  imports: [
-    forwardRef(() => StreamersModule),
-    RedisModule,
-    ConfigModule,
+  imports: [forwardRef(() => StreamersModule), RedisModule, ConfigModule],
+  controllers: [
+    TwitchWebhookController,
+    KickWebhookController,
+    TokenRefreshController,
   ],
-  controllers: [TwitchWebhookController, KickWebhookController, TokenRefreshController],
-  providers: [WebhookSubscriptionService, TokenRefreshService, TokenRefreshScheduler],
+  providers: [
+    WebhookSubscriptionService,
+    TokenRefreshService,
+    TokenRefreshScheduler,
+  ],
   exports: [WebhookSubscriptionService, TokenRefreshService],
 })
 export class WebhooksModule {}
-

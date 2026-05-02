@@ -31,7 +31,7 @@ export class PushScheduler {
     private readonly subsRepo: Repository<PushSubscriptionEntity>,
     private readonly configService: ConfigService,
     private readonly schedulesService: SchedulesService,
-  ) { }
+  ) {}
 
   @Cron(CronExpression.EVERY_MINUTE, {
     timeZone: 'America/Argentina/Buenos_Aires',
@@ -40,7 +40,9 @@ export class PushScheduler {
     // 1) Target = ahora + 10 minutos, sin segundos ni ms
     const now = TimezoneUtil.now();
     const target = now.add(10, 'minute').second(0).millisecond(0);
-    const dayOfWeek = target.isBefore(now) ? target.add(1, 'day').format('dddd').toLowerCase() : target.format('dddd').toLowerCase();
+    const dayOfWeek = target.isBefore(now)
+      ? target.add(1, 'day').format('dddd').toLowerCase()
+      : target.format('dddd').toLowerCase();
     const timeString = target.format('HH:mm:ss');
     this.logger.log(`Buscando schedules para ${dayOfWeek} a las ${timeString}`);
 
@@ -53,25 +55,33 @@ export class PushScheduler {
     });
 
     // Filtrar schedules que empiezan en 10 min
-    const dueSchedules = allSchedules.filter(s => s.start_time === timeString);
+    const dueSchedules = allSchedules.filter(
+      (s) => s.start_time === timeString,
+    );
     if (dueSchedules.length === 0) {
       this.logger.debug('Ningún programa coincide.');
       return;
     }
-    this.logger.log(`Encontrados ${dueSchedules.length} programas que coinciden.`);
-    this.logger.log(dueSchedules.map(s => {
-      return {
-        id: s.id,
-        programId: s.program.id,
-        programName: s.program.name,
-        channelName: s.program.channel?.name,
-        start_time: s.start_time,
-        end_time: s.end_time,
-      };
-    }));
+    this.logger.log(
+      `Encontrados ${dueSchedules.length} programas que coinciden.`,
+    );
+    this.logger.log(
+      dueSchedules.map((s) => {
+        return {
+          id: s.id,
+          programId: s.program.id,
+          programName: s.program.name,
+          channelName: s.program.channel?.name,
+          start_time: s.start_time,
+          end_time: s.end_time,
+        };
+      }),
+    );
 
     // 3) IDs únicos de programas
-    const programIds = Array.from(new Set(dueSchedules.map(s => s.program.id)));
+    const programIds = Array.from(
+      new Set(dueSchedules.map((s) => s.program.id)),
+    );
 
     // 4) Traer subscripciones de usuarios para esos programas
     const allUserSubscriptions = await this.userSubscriptionRepo.find({
@@ -79,7 +89,13 @@ export class PushScheduler {
         program: { id: In(programIds) },
         isActive: true,
       },
-      relations: ['user', 'user.devices', 'user.devices.pushSubscriptions', 'program', 'program.channel'],
+      relations: [
+        'user',
+        'user.devices',
+        'user.devices.pushSubscriptions',
+        'program',
+        'program.channel',
+      ],
     });
 
     if (allUserSubscriptions.length === 0) {
@@ -94,43 +110,69 @@ export class PushScheduler {
       const channelHandle = program.channel?.handle;
 
       // Gating: skip notifications if channel is not fetchable (holiday/flag)
-      if (channelHandle && !(await this.configService.canFetchLive(channelHandle))) {
-        this.logger.log(`⏸️ Notificaciones suspendidas para canal ${channelHandle} por holiday/flag`);
+      if (
+        channelHandle &&
+        !(await this.configService.canFetchLive(channelHandle))
+      ) {
+        this.logger.log(
+          `⏸️ Notificaciones suspendidas para canal ${channelHandle} por holiday/flag`,
+        );
         continue;
       }
 
       // subscripciones para este programa específico
-      const programSubscriptions = allUserSubscriptions.filter(sub => sub.program.id === program.id);
+      const programSubscriptions = allUserSubscriptions.filter(
+        (sub) => sub.program.id === program.id,
+      );
 
       for (const subscription of programSubscriptions) {
         const user = subscription.user;
 
         // Send push notifications
-        this.logger.log(`📱 User ${user.email}: ${user.devices?.length || 0} devices found`);
+        this.logger.log(
+          `📱 User ${user.email}: ${user.devices?.length || 0} devices found`,
+        );
         if (user.devices && user.devices.length > 0) {
           for (const device of user.devices) {
             const subsCount = device.pushSubscriptions?.length || 0;
-            this.logger.log(`  📱 Device ${device.deviceId} (${device.platform || 'unknown'}): ${subsCount} push subscriptions, fcmToken=${device.fcmToken ? 'yes' : 'no'}`);
-            if (device.pushSubscriptions && device.pushSubscriptions.length > 0) {
+            this.logger.log(
+              `  📱 Device ${device.deviceId} (${device.platform || 'unknown'}): ${subsCount} push subscriptions, fcmToken=${device.fcmToken ? 'yes' : 'no'}`,
+            );
+            if (
+              device.pushSubscriptions &&
+              device.pushSubscriptions.length > 0
+            ) {
               for (const pushSub of device.pushSubscriptions) {
                 const isNative = !pushSub.p256dh && !pushSub.auth;
-                this.logger.log(`    🔔 Subscription type: ${isNative ? 'NATIVE/FCM' : 'WEB'}, endpoint prefix: ${pushSub.endpoint?.substring(0, 30)}...`);
+                this.logger.log(
+                  `    🔔 Subscription type: ${isNative ? 'NATIVE/FCM' : 'WEB'}, endpoint prefix: ${pushSub.endpoint?.substring(0, 30)}...`,
+                );
                 try {
-                  const success = await this.pushService.sendNotification(pushSub, {
-                    title,
-                    options: {
-                      body: `¡En 10 minutos comienza ${title}!`,
-                      icon: '/img/logo-192x192.png',
+                  const success = await this.pushService.sendNotification(
+                    pushSub,
+                    {
+                      title,
+                      options: {
+                        body: `¡En 10 minutos comienza ${title}!`,
+                        icon: '/img/logo-192x192.png',
+                      },
                     },
-                  });
+                  );
 
                   if (success) {
-                    this.logger.log(`✅ Push notification enviada a usuario ${user.email} (device: ${device.deviceId}) para "${title}"`);
+                    this.logger.log(
+                      `✅ Push notification enviada a usuario ${user.email} (device: ${device.deviceId}) para "${title}"`,
+                    );
                   } else {
-                    this.logger.warn(`⚠️ No se pudo enviar push notification a usuario ${user.email} (device: ${device.deviceId})`);
+                    this.logger.warn(
+                      `⚠️ No se pudo enviar push notification a usuario ${user.email} (device: ${device.deviceId})`,
+                    );
                   }
                 } catch (err) {
-                  this.logger.error(`❌ Falló push notification a usuario ${user.email} (device: ${device.deviceId})`, err as any);
+                  this.logger.error(
+                    `❌ Falló push notification a usuario ${user.email} (device: ${device.deviceId})`,
+                    err as any,
+                  );
                 }
               }
             }

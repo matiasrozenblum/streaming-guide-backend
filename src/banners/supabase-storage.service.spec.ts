@@ -56,13 +56,14 @@ describe('SupabaseStorageService', () => {
 
   describe('uploadImage', () => {
     it('should upload an image successfully', async () => {
-      const expectedUrl = 'https://test.supabase.co/storage/v1/object/public/banners/test-uuid-123.jpg';
-      
+      const expectedUrl =
+        'https://test.supabase.co/storage/v1/object/public/banners/test-uuid-123.jpg';
+
       mockSupabaseClient.storage.upload.mockResolvedValue({
         data: { path: 'test-uuid-123.jpg' },
         error: null,
       });
-      
+
       mockSupabaseClient.storage.getPublicUrl.mockReturnValue({
         data: { publicUrl: expectedUrl },
       });
@@ -81,7 +82,7 @@ describe('SupabaseStorageService', () => {
       };
 
       await expect(service.uploadImage(invalidFile as any)).rejects.toThrow(
-        BadRequestException
+        BadRequestException,
       );
     });
 
@@ -92,7 +93,7 @@ describe('SupabaseStorageService', () => {
       };
 
       await expect(service.uploadImage(largeFile as any)).rejects.toThrow(
-        BadRequestException
+        BadRequestException,
       );
     });
 
@@ -102,21 +103,25 @@ describe('SupabaseStorageService', () => {
         error: { message: 'Upload failed' },
       });
 
-      await expect(service.uploadImage(mockFile)).rejects.toThrow(BadRequestException);
+      await expect(service.uploadImage(mockFile)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('should throw BadRequestException if Supabase is not configured', async () => {
       delete process.env.SUPABASE_URL;
-      
+
       // Create new service instance without config
       const module: TestingModule = await Test.createTestingModule({
         providers: [SupabaseStorageService],
       }).compile();
 
-      const unconfiguredService = module.get<SupabaseStorageService>(SupabaseStorageService);
+      const unconfiguredService = module.get<SupabaseStorageService>(
+        SupabaseStorageService,
+      );
 
       await expect(unconfiguredService.uploadImage(mockFile)).rejects.toThrow(
-        BadRequestException
+        BadRequestException,
       );
     });
 
@@ -131,9 +136,12 @@ describe('SupabaseStorageService', () => {
         data: { path: 'test-uuid-123.png' },
         error: null,
       });
-      
+
       mockSupabaseClient.storage.getPublicUrl.mockReturnValue({
-        data: { publicUrl: 'https://test.supabase.co/storage/v1/object/public/banners/test-uuid-123.png' },
+        data: {
+          publicUrl:
+            'https://test.supabase.co/storage/v1/object/public/banners/test-uuid-123.png',
+        },
       });
 
       const result = await service.uploadImage(pngFile as any);
@@ -152,9 +160,12 @@ describe('SupabaseStorageService', () => {
         data: { path: 'test-uuid-123.webp' },
         error: null,
       });
-      
+
       mockSupabaseClient.storage.getPublicUrl.mockReturnValue({
-        data: { publicUrl: 'https://test.supabase.co/storage/v1/object/public/banners/test-uuid-123.webp' },
+        data: {
+          publicUrl:
+            'https://test.supabase.co/storage/v1/object/public/banners/test-uuid-123.webp',
+        },
       });
 
       const result = await service.uploadImage(webpFile as any);
@@ -167,19 +178,21 @@ describe('SupabaseStorageService', () => {
         data: { path: 'test-uuid-123.jpg' },
         error: null,
       });
-      
+
       mockSupabaseClient.storage.getPublicUrl.mockReturnValue({
-        data: { publicUrl: 'https://test.supabase.co/storage/v1/object/public/banners/test-uuid-123.jpg' },
+        data: {
+          publicUrl:
+            'https://test.supabase.co/storage/v1/object/public/banners/test-uuid-123.jpg',
+        },
       });
 
       await service.uploadImage(mockFile);
 
       const uploadCall = mockSupabaseClient.storage.upload.mock.calls[0];
       const filename = uploadCall[0];
-      
+
       // Filename should contain UUID pattern and timestamp
       expect(filename).toMatch(/^[a-f0-9-]+-\d+\.jpg$/);
     });
   });
 });
-

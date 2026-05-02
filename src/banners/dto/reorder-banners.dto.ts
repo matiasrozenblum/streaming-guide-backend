@@ -13,9 +13,9 @@ export class BannerOrderItem {
 }
 
 export class ReorderBannersDto {
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Array of banner order items',
-    type: [BannerOrderItem]
+    type: [BannerOrderItem],
   })
   @IsArray()
   @ValidateNested({ each: true })
