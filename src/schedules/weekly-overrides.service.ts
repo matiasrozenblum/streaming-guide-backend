@@ -613,23 +613,23 @@ export class WeeklyOverridesService {
       keys.push(...keyChunk);
     }
 
-    // OPTIMIZATION: Use Redis pipeline to fetch all overrides in one round trip
+    // OPTIMIZATION: Use Redis mget in chunks to fetch all overrides efficiently
     if (keys.length > 0) {
-      const pipeline = (this.redisService as any).client.pipeline();
-      keys.forEach(key => pipeline.get(key));
-      const results = await pipeline.exec();
-      
-      // Process pipeline results and migrate if needed
-      for (let i = 0; i < results.length; i++) {
-        const result = results[i];
-        if (result[0] === null && result[1]) { // No error and has data
-          try {
-            const override = JSON.parse(result[1]);
-            // Migrate override to new structure if needed
-            const migratedOverride = await this.migrateOverrideToNewStructure(override);
-            overrides.push(migratedOverride);
-          } catch (error) {
-            this.logger.warn(`[WEEKLY-OVERRIDES] Failed to parse override ${keys[i]}:`, error);
+      const chunkSize = 500;
+      for (let i = 0; i < keys.length; i += chunkSize) {
+        const chunk = keys.slice(i, i + chunkSize);
+        const results = await this.redisService.mget<WeeklyOverride>(chunk);
+
+        for (let j = 0; j < results.length; j++) {
+          const override = results[j];
+          if (override) {
+            try {
+              // Migrate override to new structure if needed
+              const migratedOverride = await this.migrateOverrideToNewStructure(override);
+              overrides.push(migratedOverride);
+            } catch (error) {
+              this.logger.warn(`[WEEKLY-OVERRIDES] Failed to parse override ${chunk[j]}:`, error);
+            }
           }
         }
       }
@@ -928,32 +928,34 @@ export class WeeklyOverridesService {
     const now = this.dayjs().tz('America/Argentina/Buenos_Aires');
     let cleaned = 0;
 
-    // OPTIMIZATION: Use Redis pipeline to fetch all overrides in one round trip
+    // OPTIMIZATION: Use Redis mget in chunks to fetch all overrides efficiently
     if (keys.length > 0) {
-      const pipeline = (this.redisService as any).client.pipeline();
-      keys.forEach(key => pipeline.get(key));
-      const results = await pipeline.exec();
-      
       const expiredKeys: string[] = [];
+      const chunkSize = 500;
       
-      // Process pipeline results
-      results.forEach((result, index) => {
-        if (result[0] === null && result[1]) { // No error and has data
-          try {
-            const override = JSON.parse(result[1]);
-            if (override && this.dayjs(override.expiresAt).tz('America/Argentina/Buenos_Aires').isBefore(now)) {
-              expiredKeys.push(keys[index]);
+      for (let i = 0; i < keys.length; i += chunkSize) {
+        const chunk = keys.slice(i, i + chunkSize);
+        const results = await this.redisService.mget<WeeklyOverride>(chunk);
+
+        // Process mget results
+        for (let j = 0; j < results.length; j++) {
+          const override = results[j];
+          if (override) {
+            try {
+              if (this.dayjs(override.expiresAt).tz('America/Argentina/Buenos_Aires').isBefore(now)) {
+                expiredKeys.push(chunk[j]);
+              }
+            } catch (error) {
+              this.logger.warn(`[WEEKLY-OVERRIDES] Failed to process override ${chunk[j]} for cleanup:`, error);
             }
-          } catch (error) {
-            this.logger.warn(`[WEEKLY-OVERRIDES] Failed to parse override ${keys[index]} for cleanup:`, error);
           }
         }
-      });
+      }
       
-      // Delete expired overrides
-      for (const key of expiredKeys) {
-        await this.redisService.del(key);
-        cleaned++;
+      // Batch delete expired overrides
+      if (expiredKeys.length > 0) {
+        await this.redisService.del(expiredKeys);
+        cleaned += expiredKeys.length;
       }
     }
 
@@ -978,15 +980,32 @@ export class WeeklyOverridesService {
       keys.push(...keyChunk);
     }
     let deleted = 0;
-    for (const key of keys) {
-      const override = await this.redisService.get<WeeklyOverride>(key);
-      if (!override) continue;
-      if (
-        (override.programId && override.programId === programId) ||
-        (override.scheduleId && scheduleIds.includes(override.scheduleId))
-      ) {
-        await this.redisService.del(key);
-        deleted++;
+
+    // Process in chunks to avoid overwhelming Redis or hitting max call stack limits
+    if (keys.length > 0) {
+      const chunkSize = 500;
+      const keysToDelete: string[] = [];
+
+      for (let i = 0; i < keys.length; i += chunkSize) {
+        const chunk = keys.slice(i, i + chunkSize);
+        const overrides = await this.redisService.mget<WeeklyOverride>(chunk);
+
+        for (let j = 0; j < overrides.length; j++) {
+          const override = overrides[j];
+          if (!override) continue;
+
+          if (
+            (override.programId && override.programId === programId) ||
+            (override.scheduleId && scheduleIds.includes(override.scheduleId))
+          ) {
+            keysToDelete.push(chunk[j]);
+          }
+        }
+      }
+
+      if (keysToDelete.length > 0) {
+        await this.redisService.del(keysToDelete);
+        deleted += keysToDelete.length;
       }
     }
     if (deleted > 0) {
