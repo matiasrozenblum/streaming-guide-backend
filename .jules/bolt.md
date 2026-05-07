@@ -5,3 +5,7 @@
 ## 2025-03-24 - [N+1 Redis Query Avoidance in Streamer Live Status]
 **Learning:** Found N+1 Redis query patterns inside the `getLiveStatuses` method of `StreamerLiveStatusService`. For every requested streamer, it runs `await this.getLiveStatus(id)` concurrently wrapped in `Promise.all`, which executes individual `GET` commands to Redis. This leads to connection overhead and poor performance.
 **Action:** Replace `Promise.all` with individual `get` calls with a single `mget` command to batch the retrieval, mapping the responses back to the input array indices.
+
+## 2025-05-07 - [N+1 Redis Query Avoidance in Batch Fetching Live Streams]
+**Learning:** Found N+1 Redis query patterns inside the \`getBatchLiveStreams\` method of \`YoutubeLiveService\`. For every requested channel, it executes individual \`GET\` commands for \`notFoundKey\`, \`attemptTrackingKey\`, and \`statusCacheKey\` in a loop. This generates 3*N sequential network requests which leads to connection overhead and poor performance during batch processing.
+**Action:** Replace sequential \`get\` calls inside the loop with parallel \`mget\` commands outside the loop for all required keys. Iterate over arrays using indices to preserve context while reducing database roundtrips to exactly 3 regardless of the batch size.

@@ -14,6 +14,11 @@ describe('YoutubeLiveService', () => {
   let sentryService: jest.Mocked<SentryService>;
 
   beforeEach(() => {
+    if (redisService.mget) {
+      redisService.mget.mockImplementation(async (keys) => {
+        return Promise.all((keys as string[]).map(k => redisService.get(k)));
+      });
+    }
     configService = {
       isYoutubeFetchEnabledFor: jest.fn(),
       getBoolean: jest.fn(),
@@ -26,6 +31,7 @@ describe('YoutubeLiveService', () => {
     } as any;
     redisService = {
       get: jest.fn(),
+      mget: jest.fn(),
       set: jest.fn(),
       del: jest.fn(),
       incr: jest.fn(),
@@ -62,6 +68,11 @@ describe('YoutubeLiveService', () => {
 
   describe('getLiveVideoId', () => {
     beforeEach(() => {
+    if (redisService.mget) {
+      redisService.mget.mockImplementation(async (keys) => {
+        return Promise.all((keys as string[]).map(k => redisService.get(k)));
+      });
+    }
       configService.canFetchLive.mockResolvedValue(true);
     });
 
@@ -269,6 +280,11 @@ describe('YoutubeLiveService', () => {
 
   describe('getLiveStreams', () => {
     beforeEach(() => {
+    if (redisService.mget) {
+      redisService.mget.mockImplementation(async (keys) => {
+        return Promise.all((keys as string[]).map(k => redisService.get(k)));
+      });
+    }
       configService.canFetchLive.mockResolvedValue(true);
     });
 
@@ -477,6 +493,11 @@ describe('YoutubeLiveService', () => {
     let mockEmailService: any;
 
     beforeEach(() => {
+    if (redisService.mget) {
+      redisService.mget.mockImplementation(async (keys) => {
+        return Promise.all((keys as string[]).map(k => redisService.get(k)));
+      });
+    }
       mockEmailService = {
         sendEmail: jest.fn(),
       };
