@@ -1,7 +1,3 @@
-## 2025-03-05 - [N+1 DB Query Avoidance in Scraper]
-**Learning:** Found N+1 query patterns inside the `insertSchedule` method of `ScraperService`. For every scraped item, it runs `await this.programRepo.find` and then for each day `await this.scheduleRepo.findOne`. This leads to poor performance.
-**Action:** Always pre-fetch existing records into a Map or Dictionary outside of the loops to avoid N+1 DB calls.
-
-## 2025-03-24 - [N+1 Redis Query Avoidance in Streamer Live Status]
-**Learning:** Found N+1 Redis query patterns inside the `getLiveStatuses` method of `StreamerLiveStatusService`. For every requested streamer, it runs `await this.getLiveStatus(id)` concurrently wrapped in `Promise.all`, which executes individual `GET` commands to Redis. This leads to connection overhead and poor performance.
-**Action:** Replace `Promise.all` with individual `get` calls with a single `mget` command to batch the retrieval, mapping the responses back to the input array indices.
+## 2024-05-19 - Internal RedisService Limits Pipeline Capabilities
+**Learning:** The custom `RedisService` wrapper natively implements `mget` but not `pipeline`. However, exposing `(this.redisService as any).client.pipeline()` is necessary to pipeline standard `.get()` commands to achieve non-blocking bulk data fetch from matching `scanStream` keys.
+**Action:** When working with the internal `RedisService`, remember to utilize the native implementation of `mget` (which takes an array of keys) if the return values easily map, or fallback to the exposed `any` client for fully pipelined logic to optimize bulk reads cleanly in O(1) loop interactions.
