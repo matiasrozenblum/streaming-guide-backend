@@ -2,7 +2,10 @@
  * Utility function to generate service URLs from usernames
  * For Twitch and Kick, we can construct the URL from the username
  */
-export function generateServiceUrl(service: 'twitch' | 'kick' | 'youtube', username: string): string {
+export function generateServiceUrl(
+  service: 'twitch' | 'kick' | 'youtube',
+  username: string,
+): string {
   if (!username) {
     throw new Error(`Username is required for ${service} service`);
   }
@@ -19,5 +22,3 @@ export function generateServiceUrl(service: 'twitch' | 'kick' | 'youtube', usern
       throw new Error(`Unknown service: ${service}`);
   }
 }
-
-

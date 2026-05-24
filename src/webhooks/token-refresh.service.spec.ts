@@ -60,7 +60,9 @@ describe('TokenRefreshService', () => {
       const token = await service.getTwitchAccessToken();
 
       expect(token).toBe('cached-twitch-token');
-      expect(mockRedisService.get).toHaveBeenCalledWith('token:twitch:app_access');
+      expect(mockRedisService.get).toHaveBeenCalledWith(
+        'token:twitch:app_access',
+      );
       expect(mockConfigService.get).not.toHaveBeenCalled();
     });
 
@@ -72,7 +74,9 @@ describe('TokenRefreshService', () => {
       const token = await service.getTwitchAccessToken();
 
       expect(token).toBe('env-twitch-token');
-      expect(mockConfigService.get).toHaveBeenCalledWith('TWITCH_APP_ACCESS_TOKEN');
+      expect(mockConfigService.get).toHaveBeenCalledWith(
+        'TWITCH_APP_ACCESS_TOKEN',
+      );
       expect(mockRedisService.set).toHaveBeenCalled();
     });
 
@@ -99,7 +103,9 @@ describe('TokenRefreshService', () => {
       const token = await service.getKickAccessToken();
 
       expect(token).toBe('cached-kick-token');
-      expect(mockRedisService.get).toHaveBeenCalledWith('token:kick:app_access');
+      expect(mockRedisService.get).toHaveBeenCalledWith(
+        'token:kick:app_access',
+      );
     });
 
     it('should return token from env var if Redis cache is empty', async () => {
@@ -110,7 +116,9 @@ describe('TokenRefreshService', () => {
       const token = await service.getKickAccessToken();
 
       expect(token).toBe('env-kick-token');
-      expect(mockConfigService.get).toHaveBeenCalledWith('KICK_APP_ACCESS_TOKEN');
+      expect(mockConfigService.get).toHaveBeenCalledWith(
+        'KICK_APP_ACCESS_TOKEN',
+      );
     });
   });
 
@@ -333,4 +341,3 @@ describe('TokenRefreshService', () => {
     });
   });
 });
-

@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToMany, Index, JoinTable } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToMany,
+  Index,
+  JoinTable,
+} from 'typeorm';
 import { Category } from '../categories/categories.entity';
 
 export interface StreamerService {
@@ -37,4 +44,3 @@ export class Streamer {
   })
   categories?: Category[];
 }
-

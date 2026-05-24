@@ -3,22 +3,22 @@ import { StreamerLiveStatusService } from '../streamers/streamer-live-status.ser
 
 @Injectable()
 export class UpdatesService {
-    constructor(
-        private readonly streamerLiveStatusService: StreamerLiveStatusService,
-    ) { }
+  constructor(
+    private readonly streamerLiveStatusService: StreamerLiveStatusService,
+  ) {}
 
-    async getLiveStatus() {
-        const liveMap = await this.streamerLiveStatusService.getAllLiveStatuses();
-        // Start with all live IDs
-        const liveStreamerIds = Array.from(liveMap.keys());
+  async getLiveStatus() {
+    const liveMap = await this.streamerLiveStatusService.getAllLiveStatuses();
+    // Start with all live IDs
+    const liveStreamerIds = Array.from(liveMap.keys());
 
-        // We could enrich this with more data if needed, but for now just returning IDs 
-        // allows the client to know who to highlight.
-        // Spec suggests "/updates/poll"
+    // We could enrich this with more data if needed, but for now just returning IDs
+    // allows the client to know who to highlight.
+    // Spec suggests "/updates/poll"
 
-        return {
-            liveStreamerIds,
-            timestamp: Date.now(),
-        };
-    }
+    return {
+      liveStreamerIds,
+      timestamp: Date.now(),
+    };
+  }
 }

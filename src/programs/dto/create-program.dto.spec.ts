@@ -16,7 +16,7 @@ describe('CreateProgramDto', () => {
   it('should fail if name is missing', async () => {
     const dto = new CreateProgramDto();
     const errors = await validate(dto);
-    const nameError = errors.find(e => e.property === 'name');
+    const nameError = errors.find((e) => e.property === 'name');
     expect(nameError).toBeDefined();
     expect(nameError!.constraints).toHaveProperty('isNotEmpty');
   });
@@ -55,6 +55,6 @@ describe('CreateProgramDto', () => {
     dto.youtube_url = 789 as any;
     dto.channel_id = 1;
     const errors = await validate(dto);
-    expect(errors.some(e => e.property === 'youtube_url')).toBe(true);
+    expect(errors.some((e) => e.property === 'youtube_url')).toBe(true);
   });
 });

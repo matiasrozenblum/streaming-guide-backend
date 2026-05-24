@@ -14,7 +14,7 @@ jest.mock('../utils/timezone.util', () => ({
     currentTimeInMinutes: jest.fn().mockReturnValue(630), // 10:30 AM
   },
 }));
- 
+
 describe('OptimizedSchedulesService', () => {
   let service: OptimizedSchedulesService;
   let mockSchedulesService: any;
@@ -47,16 +47,19 @@ describe('OptimizedSchedulesService', () => {
     mockLiveStatusBackgroundService = {
       getLiveStatusForChannels: jest.fn().mockResolvedValue(
         new Map([
-          ['testchannel', {
-            channelId: 'test-channel-id',
-            handle: 'testchannel',
-            isLive: true,
-            streamUrl: 'https://www.youtube.com/embed/test-video?autoplay=1',
-            videoId: 'test-video',
-            lastUpdated: Date.now(),
-            ttl: 300,
-          }],
-        ])
+          [
+            'testchannel',
+            {
+              channelId: 'test-channel-id',
+              handle: 'testchannel',
+              isLive: true,
+              streamUrl: 'https://www.youtube.com/embed/test-video?autoplay=1',
+              videoId: 'test-video',
+              lastUpdated: Date.now(),
+              ttl: 300,
+            },
+          ],
+        ]),
       ),
     };
 
@@ -82,11 +85,19 @@ describe('OptimizedSchedulesService', () => {
       providers: [
         OptimizedSchedulesService,
         { provide: SchedulesService, useValue: mockSchedulesService },
-        { provide: WeeklyOverridesService, useValue: { 
-          applyWeeklyOverrides: jest.fn().mockImplementation((schedules) => Promise.resolve(schedules)),
-          getWeekStartDate: jest.fn().mockReturnValue('2024-01-01')
-        } },
-        { provide: LiveStatusBackgroundService, useValue: mockLiveStatusBackgroundService },
+        {
+          provide: WeeklyOverridesService,
+          useValue: {
+            applyWeeklyOverrides: jest
+              .fn()
+              .mockImplementation((schedules) => Promise.resolve(schedules)),
+            getWeekStartDate: jest.fn().mockReturnValue('2024-01-01'),
+          },
+        },
+        {
+          provide: LiveStatusBackgroundService,
+          useValue: mockLiveStatusBackgroundService,
+        },
         { provide: YoutubeLiveService, useValue: mockYoutubeLiveService },
         { provide: RedisService, useValue: mockRedisService },
         { provide: ConfigService, useValue: mockConfigService },
@@ -109,7 +120,9 @@ describe('OptimizedSchedulesService', () => {
 
     expect(result).toHaveLength(1);
     expect(duration).toBeLessThan(100); // Should be very fast without live status
-    expect(mockLiveStatusBackgroundService.getLiveStatusForChannels).not.toHaveBeenCalled();
+    expect(
+      mockLiveStatusBackgroundService.getLiveStatusForChannels,
+    ).not.toHaveBeenCalled();
   });
 
   it('should get schedules with live status using background cache', async () => {
@@ -122,14 +135,15 @@ describe('OptimizedSchedulesService', () => {
     expect(result).toHaveLength(1);
     expect(duration).toBeLessThan(200); // Should be fast with cached live status
     // The service now passes a handle-to-channelId map as second argument (optional)
-    expect(mockLiveStatusBackgroundService.getLiveStatusForChannels).toHaveBeenCalledWith(
-      ['testchannel'],
-      expect.any(Map)
-    );
-    
+    expect(
+      mockLiveStatusBackgroundService.getLiveStatusForChannels,
+    ).toHaveBeenCalledWith(['testchannel'], expect.any(Map));
+
     // Check that live status was applied (10:30 is within 10:00-12:00 range)
     expect(result[0].program.is_live).toBe(true);
-    expect(result[0].program.stream_url).toBe('https://www.youtube.com/embed/test-video?autoplay=1');
+    expect(result[0].program.stream_url).toBe(
+      'https://www.youtube.com/embed/test-video?autoplay=1',
+    );
   });
 
   it('should set is_live to false when program is escalated to not-found', async () => {
@@ -156,11 +170,19 @@ describe('OptimizedSchedulesService', () => {
       providers: [
         OptimizedSchedulesService,
         { provide: SchedulesService, useValue: mockSchedulesService },
-        { provide: WeeklyOverridesService, useValue: { 
-          applyWeeklyOverrides: jest.fn().mockImplementation((schedules) => Promise.resolve(schedules)),
-          getWeekStartDate: jest.fn().mockReturnValue('2024-01-01')
-        } },
-        { provide: LiveStatusBackgroundService, useValue: mockLiveStatusBackgroundService },
+        {
+          provide: WeeklyOverridesService,
+          useValue: {
+            applyWeeklyOverrides: jest
+              .fn()
+              .mockImplementation((schedules) => Promise.resolve(schedules)),
+            getWeekStartDate: jest.fn().mockReturnValue('2024-01-01'),
+          },
+        },
+        {
+          provide: LiveStatusBackgroundService,
+          useValue: mockLiveStatusBackgroundService,
+        },
         { provide: YoutubeLiveService, useValue: {} },
         { provide: RedisService, useValue: mockRedisService },
         { provide: ConfigService, useValue: mockConfigService },
@@ -212,11 +234,19 @@ describe('OptimizedSchedulesService', () => {
       providers: [
         OptimizedSchedulesService,
         { provide: SchedulesService, useValue: mockSchedulesService },
-        { provide: WeeklyOverridesService, useValue: { 
-          applyWeeklyOverrides: jest.fn().mockImplementation((schedules) => Promise.resolve(schedules)),
-          getWeekStartDate: jest.fn().mockReturnValue('2024-01-01')
-        } },
-        { provide: LiveStatusBackgroundService, useValue: mockLiveStatusBackgroundServiceNoCache },
+        {
+          provide: WeeklyOverridesService,
+          useValue: {
+            applyWeeklyOverrides: jest
+              .fn()
+              .mockImplementation((schedules) => Promise.resolve(schedules)),
+            getWeekStartDate: jest.fn().mockReturnValue('2024-01-01'),
+          },
+        },
+        {
+          provide: LiveStatusBackgroundService,
+          useValue: mockLiveStatusBackgroundServiceNoCache,
+        },
         { provide: YoutubeLiveService, useValue: {} },
         { provide: RedisService, useValue: mockRedisService },
         { provide: ConfigService, useValue: mockConfigService },

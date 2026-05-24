@@ -25,8 +25,12 @@ describe('WeeklyScheduleManagerController', () => {
       ],
     }).compile();
 
-    controller = module.get<WeeklyScheduleManagerController>(WeeklyScheduleManagerController);
-    service = module.get<WeeklyScheduleManagerService>(WeeklyScheduleManagerService);
+    controller = module.get<WeeklyScheduleManagerController>(
+      WeeklyScheduleManagerController,
+    );
+    service = module.get<WeeklyScheduleManagerService>(
+      WeeklyScheduleManagerService,
+    );
   });
 
   describe('triggerReset', () => {
@@ -36,7 +40,9 @@ describe('WeeklyScheduleManagerController', () => {
         message: 'Weekly reset completed successfully',
       };
 
-      jest.spyOn(service, 'triggerManualReset').mockResolvedValue(expectedResult);
+      jest
+        .spyOn(service, 'triggerManualReset')
+        .mockResolvedValue(expectedResult);
 
       const result = await controller.triggerReset();
 
@@ -50,7 +56,9 @@ describe('WeeklyScheduleManagerController', () => {
         message: 'Weekly reset failed: Something went wrong',
       };
 
-      jest.spyOn(service, 'triggerManualReset').mockResolvedValue(expectedResult);
+      jest
+        .spyOn(service, 'triggerManualReset')
+        .mockResolvedValue(expectedResult);
 
       const result = await controller.triggerReset();
 
@@ -71,7 +79,9 @@ describe('WeeklyScheduleManagerController', () => {
         },
       };
 
-      jest.spyOn(service, 'getCurrentWeekStats').mockResolvedValue(expectedStats);
+      jest
+        .spyOn(service, 'getCurrentWeekStats')
+        .mockResolvedValue(expectedStats);
 
       const result = await controller.getCurrentWeekStats();
 
@@ -90,7 +100,9 @@ describe('WeeklyScheduleManagerController', () => {
         },
       };
 
-      jest.spyOn(service, 'getCurrentWeekStats').mockResolvedValue(expectedStats);
+      jest
+        .spyOn(service, 'getCurrentWeekStats')
+        .mockResolvedValue(expectedStats);
 
       const result = await controller.getCurrentWeekStats();
 
@@ -124,7 +136,9 @@ describe('WeeklyScheduleManagerController', () => {
         ],
       };
 
-      jest.spyOn(service, 'getUpcomingWeekOverrides').mockResolvedValue(expectedOverrides);
+      jest
+        .spyOn(service, 'getUpcomingWeekOverrides')
+        .mockResolvedValue(expectedOverrides);
 
       const result = await controller.getUpcomingWeekOverrides();
 
@@ -139,7 +153,9 @@ describe('WeeklyScheduleManagerController', () => {
         overrides: [],
       };
 
-      jest.spyOn(service, 'getUpcomingWeekOverrides').mockResolvedValue(expectedOverrides);
+      jest
+        .spyOn(service, 'getUpcomingWeekOverrides')
+        .mockResolvedValue(expectedOverrides);
 
       const result = await controller.getUpcomingWeekOverrides();
 
@@ -147,4 +163,4 @@ describe('WeeklyScheduleManagerController', () => {
       expect(service.getUpcomingWeekOverrides).toHaveBeenCalled();
     });
   });
-}); 
+});

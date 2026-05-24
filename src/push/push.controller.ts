@@ -6,7 +6,7 @@ import { ScheduleNotificationDto } from './dto/schedule-notification.dto';
 @Controller('push')
 export class PushController {
   private readonly logger = new Logger(PushController.name);
-  constructor(private svc: PushService) { }
+  constructor(private svc: PushService) {}
 
   @Get('vapidPublicKey')
   getVapidPublicKey() {
@@ -19,8 +19,17 @@ export class PushController {
   }
 
   @Post('fcm/subscribe')
-  subscribeFCM(@Body() body: { deviceId: string; fcmToken: string; platform: 'ios' | 'android' | 'web' }) {
-    this.logger.log(`📱 FCM subscribe request: deviceId=${body.deviceId}, platform=${body.platform}, tokenPrefix=${body.fcmToken?.substring(0, 20)}...`);
+  subscribeFCM(
+    @Body()
+    body: {
+      deviceId: string;
+      fcmToken: string;
+      platform: 'ios' | 'android' | 'web';
+    },
+  ) {
+    this.logger.log(
+      `📱 FCM subscribe request: deviceId=${body.deviceId}, platform=${body.platform}, tokenPrefix=${body.fcmToken?.substring(0, 20)}...`,
+    );
     return this.svc.createFCM(body.deviceId, body.fcmToken, body.platform);
   }
 
@@ -30,14 +39,8 @@ export class PushController {
   }
 
   @Post('schedule')
-  scheduleNotification(
-    @Body() dto: ScheduleNotificationDto,
-  ) {
+  scheduleNotification(@Body() dto: ScheduleNotificationDto) {
     const { programId, title, minutesBefore } = dto;
-    return this.svc.scheduleForProgram(
-      programId,
-      title,
-      minutesBefore,
-    );
+    return this.svc.scheduleForProgram(programId, title, minutesBefore);
   }
 }

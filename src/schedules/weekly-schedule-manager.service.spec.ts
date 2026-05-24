@@ -36,8 +36,12 @@ describe('WeeklyScheduleManagerService', () => {
       ],
     }).compile();
 
-    service = module.get<WeeklyScheduleManagerService>(WeeklyScheduleManagerService);
-    weeklyOverridesService = module.get<WeeklyOverridesService>(WeeklyOverridesService);
+    service = module.get<WeeklyScheduleManagerService>(
+      WeeklyScheduleManagerService,
+    );
+    weeklyOverridesService = module.get<WeeklyOverridesService>(
+      WeeklyOverridesService,
+    );
     redisService = module.get<RedisService>(RedisService);
   });
 
@@ -45,7 +49,9 @@ describe('WeeklyScheduleManagerService', () => {
     it('should perform weekly reset successfully', async () => {
       const expiredCount = 5;
 
-      jest.spyOn(weeklyOverridesService, 'cleanupExpiredOverrides').mockResolvedValue(expiredCount);
+      jest
+        .spyOn(weeklyOverridesService, 'cleanupExpiredOverrides')
+        .mockResolvedValue(expiredCount);
       jest.spyOn(redisService, 'delByPattern').mockResolvedValue(undefined);
 
       await service.performWeeklyReset();
@@ -57,7 +63,9 @@ describe('WeeklyScheduleManagerService', () => {
     it('should handle errors during weekly reset', async () => {
       const error = new Error('Redis connection failed');
 
-      jest.spyOn(weeklyOverridesService, 'cleanupExpiredOverrides').mockRejectedValue(error);
+      jest
+        .spyOn(weeklyOverridesService, 'cleanupExpiredOverrides')
+        .mockRejectedValue(error);
 
       // Should not throw error, just log it
       await expect(service.performWeeklyReset()).resolves.toBeUndefined();
@@ -113,8 +121,12 @@ describe('WeeklyScheduleManagerService', () => {
         },
       ];
 
-      jest.spyOn(weeklyOverridesService, 'getWeekStartDate').mockReturnValue(nextWeekStart);
-      jest.spyOn(weeklyOverridesService, 'getOverridesForWeek').mockResolvedValue(overrides as any);
+      jest
+        .spyOn(weeklyOverridesService, 'getWeekStartDate')
+        .mockReturnValue(nextWeekStart);
+      jest
+        .spyOn(weeklyOverridesService, 'getOverridesForWeek')
+        .mockResolvedValue(overrides as any);
 
       const result = await service.getUpcomingWeekOverrides();
 
@@ -141,16 +153,24 @@ describe('WeeklyScheduleManagerService', () => {
         ],
       });
 
-      expect(weeklyOverridesService.getWeekStartDate).toHaveBeenCalledWith('next');
-      expect(weeklyOverridesService.getOverridesForWeek).toHaveBeenCalledWith(nextWeekStart);
+      expect(weeklyOverridesService.getWeekStartDate).toHaveBeenCalledWith(
+        'next',
+      );
+      expect(weeklyOverridesService.getOverridesForWeek).toHaveBeenCalledWith(
+        nextWeekStart,
+      );
     });
 
     it('should handle empty upcoming week overrides', async () => {
       const nextWeekStart = '2024-01-08';
       const overrides = [];
 
-      jest.spyOn(weeklyOverridesService, 'getWeekStartDate').mockReturnValue(nextWeekStart);
-      jest.spyOn(weeklyOverridesService, 'getOverridesForWeek').mockResolvedValue(overrides);
+      jest
+        .spyOn(weeklyOverridesService, 'getWeekStartDate')
+        .mockReturnValue(nextWeekStart);
+      jest
+        .spyOn(weeklyOverridesService, 'getOverridesForWeek')
+        .mockResolvedValue(overrides);
 
       const result = await service.getUpcomingWeekOverrides();
 
@@ -172,8 +192,12 @@ describe('WeeklyScheduleManagerService', () => {
         { overrideType: 'reschedule' },
       ];
 
-      jest.spyOn(weeklyOverridesService, 'getWeekStartDate').mockReturnValue(currentWeekStart);
-      jest.spyOn(weeklyOverridesService, 'getOverridesForWeek').mockResolvedValue(overrides as any);
+      jest
+        .spyOn(weeklyOverridesService, 'getWeekStartDate')
+        .mockReturnValue(currentWeekStart);
+      jest
+        .spyOn(weeklyOverridesService, 'getOverridesForWeek')
+        .mockResolvedValue(overrides as any);
 
       const result = await service.getCurrentWeekStats();
 
@@ -187,16 +211,24 @@ describe('WeeklyScheduleManagerService', () => {
         },
       });
 
-      expect(weeklyOverridesService.getWeekStartDate).toHaveBeenCalledWith('current');
-      expect(weeklyOverridesService.getOverridesForWeek).toHaveBeenCalledWith(currentWeekStart);
+      expect(weeklyOverridesService.getWeekStartDate).toHaveBeenCalledWith(
+        'current',
+      );
+      expect(weeklyOverridesService.getOverridesForWeek).toHaveBeenCalledWith(
+        currentWeekStart,
+      );
     });
 
     it('should handle empty current week stats', async () => {
       const currentWeekStart = '2024-01-01';
       const overrides = [];
 
-      jest.spyOn(weeklyOverridesService, 'getWeekStartDate').mockReturnValue(currentWeekStart);
-      jest.spyOn(weeklyOverridesService, 'getOverridesForWeek').mockResolvedValue(overrides);
+      jest
+        .spyOn(weeklyOverridesService, 'getWeekStartDate')
+        .mockReturnValue(currentWeekStart);
+      jest
+        .spyOn(weeklyOverridesService, 'getOverridesForWeek')
+        .mockResolvedValue(overrides);
 
       const result = await service.getCurrentWeekStats();
 
@@ -211,4 +243,4 @@ describe('WeeklyScheduleManagerService', () => {
       });
     });
   });
-}); 
+});

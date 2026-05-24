@@ -28,7 +28,10 @@ export class CreateProgramDto {
   @IsString()
   style_override?: string;
 
-  @ApiProperty({ required: false, description: 'Whether the program is visible on the frontend' })
+  @ApiProperty({
+    required: false,
+    description: 'Whether the program is visible on the frontend',
+  })
   @IsBoolean()
   @IsOptional()
   is_visible?: boolean;

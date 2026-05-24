@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class AddIsVisibleToProgram1767130360000 implements MigrationInterface {
   name = 'AddIsVisibleToProgram1767130360000';
@@ -22,5 +22,3 @@ export class AddIsVisibleToProgram1767130360000 implements MigrationInterface {
     `);
   }
 }
-
-
