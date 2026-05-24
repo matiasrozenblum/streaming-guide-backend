@@ -8,7 +8,12 @@ import { Program } from '../programs/programs.entity';
 import { Channel } from '../channels/channels.entity';
 import { EmailService } from '../email/email.service';
 import { ReportsProxyService } from './reports-proxy.service';
-import { ReportType, ReportPeriod, ReportFormat, ReportAction } from './dto/report.dto';
+import {
+  ReportType,
+  ReportPeriod,
+  ReportFormat,
+  ReportAction,
+} from './dto/report.dto';
 import * as dayjs from 'dayjs';
 
 @Injectable()
@@ -37,7 +42,9 @@ export class ComprehensiveReportService {
     action: ReportAction,
     toEmail?: string,
   ) {
-    const channel = await this.channelRepository.findOne({ where: { id: channelId } });
+    const channel = await this.channelRepository.findOne({
+      where: { id: channelId },
+    });
     if (!channel) {
       throw new Error('Channel not found');
     }
@@ -56,19 +63,20 @@ export class ComprehensiveReportService {
       return this.getChannelDataTable(channelId, from, to);
     }
 
-    const file = await this.reportsProxyService.generateComprehensiveChannelReport({
-      channelId,
-      from,
-      to,
-      format,
-    });
+    const file =
+      await this.reportsProxyService.generateComprehensiveChannelReport({
+        channelId,
+        from,
+        to,
+        format,
+      });
     const filename = `${channel.name}_report_${from}_to_${to}.${format}`;
 
     if (action === ReportAction.DOWNLOAD) {
-      return { 
-        filename, 
-        data: Buffer.isBuffer(file) ? file.toString('base64') : file, 
-        contentType: format === 'csv' ? 'text/csv' : 'application/pdf' 
+      return {
+        filename,
+        data: Buffer.isBuffer(file) ? file.toString('base64') : file,
+        contentType: format === 'csv' ? 'text/csv' : 'application/pdf',
       };
     } else if (action === ReportAction.EMAIL) {
       const recipient = toEmail || 'admin@laguiadelstreaming.com';
@@ -77,7 +85,13 @@ export class ComprehensiveReportService {
         subject: `Reporte del Canal ${channel.name}: ${filename}`,
         text: `Adjuntamos el reporte del canal ${channel.name} (${filename}).`,
         html: `<p>Adjuntamos el reporte del canal <b>${channel.name}</b> (<b>${filename}</b>).</p>`,
-        attachments: [{ filename, content: Buffer.isBuffer(file) ? file : Buffer.from(file), contentType: format === 'csv' ? 'text/csv' : 'application/pdf' }],
+        attachments: [
+          {
+            filename,
+            content: Buffer.isBuffer(file) ? file : Buffer.from(file),
+            contentType: format === 'csv' ? 'text/csv' : 'application/pdf',
+          },
+        ],
       });
       return { success: true, message: `Reporte enviado a ${recipient}` };
     }
@@ -122,10 +136,10 @@ export class ComprehensiveReportService {
     const filename = `${period}_${reportType}_${reportFrom}_to_${reportTo}.${format}`;
 
     if (action === ReportAction.DOWNLOAD) {
-      return { 
-        filename, 
-        data: Buffer.isBuffer(file) ? file.toString('base64') : file, 
-        contentType: format === 'csv' ? 'text/csv' : 'application/pdf' 
+      return {
+        filename,
+        data: Buffer.isBuffer(file) ? file.toString('base64') : file,
+        contentType: format === 'csv' ? 'text/csv' : 'application/pdf',
       };
     } else if (action === ReportAction.EMAIL) {
       await this.emailService.sendReportWithAttachment({
@@ -133,19 +147,35 @@ export class ComprehensiveReportService {
         subject: `Reporte ${period} automático: ${filename}`,
         text: `Adjuntamos el reporte ${period} automático (${filename}).`,
         html: `<p>Adjuntamos el reporte <b>${period}</b> automático (<b>${filename}</b>).</p>`,
-        attachments: [{ filename, content: Buffer.isBuffer(file) ? file : Buffer.from(file), contentType: format === 'csv' ? 'text/csv' : 'application/pdf' }],
+        attachments: [
+          {
+            filename,
+            content: Buffer.isBuffer(file) ? file : Buffer.from(file),
+            contentType: format === 'csv' ? 'text/csv' : 'application/pdf',
+          },
+        ],
       });
-      return { success: true, message: `Reporte ${period} enviado automáticamente` };
+      return {
+        success: true,
+        message: `Reporte ${period} enviado automáticamente`,
+      };
     }
-    
+
     // Default return for other actions
-    return { success: true, message: `Reporte ${period} generado correctamente` };
+    return {
+      success: true,
+      message: `Reporte ${period} generado correctamente`,
+    };
   }
 
   /**
    * Get channel data for table display
    */
-  private async getChannelDataTable(channelId: number, from: string, to: string) {
+  private async getChannelDataTable(
+    channelId: number,
+    from: string,
+    to: string,
+  ) {
     const subscriptions = await this.subscriptionRepository
       .createQueryBuilder('subscription')
       .leftJoinAndSelect('subscription.user', 'user')
@@ -159,11 +189,19 @@ export class ComprehensiveReportService {
 
     return {
       channelId,
-      subscriptions: subscriptions.map(sub => ({
+      subscriptions: subscriptions.map((sub) => ({
         id: sub.id,
         createdAt: sub.createdAt,
-        user: sub.user ? { id: sub.user.id, firstName: sub.user.firstName, lastName: sub.user.lastName } : null,
-        program: sub.program ? { id: sub.program.id, name: sub.program.name } : null,
+        user: sub.user
+          ? {
+              id: sub.user.id,
+              firstName: sub.user.firstName,
+              lastName: sub.user.lastName,
+            }
+          : null,
+        program: sub.program
+          ? { id: sub.program.id, name: sub.program.name }
+          : null,
       })),
       total: subscriptions.length,
     };
@@ -172,9 +210,12 @@ export class ComprehensiveReportService {
   /**
    * Get date range for different periods
    */
-  private getDateRangeForPeriod(period: ReportPeriod): { from: string; to: string } {
+  private getDateRangeForPeriod(period: ReportPeriod): {
+    from: string;
+    to: string;
+  } {
     const now = dayjs();
-    
+
     switch (period) {
       case ReportPeriod.WEEKLY:
         return {
@@ -267,4 +308,4 @@ export class ComprehensiveReportService {
       console.error('Error generating automatic yearly report:', error);
     }
   }
-} 
+}

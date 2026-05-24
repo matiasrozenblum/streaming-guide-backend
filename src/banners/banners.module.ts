@@ -7,13 +7,9 @@ import { SupabaseStorageService } from './supabase-storage.service';
 import { RedisModule } from '../redis/redis.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Banner]),
-    RedisModule,
-  ],
+  imports: [TypeOrmModule.forFeature([Banner]), RedisModule],
   controllers: [BannersController],
   providers: [BannersService, SupabaseStorageService],
   exports: [BannersService],
 })
-export class BannersModule { }
-
+export class BannersModule {}

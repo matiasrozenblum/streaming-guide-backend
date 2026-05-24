@@ -167,7 +167,7 @@ describe('ProgramsService', () => {
     notifyUtil = new NotifyAndRevalidateUtil(
       module.get<RedisService>(RedisService),
       'https://frontend.test',
-      'testsecret'
+      'testsecret',
     );
     service['notifyUtil'] = notifyUtil;
   });
@@ -179,13 +179,17 @@ describe('ProgramsService', () => {
   it('should return an array of programs', async () => {
     const result = await service.findAll();
     expect(result).toEqual([mockProgramResponse]);
-    expect(programRepository.createQueryBuilder).toHaveBeenCalledWith('program');
+    expect(programRepository.createQueryBuilder).toHaveBeenCalledWith(
+      'program',
+    );
   });
 
   it('should return a single program', async () => {
     const result = await service.findOne(1);
     expect(result).toEqual(mockProgramResponse);
-    expect(programRepository.createQueryBuilder).toHaveBeenCalledWith('program');
+    expect(programRepository.createQueryBuilder).toHaveBeenCalledWith(
+      'program',
+    );
   });
 
   it('should throw NotFoundException for non-existent program', async () => {
@@ -200,7 +204,9 @@ describe('ProgramsService', () => {
       channel_id: 1,
     };
 
-    const spy = jest.spyOn(service['notifyUtil'], 'notifyAndRevalidate').mockResolvedValue(undefined as any);
+    const spy = jest
+      .spyOn(service['notifyUtil'], 'notifyAndRevalidate')
+      .mockResolvedValue(undefined as any);
     const result = await service.create(createDto);
     expect(result).toEqual(mockProgramResponse);
     expect(programRepository.create).toHaveBeenCalledWith(createDto);
@@ -216,7 +222,9 @@ describe('ProgramsService', () => {
       channel_id: 1,
     };
 
-    const spy = jest.spyOn(service['notifyUtil'], 'notifyAndRevalidate').mockResolvedValue(undefined as any);
+    const spy = jest
+      .spyOn(service['notifyUtil'], 'notifyAndRevalidate')
+      .mockResolvedValue(undefined as any);
     const result = await service.update(1, updateDto);
     expect(result).toEqual({
       id: 1,
@@ -231,14 +239,18 @@ describe('ProgramsService', () => {
       channel_name: 'Luzu TV',
       style_override: undefined,
     });
-    expect(programRepository.createQueryBuilder).toHaveBeenCalledWith('program');
-    expect(programRepository.save).toHaveBeenCalledWith(expect.objectContaining({ 
-      id: 1, 
-      name: 'Updated Program',
-      description: 'Updated Description',
-      youtube_url: 'https://youtube.com/updated',
-      channel: mockChannel
-    }));
+    expect(programRepository.createQueryBuilder).toHaveBeenCalledWith(
+      'program',
+    );
+    expect(programRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 1,
+        name: 'Updated Program',
+        description: 'Updated Description',
+        youtube_url: 'https://youtube.com/updated',
+        channel: mockChannel,
+      }),
+    );
     expect(spy).toHaveBeenCalled();
   });
 
@@ -275,9 +287,11 @@ describe('ProgramsService', () => {
     };
     (programRepository.save as jest.Mock).mockResolvedValueOnce(updatedProgram);
 
-    const spy = jest.spyOn(service['notifyUtil'], 'notifyAndRevalidate').mockResolvedValue(undefined as any);
+    const spy = jest
+      .spyOn(service['notifyUtil'], 'notifyAndRevalidate')
+      .mockResolvedValue(undefined as any);
     const result = await service.update(1, updateDto);
-    
+
     expect(result).toEqual({
       id: 1,
       name: 'Updated Program',
@@ -291,13 +305,17 @@ describe('ProgramsService', () => {
       channel_name: 'New Channel',
       style_override: undefined,
     });
-    
-    expect(channelRepository.findOne).toHaveBeenCalledWith({ where: { id: 2 } });
-    expect(programRepository.save).toHaveBeenCalledWith(expect.objectContaining({ 
-      id: 1, 
-      name: 'Updated Program',
-      channel: newChannel
-    }));
+
+    expect(channelRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 2 },
+    });
+    expect(programRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 1,
+        name: 'Updated Program',
+        channel: newChannel,
+      }),
+    );
     expect(spy).toHaveBeenCalled();
   });
 
@@ -309,23 +327,30 @@ describe('ProgramsService', () => {
       channel_id: 999,
     };
 
-    await expect(service.update(1, updateDto)).rejects.toThrow(NotFoundException);
-    expect(channelRepository.findOne).toHaveBeenCalledWith({ where: { id: 999 } });
+    await expect(service.update(1, updateDto)).rejects.toThrow(
+      NotFoundException,
+    );
+    expect(channelRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 999 },
+    });
   });
 
   it('should remove a program and delete its weekly overrides', async () => {
     // Mock program with schedules
     const programWithSchedules = {
       ...mockProgramWithChannel,
-      schedules: [
-        { id: 10 },
-        { id: 11 },
-      ],
+      schedules: [{ id: 10 }, { id: 11 }],
     };
-    (programRepository.findOne as jest.Mock).mockResolvedValueOnce(programWithSchedules);
-    const spy = jest.spyOn(service['notifyUtil'], 'notifyAndRevalidate').mockResolvedValue(undefined as any);
+    (programRepository.findOne as jest.Mock).mockResolvedValueOnce(
+      programWithSchedules,
+    );
+    const spy = jest
+      .spyOn(service['notifyUtil'], 'notifyAndRevalidate')
+      .mockResolvedValue(undefined as any);
     await service.remove(1);
-    expect(weeklyOverridesService.deleteOverridesForProgram).toHaveBeenCalledWith(1, [10, 11]);
+    expect(
+      weeklyOverridesService.deleteOverridesForProgram,
+    ).toHaveBeenCalledWith(1, [10, 11]);
     expect(programRepository.delete).toHaveBeenCalledWith(1);
     expect(spy).toHaveBeenCalled();
   });

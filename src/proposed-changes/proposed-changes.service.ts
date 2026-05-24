@@ -25,7 +25,9 @@ export class ProposedChangesService {
     private readonly scheduleRepo: Repository<Schedule>,
   ) {}
 
-  async createProposedChange(data: CreateProposedChangeInput | CreateProposedChangeInput[]) {
+  async createProposedChange(
+    data: CreateProposedChangeInput | CreateProposedChangeInput[],
+  ) {
     const dataArray = Array.isArray(data) ? data : [data];
 
     const proposedChanges = dataArray.map((item) =>
@@ -52,18 +54,20 @@ export class ProposedChangesService {
 
   async approveChange(id: number) {
     const change = await this.proposedChangeRepo.findOne({ where: { id } });
-  
+
     if (!change) {
       throw new Error('Proposed change not found');
     }
-  
+
     if (change.status !== 'pending') {
       throw new Error('Only pending changes can be approved');
     }
-  
+
     if (change.entityType === 'program') {
-      let program = await this.programRepo.findOne({ where: { name: change.programName } });
-  
+      let program = await this.programRepo.findOne({
+        where: { name: change.programName },
+      });
+
       if (!program) {
         program = this.programRepo.create({
           name: change.after.name,
@@ -76,16 +80,20 @@ export class ProposedChangesService {
           {
             name: change.after.name,
             logo_url: change.after.logo_url,
-          }
+          },
         );
       }
     } else if (change.entityType === 'schedule') {
-      const program = await this.programRepo.findOne({ where: { name: change.programName } });
-  
+      const program = await this.programRepo.findOne({
+        where: { name: change.programName },
+      });
+
       if (!program) {
-        throw new Error(`Program "${change.programName}" not found when approving schedule`);
+        throw new Error(
+          `Program "${change.programName}" not found when approving schedule`,
+        );
       }
-  
+
       if (!change.before) {
         // 🔥 Caso especial: no hay horario previo, simplemente CREAR el nuevo schedule
         const newSchedule = this.scheduleRepo.create({
@@ -105,22 +113,22 @@ export class ProposedChangesService {
           },
           relations: ['program'],
         });
-  
+
         if (!schedule) {
           throw new Error('Schedule to update not found');
         }
-  
+
         schedule.day_of_week = change.after.day_of_week;
         schedule.start_time = change.after.start_time;
         schedule.end_time = change.after.end_time;
         await this.scheduleRepo.save(schedule);
       }
     }
-  
+
     // Actualizar estado a aprobado
     change.status = 'approved';
     await this.proposedChangeRepo.save(change);
-  
+
     return { success: true };
   }
 
@@ -145,7 +153,7 @@ export class ProposedChangesService {
   async rejectAllPendingChanges() {
     await this.proposedChangeRepo.update(
       { status: 'pending' },
-      { status: 'rejected' }
+      { status: 'rejected' },
     );
     return { success: true, message: 'All pending changes have been rejected' };
   }

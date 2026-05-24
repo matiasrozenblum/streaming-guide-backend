@@ -102,7 +102,9 @@ describe('PushController', () => {
       const error = new Error('Device not found');
       mockPushService.create.mockRejectedValue(error);
 
-      await expect(controller.subscribe(subscriptionDto)).rejects.toThrow('Device not found');
+      await expect(controller.subscribe(subscriptionDto)).rejects.toThrow(
+        'Device not found',
+      );
     });
   });
 
@@ -121,7 +123,7 @@ describe('PushController', () => {
       expect(mockPushService.scheduleForProgram).toHaveBeenCalledWith(
         scheduleDto.programId,
         scheduleDto.title,
-        scheduleDto.minutesBefore
+        scheduleDto.minutesBefore,
       );
       expect(result).toBeUndefined();
     });
@@ -136,7 +138,9 @@ describe('PushController', () => {
       const error = new Error('Scheduling failed');
       mockPushService.scheduleForProgram.mockRejectedValue(error);
 
-      await expect(controller.scheduleNotification(scheduleDto)).rejects.toThrow('Scheduling failed');
+      await expect(
+        controller.scheduleNotification(scheduleDto),
+      ).rejects.toThrow('Scheduling failed');
     });
   });
-}); 
+});

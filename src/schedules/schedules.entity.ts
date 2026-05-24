@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  Index,
+} from 'typeorm';
 import { Program } from '../programs/programs.entity';
 
 @Entity('schedule')
@@ -9,8 +16,17 @@ export class Schedule {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'day_of_week' })
-  day_of_week: string;
+  @Column({ name: 'day_of_week', type: 'varchar', nullable: true })
+  day_of_week: string | null;
+
+  @Column({ name: 'schedule_type', default: 'weekly' })
+  schedule_type: 'weekly' | 'monthly_weekday' | 'monthly_dated';
+
+  @Column({ name: 'week_number_in_month', type: 'int', nullable: true })
+  week_number_in_month: number | null;
+
+  @Column({ name: 'specific_date', type: 'date', nullable: true })
+  specific_date: string | null;
 
   @Column({ name: 'start_time' })
   start_time: string;

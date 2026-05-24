@@ -26,7 +26,9 @@ export class ResourceMonitorService implements OnModuleInit {
     const cpuUsage = this.getCpuUsage();
 
     // Log current resource usage
-    console.log(`📊 Resources: Memory ${memoryUsage.percentage.toFixed(1)}%, CPU ${cpuUsage.toFixed(1)}%`);
+    console.log(
+      `📊 Resources: Memory ${memoryUsage.percentage.toFixed(1)}%, CPU ${cpuUsage.toFixed(1)}%`,
+    );
 
     // Alert on high memory usage (P2 - High Priority)
     if (memoryUsage.percentage > 85) {
@@ -45,7 +47,7 @@ export class ResourceMonitorService implements OnModuleInit {
             memory_free: memoryUsage.free,
             threshold: 85,
             timestamp: new Date().toISOString(),
-          }
+          },
         );
 
         this.sentryService.setTag('service', 'server');
@@ -70,7 +72,7 @@ export class ResourceMonitorService implements OnModuleInit {
             memory_free: memoryUsage.free,
             threshold: 95,
             timestamp: new Date().toISOString(),
-          }
+          },
         );
 
         this.sentryService.setTag('service', 'server');
@@ -93,7 +95,7 @@ export class ResourceMonitorService implements OnModuleInit {
             cpu_cores: os.cpus().length,
             threshold: 80,
             timestamp: new Date().toISOString(),
-          }
+          },
         );
 
         this.sentryService.setTag('service', 'server');
@@ -116,7 +118,7 @@ export class ResourceMonitorService implements OnModuleInit {
             cpu_cores: os.cpus().length,
             threshold: 90,
             timestamp: new Date().toISOString(),
-          }
+          },
         );
 
         this.sentryService.setTag('service', 'server');
@@ -147,7 +149,7 @@ export class ResourceMonitorService implements OnModuleInit {
     let totalIdle = 0;
     let totalTick = 0;
 
-    cpus.forEach(cpu => {
+    cpus.forEach((cpu) => {
       for (const type in cpu.times) {
         totalTick += cpu.times[type];
       }
@@ -156,7 +158,7 @@ export class ResourceMonitorService implements OnModuleInit {
 
     const idle = totalIdle / cpus.length;
     const total = totalTick / cpus.length;
-    const usage = 100 - (idle / total * 100);
+    const usage = 100 - (idle / total) * 100;
 
     return usage;
   }
@@ -165,7 +167,7 @@ export class ResourceMonitorService implements OnModuleInit {
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     if (bytes === 0) return '0 Bytes';
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
-    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+    return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + ' ' + sizes[i];
   }
 
   // Method to get current resource stats
@@ -189,4 +191,4 @@ export class ResourceMonitorService implements OnModuleInit {
       clearInterval(this.monitoringInterval);
     }
   }
-} 
+}

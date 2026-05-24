@@ -10,4 +10,4 @@ export class UpdateProgramDto extends PartialType(CreateProgramDto) {
   @IsOptional()
   @IsBoolean()
   is_visible?: boolean;
-} 
+}

@@ -1,13 +1,28 @@
-import { Controller, Get, Post, Body, Param, Delete, Patch, NotFoundException, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Delete,
+  Patch,
+  NotFoundException,
+  UseGuards,
+} from '@nestjs/common';
 import { PanelistsService } from './panelists.service';
 import { CreatePanelistDto } from './dto/create-panelist.dto';
 import { UpdatePanelistDto } from './dto/update-panelist.dto';
 import { Panelist } from './panelists.entity';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Program } from '../programs/programs.entity';
 
-@ApiTags('panelists')  // Etiqueta para los panelistas
+@ApiTags('panelists') // Etiqueta para los panelistas
 @Controller('panelists')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
@@ -16,14 +31,22 @@ export class PanelistsController {
 
   @Get()
   @ApiOperation({ summary: 'Obtener todos los panelistas' })
-  @ApiResponse({ status: 200, description: 'Lista de panelistas', type: [Panelist] })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de panelistas',
+    type: [Panelist],
+  })
   findAll(): Promise<Panelist[]> {
     return this.panelistsService.findAll();
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Obtener un panelista por ID' })
-  @ApiResponse({ status: 200, description: 'Panelista encontrado', type: Panelist })
+  @ApiResponse({
+    status: 200,
+    description: 'Panelista encontrado',
+    type: Panelist,
+  })
   async findOne(@Param('id') id: number): Promise<Panelist> {
     const panelist = await this.panelistsService.findOne(id);
     if (!panelist) {
@@ -34,14 +57,22 @@ export class PanelistsController {
 
   @Get('program/:programId')
   @ApiOperation({ summary: 'Obtener panelistas por programa' })
-  @ApiResponse({ status: 200, description: 'Lista de panelistas del programa', type: [Panelist] })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de panelistas del programa',
+    type: [Panelist],
+  })
   findByProgram(@Param('programId') programId: string): Promise<Panelist[]> {
     return this.panelistsService.findByProgram(programId);
   }
 
   @Get(':id/programs')
   @ApiOperation({ summary: 'Obtener programas de un panelista' })
-  @ApiResponse({ status: 200, description: 'Lista de programas del panelista', type: [Program] })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de programas del panelista',
+    type: [Program],
+  })
   async getPanelistPrograms(@Param('id') id: number): Promise<Program[]> {
     const panelist = await this.panelistsService.findOne(id);
     if (!panelist) {
@@ -79,7 +110,11 @@ export class PanelistsController {
 
   @Patch(':id')
   @ApiOperation({ summary: 'Actualizar un panelista' })
-  @ApiResponse({ status: 200, description: 'Panelista actualizado', type: Panelist })
+  @ApiResponse({
+    status: 200,
+    description: 'Panelista actualizado',
+    type: Panelist,
+  })
   async update(
     @Param('id') id: string,
     @Body() updatePanelistDto: UpdatePanelistDto,

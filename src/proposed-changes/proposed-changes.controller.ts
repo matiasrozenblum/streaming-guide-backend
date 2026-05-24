@@ -1,11 +1,20 @@
-import { Controller, Get, Post, Param, Body, ParseIntPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Param,
+  Body,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { ProposedChangesService } from './proposed-changes.service';
 import { ProposedChange } from './proposed-changes.entity';
 import { CreateProposedChangeInput } from './dto/create-proposed-change-input';
 
 @Controller('proposed-changes')
 export class ProposedChangesController {
-  constructor(private readonly proposedChangesService: ProposedChangesService) {}
+  constructor(
+    private readonly proposedChangesService: ProposedChangesService,
+  ) {}
 
   @Get()
   async listPendingChanges(): Promise<ProposedChange[]> {

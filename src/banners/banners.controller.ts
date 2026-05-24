@@ -43,14 +43,15 @@ export class BannersController {
   ) {}
 
   @Get('active')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Get all active banners',
-    description: 'Returns all enabled banners within their date range, ordered by display_order'
+    description:
+      'Returns all enabled banners within their date range, ordered by display_order',
   })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Active banners retrieved successfully',
-    type: [Banner]
+    type: [Banner],
   })
   async findAllActive(): Promise<Banner[]> {
     return this.bannersService.findAllActive();
@@ -60,13 +61,13 @@ export class BannersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @ApiBearerAuth()
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Get banner statistics',
-    description: 'Returns statistics about banners (admin only)'
+    description: 'Returns statistics about banners (admin only)',
   })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Banner statistics retrieved successfully'
+  @ApiResponse({
+    status: 200,
+    description: 'Banner statistics retrieved successfully',
   })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   async getStats() {
@@ -77,14 +78,14 @@ export class BannersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @ApiBearerAuth()
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Get all banners',
-    description: 'Returns all banners (admin only)'
+    description: 'Returns all banners (admin only)',
   })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'All banners retrieved successfully',
-    type: [Banner]
+    type: [Banner],
   })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   async findAll(): Promise<Banner[]> {
@@ -95,15 +96,15 @@ export class BannersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @ApiBearerAuth()
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Get a banner by ID',
-    description: 'Returns a single banner by ID (admin only)'
+    description: 'Returns a single banner by ID (admin only)',
   })
   @ApiParam({ name: 'id', description: 'Banner ID' })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Banner retrieved successfully',
-    type: Banner
+    type: Banner,
   })
   @ApiResponse({ status: 404, description: 'Banner not found' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
@@ -115,14 +116,14 @@ export class BannersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @ApiBearerAuth()
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Create a new banner',
-    description: 'Creates a new banner (admin only)'
+    description: 'Creates a new banner (admin only)',
   })
-  @ApiResponse({ 
-    status: 201, 
+  @ApiResponse({
+    status: 201,
     description: 'Banner created successfully',
-    type: Banner
+    type: Banner,
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
@@ -134,15 +135,15 @@ export class BannersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @ApiBearerAuth()
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Update a banner',
-    description: 'Updates an existing banner (admin only)'
+    description: 'Updates an existing banner (admin only)',
   })
   @ApiParam({ name: 'id', description: 'Banner ID' })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Banner updated successfully',
-    type: Banner
+    type: Banner,
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
   @ApiResponse({ status: 404, description: 'Banner not found' })
@@ -159,9 +160,9 @@ export class BannersController {
   @Roles('admin')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Delete a banner',
-    description: 'Deletes a banner (admin only)'
+    description: 'Deletes a banner (admin only)',
   })
   @ApiParam({ name: 'id', description: 'Banner ID' })
   @ApiResponse({ status: 204, description: 'Banner deleted successfully' })
@@ -175,14 +176,14 @@ export class BannersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @ApiBearerAuth()
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Reorder banners',
-    description: 'Updates the display order of multiple banners (admin only)'
+    description: 'Updates the display order of multiple banners (admin only)',
   })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Banners reordered successfully',
-    type: [Banner]
+    type: [Banner],
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
   @ApiResponse({ status: 404, description: 'One or more banners not found' })
@@ -197,9 +198,10 @@ export class BannersController {
   @ApiBearerAuth()
   @UseInterceptors(FileInterceptor('file'))
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Upload banner image',
-    description: 'Uploads an image file to Supabase Storage and returns the public URL (admin only)'
+    description:
+      'Uploads an image file to Supabase Storage and returns the public URL (admin only)',
   })
   @ApiBody({
     schema: {
@@ -212,8 +214,8 @@ export class BannersController {
       },
     },
   })
-  @ApiResponse({ 
-    status: 201, 
+  @ApiResponse({
+    status: 201,
     description: 'Image uploaded successfully',
     schema: {
       type: 'object',
@@ -225,9 +227,14 @@ export class BannersController {
       },
     },
   })
-  @ApiResponse({ status: 400, description: 'Bad request (invalid file type or size)' })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request (invalid file type or size)',
+  })
   @ApiResponse({ status: 403, description: 'Forbidden' })
-  async uploadImage(@UploadedFile() file: Express.Multer.File): Promise<{ url: string }> {
+  async uploadImage(
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<{ url: string }> {
     if (!file) {
       throw new BadRequestException('No file provided');
     }

@@ -1,6 +1,11 @@
 import { Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { WeeklyScheduleManagerService } from './weekly-schedule-manager.service';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('weekly-schedule-manager')
@@ -8,7 +13,9 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class WeeklyScheduleManagerController {
-  constructor(private readonly weeklyManagerService: WeeklyScheduleManagerService) {}
+  constructor(
+    private readonly weeklyManagerService: WeeklyScheduleManagerService,
+  ) {}
 
   @Post('trigger-reset')
   @ApiOperation({ summary: 'Manually trigger weekly schedule reset' })
@@ -30,4 +37,4 @@ export class WeeklyScheduleManagerController {
   getUpcomingWeekOverrides(): Promise<any> {
     return this.weeklyManagerService.getUpcomingWeekOverrides();
   }
-} 
+}

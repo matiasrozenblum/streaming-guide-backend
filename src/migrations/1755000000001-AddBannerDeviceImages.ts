@@ -1,7 +1,7 @@
-import { MigrationInterface, QueryRunner, TableColumn } from "typeorm";
+import { MigrationInterface, QueryRunner, TableColumn } from 'typeorm';
 
 export class AddBannerDeviceImages1755000000001 implements MigrationInterface {
-  name = 'AddBannerDeviceImages1755000000001'
+  name = 'AddBannerDeviceImages1755000000001';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Add new nullable columns
@@ -11,7 +11,7 @@ export class AddBannerDeviceImages1755000000001 implements MigrationInterface {
         name: 'image_url_desktop',
         type: 'text',
         isNullable: true,
-      })
+      }),
     );
 
     await queryRunner.addColumn(
@@ -20,7 +20,7 @@ export class AddBannerDeviceImages1755000000001 implements MigrationInterface {
         name: 'image_url_mobile',
         type: 'text',
         isNullable: true,
-      })
+      }),
     );
 
     // Backfill: use legacy image_url for both if not set
@@ -36,4 +36,3 @@ export class AddBannerDeviceImages1755000000001 implements MigrationInterface {
     await queryRunner.dropColumn('banner', 'image_url_desktop');
   }
 }
-

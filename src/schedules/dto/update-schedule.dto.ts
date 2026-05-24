@@ -1,19 +1,53 @@
-import { IsString, IsOptional, IsEnum } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsIn,
+  IsInt,
+  Min,
+  Max,
+  IsDateString,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UpdateScheduleDto {
-  @ApiProperty({ description: 'Día de la semana (lunes, martes, etc.)', required: false })
+  @ApiProperty({ required: false })
   @IsString()
   @IsOptional()
   dayOfWeek?: string;
 
-  @ApiProperty({ description: 'Hora de inicio del programa, tipo HH:mm', required: false })
+  @ApiProperty({ required: false })
   @IsString()
   @IsOptional()
   startTime?: string;
 
-  @ApiProperty({ description: 'Hora de finalización del programa, tipo HH:mm', required: false })
+  @ApiProperty({ required: false })
   @IsString()
   @IsOptional()
   endTime?: string;
-} 
+
+  @ApiProperty({
+    required: false,
+    enum: ['weekly', 'monthly_weekday', 'monthly_dated'],
+  })
+  @IsOptional()
+  @IsIn(['weekly', 'monthly_weekday', 'monthly_dated'])
+  scheduleType?: string;
+
+  @ApiProperty({
+    required: false,
+    description: '1=first, 2=second, 3=third, 4=fourth, -1=last',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(-1)
+  @Max(4)
+  weekNumberInMonth?: number;
+
+  @ApiProperty({
+    required: false,
+    description: 'YYYY-MM-DD, only for monthly_dated type',
+  })
+  @IsOptional()
+  @IsDateString()
+  specificDate?: string;
+}

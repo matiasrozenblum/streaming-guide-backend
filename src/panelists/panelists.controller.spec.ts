@@ -104,11 +104,15 @@ describe('PanelistsController', () => {
     });
 
     it('should throw NotFoundException when updating non-existent panelist', async () => {
-      mockPanelistsService.update.mockRejectedValueOnce(new NotFoundException());
+      mockPanelistsService.update.mockRejectedValueOnce(
+        new NotFoundException(),
+      );
       const updatePanelistDto: UpdatePanelistDto = {
         name: 'Updated Panelist',
       };
-      await expect(controller.update('999', updatePanelistDto)).rejects.toThrow(NotFoundException);
+      await expect(controller.update('999', updatePanelistDto)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 

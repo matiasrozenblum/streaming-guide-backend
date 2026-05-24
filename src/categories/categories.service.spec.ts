@@ -176,7 +176,9 @@ describe('CategoriesService', () => {
 
       mockRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.findOne(categoryId)).rejects.toThrow(NotFoundException);
+      await expect(service.findOne(categoryId)).rejects.toThrow(
+        NotFoundException,
+      );
       await expect(service.findOne(categoryId)).rejects.toThrow(
         `Category with ID ${categoryId} not found`,
       );
@@ -241,9 +243,9 @@ describe('CategoriesService', () => {
 
       mockRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.update(categoryId, updateCategoryDto)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.update(categoryId, updateCategoryDto),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -269,7 +271,9 @@ describe('CategoriesService', () => {
 
       mockRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.remove(categoryId)).rejects.toThrow(NotFoundException);
+      await expect(service.remove(categoryId)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -283,12 +287,17 @@ describe('CategoriesService', () => {
 
       const result = await service.searchByName(searchTerm);
 
-      expect(mockRepository.createQueryBuilder).toHaveBeenCalledWith('category');
+      expect(mockRepository.createQueryBuilder).toHaveBeenCalledWith(
+        'category',
+      );
       expect(mockQueryBuilder.where).toHaveBeenCalledWith(
         'category.name ILIKE :searchTerm',
         { searchTerm: `%${searchTerm}%` },
       );
-      expect(mockQueryBuilder.orderBy).toHaveBeenCalledWith('category.name', 'ASC');
+      expect(mockQueryBuilder.orderBy).toHaveBeenCalledWith(
+        'category.name',
+        'ASC',
+      );
       expect(result).toEqual(expectedResults);
     });
 

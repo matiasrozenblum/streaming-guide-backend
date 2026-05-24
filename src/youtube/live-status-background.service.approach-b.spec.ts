@@ -42,7 +42,7 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
     lastUpdated: Date.now(),
     ttl: 300,
     blockEndTime: 660, // 11:00 AM
-    validationCooldown: Date.now() + (30 * 60 * 1000),
+    validationCooldown: Date.now() + 30 * 60 * 1000,
     lastValidation: Date.now(),
     streams: [
       {
@@ -51,7 +51,7 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
         description: 'Test description',
         thumbnailUrl: 'https://example.com/thumb.jpg',
         publishedAt: new Date().toISOString(),
-      }
+      },
     ],
     streamCount: 1,
   };
@@ -104,7 +104,9 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
       ],
     }).compile();
 
-    service = module.get<LiveStatusBackgroundService>(LiveStatusBackgroundService);
+    service = module.get<LiveStatusBackgroundService>(
+      LiveStatusBackgroundService,
+    );
     youtubeLiveService = module.get<YoutubeLiveService>(YoutubeLiveService);
     schedulesService = module.get<SchedulesService>(SchedulesService);
     redisService = module.get<RedisService>(RedisService);
@@ -126,7 +128,9 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
       const result = await service.getCachedLiveStatus(handle);
 
       // Assert
-      expect(redisService.get).toHaveBeenCalledWith(`liveStatusByHandle:${handle}`);
+      expect(redisService.get).toHaveBeenCalledWith(
+        `liveStatusByHandle:${handle}`,
+      );
       expect(result).toEqual(mockLiveStatusCache);
     });
 
@@ -147,7 +151,10 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
     it('should return cached data when available and not expired', async () => {
       // Arrange
       const handles = ['testhandle'];
-      const mockCached = { ...mockLiveStatusCache, lastUpdated: Date.now() - 1000 }; // 1 second ago
+      const mockCached = {
+        ...mockLiveStatusCache,
+        lastUpdated: Date.now() - 1000,
+      }; // 1 second ago
       jest.spyOn(service, 'getCachedLiveStatus').mockResolvedValue(mockCached);
       jest.spyOn(service as any, 'shouldUpdateCache').mockResolvedValue(false);
 
@@ -162,7 +169,10 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
     it('should return empty map when data is expired (fresh updates handled by cron)', async () => {
       // Arrange
       const handles = ['testhandle'];
-      const mockCached = { ...mockLiveStatusCache, lastUpdated: Date.now() - 10000 }; // 10 seconds ago
+      const mockCached = {
+        ...mockLiveStatusCache,
+        lastUpdated: Date.now() - 10000,
+      }; // 10 seconds ago
       jest.spyOn(service, 'getCachedLiveStatus').mockResolvedValue(mockCached);
       jest.spyOn(service as any, 'shouldUpdateCache').mockResolvedValue(true);
 
@@ -184,14 +194,16 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
 
       // Assert
       expect(service['logger'].log).toHaveBeenCalledWith(
-        '[LIVE-STATUS-UPDATE] Skipping bulk update - only updating channels with live programs'
+        '[LIVE-STATUS-UPDATE] Skipping bulk update - only updating channels with live programs',
       );
     });
 
     it('should handle no channels gracefully', async () => {
       // Arrange
       jest.spyOn(service['channelsRepository'], 'find').mockResolvedValue([]);
-      jest.spyOn(service as any, 'updateChannelsInBatches').mockResolvedValue(new Map());
+      jest
+        .spyOn(service as any, 'updateChannelsInBatches')
+        .mockResolvedValue(new Map());
 
       // Act
       await (service as any).updateLiveStatusForAllChannels();
@@ -202,10 +214,14 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
 
     it('should handle repository errors gracefully', async () => {
       // Arrange
-      jest.spyOn(service['channelsRepository'], 'find').mockRejectedValue(new Error('Database error'));
+      jest
+        .spyOn(service['channelsRepository'], 'find')
+        .mockRejectedValue(new Error('Database error'));
 
       // Act & Assert
-      await expect((service as any).updateLiveStatusForAllChannels()).resolves.not.toThrow();
+      await expect(
+        (service as any).updateLiveStatusForAllChannels(),
+      ).resolves.not.toThrow();
     });
   });
 
@@ -221,19 +237,19 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
             description: 'Test description',
             thumbnailUrl: 'https://example.com/thumb.jpg',
             publishedAt: new Date().toISOString(),
-          }
+          },
         ],
         primaryVideoId: 'VIDEO_123',
         streamCount: 1,
       };
-      
+
       // Create a schedule that is currently live (current time is 10:30 AM, so 10:00-11:00 works)
       const mockSchedules = [
         {
           id: 1,
           day_of_week: 'monday', // Matches the mocked currentDayOfWeek
           start_time: '10:00:00', // Starts at 10:00 AM
-          end_time: '11:00:00',   // Ends at 11:00 AM (current time 10:30 AM is between these)
+          end_time: '11:00:00', // Ends at 11:00 AM (current time 10:30 AM is between these)
           program: {
             id: 1,
             name: 'Test Program',
@@ -241,20 +257,28 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
               id: 1,
               youtube_channel_id: channelId,
               handle: 'testchannel',
-            }
-          }
-        }
+            },
+          },
+        },
       ];
 
       jest.spyOn(schedulesService, 'findAll').mockImplementation((options) => {
         // Mock the findAll method to return schedules when called with the expected parameters
-        if (options?.dayOfWeek && options?.liveStatus === false && options?.applyOverrides === true) {
+        if (
+          options?.dayOfWeek &&
+          options?.liveStatus === false &&
+          options?.applyOverrides === true
+        ) {
           return Promise.resolve(mockSchedules);
         }
         return Promise.resolve([]);
       });
-      jest.spyOn(schedulesService, 'findByDay').mockResolvedValue(mockSchedules);
-      jest.spyOn(youtubeLiveService, 'getLiveStreamsMain').mockResolvedValue(mockLiveStreamsResult);
+      jest
+        .spyOn(schedulesService, 'findByDay')
+        .mockResolvedValue(mockSchedules);
+      jest
+        .spyOn(youtubeLiveService, 'getLiveStreamsMain')
+        .mockResolvedValue(mockLiveStreamsResult);
       jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
       jest.spyOn(configService, 'canFetchLive').mockResolvedValue(true);
 
@@ -262,19 +286,21 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
       const result = await (service as any).updateChannelLiveStatus(channelId);
 
       // Assert
-      expect(result).toEqual(expect.objectContaining({
-        channelId,
-        isLive: true,
-        streams: mockLiveStreamsResult.streams,
-        streamCount: 1,
-      }));
+      expect(result).toEqual(
+        expect.objectContaining({
+          channelId,
+          isLive: true,
+          streams: mockLiveStreamsResult.streams,
+          streamCount: 1,
+        }),
+      );
       expect(redisService.set).toHaveBeenCalledWith(
         `liveStatusByHandle:testchannel`,
         expect.objectContaining({
           streams: mockLiveStreamsResult.streams,
           streamCount: 1,
         }),
-        expect.any(Number)
+        expect.any(Number),
       );
     });
   });

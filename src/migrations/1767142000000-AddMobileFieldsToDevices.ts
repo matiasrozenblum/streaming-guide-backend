@@ -1,6 +1,8 @@
 import { MigrationInterface, QueryRunner, TableColumn } from 'typeorm';
 
-export class AddMobileFieldsToDevices1767142000000 implements MigrationInterface {
+export class AddMobileFieldsToDevices1767142000000
+  implements MigrationInterface
+{
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Add fcm_token column
     await queryRunner.addColumn(

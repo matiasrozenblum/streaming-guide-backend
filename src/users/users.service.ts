@@ -1,4 +1,10 @@
-import { ConflictException, Injectable, NotFoundException, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -14,7 +20,7 @@ export class UsersService {
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     private deviceService: DeviceService,
-  ) { }
+  ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
     if (createUserDto.email) {
@@ -33,7 +39,9 @@ export class UsersService {
       age--;
     }
     if (age < 18) {
-      throw new BadRequestException('Debes ser mayor de 18 años para registrarte');
+      throw new BadRequestException(
+        'Debes ser mayor de 18 años para registrarte',
+      );
     }
     const hashedPassword = await bcrypt.hash(password, 10);
     const userData = {
@@ -45,13 +53,22 @@ export class UsersService {
     const user = this.usersRepository.create(userData);
     const saved = await this.usersRepository.save(user);
     if (Array.isArray(saved)) {
-      throw new Error('Unexpected array returned from save when saving a single user');
+      throw new Error(
+        'Unexpected array returned from save when saving a single user',
+      );
     }
     return saved;
   }
 
   /** Create user for social login (no password required) */
-  async createSocialUser(body: { firstName: string; lastName: string; email: string; gender?: string; birthDate?: string; origin?: string }): Promise<User> {
+  async createSocialUser(body: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    gender?: string;
+    birthDate?: string;
+    origin?: string;
+  }): Promise<User> {
     if (body.email) {
       body.email = body.email.toLowerCase().trim();
     }
@@ -59,9 +76,18 @@ export class UsersService {
     const randomPassword = randomBytes(16).toString('hex'); // always a string
     // Validate gender
     const allowedGenders = ['male', 'female', 'non_binary', 'rather_not_say'];
-    let gender: 'male' | 'female' | 'non_binary' | 'rather_not_say' | undefined = undefined;
+    let gender:
+      | 'male'
+      | 'female'
+      | 'non_binary'
+      | 'rather_not_say'
+      | undefined = undefined;
     if (body.gender && allowedGenders.includes(body.gender)) {
-      gender = body.gender as 'male' | 'female' | 'non_binary' | 'rather_not_say';
+      gender = body.gender as
+        | 'male'
+        | 'female'
+        | 'non_binary'
+        | 'rather_not_say';
     }
     // Validate origin
     const allowedOrigins = ['traditional', 'google', 'facebook', 'apple'];
@@ -82,12 +108,17 @@ export class UsersService {
     const user = this.usersRepository.create(userData);
     const saved = await this.usersRepository.save(user);
     if (Array.isArray(saved)) {
-      throw new Error('Unexpected array returned from save when saving a single user');
+      throw new Error(
+        'Unexpected array returned from save when saving a single user',
+      );
     }
     return saved;
   }
 
-  async findAll(page: number = 1, pageSize: number = 20): Promise<{ users: User[]; total: number; page: number; pageSize: number }> {
+  async findAll(
+    page: number = 1,
+    pageSize: number = 20,
+  ): Promise<{ users: User[]; total: number; page: number; pageSize: number }> {
     const skip = (page - 1) * pageSize;
 
     const [users, total] = await this.usersRepository.findAndCount({
@@ -129,22 +160,31 @@ export class UsersService {
     }
 
     // Fix: ensure birthDate is a Date if present
-    if (updateUserDto.birthDate && typeof updateUserDto.birthDate === 'string') {
+    if (
+      updateUserDto.birthDate &&
+      typeof updateUserDto.birthDate === 'string'
+    ) {
       updateUserDto.birthDate = new Date(updateUserDto.birthDate) as any;
     }
 
     // Fix: ensure gender is correct enum
     const allowedGenders = ['male', 'female', 'non_binary', 'rather_not_say'];
-    if (updateUserDto.gender && !allowedGenders.includes(updateUserDto.gender)) {
+    if (
+      updateUserDto.gender &&
+      !allowedGenders.includes(updateUserDto.gender)
+    ) {
       updateUserDto.gender = undefined;
     }
 
-    const updateData = Object.entries(updateUserDto).reduce((acc, [key, value]) => {
-      if (value !== undefined && value !== null && value !== '') {
-        acc[key] = value;
-      }
-      return acc;
-    }, {} as Partial<User>);
+    const updateData = Object.entries(updateUserDto).reduce(
+      (acc, [key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          acc[key] = value;
+        }
+        return acc;
+      },
+      {} as Partial<User>,
+    );
 
     Object.assign(user, updateData);
     try {
@@ -161,13 +201,16 @@ export class UsersService {
   /**
    * Fast profile completion update - optimized for social users (no password hashing)
    */
-  async updateProfile(id: number, profileData: {
-    firstName: string;
-    lastName: string;
-    gender: string;
-    birthDate: string;
-    password?: string;
-  }): Promise<User> {
+  async updateProfile(
+    id: number,
+    profileData: {
+      firstName: string;
+      lastName: string;
+      gender: string;
+      birthDate: string;
+      password?: string;
+    },
+  ): Promise<User> {
     const user = await this.usersRepository.findOne({ where: { id } });
     if (!user) throw new NotFoundException(`User with ID ${id} not found`);
 
@@ -191,7 +234,7 @@ export class UsersService {
       lastName: profileData.lastName,
       gender: profileData.gender,
       birthDate,
-      ...(profileData.password && { password: profileData.password })
+      ...(profileData.password && { password: profileData.password }),
     });
 
     try {
@@ -243,7 +286,10 @@ export class UsersService {
     newPassword: string,
   ): Promise<void> {
     const user = await this.findOne(userId);
-    const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    const isPasswordValid = await bcrypt.compare(
+      currentPassword,
+      user.password,
+    );
 
     if (!isPasswordValid) {
       throw new UnauthorizedException('Current password is incorrect');
@@ -258,21 +304,29 @@ export class UsersService {
    * Ensure user has a device for the current session
    * This is called when a user logs in to automatically create a device if needed
    */
-  async ensureUserDevice(user: User, userAgent: string, deviceId?: string): Promise<string> {
+  async ensureUserDevice(
+    user: User,
+    userAgent: string,
+    deviceId?: string,
+  ): Promise<string> {
     console.log('🔍 [UsersService] ensureUserDevice called with:', {
       userId: user.id,
       userEmail: user.email,
       userAgent,
       deviceId,
       timestamp: new Date().toISOString(),
-      stack: new Error().stack?.split('\n').slice(1, 4).join('\n') // Show call stack
+      stack: new Error().stack?.split('\n').slice(1, 4).join('\n'), // Show call stack
     });
 
-    const device = await this.deviceService.findOrCreateDevice(user, userAgent, deviceId);
+    const device = await this.deviceService.findOrCreateDevice(
+      user,
+      userAgent,
+      deviceId,
+    );
 
     console.log('✅ [UsersService] ensureUserDevice completed:', {
       deviceId: device.deviceId,
-      deviceName: device.deviceName
+      deviceName: device.deviceName,
     });
 
     return device.deviceId;
