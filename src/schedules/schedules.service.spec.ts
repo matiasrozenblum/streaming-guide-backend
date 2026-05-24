@@ -76,28 +76,34 @@ jest.mock('dayjs', () => {
           },
         };
       },
-      add: (amount: number, unit: string) => {
-        return {
-          diff: (date: any, unit: string) => {
-            // Return a reasonable TTL value for testing
-            return 3600; // 1 hour in seconds
-          },
-        };
+      day: () => {
+        const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        return days.indexOf(currentDay);
       },
+      add: (amount: number, unit: string) => makeChainable(),
       diff: (date: any, unit: string) => {
         // Return a reasonable TTL value for testing
         return 3600; // 1 hour in seconds
       },
-      endOf: (unit: string) => {
-        return {
-          diff: (date: any, unit: string) => {
-            // Return a reasonable TTL value for testing
-            return 3600; // 1 hour in seconds
-          },
-        };
-      },
+      endOf: (unit: string) => makeChainable(),
     };
   };
+
+  // Chainable stub for date arithmetic (getDayDateInCurrentWeek / filterSchedulesByContext)
+  const makeChainable = (): any => ({
+    day: () => {
+      const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      return days.indexOf(currentDay);
+    },
+    month: () => 4,
+    startOf: () => makeChainable(),
+    endOf: () => makeChainable(),
+    add: () => makeChainable(),
+    isAfter: () => false,
+    isBefore: () => false,
+    diff: () => 3600,
+    format: () => '',
+  });
 
   mockDayjs.extend = actualDayjs.extend;
   return mockDayjs;
@@ -861,6 +867,9 @@ describe('SchedulesService', () => {
           day_of_week: 'monday',
           start_time: '10:00',
           end_time: '12:00',
+          schedule_type: 'weekly' as const,
+          week_number_in_month: null,
+          specific_date: null,
           program: {
             id: 1,
             name: 'Dejá que entre el sol', // Different name from YouTube title

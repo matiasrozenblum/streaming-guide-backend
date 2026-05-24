@@ -22,6 +22,9 @@ describe('SchedulesService Logging Improvements', () => {
     start_time: '10:00:00',
     end_time: '11:00:00',
     program_id: '1',
+    schedule_type: 'weekly',
+    week_number_in_month: null,
+    specific_date: null,
     program: {
       id: 1,
       name: 'Test Program',
