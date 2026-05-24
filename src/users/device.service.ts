@@ -10,7 +10,7 @@ export class DeviceService {
   constructor(
     @InjectRepository(Device)
     private deviceRepository: Repository<Device>,
-  ) { }
+  ) {}
 
   async findOrCreateDevice(
     user: User,
@@ -27,7 +27,7 @@ export class DeviceService {
       deviceId,
       platform,
       appVersion,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
 
     // Generate device ID if not provided
@@ -46,7 +46,7 @@ export class DeviceService {
         deviceName: device.deviceName,
         currentUserId: device.user?.id,
         newUserId: user.id,
-        lastSeen: device.lastSeen
+        lastSeen: device.lastSeen,
       });
 
       // Update basic fields
@@ -64,10 +64,14 @@ export class DeviceService {
         // Only update lastSeen if it's been more than 5 minutes since last update
         const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
         if (!device.lastSeen || device.lastSeen < fiveMinutesAgo) {
-          console.log('🔄 [DeviceService] Updating lastSeen (more than 5 minutes since last update)');
+          console.log(
+            '🔄 [DeviceService] Updating lastSeen (more than 5 minutes since last update)',
+          );
           device.lastSeen = new Date();
         } else {
-          console.log('⏭️ [DeviceService] Skipping lastSeen update (updated recently)');
+          console.log(
+            '⏭️ [DeviceService] Skipping lastSeen update (updated recently)',
+          );
         }
       }
 
@@ -76,7 +80,9 @@ export class DeviceService {
       return updatedDevice;
     }
 
-    console.log('🆕 [DeviceService] No existing device found, creating new one');
+    console.log(
+      '🆕 [DeviceService] No existing device found, creating new one',
+    );
 
     // Try to create new device
     try {
@@ -97,26 +103,35 @@ export class DeviceService {
         deviceName: newDevice.deviceName,
         deviceType: newDevice.deviceType,
         userAgent: newDevice.userAgent,
-        userId: user.id
+        userId: user.id,
       });
 
       const savedDevice = await this.deviceRepository.save(newDevice);
-      console.log('✅ [DeviceService] Successfully created new device with ID:', savedDevice.id);
+      console.log(
+        '✅ [DeviceService] Successfully created new device with ID:',
+        savedDevice.id,
+      );
       return savedDevice;
     } catch (error) {
       console.error('❌ [DeviceService] Error creating device:', error);
 
       // If unique constraint violation, try to find the device again
       // This handles race conditions where another request created the device
-      if (error.code === '23505') { // PostgreSQL unique violation
-        console.log('🔄 [DeviceService] Unique constraint violation, trying to find existing device');
+      if (error.code === '23505') {
+        // PostgreSQL unique violation
+        console.log(
+          '🔄 [DeviceService] Unique constraint violation, trying to find existing device',
+        );
         device = await this.deviceRepository.findOne({
           where: { deviceId: finalDeviceId },
           relations: ['user'],
         });
 
         if (device) {
-          console.log('✅ [DeviceService] Found device after constraint violation:', device.deviceId);
+          console.log(
+            '✅ [DeviceService] Found device after constraint violation:',
+            device.deviceId,
+          );
           // Update the existing device
           if (!device.user || device.user.id !== user.id) {
             device.user = user;
@@ -130,10 +145,14 @@ export class DeviceService {
           }
           device.userAgent = userAgent;
           const updatedDevice = await this.deviceRepository.save(device);
-          console.log('✅ [DeviceService] Updated device after constraint violation');
+          console.log(
+            '✅ [DeviceService] Updated device after constraint violation',
+          );
           return updatedDevice;
         } else {
-          console.error('❌ [DeviceService] Device not found even after constraint violation');
+          console.error(
+            '❌ [DeviceService] Device not found even after constraint violation',
+          );
         }
       }
 
@@ -149,16 +168,13 @@ export class DeviceService {
   }
 
   async updateDeviceLastSeen(deviceId: string): Promise<void> {
-    await this.deviceRepository.update(
-      { deviceId },
-      { lastSeen: new Date() },
-    );
+    await this.deviceRepository.update({ deviceId }, { lastSeen: new Date() });
   }
 
   async findDeviceByUser(userId: number): Promise<Device | null> {
     console.log('🔍 [DeviceService] findDeviceByUser called with:', {
       userId,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
 
     const device = await this.deviceRepository.findOne({
@@ -170,7 +186,7 @@ export class DeviceService {
       console.log('✅ [DeviceService] Found device for user:', {
         deviceId: device.deviceId,
         deviceName: device.deviceName,
-        userId: device.user?.id
+        userId: device.user?.id,
       });
     } else {
       console.log('❌ [DeviceService] No device found for user:', userId);
@@ -197,4 +213,4 @@ export class DeviceService {
     if (/Android/.test(userAgent)) return 'Android Device';
     return 'Unknown Device';
   }
-} 
+}

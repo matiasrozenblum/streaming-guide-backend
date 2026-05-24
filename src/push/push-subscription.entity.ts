@@ -15,7 +15,9 @@ export class PushSubscriptionEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => Device, (device) => device.pushSubscriptions, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Device, (device) => device.pushSubscriptions, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'device_id' })
   device: Device;
 

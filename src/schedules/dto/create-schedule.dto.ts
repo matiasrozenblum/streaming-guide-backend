@@ -1,55 +1,94 @@
-import { IsString, IsNotEmpty, IsEnum, IsArray, ValidateNested, IsOptional, ArrayMinSize } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsArray,
+  ValidateNested,
+  IsOptional,
+  ArrayMinSize,
+  IsIn,
+  IsInt,
+  Min,
+  Max,
+  IsDateString,
+} from 'class-validator';
 import { Type } from 'class-transformer';
-import { Program } from '../../programs/programs.entity';
 
 export class CreateScheduleDto {
   @IsString()
   @IsNotEmpty()
-  programId: string; // ID del programa asociado al horario
+  programId: string;
 
   @IsString()
   @IsNotEmpty()
-  channelId: string; // ID del canal asociado al horario
+  channelId: string;
+
+  @IsOptional()
+  @IsString()
+  dayOfWeek?: string;
 
   @IsString()
   @IsNotEmpty()
-  dayOfWeek: string; // Día de la semana (lunes, martes, etc.)
+  startTime: string;
 
   @IsString()
   @IsNotEmpty()
-  startTime: string; // Hora de inicio del programa, tipo 'HH:mm'
+  endTime: string;
 
-  @IsString()
-  @IsNotEmpty()
-  endTime: string; // Hora de finalización del programa, tipo 'HH:mm'
+  @IsOptional()
+  @IsIn(['weekly', 'monthly_weekday', 'monthly_dated'])
+  scheduleType?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(-1)
+  @Max(4)
+  weekNumberInMonth?: number;
+
+  @IsOptional()
+  @IsDateString()
+  specificDate?: string;
 }
 
 export class CreateScheduleItemDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  dayOfWeek: string; // Día de la semana (lunes, martes, etc.)
+  dayOfWeek?: string;
 
   @IsString()
   @IsNotEmpty()
-  startTime: string; // Hora de inicio del programa, tipo 'HH:mm'
+  startTime: string;
 
   @IsString()
   @IsNotEmpty()
-  endTime: string; // Hora de finalización del programa, tipo 'HH:mm'
+  endTime: string;
+
+  @IsOptional()
+  @IsIn(['weekly', 'monthly_weekday', 'monthly_dated'])
+  scheduleType?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(-1)
+  @Max(4)
+  weekNumberInMonth?: number;
+
+  @IsOptional()
+  @IsDateString()
+  specificDate?: string;
 }
 
 export class CreateBulkSchedulesDto {
   @IsString()
   @IsNotEmpty()
-  programId: string; // ID del programa asociado a todos los horarios
+  programId: string;
 
   @IsString()
   @IsNotEmpty()
-  channelId: string; // ID del canal asociado a todos los horarios
+  channelId: string;
 
   @IsArray()
   @ArrayMinSize(1, { message: 'At least one schedule is required' })
   @ValidateNested({ each: true })
   @Type(() => CreateScheduleItemDto)
-  schedules: CreateScheduleItemDto[]; // Array de horarios a crear
+  schedules: CreateScheduleItemDto[];
 }

@@ -1,9 +1,27 @@
-import { Controller, Get, Post, Body, Param, Delete, Patch, UseGuards, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Delete,
+  Patch,
+  UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
+} from '@nestjs/common';
 import { StreamersService } from './streamers.service';
 import { CreateStreamerDto } from './dto/create-streamer.dto';
 import { UpdateStreamerDto } from './dto/update-streamer.dto';
 import { Streamer } from './streamers.entity';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiBody,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -16,21 +34,33 @@ export class StreamersController {
   constructor(
     private readonly streamersService: StreamersService,
     private readonly supabaseStorageService: SupabaseStorageService,
-  ) { }
+  ) {}
 
   @Get()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Obtener todos los streamers' })
-  @ApiResponse({ status: 200, description: 'Lista de streamers', type: [Streamer] })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de streamers',
+    type: [Streamer],
+  })
   findAll(): Promise<Streamer[]> {
     return this.streamersService.findAll();
   }
 
   @Get('visible')
-  @ApiOperation({ summary: 'Obtener streamers visibles (público) con estado de live' })
-  @ApiResponse({ status: 200, description: 'Lista de streamers visibles con estado de live', type: [Streamer] })
-  async findAllVisible(): Promise<Array<Streamer & { is_live?: boolean, active_services?: string[] }>> {
+  @ApiOperation({
+    summary: 'Obtener streamers visibles (público) con estado de live',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de streamers visibles con estado de live',
+    type: [Streamer],
+  })
+  async findAllVisible(): Promise<
+    Array<Streamer & { is_live?: boolean; active_services?: string[] }>
+  > {
     return this.streamersService.findAllVisibleWithLiveStatus();
   }
 
@@ -38,7 +68,11 @@ export class StreamersController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Obtener un streamer por ID' })
-  @ApiResponse({ status: 200, description: 'Streamer encontrado', type: Streamer })
+  @ApiResponse({
+    status: 200,
+    description: 'Streamer encontrado',
+    type: Streamer,
+  })
   findOne(@Param('id') id: number): Promise<Streamer> {
     return this.streamersService.findOne(id);
   }
@@ -56,8 +90,15 @@ export class StreamersController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Actualizar un streamer' })
-  @ApiResponse({ status: 200, description: 'Streamer actualizado', type: Streamer })
-  update(@Param('id') id: number, @Body() updateStreamerDto: UpdateStreamerDto): Promise<Streamer> {
+  @ApiResponse({
+    status: 200,
+    description: 'Streamer actualizado',
+    type: Streamer,
+  })
+  update(
+    @Param('id') id: number,
+    @Body() updateStreamerDto: UpdateStreamerDto,
+  ): Promise<Streamer> {
     return this.streamersService.update(id, updateStreamerDto);
   }
 
@@ -87,7 +128,8 @@ export class StreamersController {
   @UseInterceptors(FileInterceptor('file'))
   @ApiOperation({
     summary: 'Upload streamer logo',
-    description: 'Uploads an image file to Supabase Storage (streamers bucket) and returns the public URL (admin only)',
+    description:
+      'Uploads an image file to Supabase Storage (streamers bucket) and returns the public URL (admin only)',
   })
   @ApiBody({
     schema: {
@@ -113,30 +155,49 @@ export class StreamersController {
       },
     },
   })
-  @ApiResponse({ status: 400, description: 'Bad request (invalid file type or size)' })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request (invalid file type or size)',
+  })
   @ApiResponse({ status: 403, description: 'Forbidden' })
-  async uploadLogo(@UploadedFile() file: Express.Multer.File): Promise<{ url: string }> {
+  async uploadLogo(
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<{ url: string }> {
     if (!file) {
       throw new BadRequestException('No file provided');
     }
 
-    const url = await this.supabaseStorageService.uploadImage(file, 'streamers');
+    const url = await this.supabaseStorageService.uploadImage(
+      file,
+      'streamers',
+    );
     return { url };
   }
 
   @Post(':id/resubscribe-webhooks')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Re-subscribe to webhooks for a streamer (useful for fixing broken subscriptions)' })
-  @ApiResponse({ status: 200, description: 'Webhooks re-subscribed successfully' })
-  async resubscribeWebhooks(@Param('id') id: number): Promise<{ success: boolean; message: string }> {
+  @ApiOperation({
+    summary:
+      'Re-subscribe to webhooks for a streamer (useful for fixing broken subscriptions)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Webhooks re-subscribed successfully',
+  })
+  async resubscribeWebhooks(
+    @Param('id') id: number,
+  ): Promise<{ success: boolean; message: string }> {
     return this.streamersService.resubscribeWebhooks(id);
   }
 
   @Get(':id/webhook-status')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get webhook subscription status for a streamer (checks Twitch/Kick APIs)' })
+  @ApiOperation({
+    summary:
+      'Get webhook subscription status for a streamer (checks Twitch/Kick APIs)',
+  })
   @ApiResponse({ status: 200, description: 'Webhook subscription status' })
   async getWebhookStatus(@Param('id') id: number): Promise<any> {
     return this.streamersService.getWebhookStatus(id);
@@ -145,7 +206,10 @@ export class StreamersController {
   @Post(':id/sync-live-status')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Sync live status from Kick/Twitch APIs (useful when webhooks miss events)' })
+  @ApiOperation({
+    summary:
+      'Sync live status from Kick/Twitch APIs (useful when webhooks miss events)',
+  })
   @ApiResponse({ status: 200, description: 'Live status synced successfully' })
   async syncLiveStatus(@Param('id') id: number): Promise<any> {
     return this.streamersService.syncLiveStatus(id);
@@ -154,10 +218,14 @@ export class StreamersController {
   @Post(':id/verify-kick-subscription')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Verify and renew Kick webhook subscription if inactive' })
-  @ApiResponse({ status: 200, description: 'Kick subscription verification result' })
+  @ApiOperation({
+    summary: 'Verify and renew Kick webhook subscription if inactive',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Kick subscription verification result',
+  })
   async verifyKickSubscription(@Param('id') id: number): Promise<any> {
     return this.streamersService.verifyKickSubscription(id);
   }
 }
-

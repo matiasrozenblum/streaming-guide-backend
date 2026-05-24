@@ -1,4 +1,16 @@
-import { Controller, Post, Get, Headers, Body, Logger, HttpCode, HttpStatus, Req, Res, Query } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Headers,
+  Body,
+  Logger,
+  HttpCode,
+  HttpStatus,
+  Req,
+  Res,
+  Query,
+} from '@nestjs/common';
 import { Request, Response } from 'express';
 import { StreamerLiveStatusService } from '../streamers/streamer-live-status.service';
 import { StreamersService } from '../streamers/streamers.service';
@@ -7,7 +19,8 @@ import { RedisService } from '../redis/redis.service';
 import { extractKickUsername } from '../streamers/utils/extract-streamer-username';
 import * as crypto from 'crypto';
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
+const FRONTEND_URL =
+  process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
 const REVALIDATE_SECRET = process.env.REVALIDATE_SECRET || 'changeme';
 // Kick uses public key verification - fetch from their Public Key API endpoint
 // Note: This endpoint may require authentication or may not be publicly available
@@ -17,14 +30,14 @@ const KICK_PUBLIC_KEY_URL = 'https://api.kick.com/public/v1/public-key';
 /**
  * Kick webhook payload structure
  * Based on Kick Events API: https://docs.kick.com/events/webhook-payloads
- * 
+ *
  * Current format (as of 2025): Top-level fields
  * - broadcaster: Object with user info (user_id, username, channel_slug, etc.)
  * - is_live: Boolean indicating if stream is live
  * - title: Stream title
  * - started_at: ISO timestamp when stream started
  * - ended_at: ISO timestamp when stream ended (null if still live)
- * 
+ *
  * The code also supports nested format (data.broadcaster, data.is_live) for compatibility
  */
 interface KickWebhookPayload {
@@ -73,7 +86,7 @@ export class KickWebhookController {
     this.notifyUtil = new NotifyAndRevalidateUtil(
       this.redisService,
       FRONTEND_URL,
-      REVALIDATE_SECRET
+      REVALIDATE_SECRET,
     );
   }
 
@@ -88,7 +101,9 @@ export class KickWebhookController {
     @Query('token') token: string,
     @Res() res: Response,
   ) {
-    this.logger.log(`🔔 Kick webhook verification request: challenge=${challenge ? 'present' : 'missing'}, token=${token ? 'present' : 'missing'}`);
+    this.logger.log(
+      `🔔 Kick webhook verification request: challenge=${challenge ? 'present' : 'missing'}, token=${token ? 'present' : 'missing'}`,
+    );
 
     // If challenge is provided, return it to verify webhook (similar to Twitch)
     if (challenge) {
@@ -98,7 +113,9 @@ export class KickWebhookController {
 
     // If no challenge, just return 200 to confirm endpoint is accessible
     this.logger.log(`✅ Kick webhook endpoint is accessible`);
-    return res.status(200).json({ status: 'ok', message: 'Webhook endpoint is accessible' });
+    return res
+      .status(200)
+      .json({ status: 'ok', message: 'Webhook endpoint is accessible' });
   }
 
   /**
@@ -116,13 +133,15 @@ export class KickWebhookController {
     @Req() req: Request,
   ) {
     // Log incoming webhook request immediately
-    this.logger.log(`📥 Received Kick webhook request: ${JSON.stringify({
-      eventType,
-      messageId,
-      subscriptionId,
-      hasSignature: !!signature,
-      hasBody: !!body,
-    })}`);
+    this.logger.log(
+      `📥 Received Kick webhook request: ${JSON.stringify({
+        eventType,
+        messageId,
+        subscriptionId,
+        hasSignature: !!signature,
+        hasBody: !!body,
+      })}`,
+    );
 
     // Get raw body for signature verification
     // According to Kick docs: signature = messageId + "." + timestamp + "." + body
@@ -130,7 +149,12 @@ export class KickWebhookController {
 
     // Verify webhook signature using public key
     // Kick uses: signature = SHA256(messageId + "." + timestamp + "." + body)
-    const isValid = await this.verifySignature(signature, messageId, timestamp, rawBody);
+    const isValid = await this.verifySignature(
+      signature,
+      messageId,
+      timestamp,
+      rawBody,
+    );
     if (!isValid) {
       this.logger.warn('❌ Invalid Kick webhook signature');
       throw new Error('Invalid signature');
@@ -152,10 +176,13 @@ export class KickWebhookController {
 
     // Find streamer by Kick username
     const streamers = await this.streamersService.findAll();
-    const streamer = streamers.find(s => {
-      const kickService = s.services.find(service => service.service === 'kick');
+    const streamer = streamers.find((s) => {
+      const kickService = s.services.find(
+        (service) => service.service === 'kick',
+      );
       if (!kickService) return false;
-      const streamerUsername = kickService.username || extractKickUsername(kickService.url);
+      const streamerUsername =
+        kickService.username || extractKickUsername(kickService.url);
       return streamerUsername?.toLowerCase() === username.toLowerCase();
     });
 
@@ -169,11 +196,13 @@ export class KickWebhookController {
       streamer.id,
       'kick',
       isLive,
-      username
+      username,
     );
 
     // Notify frontend via SSE
-    const eventTypeName = isLive ? 'streamer_went_live' : 'streamer_went_offline';
+    const eventTypeName = isLive
+      ? 'streamer_went_live'
+      : 'streamer_went_offline';
     await this.notifyUtil.notifyAndRevalidate({
       eventType: eventTypeName,
       entity: 'streamer',
@@ -183,12 +212,14 @@ export class KickWebhookController {
         streamerName: streamer.name,
         service: 'kick',
         isLive,
-        active_services: isLive ? ['kick'] : [] // Minimum exact data for frontend SSE
+        active_services: isLive ? ['kick'] : [], // Minimum exact data for frontend SSE
       },
       revalidatePaths: ['/streamers'],
     });
 
-    this.logger.log(`✅ Updated live status for streamer ${streamer.id} (${streamer.name}): isLive=${isLive}`);
+    this.logger.log(
+      `✅ Updated live status for streamer ${streamer.id} (${streamer.name}): isLive=${isLive}`,
+    );
 
     return { success: true };
   }
@@ -218,7 +249,9 @@ export class KickWebhookController {
       if (!response.ok) {
         // 403 or 404 might mean the endpoint doesn't exist or requires different auth
         // This is not critical for webhook functionality - signature verification will be skipped
-        this.logger.debug(`⚠️ Failed to fetch Kick public key: ${response.status} (this is non-critical)`);
+        this.logger.debug(
+          `⚠️ Failed to fetch Kick public key: ${response.status} (this is non-critical)`,
+        );
         return null;
       }
 
@@ -232,7 +265,8 @@ export class KickWebhookController {
       if (publicKey.startsWith('{')) {
         try {
           const data = JSON.parse(publicKey);
-          publicKey = data.public_key || data.publicKey || data.key || publicKeyText;
+          publicKey =
+            data.public_key || data.publicKey || data.key || publicKeyText;
           publicKey = publicKey.trim();
         } catch {
           // Not JSON, use as-is
@@ -251,7 +285,9 @@ export class KickWebhookController {
       if (publicKey.includes('BEGIN PUBLIC KEY')) {
         // Key is already in PEM format, but we need to ensure proper formatting
         // Extract the base64 content between headers
-        const match = publicKey.match(/-----BEGIN PUBLIC KEY-----\s*([\s\S]*?)\s*-----END PUBLIC KEY-----/);
+        const match = publicKey.match(
+          /-----BEGIN PUBLIC KEY-----\s*([\s\S]*?)\s*-----END PUBLIC KEY-----/,
+        );
         if (match && match[1]) {
           // Clean up the base64 content (remove all whitespace)
           const base64Content = match[1].replace(/\s/g, '');
@@ -272,7 +308,9 @@ export class KickWebhookController {
         publicKey = `-----BEGIN PUBLIC KEY-----\n${lines.join('\n')}\n-----END PUBLIC KEY-----`;
       }
 
-      this.logger.debug(`🔑 Processed public key (length: ${publicKey.length}, has headers: ${publicKey.includes('BEGIN')})`);
+      this.logger.debug(
+        `🔑 Processed public key (length: ${publicKey.length}, has headers: ${publicKey.includes('BEGIN')})`,
+      );
 
       if (publicKey) {
         this.kickPublicKey = publicKey;
@@ -284,7 +322,10 @@ export class KickWebhookController {
       return null;
     } catch (error) {
       // Non-critical error - webhook will still work without signature verification in non-production
-      this.logger.debug('⚠️ Error fetching Kick public key (non-critical):', error instanceof Error ? error.message : error);
+      this.logger.debug(
+        '⚠️ Error fetching Kick public key (non-critical):',
+        error instanceof Error ? error.message : error,
+      );
       return null;
     }
   }
@@ -298,7 +339,7 @@ export class KickWebhookController {
     signature: string,
     messageId: string,
     timestamp: string,
-    rawBody: string
+    rawBody: string,
   ): Promise<boolean> {
     // Test bypass: if signature starts with "test-", skip verification (for testing)
     if (signature && signature.startsWith('test-')) {
@@ -307,11 +348,15 @@ export class KickWebhookController {
     }
 
     if (!signature || !messageId || !timestamp) {
-      this.logger.warn('⚠️ Missing required headers for signature verification');
+      this.logger.warn(
+        '⚠️ Missing required headers for signature verification',
+      );
       // In non-production, allow without verification
       const allowWithoutVerification = process.env.NODE_ENV !== 'production';
       if (allowWithoutVerification) {
-        this.logger.debug('⚠️ Skipping signature verification (missing headers, non-production mode)');
+        this.logger.debug(
+          '⚠️ Skipping signature verification (missing headers, non-production mode)',
+        );
       }
       return allowWithoutVerification;
     }
@@ -322,9 +367,13 @@ export class KickWebhookController {
       // In non-production, allow without verification if public key fetch fails
       const allowWithoutVerification = process.env.NODE_ENV !== 'production';
       if (allowWithoutVerification) {
-        this.logger.debug('⚠️ Skipping signature verification (non-production mode)');
+        this.logger.debug(
+          '⚠️ Skipping signature verification (non-production mode)',
+        );
       } else {
-        this.logger.warn('⚠️ Could not fetch Kick public key - signature verification required in production');
+        this.logger.warn(
+          '⚠️ Could not fetch Kick public key - signature verification required in production',
+        );
       }
       return allowWithoutVerification;
     }
@@ -347,17 +396,22 @@ export class KickWebhookController {
         });
       } catch (pemError) {
         // If PEM format fails, try as raw key or different format
-        this.logger.warn('⚠️ Failed to parse public key as PEM, trying alternative formats');
+        this.logger.warn(
+          '⚠️ Failed to parse public key as PEM, trying alternative formats',
+        );
         try {
           // Try without explicit format/type
           publicKey = crypto.createPublicKey(publicKeyPEM);
         } catch (altError) {
           // If that also fails, try treating it as a raw key
-          this.logger.error('❌ Failed to parse Kick public key in any format:', {
-            pemError: pemError instanceof Error ? pemError.message : pemError,
-            altError: altError instanceof Error ? altError.message : altError,
-            keyPreview: publicKeyPEM.substring(0, 100) + '...',
-          });
+          this.logger.error(
+            '❌ Failed to parse Kick public key in any format:',
+            {
+              pemError: pemError instanceof Error ? pemError.message : pemError,
+              altError: altError instanceof Error ? altError.message : altError,
+              keyPreview: publicKeyPEM.substring(0, 100) + '...',
+            },
+          );
           throw altError;
         }
       }
@@ -379,15 +433,22 @@ export class KickWebhookController {
     } catch (error) {
       this.logger.error('❌ Error verifying signature:', {
         error: error instanceof Error ? error.message : error,
-        code: error instanceof Error && 'code' in error ? (error as any).code : undefined,
-        opensslError: error instanceof Error && 'opensslErrorStack' in error ? (error as any).opensslErrorStack : undefined,
+        code:
+          error instanceof Error && 'code' in error
+            ? (error as any).code
+            : undefined,
+        opensslError:
+          error instanceof Error && 'opensslErrorStack' in error
+            ? (error as any).opensslErrorStack
+            : undefined,
       });
       // Allow webhook processing even in production when signature verification throws
       // This is better than blocking legitimate webhooks due to key parsing issues
       // The signature verification is a security enhancement, not a hard requirement
-      this.logger.warn('⚠️ Allowing webhook despite signature verification error - investigate key parsing issue');
+      this.logger.warn(
+        '⚠️ Allowing webhook despite signature verification error - investigate key parsing issue',
+      );
       return true;
     }
   }
 }
-

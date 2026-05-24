@@ -18,7 +18,9 @@ export async function scrapeGelatinaSchedule(): Promise<GelatinaProgram[]> {
     timeout: 60000,
   });
 
-  await page.waitForSelector('.et_pb_row.et_pb_equal_columns', { timeout: 10000 });
+  await page.waitForSelector('.et_pb_row.et_pb_equal_columns', {
+    timeout: 10000,
+  });
 
   const data = await page.evaluate(() => {
     const results: GelatinaProgram[] = [];
@@ -26,10 +28,10 @@ export async function scrapeGelatinaSchedule(): Promise<GelatinaProgram[]> {
 
     const formatTime = (input: string) => {
       if (!input) return '';
-      
+
       // Remove any extra whitespace and non-digit/colon characters
       const clean = input.replace(/[^\d:]/g, '').trim();
-      
+
       // Handle different time formats
       if (clean.includes(':')) {
         const parts = clean.split(':');
@@ -39,17 +41,17 @@ export async function scrapeGelatinaSchedule(): Promise<GelatinaProgram[]> {
           return `${hours}:${minutes}`;
         }
       }
-      
+
       // If it's just a number, convert to "HH:00"
       if (/^\d+$/.test(clean)) {
         return `${clean.padStart(2, '0')}:00`;
       }
-      
+
       return clean;
     };
 
     programRows.forEach((row, index) => {
-      if (index !== 1 && index % 2 === 0 || index > 13) return;
+      if ((index !== 1 && index % 2 === 0) || index > 13) return;
 
       const logoElement = row.firstElementChild;
       const detailsElement = row.children[1];
@@ -69,14 +71,18 @@ export async function scrapeGelatinaSchedule(): Promise<GelatinaProgram[]> {
       }
 
       if (lines[2].toLowerCase().includes('lunes a jueves')) {
-        lines[2] = lines[2].toLowerCase().replace('lunes a jueves', 'Lunes, Martes, Miercoles, Jueves');
+        lines[2] = lines[2]
+          .toLowerCase()
+          .replace('lunes a jueves', 'Lunes, Martes, Miercoles, Jueves');
       }
 
       const [nameRaw, panelistsRaw, scheduleRaw] = lines;
       const panelists = panelistsRaw?.split(',').map((p) => p.trim()) || [];
       const [daysRaw, timeRaw] = scheduleRaw.split(' de ');
       const days = daysRaw.split(', ').map((d) => d.trim().toLowerCase());
-      const [startTimeRaw, endTimeRaw] = timeRaw.split(' a ').map((t) => t.trim());
+      const [startTimeRaw, endTimeRaw] = timeRaw
+        .split(' a ')
+        .map((t) => t.trim());
 
       const startTime = formatTime(startTimeRaw);
       const endTime = formatTime(endTimeRaw);

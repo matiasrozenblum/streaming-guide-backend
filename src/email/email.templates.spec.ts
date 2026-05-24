@@ -1,4 +1,7 @@
-import { buildProgramNotificationHtml, buildProposedChangesReportHtml } from './email.templates';
+import {
+  buildProgramNotificationHtml,
+  buildProposedChangesReportHtml,
+} from './email.templates';
 import { ProposedChange } from '../proposed-changes/proposed-changes.entity';
 
 describe('Email Templates', () => {
@@ -9,7 +12,6 @@ describe('Email Templates', () => {
       const startTime = '20:00';
       const endTime = '21:00';
       const description = 'Test program description';
-
 
       const html = buildProgramNotificationHtml(
         programName,
@@ -37,7 +39,7 @@ describe('Email Templates', () => {
         programName,
         channelName,
         startTime,
-        endTime
+        endTime,
       );
 
       expect(html).toContain(programName);
@@ -133,4 +135,4 @@ describe('Email Templates', () => {
       expect(html).toContain('Test Program');
     });
   });
-}); 
+});

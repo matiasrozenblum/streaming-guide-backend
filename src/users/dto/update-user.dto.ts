@@ -1,4 +1,11 @@
-import { IsString, IsEmail, MinLength, Matches, IsOptional, IsEnum } from 'class-validator';
+import {
+  IsString,
+  IsEmail,
+  MinLength,
+  Matches,
+  IsOptional,
+  IsEnum,
+} from 'class-validator';
 
 export class UpdateUserDto {
   @IsOptional()
@@ -15,7 +22,9 @@ export class UpdateUserDto {
 
   @IsOptional()
   @IsString()
-  @Matches(/^\+\d+$/, { message: 'Phone must be in international format, e.g. +54911…' })
+  @Matches(/^\+\d+$/, {
+    message: 'Phone must be in international format, e.g. +54911…',
+  })
   phone?: string;
 
   @IsOptional()

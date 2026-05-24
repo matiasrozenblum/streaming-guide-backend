@@ -78,22 +78,33 @@ describe('SubscriptionController', () => {
   describe('getUserSubscriptions', () => {
     it('should return user subscriptions for real users', async () => {
       const subscriptions = [mockSubscription];
-      mockSubscriptionService.getUserSubscriptions.mockResolvedValue(subscriptions);
+      mockSubscriptionService.getUserSubscriptions.mockResolvedValue(
+        subscriptions,
+      );
 
       const mockRequest = { user: mockUser };
       const result = await controller.getUserSubscriptions(mockRequest);
 
-      expect(mockSubscriptionService.getUserSubscriptions).toHaveBeenCalledWith(mockUser.id);
+      expect(mockSubscriptionService.getUserSubscriptions).toHaveBeenCalledWith(
+        mockUser.id,
+      );
       expect(result.subscriptions).toBeDefined();
     });
 
     it('should return empty array for legacy users', async () => {
-      const legacyUser = { id: 'public', type: 'public', email: 'legacy@example.com', role: 'user' };
+      const legacyUser = {
+        id: 'public',
+        type: 'public',
+        email: 'legacy@example.com',
+        role: 'user',
+      };
       const mockRequest = { user: legacyUser };
 
       const result = await controller.getUserSubscriptions(mockRequest);
 
-      expect(mockSubscriptionService.getUserSubscriptions).not.toHaveBeenCalled();
+      expect(
+        mockSubscriptionService.getUserSubscriptions,
+      ).not.toHaveBeenCalled();
       expect(result.subscriptions).toEqual([]);
     });
   });
@@ -108,15 +119,28 @@ describe('SubscriptionController', () => {
       };
       const mockRequest = { user: mockUser };
       mockUsersService.findOne.mockResolvedValue(mockUser);
-      mockSubscriptionService.createSubscription.mockResolvedValue(mockSubscription);
-      const result = await controller.createSubscription(mockRequest, createDto);
+      mockSubscriptionService.createSubscription.mockResolvedValue(
+        mockSubscription,
+      );
+      const result = await controller.createSubscription(
+        mockRequest,
+        createDto,
+      );
       expect(mockUsersService.findOne).toHaveBeenCalledWith(mockUser.id);
-      expect(mockSubscriptionService.createSubscription).toHaveBeenCalledWith(mockUser, createDto);
+      expect(mockSubscriptionService.createSubscription).toHaveBeenCalledWith(
+        mockUser,
+        createDto,
+      );
       expect(result.message).toBe('Successfully subscribed to program');
     });
 
     it('should return error for legacy users', async () => {
-      const legacyUser = { id: 'public', type: 'public', email: 'legacy@example.com', role: 'user' };
+      const legacyUser = {
+        id: 'public',
+        type: 'public',
+        email: 'legacy@example.com',
+        role: 'user',
+      };
       const createDto = {
         programId: 1,
         endpoint: 'test-endpoint',
@@ -124,8 +148,13 @@ describe('SubscriptionController', () => {
         auth: 'test-auth',
       };
       const mockRequest = { user: legacyUser };
-      const result = await controller.createSubscription(mockRequest, createDto);
-      expect(result.error).toBe('Subscriptions not available for legacy authentication');
+      const result = await controller.createSubscription(
+        mockRequest,
+        createDto,
+      );
+      expect(result.error).toBe(
+        'Subscriptions not available for legacy authentication',
+      );
     });
 
     it('should update an existing subscription', async () => {
@@ -137,8 +166,13 @@ describe('SubscriptionController', () => {
       };
       const mockRequest = { user: mockUser };
       mockUsersService.findOne.mockResolvedValue(mockUser);
-      mockSubscriptionService.createSubscription.mockResolvedValue(mockSubscription);
-      const result = await controller.createSubscription(mockRequest, createDto);
+      mockSubscriptionService.createSubscription.mockResolvedValue(
+        mockSubscription,
+      );
+      const result = await controller.createSubscription(
+        mockRequest,
+        createDto,
+      );
       expect(result).toBeDefined();
       expect(result.subscription).toBeDefined();
     });
@@ -155,29 +189,46 @@ describe('SubscriptionController', () => {
         isActive: false,
       };
 
-      mockSubscriptionService.updateSubscription.mockResolvedValue(updatedSubscription);
+      mockSubscriptionService.updateSubscription.mockResolvedValue(
+        updatedSubscription,
+      );
 
       const mockRequest = { user: mockUser };
-      const result = await controller.updateSubscription(mockRequest, 'sub-1', updateDto);
+      const result = await controller.updateSubscription(
+        mockRequest,
+        'sub-1',
+        updateDto,
+      );
 
       expect(mockSubscriptionService.updateSubscription).toHaveBeenCalledWith(
         mockUser.id,
         'sub-1',
-        updateDto
+        updateDto,
       );
       expect(result.message).toBe('Subscription updated successfully');
     });
 
     it('should return error for legacy users', async () => {
-      const legacyUser = { id: 'public', type: 'public', email: 'legacy@example.com', role: 'user' };
+      const legacyUser = {
+        id: 'public',
+        type: 'public',
+        email: 'legacy@example.com',
+        role: 'user',
+      };
       const updateDto = {
         isActive: false,
       };
 
       const mockRequest = { user: legacyUser };
-      const result = await controller.updateSubscription(mockRequest, 'sub-1', updateDto);
+      const result = await controller.updateSubscription(
+        mockRequest,
+        'sub-1',
+        updateDto,
+      );
 
-      expect(result.error).toBe('Subscriptions not available for legacy authentication');
+      expect(result.error).toBe(
+        'Subscriptions not available for legacy authentication',
+      );
     });
   });
 
@@ -190,18 +241,25 @@ describe('SubscriptionController', () => {
 
       expect(mockSubscriptionService.removeSubscription).toHaveBeenCalledWith(
         mockUser.id,
-        'sub-1'
+        'sub-1',
       );
       expect(result.message).toBe('Successfully unsubscribed from program');
     });
 
     it('should return error for legacy users', async () => {
-      const legacyUser = { id: 'public', type: 'public', email: 'legacy@example.com', role: 'user' };
+      const legacyUser = {
+        id: 'public',
+        type: 'public',
+        email: 'legacy@example.com',
+        role: 'user',
+      };
       const mockRequest = { user: legacyUser };
 
       const result = await controller.removeSubscription(mockRequest, 'sub-1');
 
-      expect(result.error).toBe('Subscriptions not available for legacy authentication');
+      expect(result.error).toBe(
+        'Subscriptions not available for legacy authentication',
+      );
     });
   });
-}); 
+});

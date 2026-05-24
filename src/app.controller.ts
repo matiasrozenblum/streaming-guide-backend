@@ -1,4 +1,11 @@
-import { Controller, Post, Get, Inject, UseGuards, Query } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Inject,
+  UseGuards,
+  Query,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Channel } from './channels/channels.entity';
@@ -59,7 +66,7 @@ export class AppController {
   @Get('db-pool-status')
   async getDbPoolStatus() {
     const poolStatus = await this.connectionPoolMonitorService.getPoolStatus();
-    
+
     if (!poolStatus) {
       return {
         status: 'unavailable',
@@ -71,7 +78,9 @@ export class AppController {
       status: 'ok',
       pool: poolStatus,
       health: {
-        isHealthy: poolStatus.waiting === 0 && parseInt(poolStatus.utilizationPercent) < 80,
+        isHealthy:
+          poolStatus.waiting === 0 &&
+          parseInt(poolStatus.utilizationPercent) < 80,
         utilizationPercent: poolStatus.utilizationPercent,
         hasWaitingRequests: poolStatus.waiting > 0,
       },
@@ -82,114 +91,142 @@ export class AppController {
   @Post('test-error')
   testError() {
     // Test Sentry error reporting
-    this.sentryService.captureMessage('Test error for monitoring setup', 'error', {
-      test: true,
-      timestamp: new Date().toISOString(),
-    });
-    
+    this.sentryService.captureMessage(
+      'Test error for monitoring setup',
+      'error',
+      {
+        test: true,
+        timestamp: new Date().toISOString(),
+      },
+    );
+
     return { message: 'Test error sent to Sentry' };
   }
 
   @Post('test-youtube-error')
   testYoutubeError() {
     // Test YouTube API error simulation
-    this.sentryService.captureMessage('YouTube API 403 Forbidden for channel test-channel', 'error', {
-      channelId: 'test-channel-id',
-      handle: 'test-channel',
-      context: 'test',
-      errorMessage: 'Request failed with status code 403',
-      apiUrl: 'https://www.googleapis.com/youtube/v3/search',
-      timestamp: new Date().toISOString(),
-    });
-    
+    this.sentryService.captureMessage(
+      'YouTube API 403 Forbidden for channel test-channel',
+      'error',
+      {
+        channelId: 'test-channel-id',
+        handle: 'test-channel',
+        context: 'test',
+        errorMessage: 'Request failed with status code 403',
+        apiUrl: 'https://www.googleapis.com/youtube/v3/search',
+        timestamp: new Date().toISOString(),
+      },
+    );
+
     this.sentryService.setTag('service', 'youtube-api');
     this.sentryService.setTag('error_type', '403_forbidden');
     this.sentryService.setTag('channel', 'test-channel');
-    
+
     return { message: 'Test YouTube API error sent to Sentry' };
   }
 
   @Post('test-database-error')
   testDatabaseError() {
     // Test database connection error simulation
-    this.sentryService.captureMessage('Database connection timeout - PostgreSQL unreachable', 'error', {
-      service: 'database',
-      error_type: 'connection_timeout',
-      database_url: process.env.DATABASE_URL?.split('@')[1] || 'unknown',
-      timestamp: new Date().toISOString(),
-    });
-    
+    this.sentryService.captureMessage(
+      'Database connection timeout - PostgreSQL unreachable',
+      'error',
+      {
+        service: 'database',
+        error_type: 'connection_timeout',
+        database_url: process.env.DATABASE_URL?.split('@')[1] || 'unknown',
+        timestamp: new Date().toISOString(),
+      },
+    );
+
     this.sentryService.setTag('service', 'database');
     this.sentryService.setTag('error_type', 'connection_timeout');
-    
+
     return { message: 'Test database connection error sent to Sentry' };
   }
 
   @Post('test-jwt-error')
   testJwtError() {
     // Test JWT authentication error simulation
-    this.sentryService.captureMessage('JWT token validation failed - Invalid JWT_SECRET', 'error', {
-      service: 'authentication',
-      error_type: 'jwt_validation_failed',
-      jwt_secret_length: process.env.JWT_SECRET?.length || 0,
-      timestamp: new Date().toISOString(),
-    });
-    
+    this.sentryService.captureMessage(
+      'JWT token validation failed - Invalid JWT_SECRET',
+      'error',
+      {
+        service: 'authentication',
+        error_type: 'jwt_validation_failed',
+        jwt_secret_length: process.env.JWT_SECRET?.length || 0,
+        timestamp: new Date().toISOString(),
+      },
+    );
+
     this.sentryService.setTag('service', 'authentication');
     this.sentryService.setTag('error_type', 'jwt_validation_failed');
-    
+
     return { message: 'Test JWT authentication error sent to Sentry' };
   }
 
   @Post('test-redis-error')
   testRedisError() {
     // Test Redis connection error simulation
-    this.sentryService.captureMessage('Redis connection timeout - Cache service unavailable', 'error', {
-      service: 'redis',
-      error_type: 'connection_timeout',
-      redis_url: process.env.REDIS_URL?.split('@')[1] || 'unknown',
-      timestamp: new Date().toISOString(),
-    });
-    
+    this.sentryService.captureMessage(
+      'Redis connection timeout - Cache service unavailable',
+      'error',
+      {
+        service: 'redis',
+        error_type: 'connection_timeout',
+        redis_url: process.env.REDIS_URL?.split('@')[1] || 'unknown',
+        timestamp: new Date().toISOString(),
+      },
+    );
+
     this.sentryService.setTag('service', 'redis');
     this.sentryService.setTag('error_type', 'connection_timeout');
-    
+
     return { message: 'Test Redis connection error sent to Sentry' };
   }
 
   @Post('test-migration-error')
   testMigrationError() {
     // Test database migration error simulation
-    this.sentryService.captureMessage('Database migration failed - Missing column gender in users table', 'error', {
-      service: 'database',
-      error_type: 'migration_failed',
-      missing_column: 'gender',
-      table: 'users',
-      migration: 'AddGenderAndBirthDate',
-      timestamp: new Date().toISOString(),
-    });
-    
+    this.sentryService.captureMessage(
+      'Database migration failed - Missing column gender in users table',
+      'error',
+      {
+        service: 'database',
+        error_type: 'migration_failed',
+        missing_column: 'gender',
+        table: 'users',
+        migration: 'AddGenderAndBirthDate',
+        timestamp: new Date().toISOString(),
+      },
+    );
+
     this.sentryService.setTag('service', 'database');
     this.sentryService.setTag('error_type', 'migration_failed');
-    
+
     return { message: 'Test database migration error sent to Sentry' };
   }
 
   @Post('test-email-error')
   testEmailError() {
     // Test email service error simulation
-    this.sentryService.captureMessage('Email service failure - SMTP connection timeout', 'error', {
-      service: 'email',
-      error_type: 'smtp_connection_failed',
-      smtp_host: process.env.SMTP_HOST || 'unknown',
-      smtp_port: process.env.SMTP_PORT || 'unknown',
-      error_message: 'Connection timeout to SMTP server',
-      timestamp: new Date().toISOString(),
-    });
-    
+    this.sentryService.captureMessage(
+      'Email service failure - SMTP connection timeout',
+      'error',
+      {
+        service: 'email',
+        error_type: 'smtp_connection_failed',
+        smtp_host: process.env.SMTP_HOST || 'unknown',
+        smtp_port: process.env.SMTP_PORT || 'unknown',
+        error_message: 'Connection timeout to SMTP server',
+        timestamp: new Date().toISOString(),
+      },
+    );
+
     this.sentryService.setTag('service', 'email');
     this.sentryService.setTag('error_type', 'smtp_connection_failed');
-    
+
     return { message: 'Test email service error sent to Sentry' };
   }
 
@@ -197,22 +234,22 @@ export class AppController {
   async testSendGrid() {
     const sgMail = require('@sendgrid/mail');
     const apiKey = process.env.SENDGRID_API_KEY;
-    
+
     try {
       console.log('🔍 Testing SendGrid connection...');
       console.log('🔑 API Key present:', !!apiKey);
       console.log('🔑 API Key starts with SG.:', apiKey?.startsWith('SG.'));
       console.log('🔑 API Key length:', apiKey?.length);
-      
+
       if (!apiKey) {
-        return { 
-          success: false, 
-          message: 'SENDGRID_API_KEY not found in environment variables' 
+        return {
+          success: false,
+          message: 'SENDGRID_API_KEY not found in environment variables',
         };
       }
-      
+
       sgMail.setApiKey(apiKey);
-      
+
       const msg = {
         to: 'test@example.com', // This won't actually send
         from: process.env.SMTP_USER,
@@ -220,24 +257,24 @@ export class AppController {
         text: 'This is a test email',
         html: '<p>This is a test email</p>',
       };
-      
+
       console.log('🔄 Testing SendGrid API call...');
       // This will fail but give us better error info
       await sgMail.send(msg);
-      
-      return { 
-        success: true, 
-        message: 'SendGrid API test successful' 
+
+      return {
+        success: true,
+        message: 'SendGrid API test successful',
       };
     } catch (error) {
       console.error('❌ SendGrid test failed:', error);
-      
-      return { 
-        success: false, 
+
+      return {
+        success: false,
         message: 'SendGrid test failed',
         error: error.message,
         code: error.code,
-        response: error.response?.body
+        response: error.response?.body,
       };
     }
   }
@@ -247,29 +284,33 @@ export class AppController {
     const nodemailer = require('nodemailer');
     const dns = require('dns').promises;
     const net = require('net');
-    
+
     try {
       console.log('🔍 Testing SMTP connection...');
       console.log('📧 SMTP_HOST:', process.env.SMTP_HOST);
       console.log('🔌 SMTP_PORT:', process.env.SMTP_PORT);
       console.log('👤 SMTP_USER:', process.env.SMTP_USER);
       console.log('🔑 SMTP_PASS:', process.env.SMTP_PASS ? '***' : 'NOT SET');
-      
+
       // Test DNS resolution first
       console.log('🌐 Testing DNS resolution...');
       const dnsResult = await dns.resolve4(process.env.SMTP_HOST);
       console.log('✅ DNS resolved to:', dnsResult);
-      
+
       // Test basic TCP connection
       console.log('🔌 Testing TCP connection...');
       const socket = new net.Socket();
       const tcpPromise = new Promise((resolve, reject) => {
         socket.setTimeout(10000); // 10 second timeout for TCP test
-        socket.connect(Number(process.env.SMTP_PORT), process.env.SMTP_HOST, () => {
-          console.log('✅ TCP connection successful!');
-          socket.destroy();
-          resolve(true);
-        });
+        socket.connect(
+          Number(process.env.SMTP_PORT),
+          process.env.SMTP_HOST,
+          () => {
+            console.log('✅ TCP connection successful!');
+            socket.destroy();
+            resolve(true);
+          },
+        );
         socket.on('error', (err) => {
           console.log('❌ TCP connection failed:', err.message);
           reject(err);
@@ -280,9 +321,9 @@ export class AppController {
           reject(new Error('TCP connection timeout'));
         });
       });
-      
+
       await tcpPromise;
-      
+
       // Now test SMTP
       const transporter = nodemailer.createTransport({
         host: process.env.SMTP_HOST,
@@ -294,43 +335,47 @@ export class AppController {
           pass: process.env.SMTP_PASS,
         },
         connectionTimeout: 30000, // Reduced to 30 seconds
-        greetingTimeout: 15000,   // Reduced to 15 seconds
-        socketTimeout: 30000,     // Reduced to 30 seconds
+        greetingTimeout: 15000, // Reduced to 15 seconds
+        socketTimeout: 30000, // Reduced to 30 seconds
       });
 
       console.log('🔄 Verifying SMTP connection...');
       await transporter.verify();
       console.log('✅ SMTP connection successful!');
-      
-      return { 
-        success: true, 
+
+      return {
+        success: true,
         message: 'SMTP connection test successful',
         config: {
           host: process.env.SMTP_HOST,
           port: process.env.SMTP_PORT,
           user: process.env.SMTP_USER,
-          passSet: !!process.env.SMTP_PASS
+          passSet: !!process.env.SMTP_PASS,
         },
-        dns: dnsResult
+        dns: dnsResult,
       };
     } catch (error) {
       console.error('❌ SMTP connection test failed:', error);
-      
-      this.sentryService.captureMessage('SMTP connection test failed', 'error', {
-        service: 'email',
-        error_type: 'smtp_test_failed',
-        error_message: error.message,
-        error_code: error.code,
-        smtp_host: process.env.SMTP_HOST,
-        smtp_port: process.env.SMTP_PORT,
-        timestamp: new Date().toISOString(),
-      });
-      
-      return { 
-        success: false, 
+
+      this.sentryService.captureMessage(
+        'SMTP connection test failed',
+        'error',
+        {
+          service: 'email',
+          error_type: 'smtp_test_failed',
+          error_message: error.message,
+          error_code: error.code,
+          smtp_host: process.env.SMTP_HOST,
+          smtp_port: process.env.SMTP_PORT,
+          timestamp: new Date().toISOString(),
+        },
+      );
+
+      return {
+        success: false,
         message: 'SMTP connection test failed',
         error: error.message,
-        code: error.code
+        code: error.code,
       };
     }
   }
@@ -369,42 +414,46 @@ export class AppController {
   @Get('debug/schedules')
   async debugSchedules() {
     const schedulesRepo = this.appService.getSchedulesRepository();
-    
+
     // Check database connection info
     const connection = schedulesRepo.manager.connection;
     const databaseName = connection.options.database;
     const host = (connection.options as any).host;
-    
+
     // Check table existence and structure
     const tableExists = await connection.query(
-      "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'schedules')"
+      "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'schedules')",
     );
-    
+
     const totalSchedules = await schedulesRepo.count();
     const sampleSchedules = await schedulesRepo.find({
       take: 5,
-      relations: ['program', 'program.channel']
+      relations: ['program', 'program.channel'],
     });
-    
+
     // Raw SQL query to check data
-    const rawSchedules = await connection.query('SELECT * FROM schedules LIMIT 5');
-    
+    const rawSchedules = await connection.query(
+      'SELECT * FROM schedules LIMIT 5',
+    );
+
     return {
       databaseInfo: {
         database: databaseName,
         host: host,
-        tableExists: tableExists[0]?.exists
+        tableExists: tableExists[0]?.exists,
       },
       totalSchedules,
-      sampleSchedules: sampleSchedules.map(s => ({
+      sampleSchedules: sampleSchedules.map((s) => ({
         id: s.id,
         day_of_week: s.day_of_week,
         start_time: s.start_time,
         program_id: s.program_id,
         program: s.program ? { id: s.program.id, name: s.program.name } : null,
-        channel: s.program?.channel ? { id: s.program.channel.id, name: s.program.channel.name } : null
+        channel: s.program?.channel
+          ? { id: s.program.channel.id, name: s.program.channel.name }
+          : null,
       })),
-      rawSchedules: rawSchedules
+      rawSchedules: rawSchedules,
     };
   }
 
@@ -412,20 +461,24 @@ export class AppController {
   async getChannelsFromHandles() {
     // Get all channels from the database
     const channels = await this.channelsRepository.find({
-      select: ['handle']
+      select: ['handle'],
     });
 
     // Filter out channels without handles and build YouTube URLs
     const youtubeUrls = channels
-      .filter(channel => channel.handle && channel.handle.trim() !== '')
-      .map(channel => {
+      .filter((channel) => channel.handle && channel.handle.trim() !== '')
+      .map((channel) => {
         // Ensure handle starts with @ if it doesn't already
-        const handle = channel.handle.startsWith('@') ? channel.handle : `@${channel.handle}`;
+        const handle = channel.handle.startsWith('@')
+          ? channel.handle
+          : `@${channel.handle}`;
         return `https://www.youtube.com/${handle}/live`;
       });
 
     if (youtubeUrls.length === 0) {
-      return { message: 'No channels with valid handles found in the database' };
+      return {
+        message: 'No channels with valid handles found in the database',
+      };
     }
 
     return this.youtubeDiscoveryService.getChannelIdsFromLiveUrls(youtubeUrls);
@@ -436,9 +489,9 @@ export class AppController {
   @Post('youtube/fetch-live-ids')
   async fetchYoutubeLiveIds() {
     await this.youtubeLiveService.fetchLiveVideoIdsManual();
-    return { 
-      success: true, 
-      message: 'YouTube live video IDs fetched successfully.' 
+    return {
+      success: true,
+      message: 'YouTube live video IDs fetched successfully.',
     };
   }
 
@@ -471,10 +524,10 @@ export class AppController {
   @Get('cache-test-del')
   async cacheTestDel() {
     await this.redisService.flushAll();
-    
-    return { 
+
+    return {
       message: 'All cache entries deleted using FLUSHALL command',
-      method: 'flushAll'
+      method: 'flushAll',
     };
   }
 
@@ -483,9 +536,9 @@ export class AppController {
   @Post('cache/clear-schedules')
   async clearScheduleCache() {
     await this.redisService.delByPattern('schedules:all:*');
-    return { 
-      success: true, 
-      message: 'Schedule cache cleared successfully' 
+    return {
+      success: true,
+      message: 'Schedule cache cleared successfully',
     };
   }
 
@@ -497,17 +550,13 @@ export class AppController {
     panelists: number;
     schedules: number;
   }> {
-    const [
-      channelsCount,
-      programsCount,
-      panelistsCount,
-      schedulesCount,
-    ] = await Promise.all([
-      this.channelsRepository.count(),
-      this.programsRepository.count(),
-      this.panelistsRepository.count(),
-      this.schedulesRepository.count(),
-    ]);
+    const [channelsCount, programsCount, panelistsCount, schedulesCount] =
+      await Promise.all([
+        this.channelsRepository.count(),
+        this.programsRepository.count(),
+        this.panelistsRepository.count(),
+        this.schedulesRepository.count(),
+      ]);
 
     return {
       channels: channelsCount,
@@ -516,14 +565,15 @@ export class AppController {
       schedules: schedulesCount,
     };
   }
-  
+
   @Get('holiday')
   async isHoliday(@Query('date') date?: string) {
     let checkDate: Date;
     let dateString: string;
 
     if (date) {
-      const dateInArgentina = TimezoneUtil.parseInArgentinaTime(date).startOf('day');
+      const dateInArgentina =
+        TimezoneUtil.parseInArgentinaTime(date).startOf('day');
       if (!dateInArgentina.isValid()) {
         return { error: 'Invalid date format. Use YYYY-MM-DD' };
       }
@@ -537,14 +587,21 @@ export class AppController {
 
     // Check date-holidays library
     const libHolidays = this.hd.isHoliday(checkDate);
-    const holidayList: { name: string; type: string; date: string }[] = libHolidays
-      ? libHolidays.map((h: any) => ({ name: h.name, type: h.type, date: h.date }))
-      : [];
+    const holidayList: { name: string; type: string; date: string }[] =
+      libHolidays
+        ? libHolidays.map((h: any) => ({
+            name: h.name,
+            type: h.type,
+            date: h.date,
+          }))
+        : [];
 
     // Check custom dates from config (e.g. bridge days / "días no laborables")
-    const customDatesRaw = await this.appConfigService.get('holiday.custom_dates');
+    const customDatesRaw = await this.appConfigService.get(
+      'holiday.custom_dates',
+    );
     if (customDatesRaw) {
-      const customDates = customDatesRaw.split(',').map(d => d.trim());
+      const customDates = customDatesRaw.split(',').map((d) => d.trim());
       if (customDates.includes(dateString)) {
         holidayList.push({
           name: 'Día no laborable',

@@ -41,7 +41,10 @@ describe('AuthService', () => {
           provide: JwtService,
           useValue: {
             sign: jest.fn().mockResolvedValue('test-token'),
-            verify: jest.fn().mockResolvedValue({ email: 'test@example.com', type: 'registration' }),
+            verify: jest.fn().mockResolvedValue({
+              email: 'test@example.com',
+              type: 'registration',
+            }),
             signAccessToken: jest.fn().mockResolvedValue('test-token'),
             signRefreshToken: jest.fn().mockResolvedValue('test-token'),
           },
@@ -91,9 +94,15 @@ describe('AuthService', () => {
       jest.spyOn(jwtService, 'sign').mockResolvedValue(mockToken);
 
       const result = await service.loginUser('test@example.com', 'password123');
-      expect(result).toEqual({ access_token: mockToken, refresh_token: mockToken });
+      expect(result).toEqual({
+        access_token: mockToken,
+        refresh_token: mockToken,
+      });
       expect(usersService.findByEmail).toHaveBeenCalledWith('test@example.com');
-      expect(bcrypt.compare).toHaveBeenCalledWith('password123', 'hashed_password');
+      expect(bcrypt.compare).toHaveBeenCalledWith(
+        'password123',
+        'hashed_password',
+      );
       const expectedPayload = {
         sub: mockUser.id,
         type: 'public',
@@ -110,18 +119,18 @@ describe('AuthService', () => {
     it('should throw UnauthorizedException for invalid credentials', async () => {
       jest.spyOn(usersService, 'findByEmail').mockResolvedValue(null);
 
-      await expect(service.loginUser('test@example.com', 'wrong-password')).rejects.toThrow(
-        UnauthorizedException,
-      );
+      await expect(
+        service.loginUser('test@example.com', 'wrong-password'),
+      ).rejects.toThrow(UnauthorizedException);
     });
 
     it('should throw UnauthorizedException for incorrect password', async () => {
       jest.spyOn(usersService, 'findByEmail').mockResolvedValue(mockUser);
       jest.spyOn(bcrypt, 'compare').mockResolvedValue(false);
 
-      await expect(service.loginUser('test@example.com', 'wrong-password')).rejects.toThrow(
-        UnauthorizedException,
-      );
+      await expect(
+        service.loginUser('test@example.com', 'wrong-password'),
+      ).rejects.toThrow(UnauthorizedException);
     });
   });
 
@@ -150,9 +159,9 @@ describe('AuthService', () => {
     it('should throw UnauthorizedException for invalid identifier', async () => {
       jest.spyOn(usersService, 'findByEmail').mockResolvedValue(null);
 
-      await expect(service.signJwtForIdentifier('nonexistent@example.com')).rejects.toThrow(
-        UnauthorizedException,
-      );
+      await expect(
+        service.signJwtForIdentifier('nonexistent@example.com'),
+      ).rejects.toThrow(UnauthorizedException);
     });
   });
 
@@ -166,7 +175,10 @@ describe('AuthService', () => {
       expect(result).toBe(mockToken);
       const calls = (jwtService.sign as jest.Mock).mock.calls;
       expect(calls.length).toBeGreaterThan(0);
-      expect(calls[0][0]).toEqual({ email: 'test@example.com', type: 'registration' });
+      expect(calls[0][0]).toEqual({
+        email: 'test@example.com',
+        type: 'registration',
+      });
       expect(calls[0][1]).toEqual(expect.objectContaining({ expiresIn: '1h' }));
     });
   });
@@ -178,25 +190,28 @@ describe('AuthService', () => {
 
       const result = await service.verifyRegistrationToken('valid-token');
 
-      expect(result).toEqual({ email: 'test@example.com', type: 'registration' });
+      expect(result).toEqual({
+        email: 'test@example.com',
+        type: 'registration',
+      });
       expect(jwtService.verify).toHaveBeenCalledWith('valid-token');
     });
 
     it('should throw UnauthorizedException for invalid token', async () => {
       jest.spyOn(jwtService, 'verify').mockRejectedValue(new Error());
 
-      await expect(service.verifyRegistrationToken('invalid-token')).rejects.toThrow(
-        UnauthorizedException,
-      );
+      await expect(
+        service.verifyRegistrationToken('invalid-token'),
+      ).rejects.toThrow(UnauthorizedException);
     });
 
     it('should throw UnauthorizedException for token with wrong type', async () => {
       const mockPayload = { email: 'test@example.com', type: 'wrong-type' };
       jest.spyOn(jwtService, 'verify').mockResolvedValue(mockPayload);
 
-      await expect(service.verifyRegistrationToken('wrong-type-token')).rejects.toThrow(
-        UnauthorizedException,
-      );
+      await expect(
+        service.verifyRegistrationToken('wrong-type-token'),
+      ).rejects.toThrow(UnauthorizedException);
     });
   });
-}); 
+});
