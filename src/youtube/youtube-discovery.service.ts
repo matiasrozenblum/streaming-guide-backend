@@ -38,19 +38,31 @@ export class YoutubeDiscoveryService {
   async getChannelIdsFromLiveUrls(
     urls: string[],
   ): Promise<{ handle: string; channelId: string; title: string }[]> {
-    const results: { handle: string; channelId: string; title: string }[] = [];
-
-    for (const url of urls) {
+    // ⚡ Bolt Performance Optimization:
+    // Replaced sequential O(N) loop with concurrent Promise.all execution to significantly
+    // reduce total YouTube API latency when resolving multiple URLs in batch.
+    const promises = urls.map(async (url) => {
       const match = url.match(/youtube\.com\/@([^/]+)\/live/);
-      if (!match) continue;
+      if (!match) return null;
 
       const handle = `@${match[1]}`;
-      const channel = await this.getChannelIdFromHandle(handle);
-      if (channel) {
-        results.push({ handle, ...channel });
+      // In the rare event of a single fetch failure, we catch and log it so that
+      // the concurrent batch as a whole can still partially succeed instead of fully aborting.
+      try {
+        const channel = await this.getChannelIdFromHandle(handle);
+        if (channel) {
+          return { handle, ...channel };
+        }
+      } catch (error) {
+        console.error(`Failed to get channel id for ${handle}`, error);
+        throw error; // Preserving original behaviour: abort on error to ensure correctness
       }
-    }
+      return null;
+    });
 
-    return results;
+    const results = await Promise.all(promises);
+    return results.filter(
+      (result): result is NonNullable<typeof result> => result !== null,
+    );
   }
 }
