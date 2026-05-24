@@ -8,13 +8,19 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ## [Unreleased]
 
 ### Added
-- `POST /channels/upload` endpoint to upload channel logo images to Supabase Storage (`channel-logos` bucket), returning `{ url: string }` (admin only, mirrors `/streamers/upload`)
 
 ### Changed
 
 ### Removed
 
 ### Fixed
+
+---
+
+## [1.25.0] - 2026-04-16
+
+### Added
+- `POST /channels/upload` endpoint to upload channel logo images to Supabase Storage (`channel-logos` bucket), returning `{ url: string }` (admin only, mirrors `/streamers/upload`)
 
 ---
 
