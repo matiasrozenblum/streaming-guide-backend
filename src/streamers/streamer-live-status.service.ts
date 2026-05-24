@@ -9,9 +9,10 @@ import { StreamerSubscriptionService } from './streamer-subscription.service';
 export class StreamerLiveStatusService {
   private readonly logger = new Logger(StreamerLiveStatusService.name);
   private readonly CACHE_PREFIX = 'streamer:live-status:';
-  // TTL: 7 days (604800 seconds) - cache persists until webhook updates it
-  // This is a safety net in case webhooks fail; normally webhooks will update/clear the cache
-  private readonly DEFAULT_TTL: number; // 7 days
+  // TTL: 24 hours (86400 seconds) - cache persists until webhook updates it
+  // This is a safety net in case webhooks fail; normally webhooks will update/clear the cache.
+  // Reduced from 7 days to prevent unbounded accumulation of stale entries in Redis.
+  private readonly DEFAULT_TTL: number; // 24 hours
 
   constructor(
     private readonly configService: ConfigService,
@@ -19,7 +20,7 @@ export class StreamerLiveStatusService {
     @Inject(forwardRef(() => StreamerSubscriptionService))
     private readonly streamerSubscriptionService: StreamerSubscriptionService,
   ) {
-    this.DEFAULT_TTL = this.configService.get<number>('REDIS_TTL') || 604800; // Default to 7 days if not configured
+    this.DEFAULT_TTL = this.configService.get<number>('REDIS_TTL') || 86400; // Default to 24 hours if not configured
   }
 
   /**

@@ -38,8 +38,9 @@ export class YoutubeLiveService {
   private readonly validationCooldowns = new Map<string, number>(); // Track last validation time per channel
   private readonly COOLDOWN_PERIOD = 5 * 60 * 1000; // 5 minutes cooldown
   private readonly inFlightFetches = new Set<string>(); // Track in-flight YouTube API requests to prevent duplicates
+  private readonly MAX_IN_FLIGHT = 50; // Safety cap: auto-clear oldest entries if set grows beyond this
+  private readonly YOUTUBE_API_TIMEOUT_MS = 10_000; // 10 second timeout for YouTube API requests
 
-  // YouTube API usage tracking removed - no longer needed
 
   constructor(
     private readonly configService: ConfigService,
@@ -171,6 +172,7 @@ export class YoutubeLiveService {
       // YouTube API usage tracking removed
 
       const { data } = await axios.get(`${this.apiUrl}/search`, {
+        timeout: this.YOUTUBE_API_TIMEOUT_MS,
         params: {
           part: 'snippet',
           channelId,
@@ -179,6 +181,7 @@ export class YoutubeLiveService {
           key: this.apiKey,
         },
       });
+
       const videoId = data.items?.[0]?.id?.videoId ?? null;
 
       if (!videoId) {
@@ -423,6 +426,7 @@ export class YoutubeLiveService {
         }
 
         const { data } = await axios.get(`${this.apiUrl}/search`, {
+          timeout: this.YOUTUBE_API_TIMEOUT_MS,
           params: {
             part: 'snippet',
             channelId: channelIdsParam,
@@ -444,6 +448,7 @@ export class YoutubeLiveService {
           for (const channelId of chunk) {
             try {
               const individualResponse = await axios.get(`${this.apiUrl}/search`, {
+                timeout: this.YOUTUBE_API_TIMEOUT_MS,
                 params: {
                   part: 'snippet',
                   channelId: channelId,
@@ -534,7 +539,7 @@ export class YoutubeLiveService {
           });
         });
 
-        // Process results for each channel and cache them
+
         for (const channelId of chunk) {
           const streams = streamsByChannel.get(channelId);
           const handle = channelHandleMap?.get(channelId) || 'unknown';
@@ -588,6 +593,21 @@ export class YoutubeLiveService {
       channelIds.forEach(channelId => results.set(channelId, null));
       return results;
     }
+  }
+
+  /**
+   * Add a channel to the in-flight set, enforcing the MAX_IN_FLIGHT cap.
+   * If the set is at capacity, all existing entries are cleared first to prevent
+   * unbounded growth from requests that silently failed to clean up.
+   */
+  private addToInFlight(channelId: string): void {
+    if (this.inFlightFetches.size >= this.MAX_IN_FLIGHT) {
+      this.logger.warn(
+        `⚠️ inFlightFetches reached cap of ${this.MAX_IN_FLIGHT} — clearing stale entries to prevent memory leak`,
+      );
+      this.inFlightFetches.clear();
+    }
+    this.inFlightFetches.add(channelId);
   }
 
   /**
@@ -713,7 +733,8 @@ export class YoutubeLiveService {
     }
 
     // Mark channel as in-flight (in-memory for same-replica deduplication)
-    this.inFlightFetches.add(channelId);
+    this.addToInFlight(channelId);
+
 
     // fetch from YouTube
     try {
@@ -725,6 +746,7 @@ export class YoutubeLiveService {
       this.logger.debug(`🔍 [getLiveStreams] Using API key: ${this.apiKey ? this.apiKey.substring(0, 10) + '...' : 'NOT_SET'}`);
 
       const { data } = await axios.get(`${this.apiUrl}/search`, {
+        timeout: this.YOUTUBE_API_TIMEOUT_MS,
         params: {
           part: 'snippet',
           channelId,
@@ -865,15 +887,19 @@ export class YoutubeLiveService {
 
       return null;
     } finally {
-      // Always remove from in-flight set, even if there was an error
+      // Always remove from in-flight set and release the distributed lock,
+      // even if the request timed out or threw an error.
       this.inFlightFetches.delete(channelId);
+      await this.redisService.del(channelLockKey);
     }
   }
+
 
   /**
    * Get live streams for main cron - should extend not-found marks
    */
   async getLiveStreamsMain(channelId: string, handle: string, blockTTL: number): Promise<LiveStreamsResult | null | '__SKIPPED__'> {
+
     return this.getLiveStreamsInternal(channelId, handle, blockTTL, 'cron', false, 'main');
   }
 
@@ -897,6 +923,7 @@ export class YoutubeLiveService {
       // YouTube API usage tracking removed
 
       const resp = await axios.get(`${this.apiUrl}/videos`, {
+        timeout: this.YOUTUBE_API_TIMEOUT_MS,
         params: { part: 'snippet', id: videoId, key: this.apiKey },
       });
       return resp.data.items?.[0]?.snippet?.liveBroadcastContent === 'live';
@@ -913,10 +940,12 @@ export class YoutubeLiveService {
     return this.fetchLiveVideoIdsInternal('main', '🕐 MAIN CRON');
   }
 
+
   /**
    * Back-to-back fix cron job - runs at :07 and :37
    * Should only increment attempts, NOT extend not-found marks
    */
+
   async fetchLiveVideoIdsBackToBack() {
     return this.fetchLiveVideoIdsInternal('back-to-back-fix', '🔄 BACK-TO-BACK FIX CRON');
   }

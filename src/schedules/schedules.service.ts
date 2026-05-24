@@ -327,6 +327,11 @@ export class SchedulesService {
       enriched.push(...enrichedChannelSchedules);
     }
 
+    // Explicitly release the Maps to allow GC to reclaim memory promptly,
+    // since these can hold references to large schedule/stream objects.
+    channelGroups.clear();
+    batchStreamsResults.clear();
+
     // Add schedules without channels (no grouping needed)
     const schedulesWithoutChannels = schedules.filter(s => !s.program.channel?.youtube_channel_id);
     for (const schedule of schedulesWithoutChannels) {
