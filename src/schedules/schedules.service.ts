@@ -38,6 +38,7 @@ interface FindAllOptions {
   skipCache?: boolean;
   applyOverrides?: boolean;
   liveStatus?: boolean;
+  raw?: boolean; // backoffice: skip date-based filtering, return all schedules
 }
 
 @Injectable()
@@ -81,6 +82,7 @@ export class SchedulesService {
       skipCache = false,
       applyOverrides = true,
       liveStatus = false,
+      raw = false,
     } = options;
 
     // UNIFIED CACHE KEY: Always cache complete week data
@@ -95,8 +97,10 @@ export class SchedulesService {
           `Cache HIT: ${schedules.length} schedules (${Date.now() - startTime}ms)`,
         );
 
-        // Filter by day / current-week context (handles monthly schedules too)
-        schedules = this.filterSchedulesByContext(schedules, dayOfWeek);
+        // Filter by day / current-week context (skip for raw/backoffice requests)
+        if (!raw) {
+          schedules = this.filterSchedulesByContext(schedules, dayOfWeek);
+        }
 
         // Cache hit - proceed to process schedules (overrides + enrichment)
         return this.processSchedules(schedules, options, startTime);
@@ -121,7 +125,9 @@ export class SchedulesService {
           await new Promise((r) => setTimeout(r, 100));
           schedules = await this.redisService.get<Schedule[]>(cacheKey);
           if (schedules) {
-            schedules = this.filterSchedulesByContext(schedules, dayOfWeek);
+            if (!raw) {
+              schedules = this.filterSchedulesByContext(schedules, dayOfWeek);
+            }
             return this.processSchedules(schedules, options, startTime);
           }
         }
@@ -139,8 +145,10 @@ export class SchedulesService {
       // Store complete week in unified cache
       await this.redisService.set(cacheKey, schedules, 1800);
 
-      // Filter by day / current-week context (handles monthly schedules too)
-      schedules = this.filterSchedulesByContext(schedules, dayOfWeek);
+      // Filter by day / current-week context (skip for raw/backoffice requests)
+      if (!raw) {
+        schedules = this.filterSchedulesByContext(schedules, dayOfWeek);
+      }
 
       // Process and return
       return this.processSchedules(schedules, options, startTime);

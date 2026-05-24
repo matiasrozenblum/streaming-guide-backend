@@ -8,6 +8,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ## [Unreleased]
 
 ### Added
+- Monthly schedule recurrence: new `schedule_type` field (`weekly` | `monthly_weekday` | `monthly_dated`) on `Schedule` entity
+- `monthly_weekday`: repeats on the Nth weekday of each month (e.g. first Thursday), via `week_number_in_month` (1–4, -1=last) + `day_of_week`
+- `monthly_dated`: one-off occurrence on a specific calendar date via `specific_date` (YYYY-MM-DD); each date must be manually loaded in the backoffice
+- Migration `1779630918547-AddMonthlyScheduleFields`: adds `schedule_type`, `week_number_in_month`, `specific_date` columns and makes `day_of_week` nullable
+- `filterSchedulesByContext()` helper in `SchedulesService`: resolves which schedules apply for a given day/week across all three recurrence types
 
 ### Changed
 
