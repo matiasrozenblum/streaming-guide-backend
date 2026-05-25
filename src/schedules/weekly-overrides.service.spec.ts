@@ -33,6 +33,7 @@ describe('WeeklyOverridesService', () => {
 
   const mockRedisService = {
     get: jest.fn(),
+    mget: jest.fn(),
     set: jest.fn(),
     del: jest.fn(),
     delByPattern: jest.fn(),
