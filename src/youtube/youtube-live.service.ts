@@ -321,13 +321,29 @@ export class YoutubeLiveService {
     this.logger.debug(
       `Fetching live streams for ${channelIds.length} channels`,
     );
-
     // First, check cache for each channel and collect channels that need fresh fetching
     const channelsToFetch: string[] = [];
     const channelHandles = new Map<string, string>(); // Map channelId to handle for logging
 
-    for (const channelId of channelIds) {
-      const handle = channelHandleMap?.get(channelId) || 'unknown';
+    const handles = channelIds.map(
+      (id) => channelHandleMap?.get(id) || 'unknown',
+    );
+
+    // Pre-fetch all Redis keys in batches to avoid N+1 queries
+    const notFoundKeys = handles.map((h) => `videoIdNotFound:${h}`);
+    const attemptTrackingKeys = handles.map((h) => `notFoundAttempts:${h}`);
+    const statusCacheKeys = handles.map((h) => `liveStatusByHandle:${h}`);
+
+    const [notFoundResults, attemptResults, statusCacheResults] =
+      await Promise.all([
+        this.redisService.mget<string>(notFoundKeys),
+        this.redisService.mget<AttemptTracking>(attemptTrackingKeys),
+        this.redisService.mget<LiveStatusCache>(statusCacheKeys),
+      ]);
+
+    for (let i = 0; i < channelIds.length; i++) {
+      const channelId = channelIds[i];
+      const handle = handles[i];
       channelHandles.set(channelId, handle);
 
       // Unified cache - use liveStatusByHandle (replaces liveStreamsByChannel)
@@ -336,9 +352,8 @@ export class YoutubeLiveService {
       const attemptTrackingKey = `notFoundAttempts:${handle}`;
 
       // Enhanced not-found logic with escalation detection
-      const notFoundData = await this.redisService.get<string>(notFoundKey);
-      const attemptData =
-        await this.redisService.get<AttemptTracking>(attemptTrackingKey);
+      const notFoundData = notFoundResults[i];
+      const attemptData = attemptResults[i];
 
       if (
         notFoundData &&
@@ -447,8 +462,7 @@ export class YoutubeLiveService {
       }
 
       // Check unified cache
-      const cachedStatus =
-        await this.redisService.get<LiveStatusCache>(statusCacheKey);
+      const cachedStatus = statusCacheResults[i];
       if (cachedStatus) {
         try {
           // Skip validation during bulk operations to improve performance for onDemand context

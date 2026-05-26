@@ -1128,9 +1128,11 @@ describe('YoutubeLiveService', () => {
 
     describe('getBatchLiveStreams - Escalation Logic', () => {
       it('skips channels with active not-found flags', async () => {
-        redisService.get.mockImplementation(async (key: string) => {
-          if (key === 'videoIdNotFound:handle') return '1';
-          return null;
+        redisService.mget.mockImplementation(async (keys: string[]) => {
+          return keys.map((key) => {
+            if (key === 'videoIdNotFound:handle') return '1';
+            return null;
+          });
         });
 
         const result = await (service as any).getBatchLiveStreams(
