@@ -262,7 +262,7 @@ export class BannersService {
       entity: 'banner',
       entityId: saved.id,
       payload: { banner: saved },
-      revalidatePaths: ['/'],
+      revalidateTags: ['banners'],
     });
 
     return saved;
@@ -344,7 +344,7 @@ export class BannersService {
       entity: 'banner',
       entityId: id,
       payload: { banner: updated },
-      revalidatePaths: ['/'],
+      revalidateTags: ['banners'],
     });
 
     return updated;
@@ -363,7 +363,7 @@ export class BannersService {
       entity: 'banner',
       entityId: id,
       payload: {},
-      revalidatePaths: ['/'],
+      revalidateTags: ['banners'],
     });
   }
 
@@ -398,7 +398,7 @@ export class BannersService {
       entity: 'banner',
       entityId: 'all',
       payload: { bannerIds: banners.map((b) => b.id) },
-      revalidatePaths: ['/'],
+      revalidateTags: ['banners'],
     });
 
     // Return updated banners in order
