@@ -37,12 +37,13 @@ export class OptimizedSchedulesService {
     // Apply weekly overrides
     let schedulesWithOverrides = schedules;
     if (options.applyOverrides !== false) {
-      const currentWeekStart =
+      const weekStartDate =
+        options.weekStart ||
         this.weeklyOverridesService.getWeekStartDate('current');
       schedulesWithOverrides =
         await this.weeklyOverridesService.applyWeeklyOverrides(
           schedules,
-          currentWeekStart,
+          weekStartDate,
         );
     }
 
@@ -81,12 +82,13 @@ export class OptimizedSchedulesService {
     // Apply weekly overrides
     let schedulesWithOverrides = schedules;
     if (options.applyOverrides !== false) {
-      const currentWeekStart =
+      const weekStartDate =
+        options.weekStart ||
         this.weeklyOverridesService.getWeekStartDate('current');
       schedulesWithOverrides =
         await this.weeklyOverridesService.applyWeeklyOverrides(
           schedules,
-          currentWeekStart,
+          weekStartDate,
         );
     }
     this.logger.debug(

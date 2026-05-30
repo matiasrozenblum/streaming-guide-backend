@@ -123,10 +123,16 @@ export class ChannelsController {
     @Query('deviceId') deviceId?: string,
     @Query('live_status') liveStatus?: string,
     @Query('raw') raw?: string,
+    @Query('weekStart') weekStart?: string,
   ) {
     const liveStatusBool =
       liveStatus === 'true' ? true : liveStatus === 'false' ? false : undefined;
-    return this.channelsService.getWeekSchedules(deviceId, liveStatusBool, raw);
+    return this.channelsService.getWeekSchedules(
+      deviceId,
+      liveStatusBool,
+      raw,
+      weekStart,
+    );
   }
 
   @Get(':id')
