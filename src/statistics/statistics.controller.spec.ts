@@ -22,8 +22,12 @@ describe('StatisticsController', () => {
           useValue: {
             getUserDemographics: jest.fn().mockResolvedValue({ totalUsers: 1 }),
             getTopPrograms: jest.fn().mockResolvedValue([]),
-            getNewUsersReport: jest.fn().mockResolvedValue({ users: [], total: 0 }),
-            getNewSubscriptionsReport: jest.fn().mockResolvedValue({ subscriptions: [], total: 0 }),
+            getNewUsersReport: jest
+              .fn()
+              .mockResolvedValue({ users: [], total: 0 }),
+            getNewSubscriptionsReport: jest
+              .fn()
+              .mockResolvedValue({ subscriptions: [], total: 0 }),
             getAllProgramsStats: jest.fn().mockResolvedValue([]),
           },
         },
@@ -71,54 +75,113 @@ describe('StatisticsController', () => {
   });
 
   it('should get new users report', async () => {
-    const result = await controller.getNewUsersReport('2024-01-01', '2024-01-31', 1, 20);
+    const result = await controller.getNewUsersReport(
+      '2024-01-01',
+      '2024-01-31',
+      1,
+      20,
+    );
     expect(result).toEqual({ users: [], total: 0 });
     expect(statisticsService.getNewUsersReport).toHaveBeenCalled();
   });
 
   it('should get new subscriptions report', async () => {
-    const result = await controller.getNewSubscriptionsReport('2024-01-01', '2024-01-31', 1, 20, undefined, undefined);
+    const result = await controller.getNewSubscriptionsReport(
+      '2024-01-01',
+      '2024-01-31',
+      1,
+      20,
+      undefined,
+      undefined,
+    );
     expect(result).toEqual({ subscriptions: [], total: 0 });
     expect(statisticsService.getNewSubscriptionsReport).toHaveBeenCalled();
   });
 
   it('should download users report', async () => {
-    await controller.downloadUsersReport(res as Response, '2024-01-01', '2024-01-31', 'csv');
+    await controller.downloadUsersReport(
+      res as Response,
+      '2024-01-01',
+      '2024-01-31',
+      'csv',
+    );
     expect(reportsProxyService.generateReport).toHaveBeenCalled();
     expect(res.setHeader).toHaveBeenCalled();
     expect(res.send).toHaveBeenCalled();
   });
 
   it('should download subscriptions report', async () => {
-    await controller.downloadSubscriptionsReport(res as Response, '2024-01-01', '2024-01-31', 'csv', 0, 0);
+    await controller.downloadSubscriptionsReport(
+      res as Response,
+      '2024-01-01',
+      '2024-01-31',
+      'csv',
+      0,
+      0,
+    );
     expect(reportsProxyService.generateReport).toHaveBeenCalled();
     expect(res.setHeader).toHaveBeenCalled();
     expect(res.send).toHaveBeenCalled();
   });
 
   it('should handle unifiedReport table action for users', async () => {
-    const req = { report: { action: 'table', type: 'users', from: '2024-01-01', to: '2024-01-31', page: 1, pageSize: 20 } };
+    const req = {
+      report: {
+        action: 'table',
+        type: 'users',
+        from: '2024-01-01',
+        to: '2024-01-31',
+        page: 1,
+        pageSize: 20,
+      },
+    };
     await controller.unifiedReport(req as any, res as Response);
     expect(statisticsService.getNewUsersReport).toHaveBeenCalled();
     expect(res.json).toHaveBeenCalled();
   });
 
   it('should handle unifiedReport table action for subscriptions', async () => {
-    const req = { report: { action: 'table', type: 'subscriptions', from: '2024-01-01', to: '2024-01-31', page: 1, pageSize: 20 } };
+    const req = {
+      report: {
+        action: 'table',
+        type: 'subscriptions',
+        from: '2024-01-01',
+        to: '2024-01-31',
+        page: 1,
+        pageSize: 20,
+      },
+    };
     await controller.unifiedReport(req as any, res as Response);
     expect(statisticsService.getNewSubscriptionsReport).toHaveBeenCalled();
     expect(res.json).toHaveBeenCalled();
   });
 
   it('should handle unifiedReport download action', async () => {
-    const req = { report: { action: 'download', type: 'users', from: '2024-01-01', to: '2024-01-31', format: 'csv' } };
+    const req = {
+      report: {
+        action: 'download',
+        type: 'users',
+        from: '2024-01-01',
+        to: '2024-01-31',
+        format: 'csv',
+      },
+    };
     await controller.unifiedReport(req as any, res as Response);
     expect(reportsProxyService.generateReport).toHaveBeenCalled();
     expect(res.json).toHaveBeenCalled();
   });
 
   it('should handle unifiedReport email action', async () => {
-    const req = { report: { action: 'email', type: 'users', from: '2024-01-01', to: '2024-01-31', format: 'csv', toEmail: 'test@example.com' } };
+    const req = {
+      report: {
+        action: 'email',
+        type: 'users',
+        from: '2024-01-01',
+        to: '2024-01-31',
+        format: 'csv',
+        toEmail: 'test@example.com',
+      },
+    };
     await controller.unifiedReport(req as any, res as Response);
     expect(reportsProxyService.generateReport).toHaveBeenCalled();
     expect(emailService.sendReportWithAttachment).toHaveBeenCalled();
@@ -126,7 +189,15 @@ describe('StatisticsController', () => {
   });
 
   it('should handle unifiedReport invalid action', async () => {
-    const req = { report: { action: 'invalid', type: 'users', from: '2024-01-01', to: '2024-01-31', format: 'csv' } };
+    const req = {
+      report: {
+        action: 'invalid',
+        type: 'users',
+        from: '2024-01-01',
+        to: '2024-01-31',
+        format: 'csv',
+      },
+    };
     await controller.unifiedReport(req as any, res as Response);
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({ error: 'Invalid action' });
@@ -137,4 +208,4 @@ describe('StatisticsController', () => {
     expect(result).toEqual([]);
     expect(statisticsService.getAllProgramsStats).toHaveBeenCalled();
   });
-}); 
+});

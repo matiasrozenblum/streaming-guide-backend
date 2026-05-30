@@ -27,7 +27,9 @@ export class TokenRefreshService {
    */
   async getTwitchAccessToken(): Promise<string | null> {
     // Try Redis first
-    const cached = await this.redisService.get<TokenInfo>(this.TWITCH_TOKEN_PREFIX);
+    const cached = await this.redisService.get<TokenInfo>(
+      this.TWITCH_TOKEN_PREFIX,
+    );
     if (cached && cached.accessToken && Date.now() < cached.expiresAt) {
       return cached.accessToken;
     }
@@ -36,7 +38,8 @@ export class TokenRefreshService {
     const envToken = this.configService.get<string>('TWITCH_APP_ACCESS_TOKEN');
     if (envToken) {
       // Store in Redis with estimated expiration (60 days from now)
-      const expiresAt = Date.now() + this.TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+      const expiresAt =
+        Date.now() + this.TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
       await this.redisService.set(
         this.TWITCH_TOKEN_PREFIX,
         {
@@ -57,7 +60,9 @@ export class TokenRefreshService {
    */
   async getKickAccessToken(): Promise<string | null> {
     // Try Redis first
-    const cached = await this.redisService.get<TokenInfo>(this.KICK_TOKEN_PREFIX);
+    const cached = await this.redisService.get<TokenInfo>(
+      this.KICK_TOKEN_PREFIX,
+    );
     if (cached && cached.accessToken && Date.now() < cached.expiresAt) {
       return cached.accessToken;
     }
@@ -66,7 +71,8 @@ export class TokenRefreshService {
     const envToken = this.configService.get<string>('KICK_APP_ACCESS_TOKEN');
     if (envToken) {
       // Store in Redis with estimated expiration (60 days from now)
-      const expiresAt = Date.now() + this.TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+      const expiresAt =
+        Date.now() + this.TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
       await this.redisService.set(
         this.KICK_TOKEN_PREFIX,
         {
@@ -115,12 +121,14 @@ export class TokenRefreshService {
       const { access_token, expires_in } = response.data;
 
       if (!access_token) {
-        this.logger.error('❌ Twitch token refresh failed: no access_token in response');
+        this.logger.error(
+          '❌ Twitch token refresh failed: no access_token in response',
+        );
         return false;
       }
 
       // expires_in is in seconds, convert to milliseconds
-      const expiresAt = Date.now() + (expires_in * 1000);
+      const expiresAt = Date.now() + expires_in * 1000;
       const refreshedAt = Date.now();
 
       // Store in Redis
@@ -132,7 +140,11 @@ export class TokenRefreshService {
 
       // Store with TTL slightly longer than expiration to ensure we have it
       const ttlSeconds = expires_in + 3600; // Add 1 hour buffer
-      await this.redisService.set(this.TWITCH_TOKEN_PREFIX, tokenInfo, ttlSeconds);
+      await this.redisService.set(
+        this.TWITCH_TOKEN_PREFIX,
+        tokenInfo,
+        ttlSeconds,
+      );
 
       this.logger.log(
         `✅ Twitch token refreshed successfully. Expires in ${Math.round(expires_in / 86400)} days`,
@@ -187,12 +199,14 @@ export class TokenRefreshService {
       const { access_token, expires_in } = response.data;
 
       if (!access_token) {
-        this.logger.error('❌ Kick token refresh failed: no access_token in response');
+        this.logger.error(
+          '❌ Kick token refresh failed: no access_token in response',
+        );
         return false;
       }
 
       // expires_in is in seconds, convert to milliseconds
-      const expiresAt = Date.now() + (expires_in * 1000);
+      const expiresAt = Date.now() + expires_in * 1000;
       const refreshedAt = Date.now();
 
       // Store in Redis
@@ -204,7 +218,11 @@ export class TokenRefreshService {
 
       // Store with TTL slightly longer than expiration
       const ttlSeconds = expires_in + 3600; // Add 1 hour buffer
-      await this.redisService.set(this.KICK_TOKEN_PREFIX, tokenInfo, ttlSeconds);
+      await this.redisService.set(
+        this.KICK_TOKEN_PREFIX,
+        tokenInfo,
+        ttlSeconds,
+      );
 
       this.logger.log(
         `✅ Kick token refreshed successfully. Expires in ${Math.round(expires_in / 86400)} days`,
@@ -230,7 +248,7 @@ export class TokenRefreshService {
    */
   private async shouldRefreshToken(tokenPrefix: string): Promise<boolean> {
     const cached = await this.redisService.get<TokenInfo>(tokenPrefix);
-    
+
     if (!cached) {
       // No cached token, check if we have env var
       if (tokenPrefix === this.TWITCH_TOKEN_PREFIX) {
@@ -252,28 +270,44 @@ export class TokenRefreshService {
     this.logger.log('🔄 Checking token expiration status...');
 
     // Check Twitch token
-    const shouldRefreshTwitch = await this.shouldRefreshToken(this.TWITCH_TOKEN_PREFIX);
+    const shouldRefreshTwitch = await this.shouldRefreshToken(
+      this.TWITCH_TOKEN_PREFIX,
+    );
     if (shouldRefreshTwitch) {
       this.logger.log('🔄 Refreshing Twitch token...');
       await this.refreshTwitchToken();
     } else {
-      const cached = await this.redisService.get<TokenInfo>(this.TWITCH_TOKEN_PREFIX);
+      const cached = await this.redisService.get<TokenInfo>(
+        this.TWITCH_TOKEN_PREFIX,
+      );
       if (cached) {
-        const daysUntilExpiry = Math.round((cached.expiresAt - Date.now()) / (24 * 60 * 60 * 1000));
-        this.logger.debug(`✅ Twitch token still valid (expires in ${daysUntilExpiry} days)`);
+        const daysUntilExpiry = Math.round(
+          (cached.expiresAt - Date.now()) / (24 * 60 * 60 * 1000),
+        );
+        this.logger.debug(
+          `✅ Twitch token still valid (expires in ${daysUntilExpiry} days)`,
+        );
       }
     }
 
     // Check Kick token
-    const shouldRefreshKick = await this.shouldRefreshToken(this.KICK_TOKEN_PREFIX);
+    const shouldRefreshKick = await this.shouldRefreshToken(
+      this.KICK_TOKEN_PREFIX,
+    );
     if (shouldRefreshKick) {
       this.logger.log('🔄 Refreshing Kick token...');
       await this.refreshKickToken();
     } else {
-      const cached = await this.redisService.get<TokenInfo>(this.KICK_TOKEN_PREFIX);
+      const cached = await this.redisService.get<TokenInfo>(
+        this.KICK_TOKEN_PREFIX,
+      );
       if (cached) {
-        const daysUntilExpiry = Math.round((cached.expiresAt - Date.now()) / (24 * 60 * 60 * 1000));
-        this.logger.debug(`✅ Kick token still valid (expires in ${daysUntilExpiry} days)`);
+        const daysUntilExpiry = Math.round(
+          (cached.expiresAt - Date.now()) / (24 * 60 * 60 * 1000),
+        );
+        this.logger.debug(
+          `✅ Kick token still valid (expires in ${daysUntilExpiry} days)`,
+        );
       }
     }
   }
@@ -289,7 +323,9 @@ export class TokenRefreshService {
     ageInDays?: number;
   }> {
     const token = await this.getTwitchAccessToken();
-    const cached = await this.redisService.get<TokenInfo>(this.TWITCH_TOKEN_PREFIX);
+    const cached = await this.redisService.get<TokenInfo>(
+      this.TWITCH_TOKEN_PREFIX,
+    );
 
     if (!token) {
       return { hasToken: false };
@@ -303,8 +339,12 @@ export class TokenRefreshService {
       hasToken: true,
       tokenPreview: `${token.substring(0, 20)}...`,
       expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
-      daysUntilExpiry: expiresAt ? Math.round((expiresAt - now) / (24 * 60 * 60 * 1000)) : undefined,
-      ageInDays: refreshedAt ? Math.round((now - refreshedAt) / (24 * 60 * 60 * 1000)) : undefined,
+      daysUntilExpiry: expiresAt
+        ? Math.round((expiresAt - now) / (24 * 60 * 60 * 1000))
+        : undefined,
+      ageInDays: refreshedAt
+        ? Math.round((now - refreshedAt) / (24 * 60 * 60 * 1000))
+        : undefined,
     };
   }
 
@@ -319,7 +359,9 @@ export class TokenRefreshService {
     ageInDays?: number;
   }> {
     const token = await this.getKickAccessToken();
-    const cached = await this.redisService.get<TokenInfo>(this.KICK_TOKEN_PREFIX);
+    const cached = await this.redisService.get<TokenInfo>(
+      this.KICK_TOKEN_PREFIX,
+    );
 
     if (!token) {
       return { hasToken: false };
@@ -333,9 +375,12 @@ export class TokenRefreshService {
       hasToken: true,
       tokenPreview: `${token.substring(0, 20)}...`,
       expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
-      daysUntilExpiry: expiresAt ? Math.round((expiresAt - now) / (24 * 60 * 60 * 1000)) : undefined,
-      ageInDays: refreshedAt ? Math.round((now - refreshedAt) / (24 * 60 * 60 * 1000)) : undefined,
+      daysUntilExpiry: expiresAt
+        ? Math.round((expiresAt - now) / (24 * 60 * 60 * 1000))
+        : undefined,
+      ageInDays: refreshedAt
+        ? Math.round((now - refreshedAt) / (24 * 60 * 60 * 1000))
+        : undefined,
     };
   }
 }
-

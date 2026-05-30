@@ -12,9 +12,9 @@ jest.mock('dayjs', () => {
     endOf: jest.fn().mockReturnThis(),
     diff: jest.fn().mockReturnValue(10800),
     add: jest.fn().mockReturnThis(),
-    tz: jest.fn().mockReturnThis()
+    tz: jest.fn().mockReturnThis(),
   }));
-  
+
   Object.assign(mockDayjs, originalDayjs);
   return mockDayjs;
 });
@@ -58,43 +58,59 @@ describe('getBlockTTL.util', () => {
         end_time: '13:00',
         program: {
           name: 'Morning Show',
-          channel: { youtube_channel_id: 'test-channel' }
-        }
+          channel: { youtube_channel_id: 'test-channel' },
+        },
       },
       {
         start_time: '14:00',
         end_time: '16:00',
         program: {
           name: 'Afternoon Show',
-          channel: { youtube_channel_id: 'test-channel' }
-        }
-      }
+          channel: { youtube_channel_id: 'test-channel' },
+        },
+      },
     ];
 
     it('should return positive TTL when program is currently running', async () => {
-      const result = await getCurrentBlockTTL('test-channel', mockSchedules as any, mockSentryService);
-      
+      const result = await getCurrentBlockTTL(
+        'test-channel',
+        mockSchedules as any,
+        mockSentryService,
+      );
+
       expect(result).toBeGreaterThan(0);
       expect(typeof result).toBe('number');
     });
 
     it('should return end-of-day TTL when no program is currently running', async () => {
-      const result = await getCurrentBlockTTL('test-channel', mockSchedules as any, mockSentryService);
-      
+      const result = await getCurrentBlockTTL(
+        'test-channel',
+        mockSchedules as any,
+        mockSentryService,
+      );
+
       expect(result).toBeGreaterThan(0);
       expect(typeof result).toBe('number');
     });
 
     it('should work without SentryService', async () => {
-      const result = await getCurrentBlockTTL('test-channel', mockSchedules as any, undefined);
-      
+      const result = await getCurrentBlockTTL(
+        'test-channel',
+        mockSchedules as any,
+        undefined,
+      );
+
       expect(result).toBeGreaterThan(0);
       expect(typeof result).toBe('number');
     });
 
     it('should handle empty schedules array', async () => {
-      const result = await getCurrentBlockTTL('test-channel', [], mockSentryService);
-      
+      const result = await getCurrentBlockTTL(
+        'test-channel',
+        [],
+        mockSentryService,
+      );
+
       expect(result).toBeGreaterThan(0);
       expect(typeof result).toBe('number');
     });
@@ -106,25 +122,33 @@ describe('getBlockTTL.util', () => {
           end_time: '13:00',
           program: {
             name: 'Channel 1 Show',
-            channel: { youtube_channel_id: 'channel-1' }
-          }
+            channel: { youtube_channel_id: 'channel-1' },
+          },
         },
         {
           start_time: '10:00',
           end_time: '14:00',
           program: {
             name: 'Channel 2 Show',
-            channel: { youtube_channel_id: 'channel-2' }
-          }
-        }
+            channel: { youtube_channel_id: 'channel-2' },
+          },
+        },
       ];
 
       // Test with channel-1
-      const result1 = await getCurrentBlockTTL('channel-1', schedulesWithMultipleChannels as any, mockSentryService);
+      const result1 = await getCurrentBlockTTL(
+        'channel-1',
+        schedulesWithMultipleChannels as any,
+        mockSentryService,
+      );
       expect(result1).toBeGreaterThan(0);
 
       // Test with channel-2
-      const result2 = await getCurrentBlockTTL('channel-2', schedulesWithMultipleChannels as any, mockSentryService);
+      const result2 = await getCurrentBlockTTL(
+        'channel-2',
+        schedulesWithMultipleChannels as any,
+        mockSentryService,
+      );
       expect(result2).toBeGreaterThan(0);
 
       // Both should return positive TTL values
@@ -139,21 +163,25 @@ describe('getBlockTTL.util', () => {
           end_time: '10:00',
           program: {
             name: 'First Show',
-            channel: { youtube_channel_id: 'test-channel' }
-          }
+            channel: { youtube_channel_id: 'test-channel' },
+          },
         },
         {
           start_time: '10:01', // 1 minute gap
           end_time: '12:00',
           program: {
             name: 'Second Show',
-            channel: { youtube_channel_id: 'test-channel' }
-          }
-        }
+            channel: { youtube_channel_id: 'test-channel' },
+          },
+        },
       ];
 
-      const result = await getCurrentBlockTTL('test-channel', schedulesWithGap as any, mockSentryService);
-      
+      const result = await getCurrentBlockTTL(
+        'test-channel',
+        schedulesWithGap as any,
+        mockSentryService,
+      );
+
       expect(result).toBeGreaterThan(0);
       expect(typeof result).toBe('number');
     });
@@ -167,17 +195,25 @@ describe('getBlockTTL.util', () => {
           end_time: '10:00',
           program: {
             name: 'Test Show',
-            channel: { youtube_channel_id: 'test-channel' }
-          }
-        }
+            channel: { youtube_channel_id: 'test-channel' },
+          },
+        },
       ];
 
       // First call
-      await getCurrentBlockTTL('test-channel', schedules as any, mockSentryService);
-      
+      await getCurrentBlockTTL(
+        'test-channel',
+        schedules as any,
+        mockSentryService,
+      );
+
       // Second call immediately after (within cooldown)
-      await getCurrentBlockTTL('test-channel', schedules as any, mockSentryService);
-      
+      await getCurrentBlockTTL(
+        'test-channel',
+        schedules as any,
+        mockSentryService,
+      );
+
       // Should only send one alert (or none if no negative TTL detected)
       expect(mockSentryService.captureMessage).toHaveBeenCalledTimes(0);
     });

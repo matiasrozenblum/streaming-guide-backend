@@ -19,7 +19,9 @@ describe('ProposedChangesController', () => {
       ],
     }).compile();
 
-    controller = module.get<ProposedChangesController>(ProposedChangesController);
+    controller = module.get<ProposedChangesController>(
+      ProposedChangesController,
+    );
   });
 
   it('should be defined', () => {

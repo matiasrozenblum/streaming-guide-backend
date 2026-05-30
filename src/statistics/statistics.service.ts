@@ -61,7 +61,10 @@ export class StatisticsService {
     const today = new Date();
     let age = today.getFullYear() - birth.getFullYear();
     const monthDiff = today.getMonth() - birth.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+    if (
+      monthDiff < 0 ||
+      (monthDiff === 0 && today.getDate() < birth.getDate())
+    ) {
       age--;
     }
     if (age < 18) return 'under18';
@@ -77,11 +80,24 @@ export class StatisticsService {
       relations: ['subscriptions'],
     });
     const totalUsers = users.length;
-    const byGender = { male: 0, female: 0, non_binary: 0, rather_not_say: 0, unknown: 0 };
-    const byAgeGroup = { under18: 0, age18to30: 0, age30to45: 0, age45to60: 0, over60: 0, unknown: 0 };
+    const byGender = {
+      male: 0,
+      female: 0,
+      non_binary: 0,
+      rather_not_say: 0,
+      unknown: 0,
+    };
+    const byAgeGroup = {
+      under18: 0,
+      age18to30: 0,
+      age30to45: 0,
+      age45to60: 0,
+      over60: 0,
+      unknown: 0,
+    };
     let usersWithSubscriptions = 0;
     let usersWithoutSubscriptions = 0;
-    users.forEach(user => {
+    users.forEach((user) => {
       if (user.gender) {
         byGender[user.gender]++;
       } else {
@@ -92,14 +108,23 @@ export class StatisticsService {
       } else {
         byAgeGroup.unknown++;
       }
-      if (user.subscriptions && user.subscriptions.length > 0) usersWithSubscriptions++;
+      if (user.subscriptions && user.subscriptions.length > 0)
+        usersWithSubscriptions++;
       else usersWithoutSubscriptions++;
     });
-    return { totalUsers, byGender, byAgeGroup, usersWithSubscriptions, usersWithoutSubscriptions };
+    return {
+      totalUsers,
+      byGender,
+      byAgeGroup,
+      usersWithSubscriptions,
+      usersWithoutSubscriptions,
+    };
   }
 
   async getTopPrograms(limit: number = 10): Promise<TopProgramsStats[]> {
-    const totalUsers = await this.userRepository.count({ where: { role: 'user' } });
+    const totalUsers = await this.userRepository.count({
+      where: { role: 'user' },
+    });
     const topPrograms = await this.subscriptionRepository
       .createQueryBuilder('subscription')
       .leftJoinAndSelect('subscription.program', 'program')
@@ -114,18 +139,25 @@ export class StatisticsService {
       .orderBy('subscriptionCount', 'DESC')
       .limit(limit)
       .getRawMany();
-    return topPrograms.map(p => ({
+    return topPrograms.map((p) => ({
       programId: parseInt(p.programid),
       programName: p.programname,
       channelName: p.channelname,
       subscriptionCount: parseInt(p.subscriptioncount),
-      percentageOfTotalUsers: totalUsers > 0 ? (parseInt(p.subscriptioncount) / totalUsers) * 100 : 0,
+      percentageOfTotalUsers:
+        totalUsers > 0 ? (parseInt(p.subscriptioncount) / totalUsers) * 100 : 0,
     }));
   }
 
-  async getNewUsersReport(from: string, to: string, page: number = 1, pageSize: number = 20) {
+  async getNewUsersReport(
+    from: string,
+    to: string,
+    page: number = 1,
+    pageSize: number = 20,
+  ) {
     const skip = (page - 1) * pageSize;
-    const qb = this.userRepository.createQueryBuilder('user')
+    const qb = this.userRepository
+      .createQueryBuilder('user')
       .where('user.role = :role', { role: 'user' })
       .andWhere('user.createdAt >= :from', { from })
       .andWhere('user.createdAt <= :to', { to })
@@ -153,7 +185,8 @@ export class StatisticsService {
     programId?: number,
   ) {
     const skip = (page - 1) * pageSize;
-    const qb = this.subscriptionRepository.createQueryBuilder('subscription')
+    const qb = this.subscriptionRepository
+      .createQueryBuilder('subscription')
       .leftJoinAndSelect('subscription.user', 'user')
       .leftJoinAndSelect('subscription.program', 'program')
       .leftJoinAndSelect('program.channel', 'channel')
@@ -163,17 +196,32 @@ export class StatisticsService {
     if (channelId) qb.andWhere('channel.id = :channelId', { channelId });
     qb.orderBy('subscription.createdAt', 'DESC').skip(skip).take(pageSize);
     const [subscriptions, total] = await qb.getManyAndCount();
-    const result = subscriptions.map(sub => ({
+    const result = subscriptions.map((sub) => ({
       id: sub.id,
       createdAt: sub.createdAt,
-      user: sub.user ? { id: sub.user.id, firstName: sub.user.firstName, lastName: sub.user.lastName } : null,
-      program: sub.program ? { id: sub.program.id, name: sub.program.name } : null,
-      channel: sub.program && sub.program.channel ? { id: sub.program.channel.id, name: sub.program.channel.name } : null,
+      user: sub.user
+        ? {
+            id: sub.user.id,
+            firstName: sub.user.firstName,
+            lastName: sub.user.lastName,
+          }
+        : null,
+      program: sub.program
+        ? { id: sub.program.id, name: sub.program.name }
+        : null,
+      channel:
+        sub.program && sub.program.channel
+          ? { id: sub.program.channel.id, name: sub.program.channel.name }
+          : null,
     }));
     return { total, page, pageSize, subscriptions: result };
   }
 
-  async downloadUsersReport(from: string, to: string, format: 'csv' | 'pdf'): Promise<Buffer | string> {
+  async downloadUsersReport(
+    from: string,
+    to: string,
+    format: 'csv' | 'pdf',
+  ): Promise<Buffer | string> {
     return this.reportsProxyService.generateReport({
       type: 'users',
       format,
@@ -182,7 +230,13 @@ export class StatisticsService {
     });
   }
 
-  async downloadSubscriptionsReport(from: string, to: string, format: 'csv' | 'pdf', channelId: number, programId: number): Promise<Buffer | string> {
+  async downloadSubscriptionsReport(
+    from: string,
+    to: string,
+    format: 'csv' | 'pdf',
+    channelId: number,
+    programId: number,
+  ): Promise<Buffer | string> {
     return this.reportsProxyService.generateReport({
       type: 'subscriptions',
       format,
@@ -193,7 +247,12 @@ export class StatisticsService {
     });
   }
 
-  async emailUsersReport(from: string, to: string, format: 'csv' | 'pdf', toEmail: string) {
+  async emailUsersReport(
+    from: string,
+    to: string,
+    format: 'csv' | 'pdf',
+    toEmail: string,
+  ) {
     return this.reportsProxyService.generateReport({
       type: 'users',
       format,
@@ -203,7 +262,14 @@ export class StatisticsService {
     });
   }
 
-  async emailSubscriptionsReport(from: string, to: string, format: 'csv' | 'pdf', channelId: number, programId: number, toEmail: string) {
+  async emailSubscriptionsReport(
+    from: string,
+    to: string,
+    format: 'csv' | 'pdf',
+    channelId: number,
+    programId: number,
+    toEmail: string,
+  ) {
     return this.reportsProxyService.generateReport({
       type: 'subscriptions',
       format,
@@ -217,7 +283,9 @@ export class StatisticsService {
 
   async getAllProgramsStats() {
     // 1. Fetch all programs with their channels
-    const programs = await this.programRepository.find({ relations: ['channel'] });
+    const programs = await this.programRepository.find({
+      relations: ['channel'],
+    });
 
     // 2. Fetch all active subscriptions with user, program, and channel in one query
     const subscriptions = await this.subscriptionRepository
@@ -229,14 +297,30 @@ export class StatisticsService {
       .getMany();
 
     // 3. Aggregate stats in-memory
-    const statsMap = new Map<number, {
-      programId: number;
-      programName: string;
-      channelName: string;
-      totalSubscriptions: number;
-      byGender: { male: number; female: number; non_binary: number; rather_not_say: number; unknown: number; };
-      byAgeGroup: { under18: number; age18to30: number; age30to45: number; age45to60: number; over60: number; unknown: number; };
-    }>();
+    const statsMap = new Map<
+      number,
+      {
+        programId: number;
+        programName: string;
+        channelName: string;
+        totalSubscriptions: number;
+        byGender: {
+          male: number;
+          female: number;
+          non_binary: number;
+          rather_not_say: number;
+          unknown: number;
+        };
+        byAgeGroup: {
+          under18: number;
+          age18to30: number;
+          age30to45: number;
+          age45to60: number;
+          over60: number;
+          unknown: number;
+        };
+      }
+    >();
 
     for (const program of programs) {
       statsMap.set(program.id, {
@@ -244,8 +328,21 @@ export class StatisticsService {
         programName: program.name,
         channelName: program.channel?.name || '',
         totalSubscriptions: 0,
-        byGender: { male: 0, female: 0, non_binary: 0, rather_not_say: 0, unknown: 0 },
-        byAgeGroup: { under18: 0, age18to30: 0, age30to45: 0, age45to60: 0, over60: 0, unknown: 0 },
+        byGender: {
+          male: 0,
+          female: 0,
+          non_binary: 0,
+          rather_not_say: 0,
+          unknown: 0,
+        },
+        byAgeGroup: {
+          under18: 0,
+          age18to30: 0,
+          age30to45: 0,
+          age45to60: 0,
+          over60: 0,
+          unknown: 0,
+        },
       });
     }
 
@@ -273,7 +370,7 @@ export class StatisticsService {
     channelId: number,
     from: string,
     to: string,
-    format: 'csv' | 'pdf'
+    format: 'csv' | 'pdf',
   ): Promise<Buffer | string> {
     return this.reportsProxyService.generateChannelReport({
       channelId,
@@ -286,7 +383,7 @@ export class StatisticsService {
   async generateWeeklyReport(
     from: string,
     to: string,
-    channelId?: number
+    channelId?: number,
   ): Promise<Buffer> {
     return this.reportsProxyService.generateWeeklyReport({
       from,
@@ -299,7 +396,7 @@ export class StatisticsService {
     type: 'monthly-summary' | 'quarterly-summary' | 'yearly-summary',
     from: string,
     to: string,
-    channelId?: number
+    channelId?: number,
   ): Promise<Buffer> {
     return this.reportsProxyService.generatePeriodicReport({
       type,
@@ -314,24 +411,32 @@ export class StatisticsService {
     from: string,
     to: string,
     format: 'csv' | 'pdf',
-    toEmail: string
+    toEmail: string,
   ): Promise<void> {
-    const report = await this.generateChannelReport(channelId, from, to, format);
+    const report = await this.generateChannelReport(
+      channelId,
+      from,
+      to,
+      format,
+    );
     const filename = `channel_${channelId}_report_${from}_to_${to}.${format}`;
-    
+
     // Ensure report is a Buffer
-    const reportBuffer = typeof report === 'string' ? Buffer.from(report) : report;
-    
+    const reportBuffer =
+      typeof report === 'string' ? Buffer.from(report) : report;
+
     await this.emailService.sendReportWithAttachment({
       to: toEmail,
       subject: `Reporte de Canal: ${filename}`,
       text: `Adjuntamos el reporte del canal solicitado (${filename}).`,
       html: `<p>Adjuntamos el reporte del canal solicitado (<b>${filename}</b>).</p>`,
-      attachments: [{ 
-        filename, 
-        content: reportBuffer, 
-        contentType: format === 'csv' ? 'text/csv' : 'application/pdf' 
-      }],
+      attachments: [
+        {
+          filename,
+          content: reportBuffer,
+          contentType: format === 'csv' ? 'text/csv' : 'application/pdf',
+        },
+      ],
     });
   }
 
@@ -340,22 +445,24 @@ export class StatisticsService {
     from: string,
     to: string,
     channelId: number | undefined,
-    toEmail: string
+    toEmail: string,
   ): Promise<void> {
     const report = await this.generatePeriodicReport(type, from, to, channelId);
     const channelSuffix = channelId ? `_channel_${channelId}` : '';
     const filename = `${type.replace('-summary', '')}_report${channelSuffix}_${from}_to_${to}.pdf`;
-    
+
     await this.emailService.sendReportWithAttachment({
       to: toEmail,
       subject: `Reporte ${type.replace('-summary', '')}: ${filename}`,
       text: `Adjuntamos el reporte ${type.replace('-summary', '')} solicitado (${filename}).`,
       html: `<p>Adjuntamos el reporte ${type.replace('-summary', '')} solicitado (<b>${filename}</b>).</p>`,
-      attachments: [{ 
-        filename, 
-        content: report, 
-        contentType: 'application/pdf' 
-      }],
+      attachments: [
+        {
+          filename,
+          content: report,
+          contentType: 'application/pdf',
+        },
+      ],
     });
   }
 
@@ -384,12 +491,25 @@ export class StatisticsService {
 
     // Calculate statistics
     const totalSubscriptions = subscriptions.length;
-    const uniqueUsers = new Set(subscriptions.map(sub => sub.user?.id)).size;
-    
-    const byGender = { male: 0, female: 0, non_binary: 0, rather_not_say: 0, unknown: 0 };
-    const byAgeGroup = { under18: 0, age18to30: 0, age30to45: 0, age45to60: 0, over60: 0, unknown: 0 };
-    
-    subscriptions.forEach(sub => {
+    const uniqueUsers = new Set(subscriptions.map((sub) => sub.user?.id)).size;
+
+    const byGender = {
+      male: 0,
+      female: 0,
+      non_binary: 0,
+      rather_not_say: 0,
+      unknown: 0,
+    };
+    const byAgeGroup = {
+      under18: 0,
+      age18to30: 0,
+      age30to45: 0,
+      age45to60: 0,
+      over60: 0,
+      unknown: 0,
+    };
+
+    subscriptions.forEach((sub) => {
       if (sub.user && sub.user.gender) {
         byGender[sub.user.gender]++;
       } else {
@@ -403,10 +523,16 @@ export class StatisticsService {
     });
 
     // Get program breakdown
-    const programStats = new Map<number, { name: string; subscriptions: number }>();
-    subscriptions.forEach(sub => {
+    const programStats = new Map<
+      number,
+      { name: string; subscriptions: number }
+    >();
+    subscriptions.forEach((sub) => {
       if (sub.program) {
-        const existing = programStats.get(sub.program.id) || { name: sub.program.name, subscriptions: 0 };
+        const existing = programStats.get(sub.program.id) || {
+          name: sub.program.name,
+          subscriptions: 0,
+        };
         existing.subscriptions++;
         programStats.set(sub.program.id, existing);
       }
@@ -420,7 +546,9 @@ export class StatisticsService {
       uniqueUsers,
       byGender,
       byAgeGroup,
-      programs: Array.from(programStats.values()).sort((a, b) => b.subscriptions - a.subscriptions),
+      programs: Array.from(programStats.values()).sort(
+        (a, b) => b.subscriptions - a.subscriptions,
+      ),
     };
   }
-} 
+}

@@ -512,7 +512,11 @@ export class WebhookSubscriptionService {
     };
 
     const keysToFetch: string[] = [];
-    const keyMap: Array<{ key: string; type: 'twitch' | 'kick'; username: string }> = [];
+    const keyMap: Array<{
+      key: string;
+      type: 'twitch' | 'kick';
+      username: string;
+    }> = [];
 
     for (const service of services) {
       if (service.service === 'twitch') {
@@ -739,7 +743,7 @@ export class WebhookSubscriptionService {
           const username = key.replace(`${this.SUBSCRIPTION_PREFIX}kick:`, '');
 
           // Get stored data from batch
-          const storedData = storedDataBatch[i] as any;
+          const storedData = storedDataBatch[i];
           const userId = storedData?.userId;
 
           if (!userId) {

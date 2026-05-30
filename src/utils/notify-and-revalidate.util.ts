@@ -6,6 +6,7 @@ interface NotifyAndRevalidateOptions {
   entityId: string | number;
   payload?: any;
   revalidatePaths?: string[];
+  revalidateTags?: string[];
 }
 
 export class NotifyAndRevalidateUtil {
@@ -30,22 +31,33 @@ export class NotifyAndRevalidateUtil {
     await this.redisService.set(
       notificationKey,
       JSON.stringify(notification),
-      300 // 5 minutes TTL
+      300, // 5 minutes TTL
     );
 
-    // 2. Revalidate Next.js paths in the background (non-blocking, fire-and-forget)
+    // 2. Revalidate Next.js paths/tags in the background (non-blocking, fire-and-forget)
     if (options.revalidatePaths && options.revalidatePaths.length > 0) {
-      this.revalidateInBackground(options.revalidatePaths);
+      this.revalidateInBackground({ paths: options.revalidatePaths });
+    }
+    if (options.revalidateTags && options.revalidateTags.length > 0) {
+      this.revalidateInBackground({ tags: options.revalidateTags });
     }
   }
 
-  private revalidateInBackground(paths: string[]) {
+  private revalidateInBackground(opts: {
+    paths?: string[];
+    tags?: string[];
+  }) {
     const bypassToken = this.vercelBypassSecret || this.revalidateSecret;
     const url = `${this.frontendUrl}/api/revalidate?x-vercel-set-bypass-cookie=true&x-vercel-protection-bypass=${bypassToken}`;
 
+    const items = opts.paths
+      ? opts.paths.map((path) => ({ path, secret: this.revalidateSecret }))
+      : (opts.tags ?? []).map((tag) => ({ tag, secret: this.revalidateSecret }));
+
     // Fire all revalidation requests in parallel, don't await
     Promise.all(
-      paths.map(async (path) => {
+      items.map(async (body) => {
+        const label = 'path' in body ? `path: ${body.path}` : `tag: ${(body as any).tag}`;
         try {
           const response = await globalThis.fetch(url, {
             method: 'POST',
@@ -53,18 +65,26 @@ export class NotifyAndRevalidateUtil {
               'Content-Type': 'application/json',
               'x-vercel-protection-bypass': bypassToken,
             },
-            body: JSON.stringify({ path, secret: this.revalidateSecret }),
+            body: JSON.stringify(body),
           });
 
           if (!response.ok) {
-            console.error(`[NotifyAndRevalidate] Failed to revalidate path: ${path}, status: ${response.status}`);
+            console.error(
+              `[NotifyAndRevalidate] Failed to revalidate ${label}, status: ${response.status}`,
+            );
           }
         } catch (err) {
-          console.error('[NotifyAndRevalidate] Failed to revalidate path', path, err);
+          console.error(
+            `[NotifyAndRevalidate] Failed to revalidate ${label}`,
+            err,
+          );
         }
       }),
     ).catch((err) => {
-      console.error('[NotifyAndRevalidate] Unexpected error in background revalidation', err);
+      console.error(
+        '[NotifyAndRevalidate] Unexpected error in background revalidation',
+        err,
+      );
     });
   }
-} 
+}

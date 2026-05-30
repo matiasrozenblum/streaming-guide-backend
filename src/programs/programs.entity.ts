@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, ManyToMany, JoinTable, JoinColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  OneToMany,
+  ManyToMany,
+  JoinTable,
+  JoinColumn,
+} from 'typeorm';
 import { Channel } from '../channels/channels.entity';
 import { Schedule } from '../schedules/schedules.entity';
 import { Panelist } from '../panelists/panelists.entity';
@@ -14,14 +23,21 @@ export class Program {
   @Column({ type: 'text', nullable: true })
   description: string;
 
-  @ManyToOne(() => Channel, (channel) => channel.programs, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Channel, (channel) => channel.programs, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'channel_id' })
   channel: Channel;
 
-  @OneToMany(() => Schedule, (schedule) => schedule.program, { cascade: true, onDelete: 'CASCADE' })
+  @OneToMany(() => Schedule, (schedule) => schedule.program, {
+    cascade: true,
+    onDelete: 'CASCADE',
+  })
   schedules: Schedule[];
 
-  @ManyToMany(() => Panelist, (panelist) => panelist.programs, { onDelete: 'CASCADE' })
+  @ManyToMany(() => Panelist, (panelist) => panelist.programs, {
+    onDelete: 'CASCADE',
+  })
   @JoinTable()
   panelists: Panelist[];
 

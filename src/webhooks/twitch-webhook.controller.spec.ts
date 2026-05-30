@@ -71,7 +71,9 @@ describe('TwitchWebhookController', () => {
     }).compile();
 
     controller = module.get<TwitchWebhookController>(TwitchWebhookController);
-    streamerLiveStatusService = module.get<StreamerLiveStatusService>(StreamerLiveStatusService);
+    streamerLiveStatusService = module.get<StreamerLiveStatusService>(
+      StreamerLiveStatusService,
+    );
     streamersService = module.get<StreamersService>(StreamersService);
   });
 
@@ -168,7 +170,7 @@ describe('TwitchWebhookController', () => {
         headers['twitch-eventsub-message-type'],
         notification,
         req,
-        res
+        res,
       );
 
       expect(res.status).toHaveBeenCalledWith(204);
@@ -177,7 +179,7 @@ describe('TwitchWebhookController', () => {
         1,
         'twitch',
         true,
-        'testuser'
+        'testuser',
       );
     });
 
@@ -224,7 +226,7 @@ describe('TwitchWebhookController', () => {
         headers['twitch-eventsub-message-type'],
         notification,
         req,
-        res
+        res,
       );
 
       expect(res.status).toHaveBeenCalledWith(204);
@@ -233,7 +235,7 @@ describe('TwitchWebhookController', () => {
         1,
         'twitch',
         false,
-        'testuser'
+        'testuser',
       );
     });
 
@@ -275,7 +277,7 @@ describe('TwitchWebhookController', () => {
         headers['twitch-eventsub-message-type'],
         notification,
         req,
-        res
+        res,
       );
 
       expect(res.set).toHaveBeenCalledWith('Content-Type', 'text/plain');
@@ -285,4 +287,3 @@ describe('TwitchWebhookController', () => {
     });
   });
 });
-

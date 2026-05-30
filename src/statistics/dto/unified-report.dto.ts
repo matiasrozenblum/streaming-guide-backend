@@ -1,9 +1,33 @@
-import { IsString, IsEnum, IsOptional, IsNumber, IsArray, ValidateNested } from 'class-validator';
+import {
+  IsString,
+  IsEnum,
+  IsOptional,
+  IsNumber,
+  IsArray,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class SingleReportDto {
-  @IsEnum(['users', 'subscriptions', 'weekly-summary', 'monthly-summary', 'quarterly-summary', 'yearly-summary', 'channel-summary', 'comprehensive-channel-summary'])
-  type: 'users' | 'subscriptions' | 'weekly-summary' | 'monthly-summary' | 'quarterly-summary' | 'yearly-summary' | 'channel-summary' | 'comprehensive-channel-summary';
+  @IsEnum([
+    'users',
+    'subscriptions',
+    'weekly-summary',
+    'monthly-summary',
+    'quarterly-summary',
+    'yearly-summary',
+    'channel-summary',
+    'comprehensive-channel-summary',
+  ])
+  type:
+    | 'users'
+    | 'subscriptions'
+    | 'weekly-summary'
+    | 'monthly-summary'
+    | 'quarterly-summary'
+    | 'yearly-summary'
+    | 'channel-summary'
+    | 'comprehensive-channel-summary';
 
   @IsEnum(['csv', 'pdf'])
   format: 'csv' | 'pdf';
@@ -49,4 +73,4 @@ export class UnifiedReportDto {
   @ValidateNested({ each: true })
   @Type(() => SingleReportDto)
   reports?: SingleReportDto[];
-} 
+}

@@ -1,7 +1,10 @@
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from '@/redis/redis.service';
-import { StreamerLiveStatusCache, StreamerServiceStatus } from './interfaces/streamer-live-status-cache.interface';
+import {
+  StreamerLiveStatusCache,
+  StreamerServiceStatus,
+} from './interfaces/streamer-live-status-cache.interface';
 import { StreamerService } from './streamers.entity';
 import { StreamerSubscriptionService } from './streamer-subscription.service';
 import { TokenRefreshService } from '../webhooks/token-refresh.service';
@@ -32,10 +35,11 @@ export class StreamerLiveStatusService {
     streamerId: number,
     service: 'twitch' | 'kick' | 'youtube',
     isLive: boolean,
-    username?: string
+    username?: string,
   ): Promise<void> {
     const cacheKey = `${this.CACHE_PREFIX}${streamerId}`;
-    const existing = await this.redisService.get<StreamerLiveStatusCache>(cacheKey);
+    const existing =
+      await this.redisService.get<StreamerLiveStatusCache>(cacheKey);
 
     const now = Date.now();
     const serviceStatus: StreamerServiceStatus = {
@@ -49,7 +53,9 @@ export class StreamerLiveStatusService {
 
     if (existing) {
       // Update existing cache
-      const existingServiceIndex = existing.services.findIndex(s => s.service === service);
+      const existingServiceIndex = existing.services.findIndex(
+        (s) => s.service === service,
+      );
 
       if (existingServiceIndex >= 0) {
         // Update existing service status
@@ -60,7 +66,7 @@ export class StreamerLiveStatusService {
       }
 
       // Recalculate overall isLive (true if ANY service is live)
-      const overallIsLive = existing.services.some(s => s.isLive);
+      const overallIsLive = existing.services.some((s) => s.isLive);
       const wasLive = existing.isLive;
 
       updatedCache = {
@@ -73,12 +79,20 @@ export class StreamerLiveStatusService {
 
       // Trigger notification if transition from Offline -> Live
       if (!wasLive && overallIsLive) {
-        this.logger.log(`🚀 Streamer ${streamerId} went LIVE! Triggering notifications...`);
+        this.logger.log(
+          `🚀 Streamer ${streamerId} went LIVE! Triggering notifications...`,
+        );
         // WAIT for notifications to finish before ending the Express request
         try {
-          await this.streamerSubscriptionService.notifySubscribers(streamerId, service);
+          await this.streamerSubscriptionService.notifySubscribers(
+            streamerId,
+            service,
+          );
         } catch (err) {
-          this.logger.error(`Failed to notify subscribers for streamer ${streamerId}`, err);
+          this.logger.error(
+            `Failed to notify subscribers for streamer ${streamerId}`,
+            err,
+          );
         }
       }
     } else {
@@ -95,25 +109,37 @@ export class StreamerLiveStatusService {
       // However, for "create new cache", it usually happens on restart or new streamer.
       // If it's a webhook update that initializes the cache as LIVE, we should probably notify.
       if (isLive) {
-        this.logger.log(`🚀 Streamer ${streamerId} went LIVE (init)! Triggering notifications...`);
+        this.logger.log(
+          `🚀 Streamer ${streamerId} went LIVE (init)! Triggering notifications...`,
+        );
         // WAIT for notifications to finish before ending the Express request
         // This is a diagnostic test to see if execution context destruction is stripping the Auth headers.
         try {
-          await this.streamerSubscriptionService.notifySubscribers(streamerId, service);
+          await this.streamerSubscriptionService.notifySubscribers(
+            streamerId,
+            service,
+          );
         } catch (err) {
-          this.logger.error(`Failed to notify subscribers for streamer ${streamerId}`, err);
+          this.logger.error(
+            `Failed to notify subscribers for streamer ${streamerId}`,
+            err,
+          );
         }
       }
     }
 
     await this.redisService.set(cacheKey, updatedCache, updatedCache.ttl);
-    this.logger.debug(`✅ Updated live status for streamer ${streamerId}, service ${service}: isLive=${isLive}`);
+    this.logger.debug(
+      `✅ Updated live status for streamer ${streamerId}, service ${service}: isLive=${isLive}`,
+    );
   }
 
   /**
    * Get live status for a specific streamer
    */
-  async getLiveStatus(streamerId: number): Promise<StreamerLiveStatusCache | null> {
+  async getLiveStatus(
+    streamerId: number,
+  ): Promise<StreamerLiveStatusCache | null> {
     const cacheKey = `${this.CACHE_PREFIX}${streamerId}`;
     return await this.redisService.get<StreamerLiveStatusCache>(cacheKey);
   }
@@ -121,7 +147,9 @@ export class StreamerLiveStatusService {
   /**
    * Get live status for multiple streamers
    */
-  async getLiveStatuses(streamerIds: number[]): Promise<Map<number, StreamerLiveStatusCache>> {
+  async getLiveStatuses(
+    streamerIds: number[],
+  ): Promise<Map<number, StreamerLiveStatusCache>> {
     const result = new Map<number, StreamerLiveStatusCache>();
 
     if (streamerIds.length === 0) {
@@ -129,8 +157,9 @@ export class StreamerLiveStatusService {
     }
 
     // ⚡ Bolt Optimization: Replace N+1 Redis queries with a single mget
-    const keys = streamerIds.map(id => `${this.CACHE_PREFIX}${id}`);
-    const statuses = await this.redisService.mget<StreamerLiveStatusCache>(keys);
+    const keys = streamerIds.map((id) => `${this.CACHE_PREFIX}${id}`);
+    const statuses =
+      await this.redisService.mget<StreamerLiveStatusCache>(keys);
 
     statuses.forEach((status, index) => {
       if (status) {
@@ -151,13 +180,20 @@ export class StreamerLiveStatusService {
 
     do {
       // Scan for keys with the prefix
-      const reply = await this.redisService.client.scan(cursor, 'MATCH', `${this.CACHE_PREFIX}*`, 'COUNT', 100);
+      const reply = await this.redisService.client.scan(
+        cursor,
+        'MATCH',
+        `${this.CACHE_PREFIX}*`,
+        'COUNT',
+        100,
+      );
       cursor = reply[0];
       const keys = reply[1];
 
       if (keys.length > 0) {
         // Fetch all values in a single mget to avoid N+1 Redis round-trips
-        const statuses = await this.redisService.mget<StreamerLiveStatusCache>(keys);
+        const statuses =
+          await this.redisService.mget<StreamerLiveStatusCache>(keys);
         statuses.forEach((data) => {
           if (data && data.isLive) {
             result.set(data.streamerId, true);
@@ -175,7 +211,9 @@ export class StreamerLiveStatusService {
   async clearLiveStatus(streamerId: number): Promise<void> {
     const cacheKey = `${this.CACHE_PREFIX}${streamerId}`;
     await this.redisService.del(cacheKey);
-    this.logger.debug(`🗑️ Cleared live status cache for streamer ${streamerId}`);
+    this.logger.debug(
+      `🗑️ Cleared live status cache for streamer ${streamerId}`,
+    );
   }
 
   /**
@@ -184,22 +222,27 @@ export class StreamerLiveStatusService {
    */
   async syncLiveStatusFromKick(
     streamerId: number,
-    username: string
+    username: string,
   ): Promise<{ success: boolean; isLive: boolean; error?: string }> {
     try {
-      this.logger.log(`🔄 Syncing live status from Kick API for streamer ${streamerId} (${username})`);
+      this.logger.log(
+        `🔄 Syncing live status from Kick API for streamer ${streamerId} (${username})`,
+      );
 
       // Try public API first, then fallback to authenticated if 403
       let data: any;
 
       try {
         // Call Kick's public channels API
-        const response = await fetch(`https://kick.com/api/v2/channels/${username}`, {
-          headers: {
-            'User-Agent': 'StreamingGuide/1.0',
-            'Accept': 'application/json',
+        const response = await fetch(
+          `https://kick.com/api/v2/channels/${username}`,
+          {
+            headers: {
+              'User-Agent': 'StreamingGuide/1.0',
+              Accept: 'application/json',
+            },
           },
-        });
+        );
 
         if (response.status === 403 || response.status === 401) {
           // Try with authentication
@@ -208,53 +251,86 @@ export class StreamerLiveStatusService {
 
         if (!response.ok) {
           const errorText = await response.text();
-          this.logger.warn(`⚠️ Failed to fetch Kick channel data for ${username}: ${response.status} - ${errorText}`);
-          return { success: false, isLive: false, error: `Kick API returned ${response.status}` };
+          this.logger.warn(
+            `⚠️ Failed to fetch Kick channel data for ${username}: ${response.status} - ${errorText}`,
+          );
+          return {
+            success: false,
+            isLive: false,
+            error: `Kick API returned ${response.status}`,
+          };
         }
 
         data = await response.json();
       } catch (publicError) {
         // Try with Kick app access token
-        const appAccessToken = this.configService.get<string>('KICK_APP_ACCESS_TOKEN');
+        const appAccessToken = this.configService.get<string>(
+          'KICK_APP_ACCESS_TOKEN',
+        );
         if (!appAccessToken) {
-          this.logger.warn('⚠️ No KICK_APP_ACCESS_TOKEN configured, cannot retry with authentication');
-          return { success: false, isLive: false, error: 'Kick API returned 403 and no access token configured' };
+          this.logger.warn(
+            '⚠️ No KICK_APP_ACCESS_TOKEN configured, cannot retry with authentication',
+          );
+          return {
+            success: false,
+            isLive: false,
+            error: 'Kick API returned 403 and no access token configured',
+          };
         }
 
         this.logger.log('🔑 Retrying Kick API with authentication...');
-        const authResponse = await fetch(`https://kick.com/api/v2/channels/${username}`, {
-          headers: {
-            'Authorization': `Bearer ${appAccessToken}`,
-            'User-Agent': 'StreamingGuide/1.0',
-            'Accept': 'application/json',
+        const authResponse = await fetch(
+          `https://kick.com/api/v2/channels/${username}`,
+          {
+            headers: {
+              Authorization: `Bearer ${appAccessToken}`,
+              'User-Agent': 'StreamingGuide/1.0',
+              Accept: 'application/json',
+            },
           },
-        });
+        );
 
         if (!authResponse.ok) {
           const errorText = await authResponse.text();
-          this.logger.warn(`⚠️ Authenticated request also failed for ${username}: ${authResponse.status} - ${errorText}`);
-          return { success: false, isLive: false, error: `Kick API returned ${authResponse.status}` };
+          this.logger.warn(
+            `⚠️ Authenticated request also failed for ${username}: ${authResponse.status} - ${errorText}`,
+          );
+          return {
+            success: false,
+            isLive: false,
+            error: `Kick API returned ${authResponse.status}`,
+          };
         }
 
         data = await authResponse.json();
-        this.logger.log('✅ Successfully fetched Kick data with authentication');
+        this.logger.log(
+          '✅ Successfully fetched Kick data with authentication',
+        );
       }
 
       // Kick API returns livestream object when live, or livestream.is_live boolean
       // The API structure: { livestream: { is_live: boolean } } or { livestream: null }
-      const isLive = data.livestream?.is_live === true ||
-        (data.livestream !== null && data.livestream !== undefined && Object.keys(data.livestream).length > 0);
+      const isLive =
+        data.livestream?.is_live === true ||
+        (data.livestream !== null &&
+          data.livestream !== undefined &&
+          Object.keys(data.livestream).length > 0);
 
       this.logger.log(`📡 Kick API response for ${username}: isLive=${isLive}`);
 
       // Update the cache with the new status
       await this.updateLiveStatus(streamerId, 'kick', isLive, username);
 
-      this.logger.log(`✅ Synced live status for streamer ${streamerId} (${username}): isLive=${isLive}`);
+      this.logger.log(
+        `✅ Synced live status for streamer ${streamerId} (${username}): isLive=${isLive}`,
+      );
       return { success: true, isLive };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      this.logger.error(`❌ Error syncing live status from Kick for ${username}: ${errorMessage}`);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        `❌ Error syncing live status from Kick for ${username}: ${errorMessage}`,
+      );
       return { success: false, isLive: false, error: errorMessage };
     }
   }
@@ -315,36 +391,44 @@ export class StreamerLiveStatusService {
    * Called when streamer is created/updated
    * Preserves existing live status if cache already exists
    */
-  async initializeCache(streamerId: number, services: StreamerService[]): Promise<void> {
+  async initializeCache(
+    streamerId: number,
+    services: StreamerService[],
+  ): Promise<void> {
     const cacheKey = `${this.CACHE_PREFIX}${streamerId}`;
-    const existing = await this.redisService.get<StreamerLiveStatusCache>(cacheKey);
+    const existing =
+      await this.redisService.get<StreamerLiveStatusCache>(cacheKey);
     const now = Date.now();
 
     // If cache exists, preserve existing live status for services that still exist
     if (existing) {
-      const updatedServices: StreamerServiceStatus[] = services.map(service => {
-        // Find existing status for this service
-        const existingService = existing.services.find(s => s.service === service.service);
+      const updatedServices: StreamerServiceStatus[] = services.map(
+        (service) => {
+          // Find existing status for this service
+          const existingService = existing.services.find(
+            (s) => s.service === service.service,
+          );
 
-        if (existingService) {
-          // Preserve existing live status
-          return {
-            ...existingService,
-            username: service.username || existingService.username, // Update username if changed
-          };
-        } else {
-          // New service, initialize as offline
-          return {
-            service: service.service,
-            isLive: false,
-            lastUpdated: now,
-            username: service.username,
-          };
-        }
-      });
+          if (existingService) {
+            // Preserve existing live status
+            return {
+              ...existingService,
+              username: service.username || existingService.username, // Update username if changed
+            };
+          } else {
+            // New service, initialize as offline
+            return {
+              service: service.service,
+              isLive: false,
+              lastUpdated: now,
+              username: service.username,
+            };
+          }
+        },
+      );
 
       // Recalculate overall isLive
-      const overallIsLive = updatedServices.some(s => s.isLive);
+      const overallIsLive = updatedServices.some((s) => s.isLive);
 
       const updatedCache: StreamerLiveStatusCache = {
         streamerId,
@@ -355,15 +439,19 @@ export class StreamerLiveStatusService {
       };
 
       await this.redisService.set(cacheKey, updatedCache, updatedCache.ttl);
-      this.logger.debug(`📝 Updated live status cache for streamer ${streamerId} (preserved existing status)`);
+      this.logger.debug(
+        `📝 Updated live status cache for streamer ${streamerId} (preserved existing status)`,
+      );
     } else {
       // No existing cache, initialize as offline
-      const serviceStatuses: StreamerServiceStatus[] = services.map(service => ({
-        service: service.service,
-        isLive: false, // Initially offline
-        lastUpdated: now,
-        username: service.username,
-      }));
+      const serviceStatuses: StreamerServiceStatus[] = services.map(
+        (service) => ({
+          service: service.service,
+          isLive: false, // Initially offline
+          lastUpdated: now,
+          username: service.username,
+        }),
+      );
 
       const cache: StreamerLiveStatusCache = {
         streamerId,
@@ -374,8 +462,9 @@ export class StreamerLiveStatusService {
       };
 
       await this.redisService.set(cacheKey, cache, cache.ttl);
-      this.logger.debug(`📝 Initialized live status cache for streamer ${streamerId}`);
+      this.logger.debug(
+        `📝 Initialized live status cache for streamer ${streamerId}`,
+      );
     }
   }
 }
-

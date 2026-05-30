@@ -41,7 +41,9 @@ describe('ChannelsController', () => {
   };
 
   const mockSupabaseStorageService = {
-    uploadImage: jest.fn().mockResolvedValue('https://supabase.test/channel-logos/file.png'),
+    uploadImage: jest
+      .fn()
+      .mockResolvedValue('https://supabase.test/channel-logos/file.png'),
   };
 
   beforeEach(async () => {
