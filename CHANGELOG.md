@@ -9,6 +9,14 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.26.1] - 2026-05-30
+
+### Fixed
+- Banner mutations (`create`, `update`, `remove`, `reorder`) now call `revalidateTags: ['banners']` instead of `revalidatePaths: ['/']`, preventing unnecessary invalidation of unrelated caches (schedules, categories, etc.)
+- `NotifyAndRevalidateUtil` extended to accept `revalidateTags` option and send `{ tag, secret }` body to the revalidation endpoint
+
+---
+
 ## [1.26.0] - 2026-05-24
 
 ### Added
