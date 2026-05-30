@@ -419,6 +419,7 @@ export class ChannelsService {
     deviceId?: string,
     liveStatus?: boolean,
     raw?: string,
+    weekStart?: string,
   ): Promise<ChannelWithSchedules[]> {
     const overallStart = Date.now();
     const requestId = Math.random().toString(36).substr(2, 9);
@@ -470,6 +471,7 @@ export class ChannelsService {
             dayOfWeek: day,
             applyOverrides: raw !== 'true',
             liveStatus: liveStatus || false,
+            weekStart,
           },
         );
 
@@ -619,8 +621,15 @@ export class ChannelsService {
     deviceId?: string,
     liveStatus?: boolean,
     raw?: string,
+    weekStart?: string,
   ): Promise<ChannelWithSchedules[]> {
-    return this.getChannelsWithSchedules(undefined, deviceId, liveStatus, raw);
+    return this.getChannelsWithSchedules(
+      undefined,
+      deviceId,
+      liveStatus,
+      raw,
+      weekStart,
+    );
   }
 
   /**

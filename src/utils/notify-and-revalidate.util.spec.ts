@@ -15,7 +15,7 @@ describe('NotifyAndRevalidateUtil', () => {
     jest.clearAllMocks();
     global.fetch = jest
       .fn()
-      .mockResolvedValue({ status: 200, text: async () => 'ok' });
+      .mockResolvedValue({ ok: true, status: 200, text: async () => 'ok' });
     util = new NotifyAndRevalidateUtil(
       mockRedisService as any,
       frontendUrl,
@@ -69,6 +69,29 @@ describe('NotifyAndRevalidateUtil', () => {
           'x-vercel-protection-bypass': revalidateSecret,
         },
         body: JSON.stringify({ path: '/bar', secret: revalidateSecret }),
+      }),
+    );
+  });
+
+  it('calls the revalidation endpoint with tag param when revalidateTags is provided', async () => {
+    await util.notifyAndRevalidate({
+      eventType: 'test_event',
+      entity: 'test_entity',
+      entityId: 123,
+      payload: {},
+      revalidateTags: ['banners'],
+    });
+    await new Promise((resolve) => process.nextTick(resolve));
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://frontend.test/api/revalidate?x-vercel-set-bypass-cookie=true&x-vercel-protection-bypass=testsecret',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-vercel-protection-bypass': revalidateSecret,
+        },
+        body: JSON.stringify({ tag: 'banners', secret: revalidateSecret }),
       }),
     );
   });
