@@ -237,6 +237,7 @@ describe('ChannelsController', () => {
         'device123',
         true,
         'false',
+        undefined,
       );
     });
 
@@ -245,6 +246,7 @@ describe('ChannelsController', () => {
 
       expect(result).toEqual([]);
       expect(service.getWeekSchedules).toHaveBeenCalledWith(
+        undefined,
         undefined,
         undefined,
         undefined,
@@ -259,6 +261,24 @@ describe('ChannelsController', () => {
         'device789',
         false,
         undefined,
+        undefined,
+      );
+    });
+
+    it('should pass weekStart param to service', async () => {
+      const result = await controller.getWeekSchedules(
+        undefined,
+        undefined,
+        undefined,
+        '2026-06-02',
+      );
+
+      expect(result).toEqual([]);
+      expect(service.getWeekSchedules).toHaveBeenCalledWith(
+        undefined,
+        undefined,
+        undefined,
+        '2026-06-02',
       );
     });
   });

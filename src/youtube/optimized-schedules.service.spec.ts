@@ -146,6 +146,55 @@ describe('OptimizedSchedulesService', () => {
     );
   });
 
+  it('should use weekStart option instead of current week when provided', async () => {
+    const mockApplyWeeklyOverrides = jest
+      .fn()
+      .mockImplementation((schedules) => Promise.resolve(schedules));
+    const mockGetWeekStartDate = jest.fn().mockReturnValue('2024-01-01');
+
+    const mockRedisService = {
+      get: jest.fn().mockResolvedValue(null),
+      set: jest.fn(),
+      del: jest.fn(),
+      delByPattern: jest.fn(),
+    };
+    const mockConfigService = { canFetchLive: jest.fn().mockResolvedValue(true) };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        OptimizedSchedulesService,
+        { provide: SchedulesService, useValue: mockSchedulesService },
+        {
+          provide: WeeklyOverridesService,
+          useValue: {
+            applyWeeklyOverrides: mockApplyWeeklyOverrides,
+            getWeekStartDate: mockGetWeekStartDate,
+          },
+        },
+        {
+          provide: LiveStatusBackgroundService,
+          useValue: mockLiveStatusBackgroundService,
+        },
+        { provide: YoutubeLiveService, useValue: {} },
+        { provide: RedisService, useValue: mockRedisService },
+        { provide: ConfigService, useValue: mockConfigService },
+      ],
+    }).compile();
+
+    const svc = module.get<OptimizedSchedulesService>(OptimizedSchedulesService);
+
+    await svc.getSchedulesWithOptimizedLiveStatus({
+      liveStatus: false,
+      weekStart: '2026-06-02',
+    });
+
+    expect(mockGetWeekStartDate).not.toHaveBeenCalled();
+    expect(mockApplyWeeklyOverrides).toHaveBeenCalledWith(
+      expect.any(Array),
+      '2026-06-02',
+    );
+  });
+
   it('should set is_live to false when program is escalated to not-found', async () => {
     // Mock Redis to return escalated attempt tracking
     const mockRedisService = {

@@ -9,6 +9,15 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.27.0] - 2026-05-31
+
+### Added
+- `GET /channels/with-schedules/week` now accepts an optional `weekStart=YYYY-MM-DD` query param to return schedules for a specific week instead of the current one
+- Weekly overrides are filtered by the requested week's `weekStartDate`, so cancellations, time changes, and special programs are correctly applied for the target week
+- Backwards compatible: omitting `weekStart` preserves existing behavior (current week)
+
+---
+
 ## [1.26.1] - 2026-05-30
 
 ### Fixed
