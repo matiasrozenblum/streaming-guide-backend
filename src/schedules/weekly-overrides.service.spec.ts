@@ -33,13 +33,20 @@ describe('WeeklyOverridesService', () => {
 
   const mockRedisService = {
     get: jest.fn(),
+    mget: jest.fn(),
     set: jest.fn(),
     del: jest.fn(),
     delByPattern: jest.fn(),
     client: {
       scanStream: jest.fn().mockReturnValue({
         [Symbol.asyncIterator]: jest.fn().mockReturnValue({
-          next: jest.fn().mockResolvedValue({ done: true, value: undefined }),
+          next: jest
+            .fn()
+            .mockResolvedValueOnce({
+              done: false,
+              value: ['weekly_override:current:schedule:1'],
+            })
+            .mockResolvedValueOnce({ done: true, value: undefined }),
         }),
       }),
       pipeline: jest.fn(),
@@ -92,6 +99,7 @@ describe('WeeklyOverridesService', () => {
       getRepositoryToken(Panelist),
     );
     redisService = module.get<RedisService>(RedisService);
+    (redisService.mget as jest.Mock).mockResolvedValue([mockOverride]);
     dataSource = module.get<DataSource>(DataSource);
   });
 
