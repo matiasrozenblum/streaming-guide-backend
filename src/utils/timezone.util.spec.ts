@@ -20,6 +20,7 @@ jest.mock('dayjs', () => {
     startOf: jest.fn().mockReturnThis(),
     endOf: jest.fn().mockReturnThis(),
     add: jest.fn().mockReturnThis(),
+    subtract: jest.fn().mockReturnThis(),
     diff: jest.fn().mockReturnValue(3600), // 1 hour in seconds
     isAfter: jest.fn().mockReturnValue(true),
     isBefore: jest.fn().mockReturnValue(false),
@@ -141,10 +142,44 @@ describe('TimezoneUtil', () => {
   });
 
   describe('isWithinTimeRange', () => {
-    it('should check if current time is within range', () => {
+    it('should return true when current time (15:30) is within range 14:00-16:00', () => {
+      // Mocked now() returns hour=15, minute=30 → currentTimeInMinutes=930
       const result = TimezoneUtil.isWithinTimeRange('14:00', '16:00');
+      expect(result).toBe(true);
+    });
 
-      expect(result).toBe(false); // Mocked isAfter/isBefore results
+    it('should return false when current time is outside range', () => {
+      // 15:30 is NOT within 08:00-10:00
+      const result = TimezoneUtil.isWithinTimeRange('08:00', '10:00');
+      expect(result).toBe(false);
+    });
+
+    it('should handle cross-midnight range', () => {
+      // 15:30 is NOT within 23:00-00:30 (cross-midnight)
+      const result = TimezoneUtil.isWithinTimeRange('23:00', '00:30');
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('isTimeInRange', () => {
+    it('should return true for normal range when current is inside', () => {
+      expect(TimezoneUtil.isTimeInRange(600, 720, 630)).toBe(true); // 10:00-12:00, current 10:30
+    });
+
+    it('should return false for normal range when current is outside', () => {
+      expect(TimezoneUtil.isTimeInRange(600, 720, 900)).toBe(false); // 10:00-12:00, current 15:00
+    });
+
+    it('should return true for cross-midnight range when current is after start', () => {
+      expect(TimezoneUtil.isTimeInRange(1380, 30, 1410)).toBe(true); // 23:00-00:30, current 23:30
+    });
+
+    it('should return true for cross-midnight range when current is before end', () => {
+      expect(TimezoneUtil.isTimeInRange(1380, 30, 15)).toBe(true); // 23:00-00:30, current 00:15
+    });
+
+    it('should return false for cross-midnight range when current is between end and start', () => {
+      expect(TimezoneUtil.isTimeInRange(1380, 30, 600)).toBe(false); // 23:00-00:30, current 10:00
     });
   });
 

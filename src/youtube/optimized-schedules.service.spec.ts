@@ -11,7 +11,13 @@ import { ConfigService } from '../config/config.service';
 jest.mock('../utils/timezone.util', () => ({
   TimezoneUtil: {
     currentDayOfWeek: jest.fn().mockReturnValue('monday'),
+    previousDayOfWeek: jest.fn().mockReturnValue('sunday'),
     currentTimeInMinutes: jest.fn().mockReturnValue(630), // 10:30 AM
+    currentDateString: jest.fn().mockReturnValue('2024-01-15'),
+    isTimeInRange: jest.fn().mockImplementation((start, end, current) => {
+      if (end <= start) return current >= start || current < end;
+      return current >= start && current < end;
+    }),
   },
 }));
 
@@ -158,7 +164,9 @@ describe('OptimizedSchedulesService', () => {
       del: jest.fn(),
       delByPattern: jest.fn(),
     };
-    const mockConfigService = { canFetchLive: jest.fn().mockResolvedValue(true) };
+    const mockConfigService = {
+      canFetchLive: jest.fn().mockResolvedValue(true),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -181,7 +189,9 @@ describe('OptimizedSchedulesService', () => {
       ],
     }).compile();
 
-    const svc = module.get<OptimizedSchedulesService>(OptimizedSchedulesService);
+    const svc = module.get<OptimizedSchedulesService>(
+      OptimizedSchedulesService,
+    );
 
     await svc.getSchedulesWithOptimizedLiveStatus({
       liveStatus: false,

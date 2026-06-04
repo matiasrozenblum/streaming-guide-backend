@@ -95,14 +95,37 @@ export class TimezoneUtil {
   }
 
   /**
-   * Check if current time is within a time range today
+   * Get the previous day of week in lowercase (e.g., 'sunday', 'monday')
+   */
+  static previousDayOfWeek(): string {
+    return this.now().subtract(1, 'day').format('dddd').toLowerCase();
+  }
+
+  /**
+   * Check if currentMinutes falls within [startMinutes, endMinutes).
+   * Handles cross-midnight ranges where endMinutes < startMinutes.
+   */
+  static isTimeInRange(
+    startMinutes: number,
+    endMinutes: number,
+    currentMinutes: number,
+  ): boolean {
+    if (endMinutes <= startMinutes) {
+      // Cross-midnight: live when on or after start OR before end
+      return currentMinutes >= startMinutes || currentMinutes < endMinutes;
+    }
+    return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+  }
+
+  /**
+   * Check if current time is within a time range today.
+   * Handles cross-midnight ranges (e.g. startTime='23:00', endTime='00:30').
    */
   static isWithinTimeRange(startTime: string, endTime: string): boolean {
-    const now = this.now();
-    const start = this.todayAtTime(startTime);
-    const end = this.todayAtTime(endTime);
-
-    return now.isAfter(start) && now.isBefore(end);
+    const currentMinutes = this.currentTimeInMinutes();
+    const [sh, sm] = startTime.split(':').map(Number);
+    const [eh, em] = endTime.split(':').map(Number);
+    return this.isTimeInRange(sh * 60 + sm, eh * 60 + em, currentMinutes);
   }
 
   /**
