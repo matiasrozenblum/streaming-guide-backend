@@ -77,7 +77,15 @@ jest.mock('dayjs', () => {
         };
       },
       day: () => {
-        const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const days = [
+          'sunday',
+          'monday',
+          'tuesday',
+          'wednesday',
+          'thursday',
+          'friday',
+          'saturday',
+        ];
         return days.indexOf(currentDay);
       },
       add: (amount: number, unit: string) => makeChainable(),
@@ -92,7 +100,15 @@ jest.mock('dayjs', () => {
   // Chainable stub for date arithmetic (getDayDateInCurrentWeek / filterSchedulesByContext)
   const makeChainable = (): any => ({
     day: () => {
-      const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      const days = [
+        'sunday',
+        'monday',
+        'tuesday',
+        'wednesday',
+        'thursday',
+        'friday',
+        'saturday',
+      ];
       return days.indexOf(currentDay);
     },
     month: () => 4,
@@ -266,6 +282,7 @@ describe('SchedulesService', () => {
       );
     jest.spyOn(TimezoneUtil, 'currentTimeInMinutes').mockReturnValue(630); // 10:30
     jest.spyOn(TimezoneUtil, 'currentDayOfWeek').mockReturnValue('monday');
+    jest.spyOn(TimezoneUtil, 'previousDayOfWeek').mockReturnValue('sunday');
     jest
       .spyOn(TimezoneUtil, 'isWithinTimeRange')
       .mockImplementation((startTime, endTime) => {

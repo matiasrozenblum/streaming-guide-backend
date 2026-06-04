@@ -84,15 +84,30 @@ export class LiveStatusBackgroundService {
 
     try {
       const currentDay = TimezoneUtil.currentDayOfWeek();
+      const previousDay = TimezoneUtil.previousDayOfWeek();
       const currentTime = TimezoneUtil.currentTimeInMinutes();
 
       // Get schedules with weekly overrides applied (includes virtual/special programs)
       // This is crucial for detecting special programs from weekly overrides
-      const allSchedules = await this.schedulesService.findAll({
+      const todaySchedules = await this.schedulesService.findAll({
         dayOfWeek: currentDay,
         liveStatus: false, // Don't need live status, just schedule data
         applyOverrides: true, // ✅ CRITICAL: Apply weekly overrides to include special programs
       });
+
+      // Also fetch previous day's schedules to catch cross-midnight programs still running
+      const previousDaySchedules = await this.schedulesService.findAll({
+        dayOfWeek: previousDay,
+        liveStatus: false,
+        applyOverrides: true,
+      });
+      const crossMidnightSchedules = previousDaySchedules.filter((s) => {
+        const startNum = this.convertTimeToNumber(s.start_time);
+        const endNum = this.convertTimeToNumber(s.end_time);
+        return endNum < startNum && currentTime < endNum;
+      });
+
+      const allSchedules = [...todaySchedules, ...crossMidnightSchedules];
 
       const channelsToUpdate: string[] = [];
       const liveChannels = new Map<
@@ -110,7 +125,12 @@ export class LiveStatusBackgroundService {
         // Check if this schedule is currently live
         const startNum = this.convertTimeToNumber(schedule.start_time);
         const endNum = this.convertTimeToNumber(schedule.end_time);
-        const isLive = currentTime >= startNum && currentTime < endNum;
+        const isLive =
+          (schedule.day_of_week === currentDay &&
+            TimezoneUtil.isTimeInRange(startNum, endNum, currentTime)) ||
+          (endNum < startNum &&
+            schedule.day_of_week === previousDay &&
+            currentTime < endNum);
 
         if (isLive) {
           liveChannels.set(channelId, { channelId, handle });
@@ -136,7 +156,13 @@ export class LiveStatusBackgroundService {
           if (scheduleChannelId !== channelId) return false;
           const startNum = this.convertTimeToNumber(schedule.start_time);
           const endNum = this.convertTimeToNumber(schedule.end_time);
-          return currentTime >= startNum && currentTime < endNum;
+          return (
+            (schedule.day_of_week === currentDay &&
+              TimezoneUtil.isTimeInRange(startNum, endNum, currentTime)) ||
+            (endNum < startNum &&
+              schedule.day_of_week === previousDay &&
+              currentTime < endNum)
+          );
         });
         const currentProgramName = currentSchedule?.program?.name || '';
 
@@ -316,14 +342,29 @@ export class LiveStatusBackgroundService {
     try {
       // Get current day and time
       const currentDay = TimezoneUtil.currentDayOfWeek();
+      const previousDay = TimezoneUtil.previousDayOfWeek();
       const currentTime = TimezoneUtil.currentTimeInMinutes();
 
       // Get schedules with weekly overrides applied (includes virtual/special programs)
-      const allSchedules = await this.schedulesService.findAll({
+      const todayAllSchedules = await this.schedulesService.findAll({
         dayOfWeek: currentDay,
         liveStatus: false,
         applyOverrides: true, // ✅ Include special programs from weekly overrides
       });
+
+      // Also include previous day's cross-midnight schedules still in progress
+      const previousDayAllSchedules = await this.schedulesService.findAll({
+        dayOfWeek: previousDay,
+        liveStatus: false,
+        applyOverrides: true,
+      });
+      const crossMidnightAllSchedules = previousDayAllSchedules.filter((s) => {
+        const startNum = this.convertTimeToNumber(s.start_time);
+        const endNum = this.convertTimeToNumber(s.end_time);
+        return endNum < startNum && currentTime < endNum;
+      });
+
+      const allSchedules = [...todayAllSchedules, ...crossMidnightAllSchedules];
 
       // Find ALL schedules for this channel today (not just live ones)
       const channelSchedules = allSchedules.filter((schedule) => {
@@ -360,7 +401,13 @@ export class LiveStatusBackgroundService {
       const liveSchedules = channelSchedules.filter((schedule) => {
         const startNum = this.convertTimeToNumber(schedule.start_time);
         const endNum = this.convertTimeToNumber(schedule.end_time);
-        return currentTime >= startNum && currentTime < endNum;
+        return (
+          (schedule.day_of_week === currentDay &&
+            TimezoneUtil.isTimeInRange(startNum, endNum, currentTime)) ||
+          (endNum < startNum &&
+            schedule.day_of_week === previousDay &&
+            currentTime < endNum)
+        );
       });
 
       // If no live schedules, cache as not live (program ended)
