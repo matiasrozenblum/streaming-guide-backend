@@ -6,6 +6,7 @@ import { YoutubeLiveService } from './youtube-live.service';
 import { RedisService } from '../redis/redis.service';
 import { ConfigService } from '../config/config.service';
 import { SimilarityUtil } from '../utils/similarity.util';
+import { TimezoneUtil } from '../utils/timezone.util';
 
 @Injectable()
 export class OptimizedSchedulesService {
@@ -188,7 +189,6 @@ export class OptimizedSchedulesService {
       date: string;
       isHoliday: boolean;
     }>('config:holiday_status');
-    const { TimezoneUtil } = require('../utils/timezone.util');
     const today = TimezoneUtil.currentDateString();
     const isHoliday =
       holidayCache && holidayCache.date === today
@@ -232,6 +232,7 @@ export class OptimizedSchedulesService {
     // Enrich schedules — same decision logic as v1 but without async fetch triggers
     const enriched: any[] = [];
     const currentDay = TimezoneUtil.currentDayOfWeek();
+    const previousDay = TimezoneUtil.previousDayOfWeek();
     const currentTime = TimezoneUtil.currentTimeInMinutes();
 
     for (const schedule of schedules) {
@@ -264,9 +265,11 @@ export class OptimizedSchedulesService {
       const startNum = this.convertTimeToNumber(schedule.start_time);
       const endNum = this.convertTimeToNumber(schedule.end_time);
       const isCurrentlyLive =
-        schedule.day_of_week === currentDay &&
-        currentTime >= startNum &&
-        currentTime < endNum;
+        (schedule.day_of_week === currentDay &&
+          TimezoneUtil.isTimeInRange(startNum, endNum, currentTime)) ||
+        (endNum < startNum &&
+          schedule.day_of_week === previousDay &&
+          currentTime < endNum);
 
       if (channelId && liveStatusMap.has(channelId)) {
         const liveStatus = liveStatusMap.get(channelId)!;
@@ -426,10 +429,9 @@ export class OptimizedSchedulesService {
 
     // Enrich schedules with cached live status
     const enriched: any[] = [];
-    const currentDay =
-      require('../utils/timezone.util').TimezoneUtil.currentDayOfWeek();
-    const currentTime =
-      require('../utils/timezone.util').TimezoneUtil.currentTimeInMinutes();
+    const currentDay = TimezoneUtil.currentDayOfWeek();
+    const previousDay = TimezoneUtil.previousDayOfWeek();
+    const currentTime = TimezoneUtil.currentTimeInMinutes();
 
     for (const schedule of schedules) {
       const enrichedSchedule = { ...schedule };
@@ -469,9 +471,11 @@ export class OptimizedSchedulesService {
         const startNum = this.convertTimeToNumber(schedule.start_time);
         const endNum = this.convertTimeToNumber(schedule.end_time);
         const isCurrentlyLive =
-          schedule.day_of_week === currentDay &&
-          currentTime >= startNum &&
-          currentTime < endNum;
+          (schedule.day_of_week === currentDay &&
+            TimezoneUtil.isTimeInRange(startNum, endNum, currentTime)) ||
+          (endNum < startNum &&
+            schedule.day_of_week === previousDay &&
+            currentTime < endNum);
 
         // CRITICAL: If escalated to not-found, set is_live to false regardless of cache status
         if (isEscalated && isCurrentlyLive) {
@@ -631,9 +635,11 @@ export class OptimizedSchedulesService {
         const startNum = this.convertTimeToNumber(schedule.start_time);
         const endNum = this.convertTimeToNumber(schedule.end_time);
         const isCurrentlyLive =
-          schedule.day_of_week === currentDay &&
-          currentTime >= startNum &&
-          currentTime < endNum;
+          (schedule.day_of_week === currentDay &&
+            TimezoneUtil.isTimeInRange(startNum, endNum, currentTime)) ||
+          (endNum < startNum &&
+            schedule.day_of_week === previousDay &&
+            currentTime < endNum);
 
         // CRITICAL: If escalated to not-found, set is_live to false even if program is in its scheduled time
         if (isEscalated && isCurrentlyLive) {

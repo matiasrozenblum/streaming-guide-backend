@@ -11,7 +11,10 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  Headers,
 } from '@nestjs/common';
+import { isAtLeastVersion } from '../utils/app-version.util';
+import { splitCrossMidnightSchedules } from '../utils/midnight-split.util';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ChannelsService } from './channels.service';
 import { CreateChannelDto } from './dto/create-channel.dto';
@@ -56,15 +59,20 @@ export class ChannelsController {
     @Query('deviceId') deviceId?: string,
     @Query('live_status') liveStatus?: string,
     @Query('raw') raw?: string,
+    @Headers('x-app-version') appVersion?: string,
   ) {
     const liveStatusBool =
       liveStatus === 'true' ? true : liveStatus === 'false' ? false : undefined;
-    return this.channelsService.getChannelsWithSchedules(
+    const result = await this.channelsService.getChannelsWithSchedules(
       day,
       deviceId,
       liveStatusBool,
       raw,
     );
+    if (!isAtLeastVersion(appVersion, '1.0.9')) {
+      return splitCrossMidnightSchedules(result);
+    }
+    return result;
   }
 
   @Get('with-schedules/today')
@@ -79,14 +87,19 @@ export class ChannelsController {
     @Query('deviceId') deviceId?: string,
     @Query('live_status') liveStatus?: string,
     @Query('raw') raw?: string,
+    @Headers('x-app-version') appVersion?: string,
   ) {
     const liveStatusBool =
       liveStatus === 'true' ? true : liveStatus === 'false' ? false : undefined;
-    return this.channelsService.getTodaySchedules(
+    const result = await this.channelsService.getTodaySchedules(
       deviceId,
       liveStatusBool,
       raw,
     );
+    if (!isAtLeastVersion(appVersion, '1.0.9')) {
+      return splitCrossMidnightSchedules(result);
+    }
+    return result;
   }
 
   @Get('with-schedules/today/v2')
@@ -101,14 +114,19 @@ export class ChannelsController {
     @Query('deviceId') deviceId?: string,
     @Query('live_status') liveStatus?: string,
     @Query('raw') raw?: string,
+    @Headers('x-app-version') appVersion?: string,
   ) {
     const liveStatusBool =
       liveStatus === 'true' ? true : liveStatus === 'false' ? false : undefined;
-    return this.channelsService.getTodaySchedulesV2(
+    const result = await this.channelsService.getTodaySchedulesV2(
       deviceId,
       liveStatusBool,
       raw,
     );
+    if (!isAtLeastVersion(appVersion, '1.0.9')) {
+      return splitCrossMidnightSchedules(result);
+    }
+    return result;
   }
 
   @Get('with-schedules/week')
@@ -124,15 +142,20 @@ export class ChannelsController {
     @Query('live_status') liveStatus?: string,
     @Query('raw') raw?: string,
     @Query('weekStart') weekStart?: string,
+    @Headers('x-app-version') appVersion?: string,
   ) {
     const liveStatusBool =
       liveStatus === 'true' ? true : liveStatus === 'false' ? false : undefined;
-    return this.channelsService.getWeekSchedules(
+    const result = await this.channelsService.getWeekSchedules(
       deviceId,
       liveStatusBool,
       raw,
       weekStart,
     );
+    if (!isAtLeastVersion(appVersion, '1.0.9')) {
+      return splitCrossMidnightSchedules(result);
+    }
+    return result;
   }
 
   @Get(':id')

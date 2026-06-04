@@ -12,7 +12,12 @@ import { Channel } from '../channels/channels.entity';
 jest.mock('../utils/timezone.util', () => ({
   TimezoneUtil: {
     currentDayOfWeek: jest.fn().mockReturnValue('monday'),
+    previousDayOfWeek: jest.fn().mockReturnValue('sunday'),
     currentTimeInMinutes: jest.fn().mockReturnValue(630), // 10:30 AM
+    isTimeInRange: jest.fn().mockImplementation((start, end, current) => {
+      if (end <= start) return current >= start || current < end;
+      return current >= start && current < end;
+    }),
     now: jest.fn().mockReturnValue({
       diff: jest.fn().mockReturnValue(1800), // 30 minutes in seconds
       format: jest.fn().mockReturnValue('10:30:00'),

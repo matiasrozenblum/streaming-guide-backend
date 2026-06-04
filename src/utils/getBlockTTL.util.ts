@@ -58,7 +58,7 @@ export async function getCurrentBlockTTL(
       `🔍 [TTL Debug] Checking program ${seg.programName} (${seg.startTime}-${seg.endTime}): ${seg.start} <= ${currentTimeInMinutes} && ${seg.end} > ${currentTimeInMinutes} = ${seg.start <= currentTimeInMinutes && seg.end > currentTimeInMinutes}`,
     );
 
-    if (seg.start <= currentTimeInMinutes && seg.end > currentTimeInMinutes) {
+    if (TimezoneUtil.isTimeInRange(seg.start, seg.end, currentTimeInMinutes)) {
       // incia bloque con este segmento
       prevEnd = seg.end;
       blockEnd = seg.end;

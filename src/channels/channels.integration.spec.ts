@@ -151,6 +151,7 @@ describe('Channels Endpoints Integration Tests', () => {
         undefined,
         undefined,
         undefined,
+        undefined,
       );
     });
 
@@ -169,6 +170,7 @@ describe('Channels Endpoints Integration Tests', () => {
         'test-device-456',
         true,
         'true',
+        undefined,
       );
     });
 
@@ -182,6 +184,7 @@ describe('Channels Endpoints Integration Tests', () => {
 
       expect(channelsService.getWeekSchedules).toHaveBeenCalledWith(
         'partial-device',
+        undefined,
         undefined,
         undefined,
       );

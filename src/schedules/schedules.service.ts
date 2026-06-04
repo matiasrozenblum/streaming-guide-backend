@@ -304,6 +304,7 @@ export class SchedulesService {
     const now = TimezoneUtil.now();
     const currentNum = TimezoneUtil.currentTimeInMinutes();
     const currentDay = TimezoneUtil.currentDayOfWeek();
+    const previousDay = TimezoneUtil.previousDayOfWeek();
 
     // Group schedules by channel for stream distribution
     const channelGroups = new Map<string, Schedule[]>();
@@ -330,9 +331,11 @@ export class SchedulesService {
           const startNum = this.convertTimeToNumber(schedule.start_time);
           const endNum = this.convertTimeToNumber(schedule.end_time);
           return (
-            schedule.day_of_week === currentDay &&
-            currentNum >= startNum &&
-            currentNum < endNum
+            (schedule.day_of_week === currentDay &&
+              TimezoneUtil.isTimeInRange(startNum, endNum, currentNum)) ||
+            (endNum < startNum &&
+              schedule.day_of_week === previousDay &&
+              currentNum < endNum)
           );
         });
 
@@ -361,6 +364,7 @@ export class SchedulesService {
       const enrichedChannelSchedules = await this.enrichSchedulesForChannel(
         channelSchedules,
         currentDay,
+        previousDay,
         currentNum,
         liveStatus,
         batchStreamsResults.get(channelId),
@@ -383,9 +387,11 @@ export class SchedulesService {
       // Only set isLive if liveStatus is enabled
       if (
         liveStatus &&
-        schedule.day_of_week === currentDay &&
-        currentNum >= startNum &&
-        currentNum < endNum &&
+        ((schedule.day_of_week === currentDay &&
+          TimezoneUtil.isTimeInRange(startNum, endNum, currentNum)) ||
+          (endNum < startNum &&
+            schedule.day_of_week === previousDay &&
+            currentNum < endNum)) &&
         program.name &&
         program.name.trim() !== ''
       ) {
@@ -411,6 +417,7 @@ export class SchedulesService {
   private async enrichSchedulesForChannel(
     schedules: Schedule[],
     currentDay: string,
+    previousDay: string,
     currentNum: number,
     liveStatus: boolean,
     batchStreamsResult?: any,
@@ -429,6 +436,7 @@ export class SchedulesService {
           await this.enrichScheduleIndividually(
             schedule,
             currentDay,
+            previousDay,
             currentNum,
             liveStatus,
           ),
@@ -443,9 +451,11 @@ export class SchedulesService {
           const startNum = this.convertTimeToNumber(schedule.start_time);
           const endNum = this.convertTimeToNumber(schedule.end_time);
           return (
-            schedule.day_of_week === currentDay &&
-            currentNum >= startNum &&
-            currentNum < endNum &&
+            ((schedule.day_of_week === currentDay &&
+              TimezoneUtil.isTimeInRange(startNum, endNum, currentNum)) ||
+              (endNum < startNum &&
+                schedule.day_of_week === previousDay &&
+                currentNum < endNum)) &&
             schedule.program.name &&
             schedule.program.name.trim() !== ''
           );
@@ -579,6 +589,7 @@ export class SchedulesService {
           const individualEnriched = await this.enrichScheduleIndividually(
             schedule,
             currentDay,
+            previousDay,
             currentNum,
             liveStatus,
           );
@@ -609,6 +620,7 @@ export class SchedulesService {
   private async enrichScheduleIndividually(
     schedule: Schedule,
     currentDay: string,
+    previousDay: string,
     currentNum: number,
     liveStatus: boolean,
   ): Promise<any> {
@@ -624,12 +636,14 @@ export class SchedulesService {
     let streamUrl = program.stream_url || program.youtube_url;
     let assignedStream: any = null;
 
-    // Si estamos en horario
-    if (
-      schedule.day_of_week === currentDay &&
-      currentNum >= startNum &&
-      currentNum < endNum
-    ) {
+    const isCurrentlyLive =
+      (schedule.day_of_week === currentDay &&
+        TimezoneUtil.isTimeInRange(startNum, endNum, currentNum)) ||
+      (endNum < startNum &&
+        schedule.day_of_week === previousDay &&
+        currentNum < endNum);
+
+    if (isCurrentlyLive) {
       isLive = true;
 
       // If live and we have channel info, try to fetch live streams
