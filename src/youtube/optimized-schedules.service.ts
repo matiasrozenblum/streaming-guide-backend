@@ -403,29 +403,32 @@ export class OptimizedSchedulesService {
 
     // Fetch attempt tracking data for all channels to check for not-found escalation
     const attemptTrackingMap = new Map<string, any>();
-    for (const handle of handles) {
-      const attemptTrackingKey = `notFoundAttempts:${handle}`;
-      const attemptTracking =
-        await this.redisService.get<any>(attemptTrackingKey);
-      if (attemptTracking) {
-        attemptTrackingMap.set(handle, attemptTracking);
+    if (handles.length > 0) {
+      const attemptKeys = handles.map((h) => `notFoundAttempts:${h}`);
+      const attemptResults = await this.redisService.mget<any>(attemptKeys);
+      for (let i = 0; i < handles.length; i++) {
+        if (attemptResults[i]) {
+          attemptTrackingMap.set(handles[i], attemptResults[i]);
+        }
       }
     }
 
     // Check canFetchLive for all handles (respects holiday overrides)
     const canFetchLiveMap = new Map<string, boolean>();
-    for (const handle of handles) {
-      try {
-        const canFetch = await this.configService.canFetchLive(handle);
-        canFetchLiveMap.set(handle, canFetch);
-      } catch (error) {
-        // If we can't check the config, assume fetching is enabled
-        this.logger.debug(
-          `[OPTIMIZED-SCHEDULES] Error checking canFetchLive for ${handle}, assuming enabled`,
-        );
-        canFetchLiveMap.set(handle, true);
-      }
-    }
+    await Promise.all(
+      handles.map(async (handle) => {
+        try {
+          const canFetch = await this.configService.canFetchLive(handle);
+          canFetchLiveMap.set(handle, canFetch);
+        } catch (error) {
+          // If we can't check the config, assume fetching is enabled
+          this.logger.debug(
+            `[OPTIMIZED-SCHEDULES] Error checking canFetchLive for ${handle}, assuming enabled`,
+          );
+          canFetchLiveMap.set(handle, true);
+        }
+      }),
+    );
 
     // Enrich schedules with cached live status
     const enriched: any[] = [];
