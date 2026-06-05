@@ -40,14 +40,32 @@ export class YoutubeDiscoveryService {
   ): Promise<{ handle: string; channelId: string; title: string }[]> {
     const results: { handle: string; channelId: string; title: string }[] = [];
 
-    for (const url of urls) {
-      const match = url.match(/youtube\.com\/@([^/]+)\/live/);
-      if (!match) continue;
+    // ⚡ Bolt: Optimize sequential API calls to concurrent batches of 5 to improve throughput
+    // while remaining aware of API search quotas
+    const batchSize = 5;
+    for (let i = 0; i < urls.length; i += batchSize) {
+      const batchUrls = urls.slice(i, i + batchSize);
 
-      const handle = `@${match[1]}`;
-      const channel = await this.getChannelIdFromHandle(handle);
-      if (channel) {
-        results.push({ handle, ...channel });
+      const batchResults = await Promise.all(
+        batchUrls.map(async (url) => {
+          const match = url.match(/youtube\.com\/@([^/]+)\/live/);
+          if (!match) return null;
+
+          const handle = `@${match[1]}`;
+          // We intentionally do not catch errors here to preserve the original behavior
+          // where an API failure bubbled up to the caller.
+          const channel = await this.getChannelIdFromHandle(handle);
+          if (channel) {
+            return { handle, ...channel };
+          }
+          return null;
+        }),
+      );
+
+      for (const result of batchResults) {
+        if (result) {
+          results.push(result);
+        }
       }
     }
 
