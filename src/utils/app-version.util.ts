@@ -25,3 +25,25 @@ export function isAtLeastVersion(
   if (min !== minMin) return min > minMin;
   return pat >= patMin;
 }
+
+/**
+ * Returns true when the response should split cross-midnight schedules into two blocks.
+ *
+ * Unified format is returned when:
+ *  - The request Origin matches the web frontend (identified via FRONTEND_URL env var), OR
+ *  - The mobile client sends X-App-Version >= 1.0.9.
+ *
+ * Everything else (old mobile, no header) receives the split format for backward compat.
+ */
+export function needsMidnightSplit(
+  appVersion: string | undefined,
+  origin: string | undefined,
+): boolean {
+  const frontendUrl = (
+    process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com'
+  ).replace(/\/$/, '');
+
+  if (origin && origin.replace(/\/$/, '') === frontendUrl) return false;
+  if (isAtLeastVersion(appVersion, '1.0.9')) return false;
+  return true;
+}

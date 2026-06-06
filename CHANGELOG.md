@@ -9,6 +9,13 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.28.1] - 2026-06-06
+
+### Fixed
+- Web frontend no longer receives split cross-midnight blocks: the backend now identifies frontend requests via the `Origin` header (matched against `FRONTEND_URL` env var) and returns unified blocks directly, without requiring any header change on the frontend side. Old mobile clients (no `X-App-Version` header or version < 1.0.9) continue to receive the split format for backward compatibility.
+
+---
+
 ## [1.28.0] - 2026-06-04
 
 ### Fixed

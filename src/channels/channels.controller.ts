@@ -13,7 +13,7 @@ import {
   BadRequestException,
   Headers,
 } from '@nestjs/common';
-import { isAtLeastVersion } from '../utils/app-version.util';
+import { needsMidnightSplit } from '../utils/app-version.util';
 import { splitCrossMidnightSchedules } from '../utils/midnight-split.util';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ChannelsService } from './channels.service';
@@ -60,6 +60,7 @@ export class ChannelsController {
     @Query('live_status') liveStatus?: string,
     @Query('raw') raw?: string,
     @Headers('x-app-version') appVersion?: string,
+    @Headers('origin') origin?: string,
   ) {
     const liveStatusBool =
       liveStatus === 'true' ? true : liveStatus === 'false' ? false : undefined;
@@ -69,7 +70,7 @@ export class ChannelsController {
       liveStatusBool,
       raw,
     );
-    if (!isAtLeastVersion(appVersion, '1.0.9')) {
+    if (needsMidnightSplit(appVersion, origin)) {
       return splitCrossMidnightSchedules(result);
     }
     return result;
@@ -88,6 +89,7 @@ export class ChannelsController {
     @Query('live_status') liveStatus?: string,
     @Query('raw') raw?: string,
     @Headers('x-app-version') appVersion?: string,
+    @Headers('origin') origin?: string,
   ) {
     const liveStatusBool =
       liveStatus === 'true' ? true : liveStatus === 'false' ? false : undefined;
@@ -96,7 +98,7 @@ export class ChannelsController {
       liveStatusBool,
       raw,
     );
-    if (!isAtLeastVersion(appVersion, '1.0.9')) {
+    if (needsMidnightSplit(appVersion, origin)) {
       return splitCrossMidnightSchedules(result);
     }
     return result;
@@ -115,6 +117,7 @@ export class ChannelsController {
     @Query('live_status') liveStatus?: string,
     @Query('raw') raw?: string,
     @Headers('x-app-version') appVersion?: string,
+    @Headers('origin') origin?: string,
   ) {
     const liveStatusBool =
       liveStatus === 'true' ? true : liveStatus === 'false' ? false : undefined;
@@ -123,7 +126,7 @@ export class ChannelsController {
       liveStatusBool,
       raw,
     );
-    if (!isAtLeastVersion(appVersion, '1.0.9')) {
+    if (needsMidnightSplit(appVersion, origin)) {
       return splitCrossMidnightSchedules(result);
     }
     return result;
@@ -143,6 +146,7 @@ export class ChannelsController {
     @Query('raw') raw?: string,
     @Query('weekStart') weekStart?: string,
     @Headers('x-app-version') appVersion?: string,
+    @Headers('origin') origin?: string,
   ) {
     const liveStatusBool =
       liveStatus === 'true' ? true : liveStatus === 'false' ? false : undefined;
@@ -152,7 +156,7 @@ export class ChannelsController {
       raw,
       weekStart,
     );
-    if (!isAtLeastVersion(appVersion, '1.0.9')) {
+    if (needsMidnightSplit(appVersion, origin)) {
       return splitCrossMidnightSchedules(result);
     }
     return result;
