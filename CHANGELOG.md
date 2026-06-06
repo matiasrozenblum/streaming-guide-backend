@@ -9,6 +9,20 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.28.0] - 2026-06-04
+
+### Fixed
+- `is_live` detection for cross-midnight programs (e.g. 23:00–00:30): the time range check now correctly handles cases where `end_time < start_time`, using OR logic instead of AND. Also handles the day-boundary case where a program started the previous day and is still airing in the early hours of the next day.
+- `getBlockTTL` utility now correctly detects the active program block for cross-midnight schedules, fixing inaccurate Redis cache TTLs for those programs.
+- `live-status-background.service` now fetches previous-day schedules when in early morning hours, so cross-midnight programs from the previous day are included in the live status pre-fetch cycle.
+
+### Added
+- `TimezoneUtil.isTimeInRange(start, end, current)`: cross-midnight-aware time range helper used across all live-status computations.
+- `TimezoneUtil.previousDayOfWeek()`: returns yesterday's day name in Argentina timezone.
+- API versioning for cross-midnight schedule format on all `/channels/with-schedules*` endpoints: clients sending `X-App-Version >= 1.0.9` receive unified cross-midnight blocks (e.g. 23:00–01:00); older clients (no header or version < 1.0.9) receive the schedule split into two blocks at midnight for backward compatibility.
+
+---
+
 ## [1.27.0] - 2026-05-31
 
 ### Added
