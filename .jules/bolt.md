@@ -5,3 +5,6 @@
 ## 2025-03-24 - [N+1 Redis Query Avoidance in Streamer Live Status]
 **Learning:** Found N+1 Redis query patterns inside the `getLiveStatuses` method of `StreamerLiveStatusService`. For every requested streamer, it runs `await this.getLiveStatus(id)` concurrently wrapped in `Promise.all`, which executes individual `GET` commands to Redis. This leads to connection overhead and poor performance.
 **Action:** Replace `Promise.all` with individual `get` calls with a single `mget` command to batch the retrieval, mapping the responses back to the input array indices.
+## 2025-02-12 - N+1 Query Anti-Pattern in Redis Iterations
+**Learning:** Sequential `RedisService.get` and `RedisService.del` loops operating on keys returned by `scanStream` can quickly exhaust network connections and dramatically slow down execution, acting as a severe N+1 bottleneck. While the pipeline abstraction was previously noted, using explicit `RedisService.mget` combined with chunked batching (`batch_size=500`) and array-based `RedisService.del([keys])` provides identical correctness with $O(1)$ database trips per chunk.
+**Action:** When working with collections of Redis keys derived from scans or lookups, always prefer array-based mapping and chunked `mget`/bulk `del` operations over raw `for...of` loops calling single-key operations.
