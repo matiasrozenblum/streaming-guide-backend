@@ -1180,9 +1180,10 @@ export class WeeklyOverridesService {
       });
 
       // Delete expired overrides
-      for (const key of expiredKeys) {
-        await this.redisService.del(key);
-        cleaned++;
+      // OPTIMIZATION: Delete all expired overrides in a single batched round-trip to prevent N+1 Redis network overhead
+      if (expiredKeys.length > 0) {
+        await this.redisService.del(expiredKeys);
+        cleaned += expiredKeys.length;
       }
     }
 
@@ -1212,16 +1213,30 @@ export class WeeklyOverridesService {
       keys.push(...keyChunk);
     }
     let deleted = 0;
-    for (const key of keys) {
-      const override = await this.redisService.get<WeeklyOverride>(key);
-      if (!override) continue;
-      if (
-        (override.programId && override.programId === programId) ||
-        (override.scheduleId && scheduleIds.includes(override.scheduleId))
-      ) {
-        await this.redisService.del(key);
-        deleted++;
+    const keysToDelete: string[] = [];
+
+    // OPTIMIZATION: Use mget in chunks to prevent N+1 Redis gets, avoiding maximum call stack limits
+    const chunkSize = 500;
+    for (let i = 0; i < keys.length; i += chunkSize) {
+      const chunk = keys.slice(i, i + chunkSize);
+      const overrides = await this.redisService.mget<WeeklyOverride>(chunk);
+
+      for (let j = 0; j < overrides.length; j++) {
+        const override = overrides[j];
+        if (!override) continue;
+        if (
+          (override.programId && override.programId === programId) ||
+          (override.scheduleId && scheduleIds.includes(override.scheduleId))
+        ) {
+          keysToDelete.push(chunk[j]);
+        }
       }
+    }
+
+    // OPTIMIZATION: Delete all matched overrides in a single batched round-trip
+    if (keysToDelete.length > 0) {
+      await this.redisService.del(keysToDelete);
+      deleted = keysToDelete.length;
     }
     if (deleted > 0) {
       await this.redisService.del('schedules:week:complete');

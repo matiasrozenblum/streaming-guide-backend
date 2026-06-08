@@ -33,6 +33,7 @@ describe('WeeklyOverridesService', () => {
 
   const mockRedisService = {
     get: jest.fn(),
+    mget: jest.fn().mockResolvedValue([]),
     set: jest.fn(),
     del: jest.fn(),
     delByPattern: jest.fn(),
@@ -892,9 +893,9 @@ describe('WeeklyOverridesService', () => {
       const result = await service.cleanupExpiredOverrides();
 
       expect(result).toBe(1);
-      expect(redisService.del).toHaveBeenCalledWith(
+      expect(redisService.del).toHaveBeenCalledWith([
         'weekly_override:1_2024-01-01',
-      );
+      ]);
       expect(redisService.del).toHaveBeenCalledWith('schedules:week:complete');
     });
 
