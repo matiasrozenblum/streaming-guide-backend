@@ -7,6 +7,9 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+### Fixed
+- YouTube premieres (estrenos) are now detected as live streams. The `search?eventType=live` API does not return premieres, but `videos?part=snippet` correctly reports them as `liveBroadcastContent=live`. When the primary search returns no results, the backend now falls back to checking the channel's 3 most recent uploads via `playlistItems` (1 quota unit) and validates each one with `isVideoLive()`. This prevents premieres from being incorrectly marked as not-found.
+
 ---
 
 ## [1.28.1] - 2026-06-06

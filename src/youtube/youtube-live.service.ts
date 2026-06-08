@@ -1001,6 +1001,22 @@ export class YoutubeLiveService {
       }
 
       if (liveStreams.length === 0) {
+        // Fallback: YouTube premieres (estrenos) don't appear in search?eventType=live
+        // but ARE reported as liveBroadcastContent=live by the videos API.
+        // Check the channel's most recent uploads via playlistItems (1 quota unit vs 100 for search).
+        const premiereStream = await this.findActivePremiereFromUploads(
+          channelId,
+          handle,
+        );
+        if (premiereStream) {
+          liveStreams.push(premiereStream);
+          this.logger.debug(
+            `🎬 [Premiere] Found active premiere for ${handle}: ${premiereStream.videoId} - ${premiereStream.title}`,
+          );
+        }
+      }
+
+      if (liveStreams.length === 0) {
         this.logger.debug(
           `🚫 No actually live streams for ${handle} (${context}) - all were scheduled`,
         );
@@ -1169,6 +1185,60 @@ export class YoutubeLiveService {
       false,
       'manual',
     );
+  }
+
+  /**
+   * Fallback for YouTube premieres (estrenos): the search?eventType=live endpoint does not
+   * return premieres, but videos?part=snippet correctly reports them as liveBroadcastContent=live.
+   * Fetches the channel's 3 most recent uploads via playlistItems (1 quota unit) and checks
+   * each one with isVideoLive().
+   */
+  private async findActivePremiereFromUploads(
+    channelId: string,
+    handle: string,
+  ): Promise<LiveStream | null> {
+    try {
+      // Uploads playlist ID = channel ID with 'UC' prefix replaced by 'UU'
+      const uploadsPlaylistId = channelId.replace(/^UC/, 'UU');
+
+      const { data } = await axios.get(`${this.apiUrl}/playlistItems`, {
+        params: {
+          part: 'snippet',
+          playlistId: uploadsPlaylistId,
+          maxResults: 3,
+          key: this.apiKey,
+        },
+      });
+
+      const items: any[] = data.items || [];
+      this.logger.debug(
+        `🎬 [Premiere] Checking ${items.length} recent uploads for ${handle}`,
+      );
+
+      for (const item of items) {
+        const videoId = item.snippet?.resourceId?.videoId;
+        if (!videoId) continue;
+
+        const isLive = await this.isVideoLive(videoId);
+        if (isLive) {
+          return {
+            videoId,
+            title: item.snippet.title,
+            publishedAt: item.snippet.publishedAt,
+            description: item.snippet.description,
+            thumbnailUrl: item.snippet.thumbnails?.medium?.url,
+            channelTitle: item.snippet.channelTitle,
+          };
+        }
+      }
+
+      return null;
+    } catch (err) {
+      this.logger.warn(
+        `⚠️ [Premiere] Fallback check failed for ${handle}: ${err.message}`,
+      );
+      return null;
+    }
   }
 
   public async isVideoLive(videoId: string): Promise<boolean> {
