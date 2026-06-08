@@ -7,8 +7,12 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+### Added
+- `is_premiere` boolean field on `Program` entity (default `false`). When enabled, the cron will use a `playlistItems` fallback to detect YouTube premieres (estrenos) that are not returned by `search?eventType=live`.
+- `POST /channels/:id/fetch-premiere` endpoint: manually triggers the premiere fallback for all programs currently on-air on the given channel. Bypasses the `is_premiere` flag — intended for backoffice use when a channel is detected broadcasting an estreno. Clears not-found Redis flags before fetching and caches any found video ID.
+
 ### Fixed
-- YouTube premieres (estrenos) are now detected as live streams. The `search?eventType=live` API does not return premieres, but `videos?part=snippet` correctly reports them as `liveBroadcastContent=live`. When the primary search returns no results, the backend now falls back to checking the channel's 3 most recent uploads via `playlistItems` (1 quota unit) and validates each one with `isVideoLive()`. This prevents premieres from being incorrectly marked as not-found.
+- YouTube premieres (estrenos) are now detected as live streams when `is_premiere` is set on the program. The `search?eventType=live` API does not return premieres, but `videos?part=snippet` correctly reports them as `liveBroadcastContent=live`. The fallback checks the channel's 3 most recent uploads via `playlistItems` (1 quota unit vs 100 for a second search) and uses title-similarity matching (`SimilarityUtil`) to pick the best match when multiple premieres are live simultaneously.
 
 ---
 
