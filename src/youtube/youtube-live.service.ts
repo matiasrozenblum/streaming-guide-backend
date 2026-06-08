@@ -760,6 +760,7 @@ export class YoutubeLiveService {
     cronType: 'main' | 'back-to-back-fix' | 'manual',
   ): Promise<LiveStreamsResult | null | '__SKIPPED__'> {
     let currentProgramName: string | null = null;
+    let currentProgramIsPremiere = false;
 
     // gating centralizado
     try {
@@ -818,6 +819,8 @@ export class YoutubeLiveService {
 
       if (visibleCurrentSchedule?.program) {
         currentProgramName = visibleCurrentSchedule.program.name; // Capture name for sorting logic
+        currentProgramIsPremiere =
+          visibleCurrentSchedule.program.is_premiere ?? false;
       }
     } catch (visErr) {
       // Non-fatal: if visibility check fails, proceed as before
@@ -1000,6 +1003,24 @@ export class YoutubeLiveService {
         );
       }
 
+      if (liveStreams.length === 0 && currentProgramIsPremiere) {
+        // Fallback: YouTube premieres (estrenos) don't appear in search?eventType=live
+        // but ARE reported as liveBroadcastContent=live by the videos API.
+        // Only runs when the current program is flagged as is_premiere to avoid
+        // wasting quota on channels that are genuinely offline.
+        const premiereStream = await this.findActivePremiereFromUploads(
+          channelId,
+          handle,
+          currentProgramName,
+        );
+        if (premiereStream) {
+          liveStreams.push(premiereStream);
+          this.logger.debug(
+            `🎬 [Premiere] Found active premiere for ${handle}: ${premiereStream.videoId} - ${premiereStream.title}`,
+          );
+        }
+      }
+
       if (liveStreams.length === 0) {
         this.logger.debug(
           `🚫 No actually live streams for ${handle} (${context}) - all were scheduled`,
@@ -1171,6 +1192,82 @@ export class YoutubeLiveService {
     );
   }
 
+  /**
+   * Fallback for YouTube premieres (estrenos): the search?eventType=live endpoint does not
+   * return premieres, but videos?part=snippet correctly reports them as liveBroadcastContent=live.
+   * Fetches the channel's 3 most recent uploads via playlistItems (1 quota unit) and checks
+   * each one with isVideoLive().
+   */
+  private async findActivePremiereFromUploads(
+    channelId: string,
+    handle: string,
+    currentProgramName: string | null = null,
+  ): Promise<LiveStream | null> {
+    try {
+      // Uploads playlist ID = channel ID with 'UC' prefix replaced by 'UU'
+      const uploadsPlaylistId = channelId.replace(/^UC/, 'UU');
+
+      const { data } = await axios.get(`${this.apiUrl}/playlistItems`, {
+        params: {
+          part: 'snippet',
+          playlistId: uploadsPlaylistId,
+          maxResults: 3,
+          key: this.apiKey,
+        },
+      });
+
+      const items: any[] = data.items || [];
+      this.logger.debug(
+        `🎬 [Premiere] Checking ${items.length} recent uploads for ${handle}`,
+      );
+
+      const liveStreams: LiveStream[] = [];
+      for (const item of items) {
+        const videoId = item.snippet?.resourceId?.videoId;
+        if (!videoId) continue;
+
+        const isLive = await this.isVideoLive(videoId);
+        if (isLive) {
+          liveStreams.push({
+            videoId,
+            title: item.snippet.title,
+            publishedAt: item.snippet.publishedAt,
+            description: item.snippet.description,
+            thumbnailUrl: item.snippet.thumbnails?.medium?.url,
+            channelTitle: item.snippet.channelTitle,
+          });
+        }
+      }
+
+      if (liveStreams.length === 0) return null;
+
+      // When multiple premieres are live simultaneously, pick the best title match
+      if (liveStreams.length > 1 && currentProgramName) {
+        liveStreams.sort(
+          (a, b) =>
+            SimilarityUtil.calculateTitleSimilarity(
+              currentProgramName,
+              b.title,
+            ) -
+            SimilarityUtil.calculateTitleSimilarity(
+              currentProgramName,
+              a.title,
+            ),
+        );
+        this.logger.debug(
+          `🎬 [Premiere] Multiple live premieres for ${handle}, selected best match: ${liveStreams[0].videoId} - ${liveStreams[0].title}`,
+        );
+      }
+
+      return liveStreams[0];
+    } catch (err) {
+      this.logger.warn(
+        `⚠️ [Premiere] Fallback check failed for ${handle}: ${err.message}`,
+      );
+      return null;
+    }
+  }
+
   public async isVideoLive(videoId: string): Promise<boolean> {
     try {
       // Track API usage
@@ -1183,6 +1280,97 @@ export class YoutubeLiveService {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Manual premiere fetch triggered by the backoffice.
+   * Clears not-found flags then runs the premiere fallback for all programs
+   * currently on-air on the given channel, regardless of the is_premiere flag.
+   */
+  async fetchPremiereForChannel(
+    channelId: string,
+    handle: string,
+  ): Promise<
+    Array<{ programName: string; videoId: string | null; found: boolean }>
+  > {
+    // Clear any not-found / in-flight flags so the fetch isn't blocked
+    await this.redisService.del([
+      `videoIdNotFound:${handle}`,
+      `notFoundAttempts:${handle}`,
+      `fetching:${channelId}`,
+      `liveStatusByHandle:${handle}`,
+    ]);
+
+    const currentDay = TimezoneUtil.currentDayOfWeek();
+    const currentTimeInMinutes = TimezoneUtil.currentTimeInMinutes();
+
+    const schedules = await this.schedulesService.findAll({
+      dayOfWeek: currentDay,
+      liveStatus: false,
+      applyOverrides: true,
+    });
+
+    const onAirPrograms = schedules.filter((s) => {
+      if (s.program?.channel?.youtube_channel_id !== channelId) return false;
+      const start = this.convertTimeToMinutes(s.start_time);
+      const end = this.convertTimeToMinutes(s.end_time);
+      return currentTimeInMinutes >= start && currentTimeInMinutes < end;
+    });
+
+    if (onAirPrograms.length === 0) {
+      this.logger.debug(
+        `🎬 [Manual Premiere] No on-air programs for ${handle} right now`,
+      );
+      return [];
+    }
+
+    const results: Array<{
+      programName: string;
+      videoId: string | null;
+      found: boolean;
+    }> = [];
+
+    for (const schedule of onAirPrograms) {
+      const programName = schedule.program?.name ?? 'Desconocido';
+      const stream = await this.findActivePremiereFromUploads(
+        channelId,
+        handle,
+        programName,
+      );
+
+      if (stream) {
+        const ttl = await getCurrentBlockTTL(
+          channelId,
+          schedules,
+          this.sentryService,
+        );
+        const liveResult = {
+          streams: [stream],
+          primaryVideoId: stream.videoId,
+          streamCount: 1,
+        };
+        const cacheData = createLiveStatusCacheFromStreams(
+          channelId,
+          handle,
+          liveResult,
+          ttl,
+        );
+        await this.redisService.set(
+          `liveStatusByHandle:${handle}`,
+          cacheData,
+          cacheData.ttl,
+        );
+        await this.redisService.del(`videoIdNotFound:${handle}`);
+        this.logger.debug(
+          `🎬 [Manual Premiere] Found and cached ${stream.videoId} for ${programName} on ${handle}`,
+        );
+        results.push({ programName, videoId: stream.videoId, found: true });
+      } else {
+        results.push({ programName, videoId: null, found: false });
+      }
+    }
+
+    return results;
   }
 
   /**

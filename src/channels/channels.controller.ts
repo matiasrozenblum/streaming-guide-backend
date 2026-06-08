@@ -31,6 +31,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { SupabaseStorageService } from '../banners/supabase-storage.service';
+import { YoutubeLiveService } from '../youtube/youtube-live.service';
 
 @ApiTags('channels') // Etiqueta para los canales
 @Controller('channels')
@@ -38,6 +39,7 @@ export class ChannelsController {
   constructor(
     private readonly channelsService: ChannelsService,
     private readonly supabaseStorageService: SupabaseStorageService,
+    private readonly youtubeLiveService: YoutubeLiveService,
   ) {}
 
   @Get()
@@ -273,5 +275,48 @@ export class ChannelsController {
     }
     const result = await this.channelsService.clearChannelCache(channel.handle);
     return { message: 'Cache cleared successfully', ...result };
+  }
+
+  @Post(':id/fetch-premiere')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Trigger premiere fallback fetch for all currently on-air programs of this channel',
+    description:
+      'Bypasses is_premiere flag — intended for manual use from the backoffice when a channel is broadcasting a premiere (estreno). Clears not-found flags and checks recent uploads via playlistItems.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Results per on-air program',
+    schema: {
+      type: 'object',
+      properties: {
+        results: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              programName: { type: 'string' },
+              videoId: { type: 'string', nullable: true },
+              found: { type: 'boolean' },
+            },
+          },
+        },
+      },
+    },
+  })
+  async fetchPremiere(@Param('id') id: number) {
+    const channel = await this.channelsService.findOne(id);
+    if (!channel.youtube_channel_id || !channel.handle) {
+      throw new BadRequestException(
+        'Channel does not have a YouTube channel ID or handle',
+      );
+    }
+    const results = await this.youtubeLiveService.fetchPremiereForChannel(
+      channel.youtube_channel_id,
+      channel.handle,
+    );
+    return { results };
   }
 }
