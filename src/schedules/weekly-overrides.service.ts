@@ -1212,15 +1212,26 @@ export class WeeklyOverridesService {
       keys.push(...keyChunk);
     }
     let deleted = 0;
-    for (const key of keys) {
-      const override = await this.redisService.get<WeeklyOverride>(key);
-      if (!override) continue;
-      if (
-        (override.programId && override.programId === programId) ||
-        (override.scheduleId && scheduleIds.includes(override.scheduleId))
-      ) {
-        await this.redisService.del(key);
-        deleted++;
+    // Avoid N+1 redis sequential queries by fetching all overrides via mget
+    if (keys.length > 0) {
+      const overrides = await this.redisService.mget<WeeklyOverride>(keys);
+      const keysToDelete: string[] = [];
+
+      for (let i = 0; i < overrides.length; i++) {
+        const override = overrides[i];
+        if (!override) continue;
+
+        if (
+          (override.programId && override.programId === programId) ||
+          (override.scheduleId && scheduleIds.includes(override.scheduleId))
+        ) {
+          keysToDelete.push(keys[i]);
+        }
+      }
+
+      if (keysToDelete.length > 0) {
+        await this.redisService.del(keysToDelete);
+        deleted = keysToDelete.length;
       }
     }
     if (deleted > 0) {
