@@ -60,6 +60,7 @@ describe('SubscriptionService', () => {
     panelists: [],
     schedules: [],
     style_override: null,
+    is_premiere: false,
   };
 
   const mockSubscription: UserSubscription = {
