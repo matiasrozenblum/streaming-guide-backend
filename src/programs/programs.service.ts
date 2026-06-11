@@ -57,8 +57,8 @@ export class ProgramsService {
     program.channel = channel;
     const savedProgram = await this.programsRepository.save(program);
 
-    // Clear unified cache
-    await this.redisService.del('schedules:week:complete');
+    // Clear caches
+    await this.redisService.del(['schedules:week:complete', 'programs:all']);
 
     // Warm cache asynchronously (non-blocking)
     this.schedulesService.debouncedWarmSchedulesCache();
@@ -90,13 +90,17 @@ export class ProgramsService {
   }
 
   async findAll(): Promise<any[]> {
+    const cacheKey = 'programs:all';
+    const cached = await this.redisService.get<any[]>(cacheKey);
+    if (cached) return cached;
+
     const programs = await this.programsRepository
       .createQueryBuilder('program')
       .leftJoinAndSelect('program.channel', 'channel')
       .leftJoinAndSelect('program.panelists', 'panelists')
       .orderBy('panelists.id', 'ASC')
       .getMany();
-    return programs.map((program) => ({
+    const result = programs.map((program) => ({
       id: program.id,
       name: program.name,
       description: program.description,
@@ -111,9 +115,15 @@ export class ProgramsService {
       channel_name: program.channel?.name || null,
       style_override: program.style_override,
     }));
+    await this.redisService.set(cacheKey, result, 300);
+    return result;
   }
 
   async findOne(id: number): Promise<any> {
+    const cacheKey = `programs:${id}`;
+    const cached = await this.redisService.get<any>(cacheKey);
+    if (cached) return cached;
+
     const program = await this.programsRepository
       .createQueryBuilder('program')
       .leftJoinAndSelect('program.channel', 'channel')
@@ -124,7 +134,7 @@ export class ProgramsService {
     if (!program) {
       throw new NotFoundException(`Program with ID ${id} not found`);
     }
-    return {
+    const result = {
       id: program.id,
       name: program.name,
       description: program.description,
@@ -139,6 +149,8 @@ export class ProgramsService {
       channel_name: program.channel?.name || null,
       style_override: program.style_override,
     };
+    await this.redisService.set(cacheKey, result, 300);
+    return result;
   }
 
   async update(id: number, updateProgramDto: UpdateProgramDto): Promise<any> {
@@ -165,8 +177,12 @@ export class ProgramsService {
 
     const updatedProgram = await this.programsRepository.save(program);
 
-    // Clear unified cache
-    await this.redisService.del('schedules:week:complete');
+    // Clear caches
+    await this.redisService.del([
+      'schedules:week:complete',
+      'programs:all',
+      `programs:${id}`,
+    ]);
 
     // Warm cache asynchronously (non-blocking)
     this.schedulesService.debouncedWarmSchedulesCache();
@@ -218,8 +234,12 @@ export class ProgramsService {
       throw new NotFoundException(`Program with ID ${id} not found`);
     }
 
-    // Clear unified cache
-    await this.redisService.del('schedules:week:complete');
+    // Clear caches
+    await this.redisService.del([
+      'schedules:week:complete',
+      'programs:all',
+      `programs:${id}`,
+    ]);
 
     // Warm cache asynchronously (non-blocking)
     this.schedulesService.debouncedWarmSchedulesCache();
@@ -267,8 +287,12 @@ export class ProgramsService {
       await this.programsRepository.save(program);
     }
 
-    // Clear unified cache
-    await this.redisService.del('schedules:week:complete');
+    // Clear caches
+    await this.redisService.del([
+      'schedules:week:complete',
+      'programs:all',
+      `programs:${programId}`,
+    ]);
 
     // Warm cache asynchronously (non-blocking)
     this.schedulesService.debouncedWarmSchedulesCache();
@@ -291,8 +315,12 @@ export class ProgramsService {
       await this.programsRepository.save(program);
     }
 
-    // Clear unified cache
-    await this.redisService.del('schedules:week:complete');
+    // Clear caches
+    await this.redisService.del([
+      'schedules:week:complete',
+      'programs:all',
+      `programs:${programId}`,
+    ]);
 
     // Warm cache asynchronously (non-blocking)
     this.schedulesService.debouncedWarmSchedulesCache();
