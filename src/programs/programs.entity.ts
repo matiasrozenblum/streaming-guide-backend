@@ -58,4 +58,7 @@ export class Program {
 
   @Column({ type: 'boolean', default: true })
   is_visible: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  is_premiere: boolean;
 }

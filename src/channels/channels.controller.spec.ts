@@ -6,6 +6,7 @@ import { UpdateChannelDto } from './dto/update-channel.dto';
 import { Channel } from './channels.entity';
 import { NotFoundException } from '@nestjs/common';
 import { SupabaseStorageService } from '../banners/supabase-storage.service';
+import { YoutubeLiveService } from '../youtube/youtube-live.service';
 
 describe('ChannelsController', () => {
   let controller: ChannelsController;
@@ -57,6 +58,10 @@ describe('ChannelsController', () => {
         {
           provide: SupabaseStorageService,
           useValue: mockSupabaseStorageService,
+        },
+        {
+          provide: YoutubeLiveService,
+          useValue: { fetchPremiereForChannel: jest.fn().mockResolvedValue([]) },
         },
       ],
     }).compile();

@@ -897,6 +897,7 @@ describe('SchedulesService', () => {
             stream_url: '',
             style_override: null,
             is_visible: true,
+            is_premiere: false,
             channel: {
               id: 1,
               name: 'Vorterix',
