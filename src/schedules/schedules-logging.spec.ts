@@ -51,6 +51,7 @@ describe('SchedulesService Logging Improvements', () => {
       stream_url: null,
       style_override: null,
       is_visible: true,
+      is_premiere: false,
     },
   };
 

@@ -5,6 +5,7 @@ import { ChannelsController } from '../channels/channels.controller';
 import { ChannelsService } from '../channels/channels.service';
 import { TimezoneUtil } from '../utils/timezone.util';
 import { SupabaseStorageService } from '../banners/supabase-storage.service';
+import { YoutubeLiveService } from '../channels/../youtube/youtube-live.service';
 
 describe('Channels Endpoints Integration Tests', () => {
   let app: INestApplication;
@@ -66,6 +67,10 @@ describe('Channels Endpoints Integration Tests', () => {
         {
           provide: SupabaseStorageService,
           useValue: { uploadImage: jest.fn() },
+        },
+        {
+          provide: YoutubeLiveService,
+          useValue: { fetchPremiereForChannel: jest.fn().mockResolvedValue([]) },
         },
       ],
     }).compile();
