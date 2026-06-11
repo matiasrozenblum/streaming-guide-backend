@@ -43,24 +43,28 @@ export class NotifyAndRevalidateUtil {
     }
   }
 
-  private revalidateInBackground(opts: {
-    paths?: string[];
-    tags?: string[];
-  }) {
+  private revalidateInBackground(opts: { paths?: string[]; tags?: string[] }) {
     const bypassToken = this.vercelBypassSecret || this.revalidateSecret;
     const url = `${this.frontendUrl}/api/revalidate?x-vercel-set-bypass-cookie=true&x-vercel-protection-bypass=${bypassToken}`;
 
     const items = opts.paths
       ? opts.paths.map((path) => ({ path, secret: this.revalidateSecret }))
-      : (opts.tags ?? []).map((tag) => ({ tag, secret: this.revalidateSecret }));
+      : (opts.tags ?? []).map((tag) => ({
+          tag,
+          secret: this.revalidateSecret,
+        }));
 
     // Fire all revalidation requests in parallel, don't await
     Promise.all(
       items.map(async (body) => {
-        const label = 'path' in body ? `path: ${body.path}` : `tag: ${(body as any).tag}`;
+        const label =
+          'path' in body ? `path: ${body.path}` : `tag: ${body.tag}`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
         try {
           const response = await globalThis.fetch(url, {
             method: 'POST',
+            signal: controller.signal,
             headers: {
               'Content-Type': 'application/json',
               'x-vercel-protection-bypass': bypassToken,
@@ -78,6 +82,8 @@ export class NotifyAndRevalidateUtil {
             `[NotifyAndRevalidate] Failed to revalidate ${label}`,
             err,
           );
+        } finally {
+          clearTimeout(timeoutId);
         }
       }),
     ).catch((err) => {

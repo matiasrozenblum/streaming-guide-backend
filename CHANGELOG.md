@@ -21,6 +21,21 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.29.1] - 2026-06-11
+
+### Added
+- `isWarmingCache` flag in `SchedulesService.warmSchedulesCache()` to skip concurrent re-warm runs and prevent multiple simultaneous heavy `findAll()` queries during backoffice burst mutations.
+
+### Fixed
+- **Production incident (2026-06-10):** Cascading 504 Gateway Timeouts resolved with three targeted fixes:
+  - `getBlockTTL`: cross-midnight programs (e.g. 23:00–00:30) now compute TTL against the next day when `blockEnd < currentTimeInMinutes`, eliminating the -82323s negative TTL that caused a 2-minute polling loop in the YouTube background service.
+  - `warmSchedulesCache`: concurrent runs are now skipped via an `isWarmingCache` flag, preventing DB connection exhaustion during rapid backoffice mutations.
+  - `revalidateInBackground`: each `fetch` call to the Vercel revalidation endpoint now has a 5-second `AbortController` timeout to prevent hanging connections.
+- `is_premiere` added to `CreateProgramDto` and `UpdateProgramDto`: the field existed on the `Program` entity but was omitted from the DTOs, causing `PATCH /programs/:id` to return 400 Bad Request (ValidationPipe `forbidNonWhitelisted` rejected it).
+- `is_premiere` now included in all program response mappings (`create`, `findAll`, `findOne`, `update`) — previously omitted, causing the backoffice to always show the "Es estreno" checkbox unchecked regardless of the stored value.
+
+---
+
 ## [1.28.1] - 2026-06-06
 
 ### Fixed
