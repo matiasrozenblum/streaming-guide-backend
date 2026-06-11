@@ -35,4 +35,12 @@ export class CreateProgramDto {
   @IsBoolean()
   @IsOptional()
   is_visible?: boolean;
+
+  @ApiProperty({
+    required: false,
+    description: 'Whether the program is a premiere (estreno)',
+  })
+  @IsBoolean()
+  @IsOptional()
+  is_premiere?: boolean;
 }
