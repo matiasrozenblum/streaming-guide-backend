@@ -1214,33 +1214,49 @@ export class WeeklyOverridesService {
     for await (const keyChunk of stream) {
       keys.push(...keyChunk);
     }
-    let deleted = 0;
-    for (const key of keys) {
-      const override = await this.redisService.get<WeeklyOverride>(key);
-      if (!override) continue;
-      if (
-        (override.programId && override.programId === programId) ||
-        (override.scheduleId && scheduleIds.includes(override.scheduleId))
-      ) {
-        await this.redisService.del(key);
-        deleted++;
+
+    if (keys.length === 0) return 0;
+
+    // Batch GET all override values in a single pipeline round-trip
+    const pipeline = (this.redisService as any).client.pipeline();
+    keys.forEach((key) => pipeline.get(key));
+    const results = await pipeline.exec();
+
+    // Identify matching keys in-memory (no extra Redis round-trips)
+    const keysToDelete: string[] = [];
+    results.forEach((result: [Error | null, string | null], i: number) => {
+      if (result[0] === null && result[1]) {
+        try {
+          const override: WeeklyOverride = JSON.parse(result[1]);
+          if (
+            (override.programId && override.programId === programId) ||
+            (override.scheduleId && scheduleIds.includes(override.scheduleId))
+          ) {
+            keysToDelete.push(keys[i]);
+          }
+        } catch {
+          // malformed key — skip
+        }
       }
-    }
-    if (deleted > 0) {
-      await this.redisService.del('schedules:week:complete');
+    });
 
-      // Warm cache asynchronously (non-blocking)
-      this.schedulesService?.debouncedWarmSchedulesCache?.();
+    if (keysToDelete.length === 0) return 0;
 
-      // Notify frontend via SSE
-      await this.notifyUtil.notifyAndRevalidate({
-        eventType: 'overrides_bulk_deleted',
-        entity: 'override',
-        entityId: programId,
-        payload: { deletedCount: deleted },
-        revalidatePaths: ['/'],
-      });
-    }
-    return deleted;
+    // Batch DEL all matching keys + unified cache in one call
+    await this.redisService.del([...keysToDelete, 'schedules:week:complete']);
+
+    // Warm cache asynchronously (non-blocking)
+    this.schedulesService?.debouncedWarmSchedulesCache?.();
+
+    // Notify frontend via SSE
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: 'overrides_bulk_deleted',
+      entity: 'override',
+      entityId: programId,
+      payload: { deletedCount: keysToDelete.length },
+      revalidatePaths: ['/'],
+    });
+
+    return keysToDelete.length;
   }
 }

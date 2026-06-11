@@ -129,6 +129,7 @@ export class PanelistsService {
       'panelists:all',
       `panelists:${id}`,
       'schedules:week:complete',
+      'programs:all',
     ]);
 
     // Warm cache asynchronously (non-blocking)
@@ -186,6 +187,8 @@ export class PanelistsService {
       await this.redisService.del([
         `panelists:${panelistId}`,
         'schedules:week:complete',
+        'programs:all',
+        `programs:${programId}`,
       ]);
 
       // Warm cache asynchronously (non-blocking)
@@ -219,6 +222,8 @@ export class PanelistsService {
       await this.redisService.del([
         `panelists:${panelistId}`,
         'schedules:week:complete',
+        'programs:all',
+        `programs:${programId}`,
       ]);
 
       // Warm cache asynchronously (non-blocking)

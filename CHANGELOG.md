@@ -9,6 +9,35 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.30.0] - 2026-06-11
+
+### Performance
+
+- **Backoffice mutations now respond significantly faster** across channels, programs, schedules, panelists and weekly overrides:
+  - **Channel create/update**: YouTube channel ID discovery (`getChannelIdFromHandle`) moved to a background task — response drops from ~3–5 s to ~200 ms; `youtube_channel_id` is populated asynchronously within seconds.
+  - **Channel mutations**: `ConfigService.set/remove` calls for `youtube.fetch_enabled` and `youtube.fetch_override_holiday` are now parallelized with `Promise.all`.
+  - **Program delete with overrides**: `deleteOverridesForProgram` now uses a Redis pipeline batch GET + single batch DEL instead of N sequential round-trips — O(N) Redis calls → O(2).
+  - **Schedule delete**: replaced stale `delByPattern('schedules:all:*')` (matched nothing, ran an unnecessary SCAN) with `del('schedules:week:complete')`, consistent with all other mutation methods.
+  - **Cache warm debounce**: reduced from 2 000 ms to 0 ms. A `pendingWarm` flag ensures that if a warm is already running when another mutation arrives, a re-warm fires immediately after the current one finishes — bulk mutations still coalesce correctly.
+  - **`programs.findAll()` / `programs.findOne()`**: now cached in Redis under `programs:all` / `programs:{id}` (TTL 5 min). Repeated backoffice list loads drop from ~1.5–2.6 s (DB with JOINs) to < 50 ms (Redis). Cache invalidated on every program mutation and on panelist association changes.
+
+---
+
+## [1.29.1] - 2026-06-11
+
+### Added
+- `isWarmingCache` flag in `SchedulesService.warmSchedulesCache()` to skip concurrent re-warm runs and prevent multiple simultaneous heavy `findAll()` queries during backoffice burst mutations.
+
+### Fixed
+- **Production incident (2026-06-10):** Cascading 504 Gateway Timeouts resolved with three targeted fixes:
+  - `getBlockTTL`: cross-midnight programs (e.g. 23:00–00:30) now compute TTL against the next day when `blockEnd < currentTimeInMinutes`, eliminating the -82323s negative TTL that caused a 2-minute polling loop in the YouTube background service.
+  - `warmSchedulesCache`: concurrent runs are now skipped via an `isWarmingCache` flag, preventing DB connection exhaustion during rapid backoffice mutations.
+  - `revalidateInBackground`: each `fetch` call to the Vercel revalidation endpoint now has a 5-second `AbortController` timeout to prevent hanging connections.
+- `is_premiere` added to `CreateProgramDto` and `UpdateProgramDto`: the field existed on the `Program` entity but was omitted from the DTOs, causing `PATCH /programs/:id` to return 400 Bad Request (ValidationPipe `forbidNonWhitelisted` rejected it).
+- `is_premiere` now included in all program response mappings (`create`, `findAll`, `findOne`, `update`) — previously omitted, causing the backoffice to always show the "Es estreno" checkbox unchecked regardless of the stored value.
+
+---
+
 ## [1.29.0] - 2026-06-10
 
 ### Added
@@ -18,36 +47,6 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ### Fixed
 - YouTube premieres (estrenos) are now detected as live streams when `is_premiere` is set on the program. The `search?eventType=live` API does not return premieres, but `videos?part=snippet` correctly reports them as `liveBroadcastContent=live`. The fallback checks the channel's 3 most recent uploads via `playlistItems` (1 quota unit vs 100 for a second search) and uses title-similarity matching to pick the best match when multiple premieres are live simultaneously.
-
----
-
-## [1.29.1] - 2026-06-11
-
-### Added
-- `isWarmingCache` flag in `SchedulesService.warmSchedulesCache()` to skip concurrent re-warm runs and prevent multiple simultaneous heavy `findAll()` queries during backoffice burst mutations.
-
-### Fixed
-- **Production incident (2026-06-10):** Cascading 504 Gateway Timeouts resolved with three targeted fixes:
-  - `getBlockTTL`: cross-midnight programs (e.g. 23:00–00:30) now compute TTL against the next day when `blockEnd < currentTimeInMinutes`, eliminating the -82323s negative TTL that caused a 2-minute polling loop in the YouTube background service.
-  - `warmSchedulesCache`: concurrent runs are now skipped via an `isWarmingCache` flag, preventing DB connection exhaustion during rapid backoffice mutations.
-  - `revalidateInBackground`: each `fetch` call to the Vercel revalidation endpoint now has a 5-second `AbortController` timeout to prevent hanging connections.
-- `is_premiere` added to `CreateProgramDto` and `UpdateProgramDto`: the field existed on the `Program` entity but was omitted from the DTOs, causing `PATCH /programs/:id` to return 400 Bad Request (ValidationPipe `forbidNonWhitelisted` rejected it).
-- `is_premiere` now included in all program response mappings (`create`, `findAll`, `findOne`, `update`) — previously omitted, causing the backoffice to always show the "Es estreno" checkbox unchecked regardless of the stored value.
-
----
-
-## [1.29.1] - 2026-06-11
-
-### Added
-- `isWarmingCache` flag in `SchedulesService.warmSchedulesCache()` to skip concurrent re-warm runs and prevent multiple simultaneous heavy `findAll()` queries during backoffice burst mutations.
-
-### Fixed
-- **Production incident (2026-06-10):** Cascading 504 Gateway Timeouts resolved with three targeted fixes:
-  - `getBlockTTL`: cross-midnight programs (e.g. 23:00–00:30) now compute TTL against the next day when `blockEnd < currentTimeInMinutes`, eliminating the -82323s negative TTL that caused a 2-minute polling loop in the YouTube background service.
-  - `warmSchedulesCache`: concurrent runs are now skipped via an `isWarmingCache` flag, preventing DB connection exhaustion during rapid backoffice mutations.
-  - `revalidateInBackground`: each `fetch` call to the Vercel revalidation endpoint now has a 5-second `AbortController` timeout to prevent hanging connections.
-- `is_premiere` added to `CreateProgramDto` and `UpdateProgramDto`: the field existed on the `Program` entity but was omitted from the DTOs, causing `PATCH /programs/:id` to return 400 Bad Request (ValidationPipe `forbidNonWhitelisted` rejected it).
-- `is_premiere` now included in all program response mappings (`create`, `findAll`, `findOne`, `update`) — previously omitted, causing the backoffice to always show the "Es estreno" checkbox unchecked regardless of the stored value.
 
 ---
 
