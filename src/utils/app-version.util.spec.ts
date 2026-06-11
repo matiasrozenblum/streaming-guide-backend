@@ -76,6 +76,8 @@ describe('needsMidnightSplit', () => {
   });
 
   it('returns true when Origin does not match frontend URL', () => {
-    expect(needsMidnightSplit(undefined, 'https://some-other-origin.com')).toBe(true);
+    expect(needsMidnightSplit(undefined, 'https://some-other-origin.com')).toBe(
+      true,
+    );
   });
 });

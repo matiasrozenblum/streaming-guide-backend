@@ -47,6 +47,7 @@ export class SchedulesService {
   private dayjs: typeof dayjs;
   private notifyUtil: NotifyAndRevalidateUtil;
   private warmCacheTimer: ReturnType<typeof setTimeout> | null = null;
+  private isWarmingCache = false;
   private static readonly WARM_CACHE_DEBOUNCE_MS = 2000;
 
   constructor(
@@ -264,6 +265,11 @@ export class SchedulesService {
    * PUBLIC: Can be called by other services (Programs, Channels, etc.) after cache invalidation
    */
   async warmSchedulesCache(): Promise<void> {
+    if (this.isWarmingCache) {
+      this.logger.debug('Cache warm already in progress, skipping');
+      return;
+    }
+    this.isWarmingCache = true;
     const warmStart = Date.now();
 
     try {
@@ -279,6 +285,8 @@ export class SchedulesService {
       this.logger.error('Failed to warm cache', error);
       // Log to Sentry but don't throw - cache warming failure shouldn't break operations
       this.sentryService.captureException(error);
+    } finally {
+      this.isWarmingCache = false;
     }
   }
 

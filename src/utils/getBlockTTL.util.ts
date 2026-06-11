@@ -87,12 +87,18 @@ export async function getCurrentBlockTTL(
   }
 
   // calcular segundos hasta blockEnd - use centralized timezone utility
-  const endMoment = TimezoneUtil.todayAtTime(
-    `${Math.floor(blockEnd / 60)
-      .toString()
-      .padStart(2, '0')}:${(blockEnd % 60).toString().padStart(2, '0')}`,
-  );
-  const ttl = endMoment.diff(now, 'second');
+  const endTimeString = `${Math.floor(blockEnd / 60)
+    .toString()
+    .padStart(2, '0')}:${(blockEnd % 60).toString().padStart(2, '0')}`;
+  let endMoment = TimezoneUtil.todayAtTime(endTimeString);
+  let ttl = endMoment.diff(now, 'second');
+
+  // Cross-midnight fix: if blockEnd (minutes) is before currentTimeInMinutes, the end time
+  // belongs to tomorrow (e.g. program runs 23:00–00:30 and it's currently 23:22).
+  if (ttl < 0 && blockEnd < currentTimeInMinutes) {
+    endMoment = endMoment.add(1, 'day');
+    ttl = endMoment.diff(now, 'second');
+  }
 
   console.log(
     `🔍 [TTL Debug] Channel ${channelId} - Final calculation: blockEnd=${blockEnd} (${Math.floor(blockEnd / 60)}:${(blockEnd % 60).toString().padStart(2, '0')}), TTL=${ttl}s`,
@@ -144,17 +150,7 @@ export async function getCurrentBlockTTL(
       }
     }
 
-    // IMPORTANT: Even if program ended early, we should still cache until the original program end time
-    // This prevents excessive API calls when programs end early but streams are still live
-    console.log(
-      `🔄 Program ended early for ${channelId}, but using original program end time for caching`,
-    );
-    console.log(
-      `✅ Using original program end TTL: ${Math.abs(ttl)}s (program was supposed to end ${Math.abs(ttl)}s ago)`,
-    );
-
     // Return a small positive TTL (60 seconds) to avoid immediate expiration
-    // This ensures we don't cache for too long after program end, but also don't expire immediately
     return 60;
   }
 
