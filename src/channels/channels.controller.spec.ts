@@ -61,7 +61,9 @@ describe('ChannelsController', () => {
         },
         {
           provide: YoutubeLiveService,
-          useValue: { fetchPremiereForChannel: jest.fn().mockResolvedValue([]) },
+          useValue: {
+            fetchPremiereForChannel: jest.fn().mockResolvedValue([]),
+          },
         },
       ],
     }).compile();

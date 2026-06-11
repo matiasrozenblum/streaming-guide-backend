@@ -70,7 +70,9 @@ describe('Channels Endpoints Integration Tests', () => {
         },
         {
           provide: YoutubeLiveService,
-          useValue: { fetchPremiereForChannel: jest.fn().mockResolvedValue([]) },
+          useValue: {
+            fetchPremiereForChannel: jest.fn().mockResolvedValue([]),
+          },
         },
       ],
     }).compile();

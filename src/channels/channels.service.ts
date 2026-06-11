@@ -168,24 +168,26 @@ export class ChannelsService {
 
     const saved = await this.channelsRepository.save(channel);
 
-    const info = await this.youtubeDiscovery.getChannelIdFromHandle(
-      createChannelDto.handle,
-    );
-    if (info) {
-      saved.youtube_channel_id = info.channelId;
-      await this.channelsRepository.save(saved);
+    // Resolve YouTube channel ID in the background — don't block the response
+    if (createChannelDto.handle) {
+      void this.resolveYoutubeChannelIdInBackground(
+        saved,
+        createChannelDto.handle,
+      );
     }
 
-    // Create YouTube fetch configs for the channel
+    // Create YouTube fetch configs for the channel (parallelized)
     if (saved.handle) {
-      await this.configService.set(
-        `youtube.fetch_enabled.${saved.handle}`,
-        (youtube_fetch_enabled ?? true).toString(),
-      );
-      await this.configService.set(
-        `youtube.fetch_override_holiday.${saved.handle}`,
-        (youtube_fetch_override_holiday ?? true).toString(),
-      );
+      await Promise.all([
+        this.configService.set(
+          `youtube.fetch_enabled.${saved.handle}`,
+          (youtube_fetch_enabled ?? true).toString(),
+        ),
+        this.configService.set(
+          `youtube.fetch_override_holiday.${saved.handle}`,
+          (youtube_fetch_override_holiday ?? true).toString(),
+        ),
+      ]);
     }
 
     // Notify and revalidate
@@ -198,6 +200,27 @@ export class ChannelsService {
     });
 
     return saved;
+  }
+
+  private async resolveYoutubeChannelIdInBackground(
+    channel: Channel,
+    handle: string,
+  ): Promise<void> {
+    try {
+      const info = await this.youtubeDiscovery.getChannelIdFromHandle(handle);
+      if (info) {
+        channel.youtube_channel_id = info.channelId;
+        await this.channelsRepository.save(channel);
+        console.log(
+          `🔄 [background] Resolved YouTube channel ID for ${channel.name}: ${info.channelId}`,
+        );
+      }
+    } catch (error) {
+      console.error(
+        `❌ [background] Failed to resolve YouTube channel ID for ${channel.name}:`,
+        error.message,
+      );
+    }
   }
 
   async update(
@@ -253,39 +276,39 @@ export class ChannelsService {
 
     const updated = await this.channelsRepository.save(channel);
 
-    // Handle YouTube fetch configs update
+    // Handle YouTube fetch configs update (parallelized)
     if (updated.handle) {
-      // If handle changed, delete old configs and create new ones with new handle
       if (handleChanged && oldHandle) {
-        // Delete old configs
+        // Remove old configs in parallel, then set new ones in parallel
         try {
-          await this.configService.remove(`youtube.fetch_enabled.${oldHandle}`);
-          await this.configService.remove(
-            `youtube.fetch_override_holiday.${oldHandle}`,
-          );
-        } catch (error) {
-          // Config might not exist, ignore error
+          await Promise.all([
+            this.configService.remove(`youtube.fetch_enabled.${oldHandle}`),
+            this.configService.remove(
+              `youtube.fetch_override_holiday.${oldHandle}`,
+            ),
+          ]);
+        } catch {
           console.log(
             `⚠️ Could not remove old configs for handle: ${oldHandle}`,
           );
         }
       }
 
-      // Update configs with provided values (always required in UpdateChannelDto)
-      // Use updated.handle which already contains the new handle if it changed
-      await this.configService.set(
-        `youtube.fetch_enabled.${updated.handle}`,
-        youtube_fetch_enabled.toString(),
-      );
-      await this.configService.set(
-        `youtube.fetch_override_holiday.${updated.handle}`,
-        youtube_fetch_override_holiday.toString(),
-      );
+      await Promise.all([
+        this.configService.set(
+          `youtube.fetch_enabled.${updated.handle}`,
+          youtube_fetch_enabled.toString(),
+        ),
+        this.configService.set(
+          `youtube.fetch_override_holiday.${updated.handle}`,
+          youtube_fetch_override_holiday.toString(),
+        ),
+      ]);
     }
 
     // Handle cache invalidation for handle changes and/or YouTube channel ID changes
     if (handleChanged && updateChannelDto.handle) {
-      // If handle changed: invalidate old handle cache
+      // Invalidate old handle live status cache immediately (blocking — must happen before response)
       if (oldHandle) {
         await this.invalidateLiveStatusCaches(oldHandle);
         console.log(
@@ -293,49 +316,20 @@ export class ChannelsService {
         );
       }
 
-      // Resolve new YouTube channel ID from new handle
-      try {
-        const info = await this.youtubeDiscovery.getChannelIdFromHandle(
-          updateChannelDto.handle,
-        );
-        if (info) {
-          updated.youtube_channel_id = info.channelId;
-          await this.channelsRepository.save(updated);
-          console.log(
-            `🔄 Updated YouTube channel ID for ${updated.name}: ${info.channelId}`,
-          );
-
-          // If YouTube channel ID also changed, invalidate new handle cache (in case it was already cached with wrong YouTube channel ID)
-          const youtubeChannelIdChanged =
-            oldYoutubeChannelId && oldYoutubeChannelId !== info.channelId;
-          if (youtubeChannelIdChanged && updateChannelDto.handle) {
-            await this.invalidateLiveStatusCaches(updateChannelDto.handle);
-            console.log(
-              `🗑️ Invalidated live status caches for new handle (YouTube channel ID changed): ${updateChannelDto.handle}`,
-            );
-          }
-        } else {
-          console.log(
-            `⚠️ Could not resolve YouTube channel ID for handle: ${updateChannelDto.handle}`,
-          );
-        }
-      } catch (error) {
-        console.error(
-          `❌ Error updating YouTube channel ID for ${updated.name}:`,
-          error.message,
-        );
-      }
+      // Resolve new YouTube channel ID in background — don't block the response
+      void this.resolveYoutubeChannelIdForUpdateInBackground(
+        updated,
+        updateChannelDto.handle,
+        oldYoutubeChannelId,
+      );
     } else {
-      // Handle didn't change, but check if YouTube channel ID was manually updated
-      // (Note: This would be rare, as YouTube channel ID is usually derived from handle)
+      // Handle didn't change — check if YouTube channel ID was manually updated
       const youtubeChannelIdChanged =
         oldYoutubeChannelId &&
         updated.youtube_channel_id &&
         oldYoutubeChannelId !== updated.youtube_channel_id;
 
       if (youtubeChannelIdChanged && updated.handle) {
-        // YouTube channel ID changed but handle stayed the same - invalidate current handle cache
-        // since we were fetching for the wrong YouTube channel ID
         await this.invalidateLiveStatusCaches(updated.handle);
         console.log(
           `🗑️ Invalidated live status caches for handle (YouTube channel ID changed): ${updated.handle}`,
@@ -353,6 +347,42 @@ export class ChannelsService {
     });
 
     return updated;
+  }
+
+  private async resolveYoutubeChannelIdForUpdateInBackground(
+    updated: Channel,
+    newHandle: string,
+    oldYoutubeChannelId: string | null | undefined,
+  ): Promise<void> {
+    try {
+      const info =
+        await this.youtubeDiscovery.getChannelIdFromHandle(newHandle);
+      if (info) {
+        updated.youtube_channel_id = info.channelId;
+        await this.channelsRepository.save(updated);
+        console.log(
+          `🔄 [background] Updated YouTube channel ID for ${updated.name}: ${info.channelId}`,
+        );
+
+        const youtubeChannelIdChanged =
+          oldYoutubeChannelId && oldYoutubeChannelId !== info.channelId;
+        if (youtubeChannelIdChanged) {
+          await this.invalidateLiveStatusCaches(newHandle);
+          console.log(
+            `🗑️ [background] Invalidated live status caches for new handle (YouTube channel ID changed): ${newHandle}`,
+          );
+        }
+      } else {
+        console.log(
+          `⚠️ [background] Could not resolve YouTube channel ID for handle: ${newHandle}`,
+        );
+      }
+    } catch (error) {
+      console.error(
+        `❌ [background] Failed to update YouTube channel ID for ${updated.name}:`,
+        error.message,
+      );
+    }
   }
 
   async remove(id: number): Promise<void> {

@@ -48,7 +48,8 @@ export class SchedulesService {
   private notifyUtil: NotifyAndRevalidateUtil;
   private warmCacheTimer: ReturnType<typeof setTimeout> | null = null;
   private isWarmingCache = false;
-  private static readonly WARM_CACHE_DEBOUNCE_MS = 2000;
+  private pendingWarm = false;
+  private static readonly WARM_CACHE_DEBOUNCE_MS = 0;
 
   constructor(
     @InjectRepository(Schedule)
@@ -266,15 +267,14 @@ export class SchedulesService {
    */
   async warmSchedulesCache(): Promise<void> {
     if (this.isWarmingCache) {
-      this.logger.debug('Cache warm already in progress, skipping');
+      this.logger.debug('Cache warm already in progress, queuing re-warm');
+      this.pendingWarm = true;
       return;
     }
     this.isWarmingCache = true;
     const warmStart = Date.now();
 
     try {
-      // Warm unified cache (complete week data)
-      // This single call populates the cache for ALL services (users, background jobs, YouTube service)
       await this.findAll({
         skipCache: true,
         liveStatus: false,
@@ -283,10 +283,13 @@ export class SchedulesService {
       this.logger.debug(`Cache warmed (${Date.now() - warmStart}ms)`);
     } catch (error) {
       this.logger.error('Failed to warm cache', error);
-      // Log to Sentry but don't throw - cache warming failure shouldn't break operations
       this.sentryService.captureException(error);
     } finally {
       this.isWarmingCache = false;
+      if (this.pendingWarm) {
+        this.pendingWarm = false;
+        setImmediate(() => this.warmSchedulesCache());
+      }
     }
   }
 
@@ -925,8 +928,8 @@ export class SchedulesService {
   async remove(id: string): Promise<boolean> {
     const result = await this.schedulesRepository.delete(id);
     if ((result?.affected ?? 0) > 0) {
-      // Clear cache
-      await this.redisService.delByPattern('schedules:all:*');
+      // Clear unified cache (consistent with all other mutation methods)
+      await this.redisService.del('schedules:week:complete');
 
       // Warm cache asynchronously (non-blocking)
       this.debouncedWarmSchedulesCache();
@@ -981,7 +984,6 @@ export class SchedulesService {
 
     // Clear unified cache
     await this.redisService.del('schedules:week:complete');
-    await this.redisService.delByPattern('schedules:all:*');
 
     // Warm cache asynchronously (non-blocking)
     this.debouncedWarmSchedulesCache();
