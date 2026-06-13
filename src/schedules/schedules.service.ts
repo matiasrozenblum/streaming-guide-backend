@@ -370,16 +370,22 @@ export class SchedulesService {
       }
     }
 
-    // Process each channel group to distribute streams
-    for (const [channelId, channelSchedules] of channelGroups) {
-      const enrichedChannelSchedules = await this.enrichSchedulesForChannel(
-        channelSchedules,
-        currentDay,
-        previousDay,
-        currentNum,
-        liveStatus,
-        batchStreamsResults.get(channelId),
-      );
+    // Process each channel group to distribute streams concurrently
+    const enrichedChannelSchedulesArray = await Promise.all(
+      Array.from(channelGroups.entries()).map(
+        async ([channelId, channelSchedules]) => {
+          return this.enrichSchedulesForChannel(
+            channelSchedules,
+            currentDay,
+            previousDay,
+            currentNum,
+            liveStatus,
+            batchStreamsResults.get(channelId),
+          );
+        },
+      ),
+    );
+    for (const enrichedChannelSchedules of enrichedChannelSchedulesArray) {
       enriched.push(...enrichedChannelSchedules);
     }
 
@@ -501,9 +507,8 @@ export class SchedulesService {
             this.sentryService,
           );
           // Import dynamically to avoid circular dependency
-          const { createLiveStatusCacheFromStreams } = await import(
-            '../youtube/interfaces/live-status-cache.interface'
-          );
+          const { createLiveStatusCacheFromStreams } =
+            await import('../youtube/interfaces/live-status-cache.interface');
           const cacheData = createLiveStatusCacheFromStreams(
             channelId,
             handle,
