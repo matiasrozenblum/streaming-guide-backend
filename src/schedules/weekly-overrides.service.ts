@@ -1183,9 +1183,9 @@ export class WeeklyOverridesService {
       });
 
       // Delete expired overrides
-      for (const key of expiredKeys) {
-        await this.redisService.del(key);
-        cleaned++;
+      if (expiredKeys.length > 0) {
+        await this.redisService.del(expiredKeys);
+        cleaned += expiredKeys.length;
       }
     }
 

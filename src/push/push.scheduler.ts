@@ -103,17 +103,31 @@ export class PushScheduler {
       return;
     }
 
-    // 5) Enviar notificaciones por programa + usuario
+    // 5) Pre-fetch fetchable statuses for channels (avoid N+1)
+    const uniqueChannelHandles = Array.from(
+      new Set(
+        dueSchedules
+          .map((s) => s.program.channel?.handle)
+          .filter((handle): handle is string => !!handle),
+      ),
+    );
+    const fetchableMap = new Map<string, boolean>();
+    await Promise.all(
+      uniqueChannelHandles.map(async (handle) => {
+        fetchableMap.set(handle, await this.configService.canFetchLive(handle));
+      }),
+    );
+
+    // 6) Enviar notificaciones por programa + usuario
+    const pushPromises: Promise<void>[] = [];
+
     for (const schedule of dueSchedules) {
       const program = schedule.program;
       const title = program.name;
       const channelHandle = program.channel?.handle;
 
       // Gating: skip notifications if channel is not fetchable (holiday/flag)
-      if (
-        channelHandle &&
-        !(await this.configService.canFetchLive(channelHandle))
-      ) {
+      if (channelHandle && !fetchableMap.get(channelHandle)) {
         this.logger.log(
           `⏸️ Notificaciones suspendidas para canal ${channelHandle} por holiday/flag`,
         );
@@ -143,42 +157,50 @@ export class PushScheduler {
               device.pushSubscriptions.length > 0
             ) {
               for (const pushSub of device.pushSubscriptions) {
-                const isNative = !pushSub.p256dh && !pushSub.auth;
-                this.logger.log(
-                  `    🔔 Subscription type: ${isNative ? 'NATIVE/FCM' : 'WEB'}, endpoint prefix: ${pushSub.endpoint?.substring(0, 30)}...`,
-                );
-                try {
-                  const success = await this.pushService.sendNotification(
-                    pushSub,
-                    {
-                      title,
-                      options: {
-                        body: `¡En 10 minutos comienza ${title}!`,
-                        icon: '/img/logo-192x192.png',
-                      },
-                    },
-                  );
-
-                  if (success) {
+                pushPromises.push(
+                  (async () => {
+                    const isNative = !pushSub.p256dh && !pushSub.auth;
                     this.logger.log(
-                      `✅ Push notification enviada a usuario ${user.email} (device: ${device.deviceId}) para "${title}"`,
+                      `    🔔 Subscription type: ${isNative ? 'NATIVE/FCM' : 'WEB'}, endpoint prefix: ${pushSub.endpoint?.substring(0, 30)}...`,
                     );
-                  } else {
-                    this.logger.warn(
-                      `⚠️ No se pudo enviar push notification a usuario ${user.email} (device: ${device.deviceId})`,
-                    );
-                  }
-                } catch (err) {
-                  this.logger.error(
-                    `❌ Falló push notification a usuario ${user.email} (device: ${device.deviceId})`,
-                    err,
-                  );
-                }
+                    try {
+                      const success = await this.pushService.sendNotification(
+                        pushSub,
+                        {
+                          title,
+                          options: {
+                            body: `¡En 10 minutos comienza ${title}!`,
+                            icon: '/img/logo-192x192.png',
+                          },
+                        },
+                      );
+
+                      if (success) {
+                        this.logger.log(
+                          `✅ Push notification enviada a usuario ${user.email} (device: ${device.deviceId}) para "${title}"`,
+                        );
+                      } else {
+                        this.logger.warn(
+                          `⚠️ No se pudo enviar push notification a usuario ${user.email} (device: ${device.deviceId})`,
+                        );
+                      }
+                    } catch (err) {
+                      this.logger.error(
+                        `❌ Falló push notification a usuario ${user.email} (device: ${device.deviceId})`,
+                        err,
+                      );
+                    }
+                  })(),
+                );
               }
             }
           }
         }
       }
+    }
+
+    if (pushPromises.length > 0) {
+      await Promise.allSettled(pushPromises);
     }
   }
 }

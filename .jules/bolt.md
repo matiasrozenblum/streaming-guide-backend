@@ -5,3 +5,6 @@
 ## 2025-03-24 - [N+1 Redis Query Avoidance in Streamer Live Status]
 **Learning:** Found N+1 Redis query patterns inside the `getLiveStatuses` method of `StreamerLiveStatusService`. For every requested streamer, it runs `await this.getLiveStatus(id)` concurrently wrapped in `Promise.all`, which executes individual `GET` commands to Redis. This leads to connection overhead and poor performance.
 **Action:** Replace `Promise.all` with individual `get` calls with a single `mget` command to batch the retrieval, mapping the responses back to the input array indices.
+## 2025-04-12 - [N+1 Await Loops and Batch Redis Operations]
+**Learning:** Found sequential N+1 `await` loops inside the `PushScheduler` causing O(N) database reads and HTTP calls. Found `await this.redisService.del` being iteratively awaited inside `weekly-overrides.service.ts`. The codebase supports batched array deletion for Redis `del` methods, and independent push notifications should be processed concurrently using `Promise.allSettled`.
+**Action:** Always pre-fetch gating checks (like config flags) outside loops using `Promise.all` + `Map`, and use concurrent execution (`Promise.allSettled` or array mapping) for unbounded independent I/O tasks instead of sequential `for...of` loops. Also, use batch variations of Redis operations (e.g. passing arrays to `del`) instead of calling them in a loop.
