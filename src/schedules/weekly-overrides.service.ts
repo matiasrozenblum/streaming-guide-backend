@@ -1183,9 +1183,10 @@ export class WeeklyOverridesService {
       });
 
       // Delete expired overrides
-      for (const key of expiredKeys) {
-        await this.redisService.del(key);
-        cleaned++;
+      // ⚡ Bolt: Replaced sequential await N+1 deletes with a single batched array delete to eliminate Redis network overhead
+      if (expiredKeys.length > 0) {
+        await this.redisService.del(expiredKeys);
+        cleaned += expiredKeys.length;
       }
     }
 
