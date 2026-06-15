@@ -245,6 +245,11 @@ export class YoutubeLiveService {
       return videoId;
     } catch (err) {
       const errorMessage = err.message || err;
+      if (this.isYouTubeApiTimeout(err)) {
+        this.logger.warn(
+          `⏱️ YouTube API timeout (>${this.YOUTUBE_API_TIMEOUT_MS}ms) in getLiveVideoId for ${handle}`,
+        );
+      }
       this.logger.error(
         `❌ Error fetching live video for ${handle}:`,
         errorMessage,
@@ -664,6 +669,11 @@ export class YoutubeLiveService {
                 }
               }
             } catch (error) {
+              if (this.isYouTubeApiTimeout(error)) {
+                this.logger.warn(
+                  `⏱️ YouTube API timeout (>${this.YOUTUBE_API_TIMEOUT_MS}ms) on individual fallback for ${channelHandleMap?.get(channelId) ?? channelId}`,
+                );
+              }
               this.logger.error(
                 `❌ [Individual] Error testing channel ${channelId}:`,
                 error.message,
@@ -761,6 +771,11 @@ export class YoutubeLiveService {
       );
       return results;
     } catch (error) {
+      if (this.isYouTubeApiTimeout(error)) {
+        this.logger.warn(
+          `⏱️ YouTube API timeout (>${this.YOUTUBE_API_TIMEOUT_MS}ms) on batch fetch for ${channelIds.length} channels`,
+        );
+      }
       this.logger.error(`[Batch] Error in batch fetch:`, error);
       // Return null for all channels on error
       channelIds.forEach((channelId) => results.set(channelId, null));
@@ -776,6 +791,14 @@ export class YoutubeLiveService {
       this.inFlightFetches.clear();
     }
     this.inFlightFetches.add(channelId);
+  }
+
+  private isYouTubeApiTimeout(err: any): boolean {
+    return (
+      err?.code === 'ECONNABORTED' ||
+      err?.code === 'ETIMEDOUT' ||
+      (typeof err?.message === 'string' && err.message.toLowerCase().includes('timeout'))
+    );
   }
 
   /**
@@ -1107,6 +1130,13 @@ export class YoutubeLiveService {
       return result;
     } catch (err) {
       const errorMessage = err.message || err;
+
+      if (this.isYouTubeApiTimeout(err)) {
+        this.logger.warn(
+          `⏱️ YouTube API timeout (>${this.YOUTUBE_API_TIMEOUT_MS}ms) for ${handle} [context=${context}]`,
+        );
+      }
+
       this.logger.error(
         `❌ Error fetching live streams for ${handle}:`,
         errorMessage,
@@ -1293,6 +1323,11 @@ export class YoutubeLiveService {
 
       return liveStreams[0];
     } catch (err) {
+      if (this.isYouTubeApiTimeout(err)) {
+        this.logger.warn(
+          `⏱️ YouTube API timeout (>${this.YOUTUBE_API_TIMEOUT_MS}ms) in premiere fallback for ${handle}`,
+        );
+      }
       this.logger.warn(
         `⚠️ [Premiere] Fallback check failed for ${handle}: ${err.message}`,
       );
@@ -1310,7 +1345,12 @@ export class YoutubeLiveService {
         params: { part: 'snippet', id: videoId, key: this.apiKey },
       });
       return resp.data.items?.[0]?.snippet?.liveBroadcastContent === 'live';
-    } catch {
+    } catch (err) {
+      if (this.isYouTubeApiTimeout(err)) {
+        this.logger.warn(
+          `⏱️ YouTube API timeout (>${this.YOUTUBE_API_TIMEOUT_MS}ms) in isVideoLive for videoId=${videoId}`,
+        );
+      }
       return false;
     }
   }

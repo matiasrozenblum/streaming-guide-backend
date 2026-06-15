@@ -7,6 +7,19 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+### Performance
+
+- **Consolidated N+1 and sequential I/O optimizations** across multiple services (PR #358):
+  - `WeeklyOverridesService.cleanupExpiredOverrides`: expired keys now deleted in a single batch `del([...keys])` instead of a sequential loop — O(N) Redis round-trips → O(1).
+  - `SchedulesService.enrichSchedules`: channel groups now enriched concurrently via `Promise.all` instead of sequentially.
+  - `PushScheduler`: `canFetchLive` pre-fetched once for all unique channel handles before the notification loop (was N+1 per schedule); all push sends are now fired concurrently with `Promise.allSettled`.
+  - `PushService.sendNotificationToDevices`: subscriptions now notified concurrently via `Promise.allSettled`.
+  - `YoutubeLiveService.getBatchLiveStreams`: replaced N×3 sequential Redis `GET` calls with 3 parallel `MGET` commands at the start of the method; added `MAX_IN_FLIGHT=50` cap with auto-clear to prevent memory leaks; added 10-second timeout on all YouTube API axios calls with explicit `⏱️` warning logs on timeout.
+  - `OptimizedSchedulesService.enrichWithCachedLiveStatus`: `canFetchLive` checks parallelized via `Promise.all`.
+  - `YoutubeDiscoveryService.getChannelIdsFromLiveUrls`: API calls now batched in groups of 5 concurrently.
+  - `WebhookSubscriptionService.verifyKickSubscriptions`: Kick API checks now processed in concurrent batches of 5 with inter-batch rate-limit delay.
+  - `StreamerLiveStatusService`: default Redis TTL reduced from 7 days (604 800 s) to 24 hours (86 400 s) to prevent unbounded stale-entry accumulation.
+
 ---
 
 ## [1.30.0] - 2026-06-11
