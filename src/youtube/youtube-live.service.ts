@@ -45,6 +45,8 @@ export class YoutubeLiveService {
   private readonly validationCooldowns = new Map<string, number>(); // Track last validation time per channel
   private readonly COOLDOWN_PERIOD = 5 * 60 * 1000; // 5 minutes cooldown
   private readonly inFlightFetches = new Set<string>(); // Track in-flight YouTube API requests to prevent duplicates
+  private readonly MAX_IN_FLIGHT = 50; // Safety cap — auto-clear if set grows beyond this
+  private readonly YOUTUBE_API_TIMEOUT_MS = 10_000;
 
   // YouTube API usage tracking removed - no longer needed
 
@@ -191,6 +193,7 @@ export class YoutubeLiveService {
       // YouTube API usage tracking removed
 
       const { data } = await axios.get(`${this.apiUrl}/search`, {
+        timeout: this.YOUTUBE_API_TIMEOUT_MS,
         params: {
           part: 'snippet',
           channelId,
@@ -242,6 +245,11 @@ export class YoutubeLiveService {
       return videoId;
     } catch (err) {
       const errorMessage = err.message || err;
+      if (this.isYouTubeApiTimeout(err)) {
+        this.logger.warn(
+          `⏱️ YouTube API timeout (>${this.YOUTUBE_API_TIMEOUT_MS}ms) in getLiveVideoId for ${handle}`,
+        );
+      }
       this.logger.error(
         `❌ Error fetching live video for ${handle}:`,
         errorMessage,
@@ -326,8 +334,25 @@ export class YoutubeLiveService {
     const channelsToFetch: string[] = [];
     const channelHandles = new Map<string, string>(); // Map channelId to handle for logging
 
-    for (const channelId of channelIds) {
-      const handle = channelHandleMap?.get(channelId) || 'unknown';
+    const handles = channelIds.map(
+      (id) => channelHandleMap?.get(id) || 'unknown',
+    );
+
+    // Batch-fetch all Redis keys in three parallel mget calls (eliminates N+1 per channel)
+    const notFoundKeys = handles.map((h) => `videoIdNotFound:${h}`);
+    const attemptTrackingKeys = handles.map((h) => `notFoundAttempts:${h}`);
+    const statusCacheKeys = handles.map((h) => `liveStatusByHandle:${h}`);
+
+    const [notFoundResults, attemptResults, statusCacheResults] =
+      await Promise.all([
+        this.redisService.mget<string>(notFoundKeys),
+        this.redisService.mget<AttemptTracking>(attemptTrackingKeys),
+        this.redisService.mget<LiveStatusCache>(statusCacheKeys),
+      ]);
+
+    for (let i = 0; i < channelIds.length; i++) {
+      const channelId = channelIds[i];
+      const handle = handles[i];
       channelHandles.set(channelId, handle);
 
       // Unified cache - use liveStatusByHandle (replaces liveStreamsByChannel)
@@ -336,9 +361,8 @@ export class YoutubeLiveService {
       const attemptTrackingKey = `notFoundAttempts:${handle}`;
 
       // Enhanced not-found logic with escalation detection
-      const notFoundData = await this.redisService.get<string>(notFoundKey);
-      const attemptData =
-        await this.redisService.get<AttemptTracking>(attemptTrackingKey);
+      const notFoundData = notFoundResults[i];
+      const attemptData = attemptResults[i];
 
       if (
         notFoundData &&
@@ -446,9 +470,8 @@ export class YoutubeLiveService {
         );
       }
 
-      // Check unified cache
-      const cachedStatus =
-        await this.redisService.get<LiveStatusCache>(statusCacheKey);
+      // Check unified cache (pre-fetched via mget at the top of this method)
+      const cachedStatus = statusCacheResults[i];
       if (cachedStatus) {
         try {
           // Skip validation during bulk operations to improve performance for onDemand context
@@ -519,6 +542,7 @@ export class YoutubeLiveService {
         }
 
         const { data } = await axios.get(`${this.apiUrl}/search`, {
+          timeout: this.YOUTUBE_API_TIMEOUT_MS,
           params: {
             part: 'snippet',
             channelId: channelIdsParam,
@@ -548,6 +572,7 @@ export class YoutubeLiveService {
               const individualResponse = await axios.get(
                 `${this.apiUrl}/search`,
                 {
+                  timeout: this.YOUTUBE_API_TIMEOUT_MS,
                   params: {
                     part: 'snippet',
                     channelId: channelId,
@@ -644,6 +669,11 @@ export class YoutubeLiveService {
                 }
               }
             } catch (error) {
+              if (this.isYouTubeApiTimeout(error)) {
+                this.logger.warn(
+                  `⏱️ YouTube API timeout (>${this.YOUTUBE_API_TIMEOUT_MS}ms) on individual fallback for ${channelHandleMap?.get(channelId) ?? channelId}`,
+                );
+              }
               this.logger.error(
                 `❌ [Individual] Error testing channel ${channelId}:`,
                 error.message,
@@ -741,11 +771,34 @@ export class YoutubeLiveService {
       );
       return results;
     } catch (error) {
+      if (this.isYouTubeApiTimeout(error)) {
+        this.logger.warn(
+          `⏱️ YouTube API timeout (>${this.YOUTUBE_API_TIMEOUT_MS}ms) on batch fetch for ${channelIds.length} channels`,
+        );
+      }
       this.logger.error(`[Batch] Error in batch fetch:`, error);
       // Return null for all channels on error
       channelIds.forEach((channelId) => results.set(channelId, null));
       return results;
     }
+  }
+
+  private addToInFlight(channelId: string): void {
+    if (this.inFlightFetches.size >= this.MAX_IN_FLIGHT) {
+      this.logger.warn(
+        `⚠️ inFlightFetches reached cap of ${this.MAX_IN_FLIGHT} — clearing stale entries to prevent memory leak`,
+      );
+      this.inFlightFetches.clear();
+    }
+    this.inFlightFetches.add(channelId);
+  }
+
+  private isYouTubeApiTimeout(err: any): boolean {
+    return (
+      err?.code === 'ECONNABORTED' ||
+      err?.code === 'ETIMEDOUT' ||
+      (typeof err?.message === 'string' && err.message.toLowerCase().includes('timeout'))
+    );
   }
 
   /**
@@ -909,7 +962,7 @@ export class YoutubeLiveService {
     }
 
     // Mark channel as in-flight (in-memory for same-replica deduplication)
-    this.inFlightFetches.add(channelId);
+    this.addToInFlight(channelId);
 
     // fetch from YouTube
     try {
@@ -925,6 +978,7 @@ export class YoutubeLiveService {
       );
 
       const { data } = await axios.get(`${this.apiUrl}/search`, {
+        timeout: this.YOUTUBE_API_TIMEOUT_MS,
         params: {
           part: 'snippet',
           channelId,
@@ -1076,6 +1130,13 @@ export class YoutubeLiveService {
       return result;
     } catch (err) {
       const errorMessage = err.message || err;
+
+      if (this.isYouTubeApiTimeout(err)) {
+        this.logger.warn(
+          `⏱️ YouTube API timeout (>${this.YOUTUBE_API_TIMEOUT_MS}ms) for ${handle} [context=${context}]`,
+        );
+      }
+
       this.logger.error(
         `❌ Error fetching live streams for ${handle}:`,
         errorMessage,
@@ -1208,6 +1269,7 @@ export class YoutubeLiveService {
       const uploadsPlaylistId = channelId.replace(/^UC/, 'UU');
 
       const { data } = await axios.get(`${this.apiUrl}/playlistItems`, {
+        timeout: this.YOUTUBE_API_TIMEOUT_MS,
         params: {
           part: 'snippet',
           playlistId: uploadsPlaylistId,
@@ -1261,6 +1323,11 @@ export class YoutubeLiveService {
 
       return liveStreams[0];
     } catch (err) {
+      if (this.isYouTubeApiTimeout(err)) {
+        this.logger.warn(
+          `⏱️ YouTube API timeout (>${this.YOUTUBE_API_TIMEOUT_MS}ms) in premiere fallback for ${handle}`,
+        );
+      }
       this.logger.warn(
         `⚠️ [Premiere] Fallback check failed for ${handle}: ${err.message}`,
       );
@@ -1274,10 +1341,16 @@ export class YoutubeLiveService {
       // YouTube API usage tracking removed
 
       const resp = await axios.get(`${this.apiUrl}/videos`, {
+        timeout: this.YOUTUBE_API_TIMEOUT_MS,
         params: { part: 'snippet', id: videoId, key: this.apiKey },
       });
       return resp.data.items?.[0]?.snippet?.liveBroadcastContent === 'live';
-    } catch {
+    } catch (err) {
+      if (this.isYouTubeApiTimeout(err)) {
+        this.logger.warn(
+          `⏱️ YouTube API timeout (>${this.YOUTUBE_API_TIMEOUT_MS}ms) in isVideoLive for videoId=${videoId}`,
+        );
+      }
       return false;
     }
   }

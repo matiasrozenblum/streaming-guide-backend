@@ -40,14 +40,21 @@ export class YoutubeDiscoveryService {
   ): Promise<{ handle: string; channelId: string; title: string }[]> {
     const results: { handle: string; channelId: string; title: string }[] = [];
 
-    for (const url of urls) {
-      const match = url.match(/youtube\.com\/@([^/]+)\/live/);
-      if (!match) continue;
-
-      const handle = `@${match[1]}`;
-      const channel = await this.getChannelIdFromHandle(handle);
-      if (channel) {
-        results.push({ handle, ...channel });
+    // Process in batches of 5 to stay within API quota while gaining concurrency
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < urls.length; i += BATCH_SIZE) {
+      const batch = urls.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.all(
+        batch.map(async (url) => {
+          const match = url.match(/youtube\.com\/@([^/]+)\/live/);
+          if (!match) return null;
+          const handle = `@${match[1]}`;
+          const channel = await this.getChannelIdFromHandle(handle);
+          return channel ? { handle, ...channel } : null;
+        }),
+      );
+      for (const result of batchResults) {
+        if (result) results.push(result);
       }
     }
 

@@ -370,16 +370,20 @@ export class SchedulesService {
       }
     }
 
-    // Process each channel group to distribute streams
-    for (const [channelId, channelSchedules] of channelGroups) {
-      const enrichedChannelSchedules = await this.enrichSchedulesForChannel(
-        channelSchedules,
-        currentDay,
-        previousDay,
-        currentNum,
-        liveStatus,
-        batchStreamsResults.get(channelId),
-      );
+    // Process each channel group concurrently
+    const enrichedPerChannel = await Promise.all(
+      Array.from(channelGroups.entries()).map(([channelId, channelSchedules]) =>
+        this.enrichSchedulesForChannel(
+          channelSchedules,
+          currentDay,
+          previousDay,
+          currentNum,
+          liveStatus,
+          batchStreamsResults.get(channelId),
+        ),
+      ),
+    );
+    for (const enrichedChannelSchedules of enrichedPerChannel) {
       enriched.push(...enrichedChannelSchedules);
     }
 

@@ -5,7 +5,26 @@ Todas las modificaciones importantes de este proyecto se documentarán en este a
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/)
 y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
-## [Unreleased]
+## [1.31.0] - 2026-06-16
+
+### Performance
+
+- **Consolidated N+1 and sequential I/O optimizations** across multiple services (PR #358):
+  - `WeeklyOverridesService.cleanupExpiredOverrides`: expired keys now deleted in a single batch `del([...keys])` instead of a sequential loop — O(N) Redis round-trips → O(1).
+  - `SchedulesService.enrichSchedules`: channel groups now enriched concurrently via `Promise.all` instead of sequentially.
+  - `PushScheduler`: `canFetchLive` pre-fetched once for all unique channel handles before the notification loop (was N+1 per schedule); all push sends are now fired concurrently with `Promise.allSettled`.
+  - `PushService.sendNotificationToDevices`: subscriptions now notified concurrently via `Promise.allSettled`.
+  - `YoutubeLiveService.getBatchLiveStreams`: replaced N×3 sequential Redis `GET` calls with 3 parallel `MGET` commands at the start of the method; added `MAX_IN_FLIGHT=50` cap with auto-clear to prevent memory leaks; added 10-second timeout on all YouTube API axios calls with explicit `⏱️` warning logs on timeout.
+  - `OptimizedSchedulesService.enrichWithCachedLiveStatus`: `canFetchLive` checks parallelized via `Promise.all`.
+  - `YoutubeDiscoveryService.getChannelIdsFromLiveUrls`: API calls now batched in groups of 5 concurrently.
+  - `WebhookSubscriptionService.verifyKickSubscriptions`: Kick API checks now processed in concurrent batches of 5 with inter-batch rate-limit delay.
+  - `StreamerLiveStatusService`: default Redis TTL reduced from 7 days (604 800 s) to 24 hours (86 400 s) to prevent unbounded stale-entry accumulation.
+
+- **`GET /channels/with-schedules`, `with-schedules/today` and `with-schedules/week` now use the batched live-status enrichment path (V2)** instead of the legacy per-handle sequential path: `ChannelsService.getChannelsWithSchedules` now calls `OptimizedSchedulesService.getSchedulesWithOptimizedLiveStatusV2` instead of the V1 method. V1 issued one sequential Redis `GET` per channel handle in both `LiveStatusBackgroundService.getLiveStatusForChannels` and `OptimizedSchedulesService.enrichWithCachedLiveStatus`'s `notFoundAttempts` lookup; V2 batches all of these into `MGET` calls. This is the same change that previously cut `today/v2`'s response time from ~7.5 s to ~600 ms, and was identified as the root cause of `week?live_status=true` taking 10+ seconds on first load. V2 has full functional parity with V1 (escalation, holiday overrides, time-window logic); the only behavioral difference is that V1 also opportunistically triggered an async YouTube fetch on stale cache, which V2 omits in favor of the existing 2-minute background cron.
+
+### Fixed
+
+- `POST /auth/login` no longer crashes with `Cannot read properties of undefined (reading 'toLowerCase')` on a malformed/empty request body. Added `LoginDto` with `class-validator` decorators (`@IsEmail`, `@IsNotEmpty`) so the global `ValidationPipe` now returns a proper 400 instead of a 500.
 
 ---
 
