@@ -736,61 +736,75 @@ export class WebhookSubscriptionService {
       // Batch fetch all stored subscription data in a single Redis call
       const storedDataBatch = await this.redisService.mget<any>(keys);
 
-      for (let i = 0; i < keys.length; i++) {
-        const key = keys[i];
-        try {
-          // Extract username from key: webhook:subscription:kick:username
-          const username = key.replace(`${this.SUBSCRIPTION_PREFIX}kick:`, '');
+      // Process in batches of 5 for concurrency while respecting Kick API rate limits
+      const BATCH_SIZE = 5;
+      for (
+        let batchStart = 0;
+        batchStart < keys.length;
+        batchStart += BATCH_SIZE
+      ) {
+        const batchIndices = Array.from(
+          { length: Math.min(BATCH_SIZE, keys.length - batchStart) },
+          (_, idx) => batchStart + idx,
+        );
 
-          // Get stored data from batch
-          const storedData = storedDataBatch[i];
-          const userId = storedData?.userId;
-
-          if (!userId) {
-            this.logger.warn(
-              `⚠️ No userId stored for ${username}, skipping verification`,
-            );
-            continue;
-          }
-
-          // Check with Kick API
-          const apiSubscriptions = await this.getKickSubscriptions(userId);
-          const hasActiveSubscription = apiSubscriptions.some(
-            (sub) => sub.event === 'livestream.status.updated',
-          );
-
-          if (hasActiveSubscription) {
-            active++;
-          } else {
-            // Subscription is not active - renew it
-            this.logger.warn(
-              `⚠️ Subscription for ${username} is NOT active - renewing...`,
-            );
-            const newSubId = await this.subscribeToKickWebhook(
-              username,
-              userId,
-            );
-            if (newSubId) {
-              renewed++;
-              this.logger.log(
-                `✅ Renewed subscription for ${username}: ${newSubId}`,
+        await Promise.all(
+          batchIndices.map(async (i) => {
+            const key = keys[i];
+            try {
+              const username = key.replace(
+                `${this.SUBSCRIPTION_PREFIX}kick:`,
+                '',
               );
-            } else {
+              const storedData = storedDataBatch[i];
+              const userId = storedData?.userId;
+
+              if (!userId) {
+                this.logger.warn(
+                  `⚠️ No userId stored for ${username}, skipping verification`,
+                );
+                return;
+              }
+
+              const apiSubscriptions = await this.getKickSubscriptions(userId);
+              const hasActiveSubscription = apiSubscriptions.some(
+                (sub) => sub.event === 'livestream.status.updated',
+              );
+
+              if (hasActiveSubscription) {
+                active++;
+              } else {
+                this.logger.warn(
+                  `⚠️ Subscription for ${username} is NOT active - renewing...`,
+                );
+                const newSubId = await this.subscribeToKickWebhook(
+                  username,
+                  userId,
+                );
+                if (newSubId) {
+                  renewed++;
+                  this.logger.log(
+                    `✅ Renewed subscription for ${username}: ${newSubId}`,
+                  );
+                } else {
+                  failed++;
+                  this.logger.error(
+                    `❌ Failed to renew subscription for ${username}`,
+                  );
+                }
+              }
+            } catch (error: any) {
               failed++;
               this.logger.error(
-                `❌ Failed to renew subscription for ${username}`,
+                `❌ Error checking subscription for key ${key}: ${error.message}`,
               );
             }
-          }
+          }),
+        );
 
-          // Small delay to avoid rate limiting
+        // Small delay between batches to avoid rate limiting
+        if (batchStart + BATCH_SIZE < keys.length) {
           await new Promise((resolve) => setTimeout(resolve, 500));
-        } catch (error: any) {
-          failed++;
-          this.logger.error(
-            `❌ Error checking subscription for key ${key}:`,
-            error.message,
-          );
         }
       }
 

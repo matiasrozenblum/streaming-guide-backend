@@ -11,6 +11,7 @@ import { OtpService } from './otp.service';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
 import { JwtService } from '@nestjs/jwt';
 
 @ApiTags('auth')
@@ -28,7 +29,7 @@ export class AuthController {
   @ApiResponse({ status: 201, description: 'Access token and refresh token' })
   async loginUser(
     @Request() req: any,
-    @Body() body: { email: string; password: string; deviceId?: string },
+    @Body() body: LoginDto,
   ) {
     const { email, password, deviceId } = body;
     const userAgent = req.headers['user-agent'] || 'Unknown';

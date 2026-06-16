@@ -7,6 +7,50 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+### Performance
+
+- **Consolidated N+1 and sequential I/O optimizations** across multiple services (PR #358):
+  - `WeeklyOverridesService.cleanupExpiredOverrides`: expired keys now deleted in a single batch `del([...keys])` instead of a sequential loop — O(N) Redis round-trips → O(1).
+  - `SchedulesService.enrichSchedules`: channel groups now enriched concurrently via `Promise.all` instead of sequentially.
+  - `PushScheduler`: `canFetchLive` pre-fetched once for all unique channel handles before the notification loop (was N+1 per schedule); all push sends are now fired concurrently with `Promise.allSettled`.
+  - `PushService.sendNotificationToDevices`: subscriptions now notified concurrently via `Promise.allSettled`.
+  - `YoutubeLiveService.getBatchLiveStreams`: replaced N×3 sequential Redis `GET` calls with 3 parallel `MGET` commands at the start of the method; added `MAX_IN_FLIGHT=50` cap with auto-clear to prevent memory leaks; added 10-second timeout on all YouTube API axios calls with explicit `⏱️` warning logs on timeout.
+  - `OptimizedSchedulesService.enrichWithCachedLiveStatus`: `canFetchLive` checks parallelized via `Promise.all`.
+  - `YoutubeDiscoveryService.getChannelIdsFromLiveUrls`: API calls now batched in groups of 5 concurrently.
+  - `WebhookSubscriptionService.verifyKickSubscriptions`: Kick API checks now processed in concurrent batches of 5 with inter-batch rate-limit delay.
+  - `StreamerLiveStatusService`: default Redis TTL reduced from 7 days (604 800 s) to 24 hours (86 400 s) to prevent unbounded stale-entry accumulation.
+
+- **`GET /channels/with-schedules`, `with-schedules/today` and `with-schedules/week` now use the batched live-status enrichment path (V2)** instead of the legacy per-handle sequential path: `ChannelsService.getChannelsWithSchedules` now calls `OptimizedSchedulesService.getSchedulesWithOptimizedLiveStatusV2` instead of the V1 method. V1 issued one sequential Redis `GET` per channel handle in both `LiveStatusBackgroundService.getLiveStatusForChannels` and `OptimizedSchedulesService.enrichWithCachedLiveStatus`'s `notFoundAttempts` lookup; V2 batches all of these into `MGET` calls. This is the same change that previously cut `today/v2`'s response time from ~7.5 s to ~600 ms, and was identified as the root cause of `week?live_status=true` taking 10+ seconds on first load. V2 has full functional parity with V1 (escalation, holiday overrides, time-window logic); the only behavioral difference is that V1 also opportunistically triggered an async YouTube fetch on stale cache, which V2 omits in favor of the existing 2-minute background cron.
+
+---
+
+## [1.30.0] - 2026-06-11
+
+### Performance
+
+- **Backoffice mutations now respond significantly faster** across channels, programs, schedules, panelists and weekly overrides:
+  - **Channel create/update**: YouTube channel ID discovery (`getChannelIdFromHandle`) moved to a background task — response drops from ~3–5 s to ~200 ms; `youtube_channel_id` is populated asynchronously within seconds.
+  - **Channel mutations**: `ConfigService.set/remove` calls for `youtube.fetch_enabled` and `youtube.fetch_override_holiday` are now parallelized with `Promise.all`.
+  - **Program delete with overrides**: `deleteOverridesForProgram` now uses a Redis pipeline batch GET + single batch DEL instead of N sequential round-trips — O(N) Redis calls → O(2).
+  - **Schedule delete**: replaced stale `delByPattern('schedules:all:*')` (matched nothing, ran an unnecessary SCAN) with `del('schedules:week:complete')`, consistent with all other mutation methods.
+  - **Cache warm debounce**: reduced from 2 000 ms to 0 ms. A `pendingWarm` flag ensures that if a warm is already running when another mutation arrives, a re-warm fires immediately after the current one finishes — bulk mutations still coalesce correctly.
+  - **`programs.findAll()` / `programs.findOne()`**: now cached in Redis under `programs:all` / `programs:{id}` (TTL 5 min). Repeated backoffice list loads drop from ~1.5–2.6 s (DB with JOINs) to < 50 ms (Redis). Cache invalidated on every program mutation and on panelist association changes.
+
+---
+
+## [1.29.1] - 2026-06-11
+
+### Added
+- `isWarmingCache` flag in `SchedulesService.warmSchedulesCache()` to skip concurrent re-warm runs and prevent multiple simultaneous heavy `findAll()` queries during backoffice burst mutations.
+
+### Fixed
+- **Production incident (2026-06-10):** Cascading 504 Gateway Timeouts resolved with three targeted fixes:
+  - `getBlockTTL`: cross-midnight programs (e.g. 23:00–00:30) now compute TTL against the next day when `blockEnd < currentTimeInMinutes`, eliminating the -82323s negative TTL that caused a 2-minute polling loop in the YouTube background service.
+  - `warmSchedulesCache`: concurrent runs are now skipped via an `isWarmingCache` flag, preventing DB connection exhaustion during rapid backoffice mutations.
+  - `revalidateInBackground`: each `fetch` call to the Vercel revalidation endpoint now has a 5-second `AbortController` timeout to prevent hanging connections.
+- `is_premiere` added to `CreateProgramDto` and `UpdateProgramDto`: the field existed on the `Program` entity but was omitted from the DTOs, causing `PATCH /programs/:id` to return 400 Bad Request (ValidationPipe `forbidNonWhitelisted` rejected it).
+- `is_premiere` now included in all program response mappings (`create`, `findAll`, `findOne`, `update`) — previously omitted, causing the backoffice to always show the "Es estreno" checkbox unchecked regardless of the stored value.
+
 ---
 
 ## [1.29.0] - 2026-06-10
@@ -18,36 +62,6 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ### Fixed
 - YouTube premieres (estrenos) are now detected as live streams when `is_premiere` is set on the program. The `search?eventType=live` API does not return premieres, but `videos?part=snippet` correctly reports them as `liveBroadcastContent=live`. The fallback checks the channel's 3 most recent uploads via `playlistItems` (1 quota unit vs 100 for a second search) and uses title-similarity matching to pick the best match when multiple premieres are live simultaneously.
-
----
-
-## [1.29.1] - 2026-06-11
-
-### Added
-- `isWarmingCache` flag in `SchedulesService.warmSchedulesCache()` to skip concurrent re-warm runs and prevent multiple simultaneous heavy `findAll()` queries during backoffice burst mutations.
-
-### Fixed
-- **Production incident (2026-06-10):** Cascading 504 Gateway Timeouts resolved with three targeted fixes:
-  - `getBlockTTL`: cross-midnight programs (e.g. 23:00–00:30) now compute TTL against the next day when `blockEnd < currentTimeInMinutes`, eliminating the -82323s negative TTL that caused a 2-minute polling loop in the YouTube background service.
-  - `warmSchedulesCache`: concurrent runs are now skipped via an `isWarmingCache` flag, preventing DB connection exhaustion during rapid backoffice mutations.
-  - `revalidateInBackground`: each `fetch` call to the Vercel revalidation endpoint now has a 5-second `AbortController` timeout to prevent hanging connections.
-- `is_premiere` added to `CreateProgramDto` and `UpdateProgramDto`: the field existed on the `Program` entity but was omitted from the DTOs, causing `PATCH /programs/:id` to return 400 Bad Request (ValidationPipe `forbidNonWhitelisted` rejected it).
-- `is_premiere` now included in all program response mappings (`create`, `findAll`, `findOne`, `update`) — previously omitted, causing the backoffice to always show the "Es estreno" checkbox unchecked regardless of the stored value.
-
----
-
-## [1.29.1] - 2026-06-11
-
-### Added
-- `isWarmingCache` flag in `SchedulesService.warmSchedulesCache()` to skip concurrent re-warm runs and prevent multiple simultaneous heavy `findAll()` queries during backoffice burst mutations.
-
-### Fixed
-- **Production incident (2026-06-10):** Cascading 504 Gateway Timeouts resolved with three targeted fixes:
-  - `getBlockTTL`: cross-midnight programs (e.g. 23:00–00:30) now compute TTL against the next day when `blockEnd < currentTimeInMinutes`, eliminating the -82323s negative TTL that caused a 2-minute polling loop in the YouTube background service.
-  - `warmSchedulesCache`: concurrent runs are now skipped via an `isWarmingCache` flag, preventing DB connection exhaustion during rapid backoffice mutations.
-  - `revalidateInBackground`: each `fetch` call to the Vercel revalidation endpoint now has a 5-second `AbortController` timeout to prevent hanging connections.
-- `is_premiere` added to `CreateProgramDto` and `UpdateProgramDto`: the field existed on the `Program` entity but was omitted from the DTOs, causing `PATCH /programs/:id` to return 400 Bad Request (ValidationPipe `forbidNonWhitelisted` rejected it).
-- `is_premiere` now included in all program response mappings (`create`, `findAll`, `findOne`, `update`) — previously omitted, causing the backoffice to always show the "Es estreno" checkbox unchecked regardless of the stored value.
 
 ---
 

@@ -495,8 +495,10 @@ export class ChannelsService {
     let allSchedules;
     try {
       // Get data from OptimizedSchedulesService (combines schedules + liveStatus + overrides)
+      // Uses V2 (batched MGET reads) instead of V1 (sequential per-handle GETs),
+      // which cut today/v2's response time from ~7.5s to ~600ms for the same enrichment logic.
       allSchedules =
-        await this.optimizedSchedulesService.getSchedulesWithOptimizedLiveStatus(
+        await this.optimizedSchedulesService.getSchedulesWithOptimizedLiveStatusV2(
           {
             dayOfWeek: day,
             applyOverrides: raw !== 'true',
