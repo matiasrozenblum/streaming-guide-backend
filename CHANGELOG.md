@@ -20,6 +20,8 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
   - `WebhookSubscriptionService.verifyKickSubscriptions`: Kick API checks now processed in concurrent batches of 5 with inter-batch rate-limit delay.
   - `StreamerLiveStatusService`: default Redis TTL reduced from 7 days (604 800 s) to 24 hours (86 400 s) to prevent unbounded stale-entry accumulation.
 
+- **`GET /channels/with-schedules`, `with-schedules/today` and `with-schedules/week` now use the batched live-status enrichment path (V2)** instead of the legacy per-handle sequential path: `ChannelsService.getChannelsWithSchedules` now calls `OptimizedSchedulesService.getSchedulesWithOptimizedLiveStatusV2` instead of the V1 method. V1 issued one sequential Redis `GET` per channel handle in both `LiveStatusBackgroundService.getLiveStatusForChannels` and `OptimizedSchedulesService.enrichWithCachedLiveStatus`'s `notFoundAttempts` lookup; V2 batches all of these into `MGET` calls. This is the same change that previously cut `today/v2`'s response time from ~7.5 s to ~600 ms, and was identified as the root cause of `week?live_status=true` taking 10+ seconds on first load. V2 has full functional parity with V1 (escalation, holiday overrides, time-window logic); the only behavioral difference is that V1 also opportunistically triggered an async YouTube fetch on stale cache, which V2 omits in favor of the existing 2-minute background cron.
+
 ---
 
 ## [1.30.0] - 2026-06-11
