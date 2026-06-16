@@ -412,20 +412,21 @@ export class OptimizedSchedulesService {
       }
     }
 
-    // Check canFetchLive for all handles (respects holiday overrides)
+    // Check canFetchLive for all handles in parallel (respects holiday overrides)
     const canFetchLiveMap = new Map<string, boolean>();
-    for (const handle of handles) {
-      try {
-        const canFetch = await this.configService.canFetchLive(handle);
-        canFetchLiveMap.set(handle, canFetch);
-      } catch (error) {
-        // If we can't check the config, assume fetching is enabled
-        this.logger.debug(
-          `[OPTIMIZED-SCHEDULES] Error checking canFetchLive for ${handle}, assuming enabled`,
-        );
-        canFetchLiveMap.set(handle, true);
-      }
-    }
+    await Promise.all(
+      handles.map(async (handle) => {
+        try {
+          const canFetch = await this.configService.canFetchLive(handle);
+          canFetchLiveMap.set(handle, canFetch);
+        } catch (error) {
+          this.logger.debug(
+            `[OPTIMIZED-SCHEDULES] Error checking canFetchLive for ${handle}, assuming enabled`,
+          );
+          canFetchLiveMap.set(handle, true);
+        }
+      }),
+    );
 
     // Enrich schedules with cached live status
     const enriched: any[] = [];

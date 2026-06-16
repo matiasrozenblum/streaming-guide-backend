@@ -26,6 +26,7 @@ describe('YoutubeLiveService', () => {
     } as any;
     redisService = {
       get: jest.fn(),
+      mget: jest.fn().mockResolvedValue([]),
       set: jest.fn(),
       del: jest.fn(),
       incr: jest.fn(),
@@ -1128,10 +1129,9 @@ describe('YoutubeLiveService', () => {
 
     describe('getBatchLiveStreams - Escalation Logic', () => {
       it('skips channels with active not-found flags', async () => {
-        redisService.get.mockImplementation(async (key: string) => {
-          if (key === 'videoIdNotFound:handle') return '1';
-          return null;
-        });
+        redisService.mget.mockImplementation(async (keys: string[]) =>
+          keys.map((key) => (key === 'videoIdNotFound:handle' ? '1' : null)),
+        );
 
         const result = await (service as any).getBatchLiveStreams(
           ['cid'],
@@ -1152,10 +1152,11 @@ describe('YoutubeLiveService', () => {
           escalated: false,
         };
 
-        redisService.get.mockImplementation(async (key: string) => {
-          if (key === 'notFoundAttempts:handle') return attemptTracking;
-          return null; // No active not-found flag (expired)
-        });
+        redisService.mget.mockImplementation(async (keys: string[]) =>
+          keys.map((key) =>
+            key === 'notFoundAttempts:handle' ? attemptTracking : null,
+          ),
+        );
 
         redisService.set.mockResolvedValue(undefined);
         jest
@@ -1191,15 +1192,23 @@ describe('YoutubeLiveService', () => {
       });
 
       it('ignores not-found flags for back-to-back-fix cron and increments attempt counter', async () => {
+        const btbAttempt = {
+          attempts: 1,
+          firstAttempt: Date.now(),
+          lastAttempt: Date.now(),
+          escalated: false,
+        };
+        // mget: used for the batch pre-fetch in getBatchLiveStreams
+        redisService.mget.mockImplementation(async (keys: string[]) =>
+          keys.map((key) => {
+            if (key === 'videoIdNotFound:handle') return '1';
+            if (key === 'notFoundAttempts:handle') return btbAttempt;
+            return null;
+          }),
+        );
+        // get: used internally by incrementNotFoundAttempts
         redisService.get.mockImplementation(async (key: string) => {
-          if (key === 'videoIdNotFound:handle') return '1';
-          if (key === 'notFoundAttempts:handle')
-            return {
-              attempts: 1,
-              firstAttempt: Date.now(),
-              lastAttempt: Date.now(),
-              escalated: false,
-            };
+          if (key === 'notFoundAttempts:handle') return btbAttempt;
           return null;
         });
 
@@ -1230,10 +1239,9 @@ describe('YoutubeLiveService', () => {
       });
 
       it('ignores not-found flags for manual cron', async () => {
-        redisService.get.mockImplementation(async (key: string) => {
-          if (key === 'videoIdNotFound:handle') return '1';
-          return null;
-        });
+        redisService.mget.mockImplementation(async (keys: string[]) =>
+          keys.map((key) => (key === 'videoIdNotFound:handle' ? '1' : null)),
+        );
 
         jest.spyOn(axios, 'get').mockResolvedValue({ data: { items: [] } });
 
@@ -1257,12 +1265,14 @@ describe('YoutubeLiveService', () => {
           programEndTime: Date.now() + 1800000, // 30 minutes from now
         };
 
-        redisService.get.mockImplementation(async (key: string) => {
-          if (key === 'videoIdNotFound:handle') return '1';
-          if (key === 'notFoundAttempts:handle')
-            return JSON.stringify(attemptTracking);
-          return null;
-        });
+        redisService.mget.mockImplementation(async (keys: string[]) =>
+          keys.map((key) => {
+            if (key === 'videoIdNotFound:handle') return '1';
+            if (key === 'notFoundAttempts:handle')
+              return JSON.stringify(attemptTracking);
+            return null;
+          }),
+        );
 
         const result = await (service as any).getBatchLiveStreams(
           ['cid'],
