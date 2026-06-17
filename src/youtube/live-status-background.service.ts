@@ -252,9 +252,20 @@ export class LiveStatusBackgroundService {
     const results = new Map<string, LiveStatusCache>();
     const handlesNeedingUpdate: string[] = [];
 
-    for (const handle of handles) {
-      const cached = await this.getCachedLiveStatus(handle);
+    if (handles.length === 0) {
+      return results;
+    }
+
+    const cacheKeys = handles.map((h) => `${this.CACHE_PREFIX}${h}`);
+    const cachedResults =
+      await this.redisService.mget<LiveStatusCache>(cacheKeys);
+
+    for (let i = 0; i < handles.length; i++) {
+      const handle = handles[i];
+      const cached = cachedResults[i];
+
       if (cached) {
+        this.logger.debug(`[LIVE-STATUS-BG] Cache hit for ${handle}`);
         const needsUpdate = await this.shouldUpdateCache(cached);
         if (!needsUpdate) {
           // Cache is fresh, use it
