@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { ProgramsService } from './programs.service';
 import { CreateProgramDto } from './dto/create-program.dto';
+import { CreateBulkProgramsDto } from './dto/create-bulk-programs.dto';
 import { Program } from './programs.entity';
 import {
   ApiTags,
@@ -166,6 +167,16 @@ export class ProgramsController {
     @Param('panelistId') panelistId: string,
   ): Promise<void> {
     await this.programsService.removePanelist(Number(id), Number(panelistId));
+  }
+
+  @Post('bulk')
+  @ApiOperation({ summary: 'Create the same program for multiple channels at once' })
+  @ApiResponse({
+    status: 201,
+    description: 'Programs created successfully for all specified channels.',
+  })
+  createBulk(@Body() dto: CreateBulkProgramsDto): Promise<any[]> {
+    return this.programsService.createBulk(dto);
   }
 
   @Post()
