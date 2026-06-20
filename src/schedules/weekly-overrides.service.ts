@@ -43,6 +43,25 @@ export interface WeeklyOverrideDto {
   };
 }
 
+export interface BulkWeeklyOverrideDto {
+  channel_ids: number[];
+  targetWeek: 'current' | 'next';
+  overrideType: 'create';
+  newStartTime: string;
+  newEndTime: string;
+  newDayOfWeek: string;
+  reason?: string;
+  createdBy?: string;
+  panelistIds?: number[];
+  specialProgram: {
+    name: string;
+    description?: string;
+    imageUrl?: string;
+    stream_url?: string;
+    is_premiere?: boolean;
+  };
+}
+
 export interface WeeklyOverride {
   id: string;
   scheduleId?: number; // Optional for special programs or program-level overrides
@@ -1197,6 +1216,143 @@ export class WeeklyOverridesService {
     }
 
     return cleaned;
+  }
+
+  /**
+   * Create a special-program override for multiple channels at once
+   */
+  async createBulk(dto: BulkWeeklyOverrideDto): Promise<WeeklyOverride[]> {
+    if (dto.overrideType !== 'create') {
+      throw new BadRequestException(
+        'Bulk override creation only supports overrideType "create"',
+      );
+    }
+
+    if (!dto.specialProgram?.name) {
+      throw new BadRequestException('Special program name is required');
+    }
+
+    if (!dto.newStartTime || !dto.newEndTime || !dto.newDayOfWeek) {
+      throw new BadRequestException(
+        'Start time, end time, and day of week are required',
+      );
+    }
+
+    // Calculate target week (same logic as createWeeklyOverride)
+    const now = this.dayjs().tz('America/Argentina/Buenos_Aires');
+    let targetWeekStart: dayjs.Dayjs;
+
+    if (dto.targetWeek === 'current') {
+      targetWeekStart = now.startOf('week');
+    } else if (dto.targetWeek === 'next') {
+      targetWeekStart = now.add(1, 'week').startOf('week');
+    } else {
+      throw new BadRequestException(
+        'targetWeek must be either "current" or "next"',
+      );
+    }
+
+    const weekStartDate = targetWeekStart.format('YYYY-MM-DD');
+    const expiresAt = targetWeekStart.add(1, 'week').format('YYYY-MM-DD HH:mm:ss');
+    const secondsUntilExpiry = this.dayjs(expiresAt)
+      .tz('America/Argentina/Buenos_Aires')
+      .diff(now, 'seconds');
+
+    // Fetch panelists once (shared across all channels)
+    let completePanelists: any[] = [];
+    if (dto.panelistIds && dto.panelistIds.length > 0) {
+      const panelists = await this.panelistsRepository.find({
+        where: { id: In(dto.panelistIds) },
+      });
+      if (panelists.length !== dto.panelistIds.length) {
+        const foundIds = panelists.map((p) => p.id);
+        const missingIds = dto.panelistIds.filter((id) => !foundIds.includes(id));
+        throw new NotFoundException(
+          `Panelists with IDs ${missingIds.join(', ')} not found`,
+        );
+      }
+      completePanelists = panelists;
+    }
+
+    // Fetch all channel objects in one query
+    const channelRows = await this.dataSource.query(
+      `SELECT id, name, handle, youtube_channel_id, logo_url, description, "order", is_visible
+       FROM channel WHERE id = ANY($1)`,
+      [dto.channel_ids],
+    );
+
+    const channelMap = new Map<number, any>(
+      channelRows.map((c: any) => [c.id, c]),
+    );
+
+    const missingChannelIds = dto.channel_ids.filter((id) => !channelMap.has(id));
+    if (missingChannelIds.length > 0) {
+      throw new NotFoundException(
+        `Channels not found: ${missingChannelIds.join(', ')}`,
+      );
+    }
+
+    const name = dto.specialProgram.name.replace(/\s+/g, '_').toLowerCase();
+    const dayOfWeek = dto.newDayOfWeek.toLowerCase();
+
+    const created: WeeklyOverride[] = [];
+
+    for (const channelId of dto.channel_ids) {
+      const overrideId = `special_channel_${channelId}_${name}_${dayOfWeek}_${weekStartDate}`;
+
+      // Skip if already exists
+      const existing = await this.getWeeklyOverride(overrideId);
+      if (existing) {
+        this.logger.warn(
+          `[BULK-OVERRIDE] Override ${overrideId} already exists, skipping`,
+        );
+        continue;
+      }
+
+      const channel = channelMap.get(channelId);
+      const override: WeeklyOverride = {
+        id: overrideId,
+        weekStartDate,
+        overrideType: 'create',
+        newStartTime: dto.newStartTime,
+        newEndTime: dto.newEndTime,
+        newDayOfWeek: dayOfWeek,
+        reason: dto.reason,
+        createdBy: dto.createdBy,
+        expiresAt,
+        createdAt: new Date(),
+        panelistIds: dto.panelistIds,
+        panelists: completePanelists,
+        specialProgram: {
+          ...dto.specialProgram,
+          channelId,
+          channel,
+        },
+      };
+
+      await this.redisService.set(
+        `weekly_override:${overrideId}`,
+        override,
+        secondsUntilExpiry,
+      );
+
+      created.push(override);
+    }
+
+    // Clear caches once for all created overrides
+    await this.redisService.del('schedules:week:complete');
+    await this.updateWeeklyCacheForWeek(weekStartDate);
+    this.schedulesService?.debouncedWarmSchedulesCache?.();
+
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: 'overrides_bulk_created',
+      entity: 'override',
+      entityId: 'bulk',
+      payload: { count: created.length },
+      revalidatePaths: ['/'],
+    });
+
+    return created;
   }
 
   /**

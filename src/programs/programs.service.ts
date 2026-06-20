@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { FindOneOptions, Repository } from 'typeorm';
 import { Program } from './programs.entity';
 import { CreateProgramDto } from './dto/create-program.dto';
+import { CreateBulkProgramsDto } from './dto/create-bulk-programs.dto';
 import { UpdateProgramDto } from './dto/update-program.dto';
 import { Panelist } from '../panelists/panelists.entity';
 import { Channel } from '../channels/channels.entity';
@@ -87,6 +88,80 @@ export class ProgramsService {
       channel_name: savedProgram.channel?.name || null,
       style_override: savedProgram.style_override,
     };
+  }
+
+  async createBulk(dto: CreateBulkProgramsDto): Promise<any[]> {
+    // Validate all channels exist in parallel
+    const channelResults = await Promise.all(
+      dto.channel_ids.map((id) =>
+        this.channelsRepository.findOne({ where: { id } }),
+      ),
+    );
+
+    const missingIds = dto.channel_ids.filter((_, i) => !channelResults[i]);
+    if (missingIds.length > 0) {
+      throw new NotFoundException(
+        `Channels not found: ${missingIds.join(', ')}`,
+      );
+    }
+
+    const channels = channelResults as NonNullable<(typeof channelResults)[0]>[];
+
+    // Batch-create one Program entity per channel
+    const programs = channels.map((channel) =>
+      this.programsRepository.create({
+        name: dto.name,
+        description: dto.description,
+        logo_url: dto.logo_url ?? null,
+        youtube_url: dto.youtube_url ?? null,
+        style_override: dto.style_override ?? null,
+        is_visible: dto.is_visible ?? true,
+        is_premiere: dto.is_premiere ?? false,
+        channel,
+      }),
+    );
+
+    const savedPrograms = await this.programsRepository.save(programs);
+
+    // Create schedules for each program if provided (debounce collapses warm calls)
+    if (dto.schedules && dto.schedules.length > 0) {
+      await Promise.all(
+        savedPrograms.map((program) =>
+          this.schedulesService.createBulk({
+            programId: program.id.toString(),
+            channelId: program.channel!.id.toString(),
+            schedules: dto.schedules!,
+          }),
+        ),
+      );
+    }
+
+    // Clear caches once for all created programs
+    await this.redisService.del(['schedules:week:complete', 'programs:all']);
+    this.schedulesService.debouncedWarmSchedulesCache();
+
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: 'programs_bulk_created',
+      entity: 'program',
+      entityId: 'bulk',
+      payload: { count: savedPrograms.length },
+      revalidatePaths: ['/'],
+    });
+
+    return savedPrograms.map((p) => ({
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      logo_url: p.logo_url,
+      youtube_url: p.youtube_url,
+      is_live: p.is_live,
+      stream_url: p.stream_url,
+      is_visible: p.is_visible,
+      is_premiere: p.is_premiere,
+      channel_id: p.channel?.id,
+      channel_name: p.channel?.name || null,
+      style_override: p.style_override,
+    }));
   }
 
   async findAll(): Promise<any[]> {
