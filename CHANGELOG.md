@@ -5,7 +5,7 @@ Todas las modificaciones importantes de este proyecto se documentarán en este a
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/)
 y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
-## [Unreleased]
+## [1.32.0] - 2026-06-20
 
 ### Added
 
