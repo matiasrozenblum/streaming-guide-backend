@@ -12,6 +12,7 @@ import {
 import {
   WeeklyOverridesService,
   WeeklyOverrideDto,
+  BulkWeeklyOverrideDto,
 } from './weekly-overrides.service';
 import {
   ApiTags,
@@ -29,6 +30,13 @@ export class WeeklyOverridesController {
   constructor(
     private readonly weeklyOverridesService: WeeklyOverridesService,
   ) {}
+
+  @Post('bulk')
+  @ApiOperation({ summary: 'Create a special program override for multiple channels at once' })
+  @ApiResponse({ status: 201, description: 'Bulk overrides created successfully' })
+  async createBulkOverride(@Body() dto: BulkWeeklyOverrideDto) {
+    return this.weeklyOverridesService.createBulk(dto);
+  }
 
   @Post()
   @ApiOperation({ summary: 'Create a weekly override' })
