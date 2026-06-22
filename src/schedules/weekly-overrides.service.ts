@@ -1253,7 +1253,9 @@ export class WeeklyOverridesService {
     }
 
     const weekStartDate = targetWeekStart.format('YYYY-MM-DD');
-    const expiresAt = targetWeekStart.add(1, 'week').format('YYYY-MM-DD HH:mm:ss');
+    const expiresAt = targetWeekStart
+      .add(1, 'week')
+      .format('YYYY-MM-DD HH:mm:ss');
     const secondsUntilExpiry = this.dayjs(expiresAt)
       .tz('America/Argentina/Buenos_Aires')
       .diff(now, 'seconds');
@@ -1266,7 +1268,9 @@ export class WeeklyOverridesService {
       });
       if (panelists.length !== dto.panelistIds.length) {
         const foundIds = panelists.map((p) => p.id);
-        const missingIds = dto.panelistIds.filter((id) => !foundIds.includes(id));
+        const missingIds = dto.panelistIds.filter(
+          (id) => !foundIds.includes(id),
+        );
         throw new NotFoundException(
           `Panelists with IDs ${missingIds.join(', ')} not found`,
         );
@@ -1285,7 +1289,9 @@ export class WeeklyOverridesService {
       channelRows.map((c: any) => [c.id, c]),
     );
 
-    const missingChannelIds = dto.channel_ids.filter((id) => !channelMap.has(id));
+    const missingChannelIds = dto.channel_ids.filter(
+      (id) => !channelMap.has(id),
+    );
     if (missingChannelIds.length > 0) {
       throw new NotFoundException(
         `Channels not found: ${missingChannelIds.join(', ')}`,

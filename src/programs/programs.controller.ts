@@ -170,7 +170,9 @@ export class ProgramsController {
   }
 
   @Post('bulk')
-  @ApiOperation({ summary: 'Create the same program for multiple channels at once' })
+  @ApiOperation({
+    summary: 'Create the same program for multiple channels at once',
+  })
   @ApiResponse({
     status: 201,
     description: 'Programs created successfully for all specified channels.',

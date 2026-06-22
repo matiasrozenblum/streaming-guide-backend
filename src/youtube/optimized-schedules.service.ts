@@ -403,30 +403,91 @@ export class OptimizedSchedulesService {
 
     // Fetch attempt tracking data for all channels to check for not-found escalation
     const attemptTrackingMap = new Map<string, any>();
-    for (const handle of handles) {
-      const attemptTrackingKey = `notFoundAttempts:${handle}`;
-      const attemptTracking =
-        await this.redisService.get<any>(attemptTrackingKey);
-      if (attemptTracking) {
-        attemptTrackingMap.set(handle, attemptTracking);
+    if (handles.length > 0) {
+      const attemptKeys = handles.map((h) => `notFoundAttempts:${h}`);
+      const attemptResults = await this.redisService.mget<any>(attemptKeys);
+      for (let i = 0; i < handles.length; i++) {
+        if (attemptResults[i]) {
+          attemptTrackingMap.set(handles[i], attemptResults[i]);
+        }
       }
     }
 
-    // Check canFetchLive for all handles in parallel (respects holiday overrides)
+    // Check canFetchLive for all handles using optimized V2-style batching
     const canFetchLiveMap = new Map<string, boolean>();
-    await Promise.all(
-      handles.map(async (handle) => {
+
+    if (handles.length > 0) {
+      // 1. Get global holiday status
+      const today = TimezoneUtil.currentDateString();
+      const cachedHoliday = await this.redisService.get<{
+        date: string;
+        isHoliday: boolean;
+      }>('config:holiday_status');
+
+      let isHoliday = false;
+      if (cachedHoliday && cachedHoliday.date === today) {
+        isHoliday = cachedHoliday.isHoliday;
+      } else {
+        // Fallback to checking first handle if cache is missing to populate it
         try {
-          const canFetch = await this.configService.canFetchLive(handle);
-          canFetchLiveMap.set(handle, canFetch);
-        } catch (error) {
-          this.logger.debug(
-            `[OPTIMIZED-SCHEDULES] Error checking canFetchLive for ${handle}, assuming enabled`,
-          );
-          canFetchLiveMap.set(handle, true);
+          await this.configService.canFetchLive(handles[0]);
+          const freshCache = await this.redisService.get<{
+            date: string;
+            isHoliday: boolean;
+          }>('config:holiday_status');
+          if (freshCache && freshCache.date === today) {
+            isHoliday = freshCache.isHoliday;
+          }
+        } catch (e) {
+          // Ignore
         }
-      }),
-    );
+      }
+
+      // 2. Batch get fetch_enabled
+      const fetchEnabledKeys = handles.map(
+        (h) => `config:fetch_enabled:youtube.fetch_enabled.${h}`,
+      );
+      const fetchEnabledResults =
+        await this.redisService.mget<string>(fetchEnabledKeys);
+
+      const fetchEnabledGlobal =
+        (await this.configService.get('youtube.fetch_enabled')) === 'true';
+
+      // 3. Batch get holiday overrides if it's a holiday
+      let overrideResults: (string | null)[] = [];
+      if (isHoliday) {
+        const overrideKeys = handles.map(
+          (h) => `config:holiday_override:youtube.fetch_override_holiday.${h}`,
+        );
+        overrideResults = await this.redisService.mget<string>(overrideKeys);
+      }
+
+      for (let i = 0; i < handles.length; i++) {
+        const handle = handles[i];
+
+        // Check if fetch is enabled for this channel
+        const channelEnabledStr = fetchEnabledResults[i];
+        const isEnabled =
+          channelEnabledStr !== null
+            ? channelEnabledStr === 'true'
+            : fetchEnabledGlobal;
+
+        if (!isEnabled) {
+          canFetchLiveMap.set(handle, false);
+          continue;
+        }
+
+        if (!isHoliday) {
+          canFetchLiveMap.set(handle, true);
+          continue;
+        }
+
+        // Holiday override logic
+        const overrideStr = overrideResults[i];
+        const isOverride = overrideStr !== null ? overrideStr === 'true' : true; // Default true
+        canFetchLiveMap.set(handle, isOverride);
+      }
+    }
 
     // Enrich schedules with cached live status
     const enriched: any[] = [];
@@ -578,9 +639,8 @@ export class OptimizedSchedulesService {
                     `[OPTIMIZED-SCHEDULES] Triggering async fetch for ${handle} (stale cache)...`,
                   );
                   // Use program-aware TTL instead of hardcoded 300
-                  const { getCurrentBlockTTL } = await import(
-                    '../utils/getBlockTTL.util'
-                  );
+                  const { getCurrentBlockTTL } =
+                    await import('../utils/getBlockTTL.util');
                   const schedulesForTTL = schedules.filter(
                     (s) => s.program.channel?.youtube_channel_id === channelId,
                   );
@@ -708,9 +768,8 @@ export class OptimizedSchedulesService {
                   `[OPTIMIZED-SCHEDULES] Triggering async fetch for ${handle} (no cache data)...`,
                 );
                 // Use program-aware TTL instead of hardcoded 300
-                const { getCurrentBlockTTL } = await import(
-                  '../utils/getBlockTTL.util'
-                );
+                const { getCurrentBlockTTL } =
+                  await import('../utils/getBlockTTL.util');
                 const schedulesForTTL = schedules.filter(
                   (s) => s.program.channel?.youtube_channel_id === channelId,
                 );

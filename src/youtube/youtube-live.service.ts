@@ -797,7 +797,8 @@ export class YoutubeLiveService {
     return (
       err?.code === 'ECONNABORTED' ||
       err?.code === 'ETIMEDOUT' ||
-      (typeof err?.message === 'string' && err.message.toLowerCase().includes('timeout'))
+      (typeof err?.message === 'string' &&
+        err.message.toLowerCase().includes('timeout'))
     );
   }
 

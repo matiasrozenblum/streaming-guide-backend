@@ -13,7 +13,9 @@ import { Type } from 'class-transformer';
 import { CreateScheduleItemDto } from '../../schedules/dto/create-schedule.dto';
 
 export class CreateBulkProgramsDto {
-  @ApiProperty({ description: 'IDs de los canales donde se creará el programa' })
+  @ApiProperty({
+    description: 'IDs de los canales donde se creará el programa',
+  })
   @IsArray()
   @ArrayMinSize(1)
   @IsInt({ each: true })
@@ -51,7 +53,11 @@ export class CreateBulkProgramsDto {
   @IsOptional()
   is_premiere?: boolean;
 
-  @ApiProperty({ required: false, description: 'Horarios a crear para cada programa (mismos para todos los canales)' })
+  @ApiProperty({
+    required: false,
+    description:
+      'Horarios a crear para cada programa (mismos para todos los canales)',
+  })
   @IsArray()
   @IsOptional()
   @ValidateNested({ each: true })

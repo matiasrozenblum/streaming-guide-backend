@@ -105,7 +105,9 @@ export class ProgramsService {
       );
     }
 
-    const channels = channelResults as NonNullable<(typeof channelResults)[0]>[];
+    const channels = channelResults as NonNullable<
+      (typeof channelResults)[0]
+    >[];
 
     // Batch-create one Program entity per channel
     const programs = channels.map((channel) =>

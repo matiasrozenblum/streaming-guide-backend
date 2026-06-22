@@ -32,8 +32,13 @@ export class WeeklyOverridesController {
   ) {}
 
   @Post('bulk')
-  @ApiOperation({ summary: 'Create a special program override for multiple channels at once' })
-  @ApiResponse({ status: 201, description: 'Bulk overrides created successfully' })
+  @ApiOperation({
+    summary: 'Create a special program override for multiple channels at once',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Bulk overrides created successfully',
+  })
   async createBulkOverride(@Body() dto: BulkWeeklyOverrideDto) {
     return this.weeklyOverridesService.createBulk(dto);
   }
