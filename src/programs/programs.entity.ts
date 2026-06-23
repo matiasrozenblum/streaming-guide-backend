@@ -61,4 +61,7 @@ export class Program {
 
   @Column({ type: 'boolean', default: false })
   is_premiere: boolean;
+
+  @Column({ type: 'varchar', nullable: true })
+  link_group_id: string | null;
 }
