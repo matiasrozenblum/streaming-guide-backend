@@ -5,6 +5,15 @@ Todas las modificaciones importantes de este proyecto se documentarán en este a
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/)
 y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
+## [1.32.0] - 2026-06-20
+
+### Added
+
+- **`POST /programs/bulk`**: crea N programas independientes (uno por canal) en una sola llamada. Acepta `channel_ids: number[]`, todos los campos de `CreateProgramDto` y un array opcional de `schedules` que se replica para cada programa creado.
+- **`POST /weekly-overrides/bulk`**: crea un programa especial (override tipo `create`) en múltiples canales simultáneamente. Acepta `channel_ids: number[]` más todos los campos del override; crea una clave Redis independiente por canal.
+- Nuevo `CreateBulkProgramsDto` con validaciones `class-validator`.
+- Nueva interfaz `BulkWeeklyOverrideDto` en `weekly-overrides.service`.
+
 ## [1.31.0] - 2026-06-16
 
 ### Performance

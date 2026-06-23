@@ -57,4 +57,10 @@ export class CreateBulkProgramsDto {
   @ValidateNested({ each: true })
   @Type(() => CreateScheduleItemDto)
   schedules?: CreateScheduleItemDto[];
+
+  @ApiProperty({ required: false, description: 'IDs de panelistas a asignar a todos los programas creados' })
+  @IsArray()
+  @IsOptional()
+  @IsInt({ each: true })
+  panelist_ids?: number[];
 }

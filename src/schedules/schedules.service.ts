@@ -879,6 +879,9 @@ export class SchedulesService {
     });
     const saved = await this.schedulesRepository.save(schedule);
 
+    // Propagate schedule changes to linked programs
+    await this.syncSchedulesToLinkedPrograms(+dto.programId);
+
     // Clear unified cache
     await this.redisService.del('schedules:week:complete');
 
@@ -899,6 +902,7 @@ export class SchedulesService {
 
   async update(id: string, dto: UpdateScheduleDto): Promise<Schedule> {
     const schedule = await this.findOne(id);
+    const programId = +schedule.program_id;
     if (dto.dayOfWeek !== undefined) schedule.day_of_week = dto.dayOfWeek;
     if (dto.startTime) schedule.start_time = dto.startTime;
     if (dto.endTime) schedule.end_time = dto.endTime;
@@ -909,6 +913,9 @@ export class SchedulesService {
     if (dto.specificDate !== undefined)
       schedule.specific_date = dto.specificDate;
     const updated = await this.schedulesRepository.save(schedule);
+
+    // Propagate schedule changes to linked programs
+    await this.syncSchedulesToLinkedPrograms(programId);
 
     // Clear unified cache
     await this.redisService.del('schedules:week:complete');
@@ -930,8 +937,17 @@ export class SchedulesService {
   }
 
   async remove(id: string): Promise<boolean> {
+    // Load before delete to capture program_id for link propagation
+    const schedule = await this.schedulesRepository.findOne({ where: { id: +id } });
+    const programId = schedule ? +schedule.program_id : null;
+
     const result = await this.schedulesRepository.delete(id);
     if ((result?.affected ?? 0) > 0) {
+      // Propagate schedule deletion to linked programs
+      if (programId !== null) {
+        await this.syncSchedulesToLinkedPrograms(programId);
+      }
+
       // Clear unified cache (consistent with all other mutation methods)
       await this.redisService.del('schedules:week:complete');
 
@@ -1026,6 +1042,11 @@ export class SchedulesService {
 
     const savedSchedules = await this.schedulesRepository.save(schedules);
 
+    // Propagate to linked programs unless explicitly skipped (e.g. during linked-program bulk creation)
+    if (!dto.skipLinkPropagation) {
+      await this.syncSchedulesToLinkedPrograms(+dto.programId);
+    }
+
     // Clear unified cache
     await this.redisService.del('schedules:week:complete');
 
@@ -1049,6 +1070,48 @@ export class SchedulesService {
    * Used for program start detection to validate cached video IDs
    * OPTIMIZED: Uses cached schedules instead of database query
    */
+  /**
+   * After any schedule mutation on a program, copy its current schedules to all
+   * other programs that share the same link_group_id (full replace).
+   */
+  private async syncSchedulesToLinkedPrograms(programId: number): Promise<void> {
+    const program = await this.programsRepository.findOne({
+      where: { id: programId },
+      select: ['id', 'link_group_id'],
+    });
+    if (!program?.link_group_id) return;
+
+    const linkedPrograms = await this.programsRepository.find({
+      where: { link_group_id: program.link_group_id },
+      select: ['id'],
+    });
+    const others = linkedPrograms.filter((p) => p.id !== programId);
+    if (others.length === 0) return;
+
+    // Load current schedules of the source program
+    const sourceSchedules = await this.schedulesRepository.find({
+      where: { program_id: programId.toString() },
+    });
+
+    for (const other of others) {
+      await this.schedulesRepository.delete({ program_id: other.id.toString() });
+      if (sourceSchedules.length > 0) {
+        const copies = sourceSchedules.map((s) =>
+          this.schedulesRepository.create({
+            day_of_week: s.day_of_week,
+            start_time: s.start_time,
+            end_time: s.end_time,
+            schedule_type: s.schedule_type,
+            week_number_in_month: s.week_number_in_month,
+            specific_date: s.specific_date,
+            program_id: other.id.toString(),
+          }),
+        );
+        await this.schedulesRepository.save(copies);
+      }
+    }
+  }
+
   // ─── Monthly schedule helpers ──────────────────────────────────────────────
 
   private getDayDateInCurrentWeek(dayOfWeek: string): dayjs.Dayjs {

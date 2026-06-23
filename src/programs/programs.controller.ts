@@ -6,6 +6,7 @@ import {
   Param,
   Delete,
   Patch,
+  Query,
   UseGuards,
   NotFoundException,
   Request,
@@ -210,7 +211,10 @@ export class ProgramsController {
     description: 'The program has been successfully deleted.',
   })
   @ApiResponse({ status: 404, description: 'Program not found.' })
-  remove(@Param('id') id: string): Promise<void> {
-    return this.programsService.remove(Number(id));
+  remove(
+    @Param('id') id: string,
+    @Query('deleteLinked') deleteLinked?: string,
+  ): Promise<void> {
+    return this.programsService.remove(Number(id), deleteLinked === 'true');
   }
 }
