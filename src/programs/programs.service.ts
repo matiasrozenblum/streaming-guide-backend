@@ -5,7 +5,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOneOptions, Repository } from 'typeorm';
+import { FindOneOptions, Repository, In } from 'typeorm';
 import { Program } from './programs.entity';
 import { CreateProgramDto } from './dto/create-program.dto';
 import { CreateBulkProgramsDto } from './dto/create-bulk-programs.dto';
@@ -92,10 +92,15 @@ export class ProgramsService {
 
   async createBulk(dto: CreateBulkProgramsDto): Promise<any[]> {
     // Validate all channels exist in parallel
-    const channelResults = await Promise.all(
-      dto.channel_ids.map((id) =>
-        this.channelsRepository.findOne({ where: { id } }),
-      ),
+    // TypeORM In operator to fetch all channels in a single query
+    const channelResultsUnordered = await this.channelsRepository.find({
+      where: { id: In(dto.channel_ids) },
+    });
+
+    // Maintain the order of the original array to map correctly to missingIds
+    const channelResults = dto.channel_ids.map(
+      (id) =>
+        channelResultsUnordered.find((channel) => channel.id === id) || null,
     );
 
     const missingIds = dto.channel_ids.filter((_, i) => !channelResults[i]);
@@ -105,7 +110,9 @@ export class ProgramsService {
       );
     }
 
-    const channels = channelResults as NonNullable<(typeof channelResults)[0]>[];
+    const channels = channelResults as NonNullable<
+      (typeof channelResults)[0]
+    >[];
 
     // Batch-create one Program entity per channel
     const programs = channels.map((channel) =>
