@@ -43,6 +43,44 @@ export interface WeeklyOverrideDto {
   };
 }
 
+export interface ConflictInfo {
+  channelId: number;
+  channelName: string;
+  programId: number;
+  programName: string;
+  scheduleId?: number;
+  dayOfWeek: string;
+  weekStartDate: string;
+  currentStartTime: string;
+  currentEndTime: string;
+  suggestedAction: 'reschedule' | 'cancel';
+  suggestedStartTime?: string;
+  suggestedEndTime?: string;
+  hasExistingOverride: boolean;
+  existingOverrideId?: string;
+}
+
+export interface ConflictResolutionItem {
+  programId?: number;
+  scheduleId?: number;
+  channelId: number;
+  dayOfWeek: string;
+  weekStartDate: string;
+  action: 'cancel' | 'reschedule' | 'keep';
+  newStartTime?: string;
+  newEndTime?: string;
+}
+
+export interface ResolveConflictsDto {
+  targetWeek: 'current' | 'next';
+  resolutions: ConflictResolutionItem[];
+}
+
+export interface WeeklyOverrideResult extends WeeklyOverride {
+  linkedOverrides: WeeklyOverride[];
+  conflicts: ConflictInfo[];
+}
+
 export interface BulkWeeklyOverrideDto {
   channel_ids: number[];
   targetWeek: 'current' | 'next';
@@ -145,7 +183,7 @@ export class WeeklyOverridesService {
   /**
    * Create a weekly override
    */
-  async createWeeklyOverride(dto: WeeklyOverrideDto): Promise<WeeklyOverride> {
+  async createWeeklyOverride(dto: WeeklyOverrideDto): Promise<WeeklyOverrideResult> {
     // Validate that either scheduleId or programId is provided (but not both)
     if (dto.scheduleId && dto.programId) {
       throw new BadRequestException(
@@ -366,7 +404,63 @@ export class WeeklyOverridesService {
       revalidatePaths: ['/'],
     });
 
-    return override;
+    // Propagate to linked programs and detect conflicts (non-create overrides only)
+    let linkedOverrides: WeeklyOverride[] = [];
+    let conflicts: ConflictInfo[] = [];
+
+    if (dto.overrideType !== 'create') {
+      let effectiveProgramId: number | undefined;
+      let originalDayOfWeek: string | undefined;
+
+      if (dto.scheduleId) {
+        const [row] = await this.dataSource.query(
+          `SELECT program_id::integer AS program_id, day_of_week FROM schedule WHERE id = $1`,
+          [dto.scheduleId],
+        );
+        if (row) {
+          effectiveProgramId = Number(row.program_id);
+          originalDayOfWeek = row.day_of_week;
+        }
+      } else if (dto.programId) {
+        effectiveProgramId = dto.programId;
+      }
+
+      if (
+        effectiveProgramId &&
+        ['cancel', 'time_change', 'reschedule'].includes(dto.overrideType)
+      ) {
+        linkedOverrides = await this.propagateOverrideToLinkedPrograms(
+          effectiveProgramId,
+          dto.overrideType,
+          weekStartDate,
+          expiresAt,
+          secondsUntilExpiry,
+          dto.newStartTime,
+          dto.newEndTime,
+          dto.newDayOfWeek,
+          originalDayOfWeek,
+        );
+      }
+
+      const conflictDay = dto.newDayOfWeek || originalDayOfWeek;
+      if (
+        effectiveProgramId &&
+        ['time_change', 'reschedule'].includes(dto.overrideType) &&
+        dto.newStartTime &&
+        dto.newEndTime &&
+        conflictDay
+      ) {
+        conflicts = await this.detectConflictsForLinkedChannels(
+          effectiveProgramId,
+          conflictDay,
+          weekStartDate,
+          dto.newStartTime,
+          dto.newEndTime,
+        );
+      }
+    }
+
+    return { ...override, linkedOverrides, conflicts };
   }
 
   /**
@@ -375,7 +469,7 @@ export class WeeklyOverridesService {
   async updateWeeklyOverride(
     overrideId: string,
     dto: Partial<WeeklyOverrideDto>,
-  ): Promise<WeeklyOverride> {
+  ): Promise<WeeklyOverrideResult> {
     // Get the existing override
     const existingOverride = await this.getWeeklyOverride(overrideId);
     if (!existingOverride) {
@@ -550,7 +644,76 @@ export class WeeklyOverridesService {
       revalidatePaths: ['/'],
     });
 
-    return updatedOverride;
+    // Propagate to linked programs and detect conflicts
+    let linkedOverrides: WeeklyOverride[] = [];
+    let conflicts: ConflictInfo[] = [];
+
+    const effectiveType = updatedOverride.overrideType ?? existingOverride.overrideType;
+    if (effectiveType !== 'create') {
+      let effectiveProgramId: number | undefined;
+      let originalDayOfWeek: string | undefined;
+
+      const effectiveScheduleId =
+        updatedOverride.scheduleId ?? existingOverride.scheduleId;
+      const effectiveProgramIdField =
+        updatedOverride.programId ?? existingOverride.programId;
+
+      if (effectiveScheduleId) {
+        const [row] = await this.dataSource.query(
+          `SELECT program_id::integer AS program_id, day_of_week FROM schedule WHERE id = $1`,
+          [effectiveScheduleId],
+        );
+        if (row) {
+          effectiveProgramId = Number(row.program_id);
+          originalDayOfWeek = row.day_of_week;
+        }
+      } else if (effectiveProgramIdField) {
+        effectiveProgramId = effectiveProgramIdField;
+      }
+
+      if (
+        effectiveProgramId &&
+        ['cancel', 'time_change', 'reschedule'].includes(effectiveType)
+      ) {
+        linkedOverrides = await this.propagateOverrideToLinkedPrograms(
+          effectiveProgramId,
+          effectiveType,
+          existingOverride.weekStartDate,
+          existingOverride.expiresAt,
+          60 * 60 * 24 * 7,
+          updatedOverride.newStartTime ?? existingOverride.newStartTime,
+          updatedOverride.newEndTime ?? existingOverride.newEndTime,
+          updatedOverride.newDayOfWeek ?? existingOverride.newDayOfWeek,
+          originalDayOfWeek,
+        );
+      }
+
+      const conflictStart =
+        updatedOverride.newStartTime ?? existingOverride.newStartTime;
+      const conflictEnd =
+        updatedOverride.newEndTime ?? existingOverride.newEndTime;
+      const conflictDay =
+        updatedOverride.newDayOfWeek ??
+        existingOverride.newDayOfWeek ??
+        originalDayOfWeek;
+      if (
+        effectiveProgramId &&
+        ['time_change', 'reschedule'].includes(effectiveType) &&
+        conflictStart &&
+        conflictEnd &&
+        conflictDay
+      ) {
+        conflicts = await this.detectConflictsForLinkedChannels(
+          effectiveProgramId,
+          conflictDay,
+          existingOverride.weekStartDate,
+          conflictStart,
+          conflictEnd,
+        );
+      }
+    }
+
+    return { ...updatedOverride, linkedOverrides, conflicts };
   }
 
   /**
@@ -1414,5 +1577,334 @@ export class WeeklyOverridesService {
     });
 
     return keysToDelete.length;
+  }
+
+  // ─── Conflict detection & linked-program propagation ──────────────────────
+
+  private buildSmartSuggestion(
+    confStart: string,
+    confEnd: string,
+    golStart: string,
+    golEnd: string,
+  ): {
+    action: 'reschedule' | 'cancel';
+    suggestedStart?: string;
+    suggestedEnd?: string;
+  } {
+    const startsBeforeGol = confStart < golStart;
+    const endsAfterGol = confEnd > golEnd;
+
+    if (startsBeforeGol && !endsAfterGol) {
+      return { action: 'reschedule', suggestedStart: confStart, suggestedEnd: golStart };
+    }
+    if (!startsBeforeGol && endsAfterGol) {
+      return { action: 'reschedule', suggestedStart: golEnd, suggestedEnd: confEnd };
+    }
+    return { action: 'cancel' };
+  }
+
+  private async detectConflictsForChannel(
+    channelId: number,
+    channelName: string,
+    dayOfWeek: string,
+    weekStartDate: string,
+    newStartTime: string,
+    newEndTime: string,
+    excludeProgramIds: number[],
+  ): Promise<ConflictInfo[]> {
+    const rows = await this.dataSource.query(
+      `SELECT s.id AS schedule_id, s.day_of_week, s.start_time, s.end_time,
+              p.id AS program_id, p.name AS program_name
+       FROM schedule s
+       JOIN program p ON p.id = s.program_id::integer
+       WHERE p.channel_id = $1
+         AND p.id != ALL($2::integer[])
+         AND s.day_of_week = $3
+         AND s.schedule_type = 'weekly'
+         AND s.start_time < $4
+         AND s.end_time > $5`,
+      [channelId, excludeProgramIds, dayOfWeek, newEndTime, newStartTime],
+    );
+
+    if (rows.length === 0) return [];
+
+    const weekOverrides = await this.getOverridesForWeek(weekStartDate);
+    const conflicts: ConflictInfo[] = [];
+
+    for (const row of rows) {
+      const programId = Number(row.program_id);
+      const scheduleId = Number(row.schedule_id);
+
+      const existingOverride = weekOverrides.find(
+        (o) => o.programId === programId || o.scheduleId === scheduleId,
+      );
+
+      if (existingOverride?.overrideType === 'cancel') continue;
+
+      let effectiveStart: string = row.start_time;
+      let effectiveEnd: string = row.end_time;
+      if (existingOverride?.newStartTime) effectiveStart = existingOverride.newStartTime;
+      if (existingOverride?.newEndTime) effectiveEnd = existingOverride.newEndTime;
+
+      if (effectiveStart >= newEndTime || effectiveEnd <= newStartTime) continue;
+
+      const { action, suggestedStart, suggestedEnd } = this.buildSmartSuggestion(
+        effectiveStart,
+        effectiveEnd,
+        newStartTime,
+        newEndTime,
+      );
+
+      conflicts.push({
+        channelId,
+        channelName,
+        programId,
+        programName: row.program_name,
+        scheduleId,
+        dayOfWeek,
+        weekStartDate,
+        currentStartTime: effectiveStart,
+        currentEndTime: effectiveEnd,
+        suggestedAction: action,
+        suggestedStartTime: suggestedStart,
+        suggestedEndTime: suggestedEnd,
+        hasExistingOverride: !!existingOverride,
+        existingOverrideId: existingOverride?.id,
+      });
+    }
+
+    return conflicts;
+  }
+
+  private async detectConflictsForLinkedChannels(
+    programId: number,
+    dayOfWeek: string,
+    weekStartDate: string,
+    newStartTime: string,
+    newEndTime: string,
+  ): Promise<ConflictInfo[]> {
+    const rows = await this.dataSource.query(
+      `SELECT p.id, p.link_group_id, p.channel_id, c.name AS channel_name
+       FROM program p
+       JOIN channel c ON c.id = p.channel_id
+       WHERE p.id = $1`,
+      [programId],
+    );
+    if (!rows.length) return [];
+
+    const programInfo = rows[0];
+    const allPrograms: Array<{ id: number; channel_id: number; channel_name: string }> = [
+      {
+        id: Number(programInfo.id),
+        channel_id: Number(programInfo.channel_id),
+        channel_name: programInfo.channel_name,
+      },
+    ];
+
+    if (programInfo.link_group_id) {
+      const linked = await this.dataSource.query(
+        `SELECT p.id, p.channel_id, c.name AS channel_name
+         FROM program p
+         JOIN channel c ON c.id = p.channel_id
+         WHERE p.link_group_id = $1 AND p.id != $2`,
+        [programInfo.link_group_id, programId],
+      );
+      allPrograms.push(
+        ...linked.map((l: any) => ({
+          id: Number(l.id),
+          channel_id: Number(l.channel_id),
+          channel_name: l.channel_name,
+        })),
+      );
+    }
+
+    const excludeProgramIds = allPrograms.map((p) => p.id);
+    const conflicts: ConflictInfo[] = [];
+
+    for (const p of allPrograms) {
+      const channelConflicts = await this.detectConflictsForChannel(
+        p.channel_id,
+        p.channel_name,
+        dayOfWeek,
+        weekStartDate,
+        newStartTime,
+        newEndTime,
+        excludeProgramIds,
+      );
+      conflicts.push(...channelConflicts);
+    }
+
+    return conflicts;
+  }
+
+  private async propagateOverrideToLinkedPrograms(
+    programId: number,
+    overrideType: string,
+    weekStartDate: string,
+    expiresAt: string,
+    secondsUntilExpiry: number,
+    newStartTime?: string,
+    newEndTime?: string,
+    newDayOfWeek?: string,
+    originalDayOfWeek?: string,
+  ): Promise<WeeklyOverride[]> {
+    const [programInfo] = await this.dataSource.query(
+      `SELECT link_group_id FROM program WHERE id = $1`,
+      [programId],
+    );
+    if (!programInfo?.link_group_id) return [];
+
+    const linkedPrograms = await this.dataSource.query(
+      `SELECT id FROM program WHERE link_group_id = $1 AND id != $2`,
+      [programInfo.link_group_id, programId],
+    );
+    if (!linkedPrograms.length) return [];
+
+    const created: WeeklyOverride[] = [];
+    const dayToFind = originalDayOfWeek;
+
+    for (const linked of linkedPrograms) {
+      const linkedId = Number(linked.id);
+      let overrideId: string;
+      let linkedScheduleId: number | undefined;
+
+      if (dayToFind) {
+        const [linkedSchedule] = await this.dataSource.query(
+          `SELECT id FROM schedule WHERE program_id = $1 AND day_of_week = $2 AND schedule_type = 'weekly'`,
+          [linkedId.toString(), dayToFind],
+        );
+        if (linkedSchedule) {
+          linkedScheduleId = Number(linkedSchedule.id);
+          overrideId = `${linkedScheduleId}_${weekStartDate}`;
+        } else {
+          overrideId = `program_${linkedId}_${weekStartDate}`;
+        }
+      } else {
+        overrideId = `program_${linkedId}_${weekStartDate}`;
+      }
+
+      const existing = await this.getWeeklyOverride(overrideId);
+      if (existing) {
+        this.logger.warn(
+          `[LINKED-OVERRIDE] Override ${overrideId} already exists, updating`,
+        );
+        // Update the existing override with the new values
+        const updatedLinked: WeeklyOverride = {
+          ...existing,
+          overrideType: overrideType as any,
+          newStartTime,
+          newEndTime,
+          newDayOfWeek: newDayOfWeek?.toLowerCase(),
+        };
+        await this.redisService.set(
+          `weekly_override:${overrideId}`,
+          updatedLinked,
+          secondsUntilExpiry,
+        );
+        created.push(updatedLinked);
+        continue;
+      }
+
+      const linkedOverride: WeeklyOverride = {
+        id: overrideId,
+        ...(linkedScheduleId ? { scheduleId: linkedScheduleId } : { programId: linkedId }),
+        weekStartDate,
+        overrideType: overrideType as any,
+        newStartTime,
+        newEndTime,
+        newDayOfWeek: newDayOfWeek?.toLowerCase(),
+        expiresAt,
+        createdAt: new Date(),
+        panelists: [],
+      };
+
+      await this.redisService.set(
+        `weekly_override:${overrideId}`,
+        linkedOverride,
+        secondsUntilExpiry,
+      );
+
+      created.push(linkedOverride);
+      this.logger.log(
+        `[LINKED-OVERRIDE] Propagated override ${overrideId} for linked program ${linkedId}`,
+      );
+    }
+
+    return created;
+  }
+
+  async resolveConflicts(dto: ResolveConflictsDto): Promise<{ resolved: number; skipped: number }> {
+    const now = this.dayjs().tz('America/Argentina/Buenos_Aires');
+    let targetWeekStart: dayjs.Dayjs;
+
+    if (dto.targetWeek === 'current') {
+      targetWeekStart = now.startOf('week');
+    } else {
+      targetWeekStart = now.add(1, 'week').startOf('week');
+    }
+
+    const weekStartDate = targetWeekStart.format('YYYY-MM-DD');
+    const expiresAt = targetWeekStart.add(1, 'week').format('YYYY-MM-DD HH:mm:ss');
+    const secondsUntilExpiry = this.dayjs(expiresAt)
+      .tz('America/Argentina/Buenos_Aires')
+      .diff(now, 'seconds');
+
+    let resolved = 0;
+    let skipped = 0;
+
+    for (const resolution of dto.resolutions) {
+      if (resolution.action === 'keep') {
+        skipped++;
+        continue;
+      }
+
+      let overrideId: string;
+      if (resolution.scheduleId) {
+        overrideId = `${resolution.scheduleId}_${weekStartDate}`;
+      } else if (resolution.programId) {
+        overrideId = `program_${resolution.programId}_${weekStartDate}`;
+      } else {
+        skipped++;
+        continue;
+      }
+
+      const overrideType = resolution.action === 'cancel' ? 'cancel' : 'time_change';
+
+      const override: WeeklyOverride = {
+        id: overrideId,
+        ...(resolution.scheduleId
+          ? { scheduleId: resolution.scheduleId }
+          : { programId: resolution.programId }),
+        weekStartDate,
+        overrideType: overrideType as any,
+        newStartTime: resolution.newStartTime,
+        newEndTime: resolution.newEndTime,
+        expiresAt,
+        createdAt: new Date(),
+        panelists: [],
+      };
+
+      await this.redisService.set(
+        `weekly_override:${overrideId}`,
+        override,
+        secondsUntilExpiry,
+      );
+
+      resolved++;
+    }
+
+    await this.redisService.del('schedules:week:complete');
+    await this.updateWeeklyCacheForWeek(weekStartDate);
+    this.schedulesService?.debouncedWarmSchedulesCache?.();
+
+    await this.notifyUtil.notifyAndRevalidate({
+      eventType: 'conflicts_resolved',
+      entity: 'override',
+      entityId: 'bulk',
+      payload: { resolved, skipped },
+      revalidatePaths: ['/'],
+    });
+
+    return { resolved, skipped };
   }
 }

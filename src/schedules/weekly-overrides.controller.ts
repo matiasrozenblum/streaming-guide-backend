@@ -13,6 +13,7 @@ import {
   WeeklyOverridesService,
   WeeklyOverrideDto,
   BulkWeeklyOverrideDto,
+  ResolveConflictsDto,
 } from './weekly-overrides.service';
 import {
   ApiTags,
@@ -36,6 +37,13 @@ export class WeeklyOverridesController {
   @ApiResponse({ status: 201, description: 'Bulk overrides created successfully' })
   async createBulkOverride(@Body() dto: BulkWeeklyOverrideDto) {
     return this.weeklyOverridesService.createBulk(dto);
+  }
+
+  @Post('resolve-conflicts')
+  @ApiOperation({ summary: 'Resolve schedule conflicts after a linked-program override' })
+  @ApiResponse({ status: 201, description: 'Conflicts resolved successfully' })
+  async resolveConflicts(@Body() dto: ResolveConflictsDto) {
+    return this.weeklyOverridesService.resolveConflicts(dto);
   }
 
   @Post()
