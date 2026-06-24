@@ -5,6 +5,22 @@ Todas las modificaciones importantes de este proyecto se documentarán en este a
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/)
 y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
+## [Unreleased]
+
+### Added
+
+- **Programas linkeados (`link_group_id`)**: nueva columna UUID en la entidad `program` que agrupa programas que se transmiten simultáneamente en distintos canales. Migración `AddLinkGroupIdToPrograms` incluida.
+- **Propagación de overrides a programas linkeados**: al crear o actualizar un `weekly-override` (tipos `cancel`, `time_change`, `reschedule`) sobre un programa con `link_group_id`, el backend replica automáticamente el override a todos los programas del mismo grupo.
+- **Detección automática de conflictos de grilla**: tras aplicar un override, se detectan los programas con horario superpuesto en los canales afectados y se devuelven como array `conflicts` en la respuesta de `POST /weekly-overrides` y `POST /weekly-overrides/bulk`.
+- **`POST /weekly-overrides/resolve-conflicts`**: nuevo endpoint para aplicar resoluciones (`cancel`, `time_change`, `keep`) sobre los conflictos detectados.
+
+### Fixed
+
+- La detección de conflictos ahora se activa correctamente para overrides de tipo `create` y para el endpoint `POST /weekly-overrides/bulk`.
+- Los programas con `is_visible = false` ya no se incluyen en la lista de conflictos detectados.
+
+---
+
 ## [1.32.0] - 2026-06-20
 
 ### Added
