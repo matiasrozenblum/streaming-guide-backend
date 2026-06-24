@@ -91,4 +91,6 @@ export class CreateBulkSchedulesDto {
   @ValidateNested({ each: true })
   @Type(() => CreateScheduleItemDto)
   schedules: CreateScheduleItemDto[];
+
+  skipLinkPropagation?: boolean;
 }
