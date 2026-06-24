@@ -404,11 +404,30 @@ export class WeeklyOverridesService {
       revalidatePaths: ['/'],
     });
 
-    // Propagate to linked programs and detect conflicts (non-create overrides only)
+    // Propagate to linked programs and detect conflicts
     let linkedOverrides: WeeklyOverride[] = [];
     let conflicts: ConflictInfo[] = [];
 
-    if (dto.overrideType !== 'create') {
+    if (dto.overrideType === 'create') {
+      // For create overrides: detect conflicts on the special program's channel
+      const channelId = dto.specialProgram?.channelId;
+      const conflictDay = dto.newDayOfWeek;
+      if (channelId && dto.newStartTime && dto.newEndTime && conflictDay) {
+        const [ch] = await this.dataSource.query(
+          'SELECT name FROM channel WHERE id = $1',
+          [channelId],
+        );
+        conflicts = await this.detectConflictsForChannel(
+          channelId,
+          ch?.name || '',
+          conflictDay,
+          weekStartDate,
+          dto.newStartTime,
+          dto.newEndTime,
+          [], // special programs have no DB program_id to exclude
+        );
+      }
+    } else {
       let effectiveProgramId: number | undefined;
       let originalDayOfWeek: string | undefined;
 
@@ -1384,7 +1403,7 @@ export class WeeklyOverridesService {
   /**
    * Create a special-program override for multiple channels at once
    */
-  async createBulk(dto: BulkWeeklyOverrideDto): Promise<WeeklyOverride[]> {
+  async createBulk(dto: BulkWeeklyOverrideDto): Promise<{ overrides: WeeklyOverride[]; conflicts: ConflictInfo[] }> {
     if (dto.overrideType !== 'create') {
       throw new BadRequestException(
         'Bulk override creation only supports overrideType "create"',
@@ -1515,7 +1534,27 @@ export class WeeklyOverridesService {
       revalidatePaths: ['/'],
     });
 
-    return created;
+    // Detect conflicts for each created override's channel
+    const conflicts: ConflictInfo[] = [];
+    if (dto.newStartTime && dto.newEndTime && dto.newDayOfWeek) {
+      for (const override of created) {
+        const channelId = override.specialProgram?.channelId;
+        if (!channelId) continue;
+        const channel = channelMap.get(channelId);
+        const channelConflicts = await this.detectConflictsForChannel(
+          channelId,
+          channel?.name || '',
+          dto.newDayOfWeek.toLowerCase(),
+          weekStartDate,
+          dto.newStartTime,
+          dto.newEndTime,
+          [],
+        );
+        conflicts.push(...channelConflicts);
+      }
+    }
+
+    return { overrides: created, conflicts };
   }
 
   /**
