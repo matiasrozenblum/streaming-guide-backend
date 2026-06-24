@@ -52,6 +52,7 @@ describe('SchedulesService Logging Improvements', () => {
       style_override: null,
       is_visible: true,
       is_premiere: false,
+      link_group_id: null,
     },
   };
 

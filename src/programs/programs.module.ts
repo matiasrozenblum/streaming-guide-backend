@@ -5,13 +5,14 @@ import { ProgramsService } from './programs.service';
 import { Program } from './programs.entity';
 import { Panelist } from '../panelists/panelists.entity';
 import { Channel } from '../channels/channels.entity';
+import { Schedule } from '../schedules/schedules.entity';
 import { RedisModule } from '../redis/redis.module';
 import { UsersModule } from '../users/users.module';
 import { SchedulesModule } from '../schedules/schedules.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Program, Panelist, Channel]),
+    TypeOrmModule.forFeature([Program, Panelist, Channel, Schedule]),
     RedisModule,
     UsersModule,
     forwardRef(() => SchedulesModule),

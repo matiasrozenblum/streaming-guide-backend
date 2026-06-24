@@ -71,7 +71,7 @@ describe('WeeklyOverridesService', () => {
         {
           provide: DataSource,
           useValue: {
-            query: jest.fn(),
+            query: jest.fn().mockResolvedValue([]),
           },
         },
         {
@@ -931,6 +931,342 @@ describe('WeeklyOverridesService', () => {
 
       expect(result).toBe(0);
       expect(redisService.del).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('linked programs — propagateOverrideToLinkedPrograms', () => {
+    it('should return empty array when program has no link_group_id', async () => {
+      jest
+        .spyOn(dataSource, 'query')
+        .mockResolvedValueOnce([{ link_group_id: null }]); // SELECT link_group_id FROM program
+
+      const dto: WeeklyOverrideDto = {
+        programId: 1,
+        targetWeek: 'current',
+        overrideType: 'cancel',
+      };
+
+      // programId validation: needs a schedule belonging to programId=1
+      jest
+        .spyOn(schedulesRepo, 'findOne')
+        .mockResolvedValue(mockSchedule as any);
+      jest.spyOn(redisService, 'get').mockResolvedValue(null);
+      jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
+
+      const result = await service.createWeeklyOverride(dto);
+
+      expect(result.linkedOverrides).toEqual([]);
+    });
+
+    it('should propagate cancel override to all programs in the link group', async () => {
+      const linkGroupId = 'group-uuid-123';
+      jest
+        .spyOn(dataSource, 'query')
+        // propagateOverrideToLinkedPrograms: SELECT link_group_id FROM program WHERE id = 1
+        .mockResolvedValueOnce([{ link_group_id: linkGroupId }])
+        // SELECT id FROM program WHERE link_group_id = ... AND id != 1
+        .mockResolvedValueOnce([{ id: 2 }, { id: 3 }])
+        // SELECT id FROM schedule WHERE program_id = '2' AND day_of_week = ...
+        .mockResolvedValueOnce([{ id: 20 }])
+        // SELECT id FROM schedule WHERE program_id = '3' AND day_of_week = ...
+        .mockResolvedValueOnce([{ id: 30 }]);
+
+      const dto: WeeklyOverrideDto = {
+        programId: 1,
+        targetWeek: 'current',
+        overrideType: 'cancel',
+      };
+
+      jest
+        .spyOn(schedulesRepo, 'findOne')
+        .mockResolvedValue(mockSchedule as any);
+      jest.spyOn(redisService, 'get').mockResolvedValue(null);
+      jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
+
+      const result = await service.createWeeklyOverride(dto);
+
+      // Two linked programs get propagated overrides
+      expect(result.linkedOverrides).toHaveLength(2);
+      expect(result.linkedOverrides[0].overrideType).toBe('cancel');
+      expect(result.linkedOverrides[1].overrideType).toBe('cancel');
+    });
+
+    it('should not propagate to itself — only to other programs in the group', async () => {
+      const linkGroupId = 'group-uuid-self';
+      jest
+        .spyOn(dataSource, 'query')
+        .mockResolvedValueOnce([{ link_group_id: linkGroupId }])
+        .mockResolvedValueOnce([]); // No OTHER programs in group
+
+      const dto: WeeklyOverrideDto = {
+        programId: 5,
+        targetWeek: 'current',
+        overrideType: 'cancel',
+      };
+
+      jest
+        .spyOn(schedulesRepo, 'findOne')
+        .mockResolvedValue({ ...mockSchedule, program: { id: 5 } } as any);
+      jest.spyOn(redisService, 'get').mockResolvedValue(null);
+      jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
+
+      const result = await service.createWeeklyOverride(dto);
+
+      expect(result.linkedOverrides).toEqual([]);
+    });
+  });
+
+  describe('linked programs — detectConflictsForLinkedChannels', () => {
+    it('should return empty conflicts when no overlapping schedules exist', async () => {
+      jest
+        .spyOn(dataSource, 'query')
+        // schedule → program_id lookup
+        .mockResolvedValueOnce([{ program_id: 1, day_of_week: 'monday' }])
+        // propagation: link_group_id lookup
+        .mockResolvedValueOnce([{ link_group_id: null }])
+        // detectConflictsForLinkedChannels: program info
+        .mockResolvedValueOnce([
+          { id: 1, link_group_id: null, channel_id: 1, channel_name: 'Canal 1' },
+        ])
+        // detectConflictsForChannel SQL: no overlapping rows
+        .mockResolvedValueOnce([]);
+
+      const dto: WeeklyOverrideDto = {
+        scheduleId: 1,
+        targetWeek: 'current',
+        overrideType: 'time_change',
+        newStartTime: '15:00',
+        newEndTime: '17:00',
+        newDayOfWeek: 'monday',
+      };
+
+      jest
+        .spyOn(schedulesRepo, 'findOne')
+        .mockResolvedValue(mockSchedule as any);
+      jest.spyOn(redisService, 'get').mockResolvedValue(null);
+      jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
+
+      const result = await service.createWeeklyOverride(dto);
+
+      expect(result.conflicts).toEqual([]);
+    });
+
+    it('should return conflicts when overlapping schedules are detected', async () => {
+      jest
+        .spyOn(dataSource, 'query')
+        // schedule → program_id/day_of_week
+        .mockResolvedValueOnce([{ program_id: 1, day_of_week: 'monday' }])
+        // propagation: link_group_id
+        .mockResolvedValueOnce([{ link_group_id: null }])
+        // detectConflictsForLinkedChannels: program info
+        .mockResolvedValueOnce([
+          { id: 1, link_group_id: null, channel_id: 1, channel_name: 'Canal Test' },
+        ])
+        // detectConflictsForChannel: overlapping schedule rows
+        .mockResolvedValueOnce([
+          {
+            schedule_id: 99,
+            day_of_week: 'monday',
+            start_time: '14:30',
+            end_time: '16:00',
+            program_id: 42,
+            program_name: 'Programa Solapado',
+          },
+        ])
+        // existing override check for the conflict (redis.get returns null → no existing override)
+        .mockResolvedValue([]);
+
+      const dto: WeeklyOverrideDto = {
+        scheduleId: 1,
+        targetWeek: 'current',
+        overrideType: 'time_change',
+        newStartTime: '15:00',
+        newEndTime: '17:00',
+        newDayOfWeek: 'monday',
+      };
+
+      jest
+        .spyOn(schedulesRepo, 'findOne')
+        .mockResolvedValue(mockSchedule as any);
+      jest.spyOn(redisService, 'get').mockResolvedValue(null);
+      jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
+
+      const result = await service.createWeeklyOverride(dto);
+
+      expect(result.conflicts).toHaveLength(1);
+      expect(result.conflicts[0].programName).toBe('Programa Solapado');
+      expect(result.conflicts[0].channelName).toBe('Canal Test');
+      expect(result.conflicts[0].dayOfWeek).toBe('monday');
+    });
+  });
+
+  describe('resolveConflicts', () => {
+    it('should skip resolutions with action keep', async () => {
+      jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
+      jest.spyOn(redisService, 'del').mockResolvedValue(undefined);
+
+      const result = await service.resolveConflicts({
+        targetWeek: 'current',
+        resolutions: [
+          {
+            programId: 1,
+            channelId: 1,
+            dayOfWeek: 'monday',
+            weekStartDate: '2026-06-23',
+            action: 'keep',
+          },
+        ],
+      });
+
+      expect(result.skipped).toBe(1);
+      expect(result.resolved).toBe(0);
+      // No override written (only the live_notification key is set for the summary event)
+      const overrideSetCalls = (redisService.set as jest.Mock).mock.calls.filter(
+        (args) => !String(args[0]).startsWith('live_notification:'),
+      );
+      expect(overrideSetCalls).toHaveLength(0);
+    });
+
+    it('should create a cancel override for action cancel', async () => {
+      jest.spyOn(redisService, 'get').mockResolvedValue(null);
+      jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
+      jest.spyOn(redisService, 'del').mockResolvedValue(undefined);
+
+      const result = await service.resolveConflicts({
+        targetWeek: 'current',
+        resolutions: [
+          {
+            programId: 10,
+            channelId: 1,
+            dayOfWeek: 'monday',
+            weekStartDate: '2026-06-23',
+            action: 'cancel',
+          },
+        ],
+      });
+
+      expect(result.resolved).toBe(1);
+      expect(result.skipped).toBe(0);
+      expect(redisService.set).toHaveBeenCalledWith(
+        expect.stringContaining('weekly_override:'),
+        expect.objectContaining({ overrideType: 'cancel' }),
+        expect.any(Number),
+      );
+    });
+
+    it('should create a time_change override for action reschedule', async () => {
+      jest.spyOn(redisService, 'get').mockResolvedValue(null);
+      jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
+      jest.spyOn(redisService, 'del').mockResolvedValue(undefined);
+
+      const result = await service.resolveConflicts({
+        targetWeek: 'current',
+        resolutions: [
+          {
+            programId: 10,
+            channelId: 1,
+            dayOfWeek: 'monday',
+            weekStartDate: '2026-06-23',
+            action: 'reschedule',
+            newStartTime: '18:00',
+            newEndTime: '19:00',
+          },
+        ],
+      });
+
+      expect(result.resolved).toBe(1);
+      expect(redisService.set).toHaveBeenCalledWith(
+        expect.stringContaining('weekly_override:'),
+        expect.objectContaining({
+          overrideType: 'time_change',
+          newStartTime: '18:00',
+          newEndTime: '19:00',
+        }),
+        expect.any(Number),
+      );
+    });
+
+    it('should handle mixed resolutions correctly', async () => {
+      jest.spyOn(redisService, 'get').mockResolvedValue(null);
+      jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
+      jest.spyOn(redisService, 'del').mockResolvedValue(undefined);
+
+      const result = await service.resolveConflicts({
+        targetWeek: 'current',
+        resolutions: [
+          {
+            programId: 1,
+            channelId: 1,
+            dayOfWeek: 'monday',
+            weekStartDate: '2026-06-23',
+            action: 'keep',
+          },
+          {
+            programId: 2,
+            channelId: 2,
+            dayOfWeek: 'monday',
+            weekStartDate: '2026-06-23',
+            action: 'cancel',
+          },
+          {
+            programId: 3,
+            channelId: 3,
+            dayOfWeek: 'monday',
+            weekStartDate: '2026-06-23',
+            action: 'reschedule',
+            newStartTime: '20:00',
+            newEndTime: '21:00',
+          },
+        ],
+      });
+
+      expect(result.resolved).toBe(2);
+      expect(result.skipped).toBe(1);
+    });
+  });
+
+  describe('createWeeklyOverride — response shape', () => {
+    it('should always return linkedOverrides and conflicts arrays', async () => {
+      const dto: WeeklyOverrideDto = {
+        scheduleId: 1,
+        targetWeek: 'current',
+        overrideType: 'cancel',
+      };
+
+      jest
+        .spyOn(schedulesRepo, 'findOne')
+        .mockResolvedValue(mockSchedule as any);
+      jest.spyOn(redisService, 'get').mockResolvedValue(null);
+      jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
+
+      const result = await service.createWeeklyOverride(dto);
+
+      expect(Array.isArray(result.linkedOverrides)).toBe(true);
+      expect(Array.isArray(result.conflicts)).toBe(true);
+    });
+
+    it('should not trigger conflict detection for cancel overrides', async () => {
+      const dto: WeeklyOverrideDto = {
+        scheduleId: 1,
+        targetWeek: 'current',
+        overrideType: 'cancel',
+      };
+
+      jest
+        .spyOn(schedulesRepo, 'findOne')
+        .mockResolvedValue(mockSchedule as any);
+      jest.spyOn(redisService, 'get').mockResolvedValue(null);
+      jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
+      const querySpy = jest.spyOn(dataSource, 'query').mockResolvedValue([]);
+
+      await service.createWeeklyOverride(dto);
+
+      // For cancel: only schedule→programId lookup may fire; no conflict SQL
+      // Conflict detection SQL query has WHERE start_time < $4 AND end_time > $5 — not called
+      const conflictQueryCalls = querySpy.mock.calls.filter((args) =>
+        String(args[0]).includes('start_time <'),
+      );
+      expect(conflictQueryCalls).toHaveLength(0);
     });
   });
 });

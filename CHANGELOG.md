@@ -9,6 +9,22 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ### Added
 
+- **Programas linkeados (`link_group_id`)**: nueva columna UUID en la entidad `program` que agrupa programas que se transmiten simultáneamente en distintos canales. Migración `AddLinkGroupIdToPrograms` incluida.
+- **Propagación de overrides a programas linkeados**: al crear o actualizar un `weekly-override` (tipos `cancel`, `time_change`, `reschedule`) sobre un programa con `link_group_id`, el backend replica automáticamente el override a todos los programas del mismo grupo.
+- **Detección automática de conflictos de grilla**: tras aplicar un override, se detectan los programas con horario superpuesto en los canales afectados y se devuelven como array `conflicts` en la respuesta de `POST /weekly-overrides` y `POST /weekly-overrides/bulk`.
+- **`POST /weekly-overrides/resolve-conflicts`**: nuevo endpoint para aplicar resoluciones (`cancel`, `time_change`, `keep`) sobre los conflictos detectados.
+
+### Fixed
+
+- La detección de conflictos ahora se activa correctamente para overrides de tipo `create` y para el endpoint `POST /weekly-overrides/bulk`.
+- Los programas con `is_visible = false` ya no se incluyen en la lista de conflictos detectados.
+
+---
+
+## [1.32.0] - 2026-06-20
+
+### Added
+
 - **`POST /programs/bulk`**: crea N programas independientes (uno por canal) en una sola llamada. Acepta `channel_ids: number[]`, todos los campos de `CreateProgramDto` y un array opcional de `schedules` que se replica para cada programa creado.
 - **`POST /weekly-overrides/bulk`**: crea un programa especial (override tipo `create`) en múltiples canales simultáneamente. Acepta `channel_ids: number[]` más todos los campos del override; crea una clave Redis independiente por canal.
 - Nuevo `CreateBulkProgramsDto` con validaciones `class-validator`.

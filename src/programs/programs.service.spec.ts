@@ -7,6 +7,7 @@ import { Repository } from 'typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { CreateProgramDto } from './dto/create-program.dto';
 import { Channel } from '../channels/channels.entity';
+import { Schedule } from '../schedules/schedules.entity';
 import { RedisService } from '../redis/redis.service';
 import { SchedulesService } from '../schedules/schedules.service';
 import { WeeklyOverridesService } from '../schedules/weekly-overrides.service';
@@ -62,6 +63,10 @@ describe('ProgramsService', () => {
     youtube_url: 'https://youtube.com/test',
     is_live: false,
     stream_url: null,
+    is_visible: true,
+    is_premiere: false,
+    style_override: null,
+    link_group_id: null,
   };
 
   const mockProgramResponse = {
@@ -73,6 +78,10 @@ describe('ProgramsService', () => {
     youtube_url: 'https://youtube.com/test',
     is_live: false,
     stream_url: null,
+    is_visible: true,
+    is_premiere: false,
+    style_override: null,
+    link_group_id: null,
     channel_id: 1,
     channel_name: 'Luzu TV',
   };
@@ -139,6 +148,16 @@ describe('ProgramsService', () => {
         {
           provide: getRepositoryToken(Channel),
           useValue: channelRepository,
+        },
+        {
+          provide: getRepositoryToken(Schedule),
+          useValue: {
+            find: jest.fn().mockResolvedValue([]),
+            findOne: jest.fn().mockResolvedValue(null),
+            save: jest.fn(),
+            create: jest.fn(),
+            delete: jest.fn(),
+          },
         },
         {
           provide: RedisService,
@@ -235,9 +254,12 @@ describe('ProgramsService', () => {
       youtube_url: 'https://youtube.com/updated',
       is_live: false,
       stream_url: null,
+      is_visible: true,
+      is_premiere: false,
+      style_override: null,
+      link_group_id: null,
       channel_id: 1,
       channel_name: 'Luzu TV',
-      style_override: undefined,
     });
     expect(programRepository.createQueryBuilder).toHaveBeenCalledWith(
       'program',
@@ -301,9 +323,12 @@ describe('ProgramsService', () => {
       youtube_url: 'https://youtube.com/test',
       is_live: false,
       stream_url: null,
+      is_visible: undefined,
+      is_premiere: undefined,
+      style_override: undefined,
+      link_group_id: null,
       channel_id: 2,
       channel_name: 'New Channel',
-      style_override: undefined,
     });
 
     expect(channelRepository.findOne).toHaveBeenCalledWith({

@@ -6,12 +6,14 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FindOneOptions, Repository } from 'typeorm';
+import { randomUUID } from 'crypto';
 import { Program } from './programs.entity';
 import { CreateProgramDto } from './dto/create-program.dto';
 import { CreateBulkProgramsDto } from './dto/create-bulk-programs.dto';
 import { UpdateProgramDto } from './dto/update-program.dto';
 import { Panelist } from '../panelists/panelists.entity';
 import { Channel } from '../channels/channels.entity';
+import { Schedule } from '../schedules/schedules.entity';
 import { RedisService } from '../redis/redis.service';
 import { WeeklyOverridesService } from '../schedules/weekly-overrides.service';
 import { SchedulesService } from '../schedules/schedules.service';
@@ -32,6 +34,8 @@ export class ProgramsService {
     private panelistsRepository: Repository<Panelist>,
     @InjectRepository(Channel)
     private channelsRepository: Repository<Channel>,
+    @InjectRepository(Schedule)
+    private schedulesRepository: Repository<Schedule>,
     private redisService: RedisService,
     private weeklyOverridesService: WeeklyOverridesService,
     @Inject(forwardRef(() => SchedulesService))
@@ -87,6 +91,7 @@ export class ProgramsService {
       channel_id: savedProgram.channel?.id,
       channel_name: savedProgram.channel?.name || null,
       style_override: savedProgram.style_override,
+      link_group_id: savedProgram.link_group_id ?? null,
     };
   }
 
@@ -107,6 +112,9 @@ export class ProgramsService {
 
     const channels = channelResults as NonNullable<(typeof channelResults)[0]>[];
 
+    // Generate a shared UUID when creating for multiple channels so programs are linked
+    const linkGroupId = dto.channel_ids.length > 1 ? randomUUID() : null;
+
     // Batch-create one Program entity per channel
     const programs = channels.map((channel) =>
       this.programsRepository.create({
@@ -117,13 +125,30 @@ export class ProgramsService {
         style_override: dto.style_override ?? null,
         is_visible: dto.is_visible ?? true,
         is_premiere: dto.is_premiere ?? false,
+        link_group_id: linkGroupId,
         channel,
       }),
     );
 
     const savedPrograms = await this.programsRepository.save(programs);
 
-    // Create schedules for each program if provided (debounce collapses warm calls)
+    // Assign panelists to all created programs if provided
+    if (dto.panelist_ids && dto.panelist_ids.length > 0) {
+      const panelists = await Promise.all(
+        dto.panelist_ids.map((pid) =>
+          this.panelistsRepository.findOne({ where: { id: pid } }),
+        ),
+      );
+      const validPanelists = panelists.filter(Boolean) as Panelist[];
+      if (validPanelists.length > 0) {
+        for (const program of savedPrograms) {
+          program.panelists = validPanelists;
+        }
+        await this.programsRepository.save(savedPrograms);
+      }
+    }
+
+    // Create schedules for each program if provided (skip link propagation — all programs handled here)
     if (dto.schedules && dto.schedules.length > 0) {
       await Promise.all(
         savedPrograms.map((program) =>
@@ -131,6 +156,7 @@ export class ProgramsService {
             programId: program.id.toString(),
             channelId: program.channel!.id.toString(),
             schedules: dto.schedules!,
+            skipLinkPropagation: true,
           }),
         ),
       );
@@ -161,6 +187,7 @@ export class ProgramsService {
       channel_id: p.channel?.id,
       channel_name: p.channel?.name || null,
       style_override: p.style_override,
+      link_group_id: p.link_group_id ?? null,
     }));
   }
 
@@ -189,6 +216,7 @@ export class ProgramsService {
       channel_id: program.channel?.id,
       channel_name: program.channel?.name || null,
       style_override: program.style_override,
+      link_group_id: program.link_group_id ?? null,
     }));
     await this.redisService.set(cacheKey, result, 300);
     return result;
@@ -223,6 +251,7 @@ export class ProgramsService {
       channel_id: program.channel?.id,
       channel_name: program.channel?.name || null,
       style_override: program.style_override,
+      link_group_id: program.link_group_id ?? null,
     };
     await this.redisService.set(cacheKey, result, 300);
     return result;
@@ -242,15 +271,32 @@ export class ProgramsService {
         );
       }
       program.channel = newChannel;
-      // Remove channel_id from DTO to avoid conflicts with Object.assign
       const { channel_id, ...updateData } = updateProgramDto;
       Object.assign(program, updateData);
     } else {
-      // Update other fields normally if no channel_id change
       Object.assign(program, updateProgramDto);
     }
 
     const updatedProgram = await this.programsRepository.save(program);
+
+    // Propagate metadata changes to all linked programs (never propagate channel_id)
+    if (updatedProgram.link_group_id) {
+      const { channel_id: _cid, ...fieldsToPropagate } = updateProgramDto;
+      const linkedPrograms = await this.programsRepository.find({
+        where: { link_group_id: updatedProgram.link_group_id },
+        relations: ['channel'],
+      });
+      const othersToUpdate = linkedPrograms.filter((p) => p.id !== id);
+      if (othersToUpdate.length > 0) {
+        for (const linked of othersToUpdate) {
+          Object.assign(linked, fieldsToPropagate);
+        }
+        await this.programsRepository.save(othersToUpdate);
+        await this.redisService.del(
+          othersToUpdate.map((p) => `programs:${p.id}`),
+        );
+      }
+    }
 
     // Clear caches
     await this.redisService.del([
@@ -285,11 +331,11 @@ export class ProgramsService {
       channel_id: updatedProgram.channel?.id,
       channel_name: updatedProgram.channel?.name || null,
       style_override: updatedProgram.style_override,
+      link_group_id: updatedProgram.link_group_id ?? null,
     };
   }
 
-  async remove(id: number): Promise<void> {
-    // Get all schedule IDs for this program before deleting
+  async remove(id: number, deleteLinked = false): Promise<void> {
     const program = await this.programsRepository.findOne({
       where: { id },
       relations: ['schedules'],
@@ -297,13 +343,22 @@ export class ProgramsService {
     if (!program) {
       throw new NotFoundException(`Program with ID ${id} not found`);
     }
+
+    // If deleteLinked, delete every program in the group (including this one)
+    if (deleteLinked && program.link_group_id) {
+      const group = await this.programsRepository.find({
+        where: { link_group_id: program.link_group_id },
+        select: ['id'],
+      });
+      await Promise.all(group.map((p) => this.remove(p.id, false)));
+      return;
+    }
+
     const scheduleIds = (program.schedules || []).map((s) => s.id);
-    // Delete all related weekly overrides
     await this.weeklyOverridesService.deleteOverridesForProgram(
       id,
       scheduleIds,
     );
-    // Delete the program (cascades schedules, panelists, etc.)
     const result = await this.programsRepository.delete(id);
     if (result.affected === 0) {
       throw new NotFoundException(`Program with ID ${id} not found`);
@@ -353,13 +408,27 @@ export class ProgramsService {
       throw new NotFoundException(`Panelist with ID ${panelistId} not found`);
     }
 
-    if (!program.panelists) {
-      program.panelists = [];
-    }
-
+    if (!program.panelists) program.panelists = [];
     if (!program.panelists.some((p) => p.id === panelist.id)) {
       program.panelists.push(panelist);
       await this.programsRepository.save(program);
+    }
+
+    // Propagate to linked programs
+    if (program.link_group_id) {
+      const linked = await this.programsRepository.find({
+        where: { link_group_id: program.link_group_id },
+        relations: ['panelists'],
+      });
+      const others = linked.filter((p) => p.id !== programId);
+      for (const other of others) {
+        if (!other.panelists) other.panelists = [];
+        if (!other.panelists.some((p) => p.id === panelistId)) {
+          other.panelists.push(panelist);
+          await this.programsRepository.save(other);
+          await this.redisService.del([`programs:${other.id}`]);
+        }
+      }
     }
 
     // Clear caches
@@ -388,6 +457,22 @@ export class ProgramsService {
     if (program.panelists) {
       program.panelists = program.panelists.filter((p) => p.id !== panelistId);
       await this.programsRepository.save(program);
+    }
+
+    // Propagate to linked programs
+    if (program.link_group_id) {
+      const linked = await this.programsRepository.find({
+        where: { link_group_id: program.link_group_id },
+        relations: ['panelists'],
+      });
+      const others = linked.filter((p) => p.id !== programId);
+      for (const other of others) {
+        if (other.panelists) {
+          other.panelists = other.panelists.filter((p) => p.id !== panelistId);
+          await this.programsRepository.save(other);
+          await this.redisService.del([`programs:${other.id}`]);
+        }
+      }
     }
 
     // Clear caches
