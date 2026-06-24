@@ -154,6 +154,9 @@ describe('SchedulesService', () => {
     is_live: false,
     stream_url: '',
     is_visible: true,
+    is_premiere: false,
+    style_override: null,
+    link_group_id: null,
     channel: mockChannel,
     panelists: [],
     schedules: [],
@@ -898,6 +901,7 @@ describe('SchedulesService', () => {
             style_override: null,
             is_visible: true,
             is_premiere: false,
+            link_group_id: null,
             channel: {
               id: 1,
               name: 'Vorterix',
