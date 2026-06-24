@@ -1658,6 +1658,7 @@ export class WeeklyOverridesService {
        JOIN program p ON p.id = s.program_id::integer
        WHERE p.channel_id = $1
          AND p.id != ALL($2::integer[])
+         AND p.is_visible = true
          AND s.day_of_week = $3
          AND s.schedule_type = 'weekly'
          AND s.start_time < $4
