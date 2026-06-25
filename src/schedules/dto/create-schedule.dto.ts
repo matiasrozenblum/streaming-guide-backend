@@ -10,6 +10,7 @@ import {
   Min,
   Max,
   IsDateString,
+  IsBoolean,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -92,5 +93,7 @@ export class CreateBulkSchedulesDto {
   @Type(() => CreateScheduleItemDto)
   schedules: CreateScheduleItemDto[];
 
+  @IsOptional()
+  @IsBoolean()
   skipLinkPropagation?: boolean;
 }

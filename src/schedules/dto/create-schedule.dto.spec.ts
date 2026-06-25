@@ -1,4 +1,5 @@
 import { validate } from 'class-validator';
+import { plainToInstance } from 'class-transformer';
 import {
   CreateScheduleDto,
   CreateScheduleItemDto,
@@ -141,5 +142,45 @@ describe('CreateBulkSchedulesDto', () => {
     // Without reflection metadata, nested validation won't work, so we expect no errors
     // The test is adjusted to reflect the actual behavior
     expect(errors.length).toBe(0);
+  });
+
+  // Mirrors the global ValidationPipe config in main.ts (whitelist +
+  // forbidNonWhitelisted, with plainToInstance instead of manual property
+  // assignment). This is what actually runs in production for HTTP
+  // requests, and is the only way to catch undecorated class fields
+  // getting rejected as "unknown" properties.
+  it('debería aceptar un payload real de un caller externo (sin skipLinkPropagation) bajo el ValidationPipe global', async () => {
+    const instance = plainToInstance(CreateBulkSchedulesDto, {
+      programId: '1',
+      channelId: '1',
+      schedules: [
+        { dayOfWeek: 'monday', startTime: '10:00', endTime: '12:00' },
+      ],
+    });
+
+    const errors = await validate(instance, {
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    });
+
+    expect(errors).toEqual([]);
+  });
+
+  it('debería aceptar skipLinkPropagation bajo el ValidationPipe global', async () => {
+    const instance = plainToInstance(CreateBulkSchedulesDto, {
+      programId: '1',
+      channelId: '1',
+      schedules: [
+        { dayOfWeek: 'monday', startTime: '10:00', endTime: '12:00' },
+      ],
+      skipLinkPropagation: true,
+    });
+
+    const errors = await validate(instance, {
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    });
+
+    expect(errors).toEqual([]);
   });
 });
