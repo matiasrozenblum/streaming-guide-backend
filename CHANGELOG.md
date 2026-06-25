@@ -5,6 +5,13 @@ Todas las modificaciones importantes de este proyecto se documentarán en este a
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/)
 y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
+## [1.34.0] - 2026-06-24
+
+### Fixed
+
+- **Detección de conflictos en programas que cruzan medianoche**: la detección de horarios superpuestos comparaba `start_time`/`end_time` como strings, lo que fallaba cuando un programa especial cruza las 00:00 (ej. 23:00–00:30), ya que ese bloque se guarda con `end_time < start_time` bajo el mismo `day_of_week`. Ahora la comparación normaliza ambos horarios a minutos con wraparound antes de evaluar el solapamiento, igual que el resto del código (`timezone.util.ts`). También corrige `buildSmartSuggestion`, que tenía el mismo problema al sugerir un horario de reprogramación.
+- **`POST /schedules/bulk` rechazaba todas las requests con 400**: `CreateBulkSchedulesDto.skipLinkPropagation` no tenía decoradores de `class-validator`. Con el `ValidationPipe` global (`whitelist` + `forbidNonWhitelisted`) y el target `ES2023` de TypeScript (semántica de class-fields tipo `define`), toda instancia del DTO incluía esa propiedad como `undefined` aunque no viniera en el body, y `class-validator` la rechazaba como propiedad desconocida. Esto rompía la creación de horarios en bulk para cualquier programa existente.
+
 ## [1.33.0] - 2026-06-23
 
 ### Added
