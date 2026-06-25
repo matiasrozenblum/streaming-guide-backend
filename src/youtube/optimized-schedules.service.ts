@@ -413,20 +413,15 @@ export class OptimizedSchedulesService {
     }
 
     // Check canFetchLive for all handles in parallel (respects holiday overrides)
-    const canFetchLiveMap = new Map<string, boolean>();
-    await Promise.all(
-      handles.map(async (handle) => {
-        try {
-          const canFetch = await this.configService.canFetchLive(handle);
-          canFetchLiveMap.set(handle, canFetch);
-        } catch (error) {
-          this.logger.debug(
-            `[OPTIMIZED-SCHEDULES] Error checking canFetchLive for ${handle}, assuming enabled`,
-          );
-          canFetchLiveMap.set(handle, true);
-        }
-      }),
-    );
+    let canFetchLiveMap = new Map<string, boolean>();
+    try {
+      canFetchLiveMap = await this.configService.canFetchLiveBulk(handles);
+    } catch (error) {
+      this.logger.debug(
+        `[OPTIMIZED-SCHEDULES] Error checking canFetchLiveBulk, assuming enabled`,
+      );
+      handles.forEach((handle) => canFetchLiveMap.set(handle, true));
+    }
 
     // Enrich schedules with cached live status
     const enriched: any[] = [];
@@ -578,9 +573,8 @@ export class OptimizedSchedulesService {
                     `[OPTIMIZED-SCHEDULES] Triggering async fetch for ${handle} (stale cache)...`,
                   );
                   // Use program-aware TTL instead of hardcoded 300
-                  const { getCurrentBlockTTL } = await import(
-                    '../utils/getBlockTTL.util'
-                  );
+                  const { getCurrentBlockTTL } =
+                    await import('../utils/getBlockTTL.util');
                   const schedulesForTTL = schedules.filter(
                     (s) => s.program.channel?.youtube_channel_id === channelId,
                   );
@@ -708,9 +702,8 @@ export class OptimizedSchedulesService {
                   `[OPTIMIZED-SCHEDULES] Triggering async fetch for ${handle} (no cache data)...`,
                 );
                 // Use program-aware TTL instead of hardcoded 300
-                const { getCurrentBlockTTL } = await import(
-                  '../utils/getBlockTTL.util'
-                );
+                const { getCurrentBlockTTL } =
+                  await import('../utils/getBlockTTL.util');
                 const schedulesForTTL = schedules.filter(
                   (s) => s.program.channel?.youtube_channel_id === channelId,
                 );

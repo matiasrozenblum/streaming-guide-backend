@@ -266,6 +266,107 @@ export class ConfigService {
     return value;
   }
 
+  async canFetchLiveBulk(handles: string[]): Promise<Map<string, boolean>> {
+    // Ensure cache is seeded before reading
+    await this.ensureCacheSeeded();
+
+    const fetchEnabledKeys = handles.map(
+      (h) => `${this.FETCH_ENABLED_PREFIX}youtube.fetch_enabled.${h}`,
+    );
+    // BATCH 1: Fetch enabled statuses for all handles
+    const fetchEnabledResults =
+      handles.length > 0
+        ? await this.redisService.mget<boolean>(fetchEnabledKeys)
+        : [];
+
+    // Also get global fetch_enabled as fallback
+    const globalFetchEnabled = await this.redisService.get<boolean>(
+      `${this.FETCH_ENABLED_PREFIX}youtube.fetch_enabled`,
+    );
+
+    const fetchEnabledMap = new Map<string, boolean>();
+    for (let i = 0; i < handles.length; i++) {
+      // Per-channel value takes priority, fallback to global, default true
+      fetchEnabledMap.set(
+        handles[i],
+        fetchEnabledResults[i] ?? globalFetchEnabled ?? true,
+      );
+    }
+
+    // Check if today is a holiday (cached daily) - using Argentina/Buenos Aires timezone
+    const today = TimezoneUtil.currentDateString(); // YYYY-MM-DD in Argentina time
+
+    // Check Redis for holiday status
+    const cachedHoliday = await this.redisService.get<{
+      date: string;
+      isHoliday: boolean;
+    }>(this.HOLIDAY_CACHE_KEY);
+
+    let isHoliday: boolean;
+    if (!cachedHoliday || cachedHoliday.date !== today) {
+      // Check date-holidays library
+      const argentinaDate = TimezoneUtil.now().toDate();
+      isHoliday = !!this.hd.isHoliday(argentinaDate);
+
+      // Also check custom dates config (bridge days / "días no laborables")
+      if (!isHoliday) {
+        const customDatesRaw = await this.get('holiday.custom_dates');
+        if (customDatesRaw) {
+          const customDates = customDatesRaw.split(',').map((d) => d.trim());
+          isHoliday = customDates.includes(today);
+        }
+      }
+
+      // Cache until end of day (Argentina time)
+      const ttl = TimezoneUtil.ttlUntilEndOfDay();
+      await this.redisService.set(
+        this.HOLIDAY_CACHE_KEY,
+        { date: today, isHoliday },
+        ttl,
+      );
+    } else {
+      isHoliday = cachedHoliday.isHoliday;
+    }
+
+    const canFetchLiveMap = new Map<string, boolean>();
+
+    if (!isHoliday) {
+      for (const handle of handles) {
+        canFetchLiveMap.set(handle, fetchEnabledMap.get(handle) ?? true);
+      }
+      return canFetchLiveMap;
+    }
+
+    // It's a holiday - check override from Redis
+    const overrideKeys = handles.map(
+      (h) =>
+        `${this.HOLIDAY_OVERRIDE_PREFIX}youtube.fetch_override_holiday.${h}`,
+    );
+
+    // BATCH 2: Fetch holiday overrides
+    const overrideResults =
+      handles.length > 0
+        ? await this.redisService.mget<boolean>(overrideKeys)
+        : [];
+
+    const holidayOverrideMap = new Map<string, boolean>();
+    for (let i = 0; i < handles.length; i++) {
+      // Default to true (enabled on holidays) if no override configured
+      holidayOverrideMap.set(handles[i], overrideResults[i] ?? true);
+    }
+
+    for (const handle of handles) {
+      const enabled = fetchEnabledMap.get(handle) ?? true;
+      if (!enabled) {
+        canFetchLiveMap.set(handle, false);
+      } else {
+        canFetchLiveMap.set(handle, holidayOverrideMap.get(handle) ?? true);
+      }
+    }
+
+    return canFetchLiveMap;
+  }
+
   async canFetchLive(handle: string): Promise<boolean> {
     // Check if fetch is enabled
     const enabled = await this.isYoutubeFetchEnabledFor(handle);

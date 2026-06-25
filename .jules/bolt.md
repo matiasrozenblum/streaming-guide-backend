@@ -5,3 +5,7 @@
 ## 2025-03-24 - [N+1 Redis Query Avoidance in Streamer Live Status]
 **Learning:** Found N+1 Redis query patterns inside the `getLiveStatuses` method of `StreamerLiveStatusService`. For every requested streamer, it runs `await this.getLiveStatus(id)` concurrently wrapped in `Promise.all`, which executes individual `GET` commands to Redis. This leads to connection overhead and poor performance.
 **Action:** Replace `Promise.all` with individual `get` calls with a single `mget` command to batch the retrieval, mapping the responses back to the input array indices.
+
+## 2025-05-18 - [N+1 Redis Query Avoidance in Config Validation]
+**Learning:** Found N+1 Redis query patterns when checking configurations in loops using `await this.configService.canFetchLive(handle)` inside a `Promise.all`. This causes multiple sequential/concurrent Redis `GET` requests for holiday overrides and fetch enabled statuses per loop execution.
+**Action:** Created `canFetchLiveBulk` inside `ConfigService` which leverages `RedisService.mget` to batch fetch all `youtube.fetch_enabled.*` and `youtube.fetch_override_holiday.*` keys in two round-trips. Always pre-fetch properties in bulk and return a Map for O(1) in-memory checks when dealing with config validations in a loop.
