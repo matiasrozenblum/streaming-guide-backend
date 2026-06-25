@@ -141,18 +141,23 @@ describe('WeeklyOverridesService', () => {
       jest.spyOn(redisService, 'get').mockResolvedValue(null); // No existing override
       jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
       jest.spyOn(redisService, 'del').mockResolvedValue(undefined);
-      jest.spyOn(dataSource, 'query').mockResolvedValue([
-        {
-          id: 1,
-          name: 'Test Channel',
-          handle: 'test',
-          youtube_channel_id: 'test123',
-          logo_url: null,
-          description: null,
-          order: 1,
-          is_visible: true,
-        },
-      ]);
+      jest.spyOn(dataSource, 'query').mockImplementation((sql: string) => {
+        if (sql.includes('FROM channel')) {
+          return Promise.resolve([
+            {
+              id: 1,
+              name: 'Test Channel',
+              handle: 'test',
+              youtube_channel_id: 'test123',
+              logo_url: null,
+              description: null,
+              order: 1,
+              is_visible: true,
+            },
+          ]);
+        }
+        return Promise.resolve([]);
+      });
 
       const result = await service.createWeeklyOverride(dto);
 
@@ -1026,7 +1031,12 @@ describe('WeeklyOverridesService', () => {
         .mockResolvedValueOnce([{ link_group_id: null }])
         // detectConflictsForLinkedChannels: program info
         .mockResolvedValueOnce([
-          { id: 1, link_group_id: null, channel_id: 1, channel_name: 'Canal 1' },
+          {
+            id: 1,
+            link_group_id: null,
+            channel_id: 1,
+            channel_name: 'Canal 1',
+          },
         ])
         // detectConflictsForChannel SQL: no overlapping rows
         .mockResolvedValueOnce([]);
@@ -1060,7 +1070,12 @@ describe('WeeklyOverridesService', () => {
         .mockResolvedValueOnce([{ link_group_id: null }])
         // detectConflictsForLinkedChannels: program info
         .mockResolvedValueOnce([
-          { id: 1, link_group_id: null, channel_id: 1, channel_name: 'Canal Test' },
+          {
+            id: 1,
+            link_group_id: null,
+            channel_id: 1,
+            channel_name: 'Canal Test',
+          },
         ])
         // detectConflictsForChannel: overlapping schedule rows
         .mockResolvedValueOnce([
@@ -1098,6 +1113,102 @@ describe('WeeklyOverridesService', () => {
       expect(result.conflicts[0].channelName).toBe('Canal Test');
       expect(result.conflicts[0].dayOfWeek).toBe('monday');
     });
+
+    it('should detect conflicts for schedules that cross midnight', async () => {
+      // "El que ríe último" airs 23:00 → 00:30 (next day), same as the
+      // newly created special program. Both start_time/end_time are stored
+      // anchored to the same day_of_week with end_time < start_time.
+      jest
+        .spyOn(dataSource, 'query')
+        .mockResolvedValueOnce([{ program_id: 1, day_of_week: 'monday' }])
+        .mockResolvedValueOnce([{ link_group_id: null }])
+        .mockResolvedValueOnce([
+          {
+            id: 1,
+            link_group_id: null,
+            channel_id: 1,
+            channel_name: 'Canal Test',
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            schedule_id: 99,
+            day_of_week: 'monday',
+            start_time: '23:00:00',
+            end_time: '00:30:00',
+            program_id: 42,
+            program_name: 'El que ríe último',
+          },
+        ])
+        .mockResolvedValue([]);
+
+      const dto: WeeklyOverrideDto = {
+        scheduleId: 1,
+        targetWeek: 'current',
+        overrideType: 'time_change',
+        newStartTime: '23:00',
+        newEndTime: '00:30',
+        newDayOfWeek: 'monday',
+      };
+
+      jest
+        .spyOn(schedulesRepo, 'findOne')
+        .mockResolvedValue(mockSchedule as any);
+      jest.spyOn(redisService, 'get').mockResolvedValue(null);
+      jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
+
+      const result = await service.createWeeklyOverride(dto);
+
+      expect(result.conflicts).toHaveLength(1);
+      expect(result.conflicts[0].programName).toBe('El que ríe último');
+    });
+
+    it('should not flag adjacent (non-overlapping) cross-midnight schedules as conflicts', async () => {
+      // New program ends exactly when the existing one starts: 22:00→23:00
+      // vs. 23:00→00:30. No actual overlap.
+      jest
+        .spyOn(dataSource, 'query')
+        .mockResolvedValueOnce([{ program_id: 1, day_of_week: 'monday' }])
+        .mockResolvedValueOnce([{ link_group_id: null }])
+        .mockResolvedValueOnce([
+          {
+            id: 1,
+            link_group_id: null,
+            channel_id: 1,
+            channel_name: 'Canal Test',
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            schedule_id: 99,
+            day_of_week: 'monday',
+            start_time: '23:00:00',
+            end_time: '00:30:00',
+            program_id: 42,
+            program_name: 'El que ríe último',
+          },
+        ])
+        .mockResolvedValue([]);
+
+      const dto: WeeklyOverrideDto = {
+        scheduleId: 1,
+        targetWeek: 'current',
+        overrideType: 'time_change',
+        newStartTime: '22:00',
+        newEndTime: '23:00',
+        newDayOfWeek: 'monday',
+      };
+
+      jest
+        .spyOn(schedulesRepo, 'findOne')
+        .mockResolvedValue(mockSchedule as any);
+      jest.spyOn(redisService, 'get').mockResolvedValue(null);
+      jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
+
+      const result = await service.createWeeklyOverride(dto);
+
+      expect(result.conflicts).toEqual([]);
+    });
   });
 
   describe('resolveConflicts', () => {
@@ -1121,7 +1232,9 @@ describe('WeeklyOverridesService', () => {
       expect(result.skipped).toBe(1);
       expect(result.resolved).toBe(0);
       // No override written (only the live_notification key is set for the summary event)
-      const overrideSetCalls = (redisService.set as jest.Mock).mock.calls.filter(
+      const overrideSetCalls = (
+        redisService.set as jest.Mock
+      ).mock.calls.filter(
         (args) => !String(args[0]).startsWith('live_notification:'),
       );
       expect(overrideSetCalls).toHaveLength(0);

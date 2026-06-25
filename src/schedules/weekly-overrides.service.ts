@@ -183,7 +183,9 @@ export class WeeklyOverridesService {
   /**
    * Create a weekly override
    */
-  async createWeeklyOverride(dto: WeeklyOverrideDto): Promise<WeeklyOverrideResult> {
+  async createWeeklyOverride(
+    dto: WeeklyOverrideDto,
+  ): Promise<WeeklyOverrideResult> {
     // Validate that either scheduleId or programId is provided (but not both)
     if (dto.scheduleId && dto.programId) {
       throw new BadRequestException(
@@ -667,7 +669,8 @@ export class WeeklyOverridesService {
     let linkedOverrides: WeeklyOverride[] = [];
     let conflicts: ConflictInfo[] = [];
 
-    const effectiveType = updatedOverride.overrideType ?? existingOverride.overrideType;
+    const effectiveType =
+      updatedOverride.overrideType ?? existingOverride.overrideType;
     if (effectiveType !== 'create') {
       let effectiveProgramId: number | undefined;
       let originalDayOfWeek: string | undefined;
@@ -1403,7 +1406,9 @@ export class WeeklyOverridesService {
   /**
    * Create a special-program override for multiple channels at once
    */
-  async createBulk(dto: BulkWeeklyOverrideDto): Promise<{ overrides: WeeklyOverride[]; conflicts: ConflictInfo[] }> {
+  async createBulk(
+    dto: BulkWeeklyOverrideDto,
+  ): Promise<{ overrides: WeeklyOverride[]; conflicts: ConflictInfo[] }> {
     if (dto.overrideType !== 'create') {
       throw new BadRequestException(
         'Bulk override creation only supports overrideType "create"',
@@ -1435,7 +1440,9 @@ export class WeeklyOverridesService {
     }
 
     const weekStartDate = targetWeekStart.format('YYYY-MM-DD');
-    const expiresAt = targetWeekStart.add(1, 'week').format('YYYY-MM-DD HH:mm:ss');
+    const expiresAt = targetWeekStart
+      .add(1, 'week')
+      .format('YYYY-MM-DD HH:mm:ss');
     const secondsUntilExpiry = this.dayjs(expiresAt)
       .tz('America/Argentina/Buenos_Aires')
       .diff(now, 'seconds');
@@ -1448,7 +1455,9 @@ export class WeeklyOverridesService {
       });
       if (panelists.length !== dto.panelistIds.length) {
         const foundIds = panelists.map((p) => p.id);
-        const missingIds = dto.panelistIds.filter((id) => !foundIds.includes(id));
+        const missingIds = dto.panelistIds.filter(
+          (id) => !foundIds.includes(id),
+        );
         throw new NotFoundException(
           `Panelists with IDs ${missingIds.join(', ')} not found`,
         );
@@ -1467,7 +1476,9 @@ export class WeeklyOverridesService {
       channelRows.map((c: any) => [c.id, c]),
     );
 
-    const missingChannelIds = dto.channel_ids.filter((id) => !channelMap.has(id));
+    const missingChannelIds = dto.channel_ids.filter(
+      (id) => !channelMap.has(id),
+    );
     if (missingChannelIds.length > 0) {
       throw new NotFoundException(
         `Channels not found: ${missingChannelIds.join(', ')}`,
@@ -1620,6 +1631,35 @@ export class WeeklyOverridesService {
 
   // ─── Conflict detection & linked-program propagation ──────────────────────
 
+  /** Minutes since midnight for an 'HH:MM' / 'HH:MM:SS' time string. */
+  private toMinutes(time: string): number {
+    const [h, m] = time.split(':').map(Number);
+    return h * 60 + m;
+  }
+
+  /**
+   * Converts a start/end pair anchored to the same day_of_week into a
+   * minutes range on a 48h timeline. If end <= start, the block crosses
+   * midnight and end is pushed into the next day (+1440) so overlap math
+   * works the same way as same-day blocks.
+   */
+  private toOverlapRange(
+    start: string,
+    end: string,
+  ): { start: number; end: number } {
+    const startMin = this.toMinutes(start);
+    let endMin = this.toMinutes(end);
+    if (endMin <= startMin) endMin += 24 * 60;
+    return { start: startMin, end: endMin };
+  }
+
+  private rangesOverlap(
+    a: { start: number; end: number },
+    b: { start: number; end: number },
+  ): boolean {
+    return a.start < b.end && b.start < a.end;
+  }
+
   private buildSmartSuggestion(
     confStart: string,
     confEnd: string,
@@ -1630,14 +1670,24 @@ export class WeeklyOverridesService {
     suggestedStart?: string;
     suggestedEnd?: string;
   } {
-    const startsBeforeGol = confStart < golStart;
-    const endsAfterGol = confEnd > golEnd;
+    const conf = this.toOverlapRange(confStart, confEnd);
+    const gol = this.toOverlapRange(golStart, golEnd);
+    const startsBeforeGol = conf.start < gol.start;
+    const endsAfterGol = conf.end > gol.end;
 
     if (startsBeforeGol && !endsAfterGol) {
-      return { action: 'reschedule', suggestedStart: confStart, suggestedEnd: golStart };
+      return {
+        action: 'reschedule',
+        suggestedStart: confStart,
+        suggestedEnd: golStart,
+      };
     }
     if (!startsBeforeGol && endsAfterGol) {
-      return { action: 'reschedule', suggestedStart: golEnd, suggestedEnd: confEnd };
+      return {
+        action: 'reschedule',
+        suggestedStart: golEnd,
+        suggestedEnd: confEnd,
+      };
     }
     return { action: 'cancel' };
   }
@@ -1660,16 +1710,15 @@ export class WeeklyOverridesService {
          AND p.id != ALL($2::integer[])
          AND p.is_visible = true
          AND s.day_of_week = $3
-         AND s.schedule_type = 'weekly'
-         AND s.start_time < $4
-         AND s.end_time > $5`,
-      [channelId, excludeProgramIds, dayOfWeek, newEndTime, newStartTime],
+         AND s.schedule_type = 'weekly'`,
+      [channelId, excludeProgramIds, dayOfWeek],
     );
 
     if (rows.length === 0) return [];
 
     const weekOverrides = await this.getOverridesForWeek(weekStartDate);
     const conflicts: ConflictInfo[] = [];
+    const newRange = this.toOverlapRange(newStartTime, newEndTime);
 
     for (const row of rows) {
       const programId = Number(row.program_id);
@@ -1683,17 +1732,21 @@ export class WeeklyOverridesService {
 
       let effectiveStart: string = row.start_time;
       let effectiveEnd: string = row.end_time;
-      if (existingOverride?.newStartTime) effectiveStart = existingOverride.newStartTime;
-      if (existingOverride?.newEndTime) effectiveEnd = existingOverride.newEndTime;
+      if (existingOverride?.newStartTime)
+        effectiveStart = existingOverride.newStartTime;
+      if (existingOverride?.newEndTime)
+        effectiveEnd = existingOverride.newEndTime;
 
-      if (effectiveStart >= newEndTime || effectiveEnd <= newStartTime) continue;
+      const existingRange = this.toOverlapRange(effectiveStart, effectiveEnd);
+      if (!this.rangesOverlap(newRange, existingRange)) continue;
 
-      const { action, suggestedStart, suggestedEnd } = this.buildSmartSuggestion(
-        effectiveStart,
-        effectiveEnd,
-        newStartTime,
-        newEndTime,
-      );
+      const { action, suggestedStart, suggestedEnd } =
+        this.buildSmartSuggestion(
+          effectiveStart,
+          effectiveEnd,
+          newStartTime,
+          newEndTime,
+        );
 
       conflicts.push({
         channelId,
@@ -1733,7 +1786,11 @@ export class WeeklyOverridesService {
     if (!rows.length) return [];
 
     const programInfo = rows[0];
-    const allPrograms: Array<{ id: number; channel_id: number; channel_name: string }> = [
+    const allPrograms: Array<{
+      id: number;
+      channel_id: number;
+      channel_name: string;
+    }> = [
       {
         id: Number(programInfo.id),
         channel_id: Number(programInfo.channel_id),
@@ -1847,7 +1904,9 @@ export class WeeklyOverridesService {
 
       const linkedOverride: WeeklyOverride = {
         id: overrideId,
-        ...(linkedScheduleId ? { scheduleId: linkedScheduleId } : { programId: linkedId }),
+        ...(linkedScheduleId
+          ? { scheduleId: linkedScheduleId }
+          : { programId: linkedId }),
         weekStartDate,
         overrideType: overrideType as any,
         newStartTime,
@@ -1873,7 +1932,9 @@ export class WeeklyOverridesService {
     return created;
   }
 
-  async resolveConflicts(dto: ResolveConflictsDto): Promise<{ resolved: number; skipped: number }> {
+  async resolveConflicts(
+    dto: ResolveConflictsDto,
+  ): Promise<{ resolved: number; skipped: number }> {
     const now = this.dayjs().tz('America/Argentina/Buenos_Aires');
     let targetWeekStart: dayjs.Dayjs;
 
@@ -1884,7 +1945,9 @@ export class WeeklyOverridesService {
     }
 
     const weekStartDate = targetWeekStart.format('YYYY-MM-DD');
-    const expiresAt = targetWeekStart.add(1, 'week').format('YYYY-MM-DD HH:mm:ss');
+    const expiresAt = targetWeekStart
+      .add(1, 'week')
+      .format('YYYY-MM-DD HH:mm:ss');
     const secondsUntilExpiry = this.dayjs(expiresAt)
       .tz('America/Argentina/Buenos_Aires')
       .diff(now, 'seconds');
@@ -1908,7 +1971,8 @@ export class WeeklyOverridesService {
         continue;
       }
 
-      const overrideType = resolution.action === 'cancel' ? 'cancel' : 'time_change';
+      const overrideType =
+        resolution.action === 'cancel' ? 'cancel' : 'time_change';
 
       const override: WeeklyOverride = {
         id: overrideId,
