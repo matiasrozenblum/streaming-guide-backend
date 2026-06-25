@@ -61,6 +61,7 @@ describe('SubscriptionService', () => {
     schedules: [],
     style_override: null,
     is_premiere: false,
+    link_group_id: null,
   };
 
   const mockSubscription: UserSubscription = {
