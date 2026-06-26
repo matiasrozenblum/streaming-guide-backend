@@ -63,6 +63,7 @@ describe('PushScheduler', () => {
     name: 'Test Program',
     description: 'Test program description',
     logo_url: 'https://example.com/program-logo.png',
+    is_visible: true,
     channel: mockChannel,
   };
 
@@ -490,6 +491,24 @@ describe('PushScheduler', () => {
 
       await scheduler.handleNotificationsCron();
 
+      expect(mockPushService.sendNotification).not.toHaveBeenCalled();
+    });
+
+    it('should not send notifications for programs with is_visible = false', async () => {
+      const hiddenProgram = { ...mockProgram, is_visible: false };
+      const hiddenSchedule = { ...mockSchedule, program: hiddenProgram };
+
+      const schedulesService = module.get(SchedulesService);
+      jest
+        .spyOn(schedulesService, 'findAll')
+        .mockResolvedValue([hiddenSchedule]);
+
+      await scheduler.handleNotificationsCron();
+
+      expect(scheduler['logger'].debug).toHaveBeenCalledWith(
+        'Ningún programa coincide.',
+      );
+      expect(mockUserSubscriptionRepository.find).not.toHaveBeenCalled();
       expect(mockPushService.sendNotification).not.toHaveBeenCalled();
     });
 

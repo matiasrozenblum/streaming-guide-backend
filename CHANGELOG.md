@@ -5,6 +5,12 @@ Todas las modificaciones importantes de este proyecto se documentarán en este a
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/)
 y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Notificaciones de suscripciones sobre programas ocultos**: el cron de notificaciones enviaba alertas de "en 10 minutos comienza X" para programas con `is_visible = false`. El filtro de `dueSchedules` ahora excluye explícitamente los programas con `is_visible !== true`, evitando notificaciones sobre programas que ya no están activos en la grilla.
+
 ## [1.34.0] - 2026-06-24
 
 ### Fixed
