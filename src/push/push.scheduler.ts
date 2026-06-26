@@ -54,9 +54,9 @@ export class PushScheduler {
       skipCache: false, // ✅ IMPORTANTE: Usar cache para reducir carga en DB
     });
 
-    // Filtrar schedules que empiezan en 10 min
+    // Filtrar schedules que empiezan en 10 min, excluyendo programas ocultos
     const dueSchedules = allSchedules.filter(
-      (s) => s.start_time === timeString,
+      (s) => s.start_time === timeString && s.program?.is_visible === true,
     );
     if (dueSchedules.length === 0) {
       this.logger.debug('Ningún programa coincide.');
