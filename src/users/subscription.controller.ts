@@ -98,6 +98,8 @@ export class SubscriptionController {
           description: sub.program.description,
           logoUrl: sub.program.logo_url, // Keep for legacy frontend support
           logo_url: sub.program.logo_url, // Add for consistency and mobile
+          is_visible: sub.program.is_visible,
+          has_active_schedules: (sub.program.schedules?.length ?? 0) > 0,
           channel: {
             id: sub.program.channel.id,
             name: sub.program.channel.name,
