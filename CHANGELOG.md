@@ -5,6 +5,12 @@ Todas las modificaciones importantes de este proyecto se documentarán en este a
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/)
 y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
+## [1.36.0] - 2026-06-26
+
+### Added
+
+- **`GET /subscriptions` expone estado del programa**: la respuesta ahora incluye `program.is_visible` (booleano) y `program.has_active_schedules` (booleano), para que el frontend pueda identificar visualmente los programas suscriptos que ya no están activos en la grilla.
+
 ## [1.35.0] - 2026-06-26
 
 ### Fixed
