@@ -237,65 +237,6 @@ export class LiveStatusBackgroundService {
   }
 
   /**
-   * Get live status for multiple channels (uses background cache when available)
-   * Migration complete - now accepts handles instead of channelIds
-   *
-   * Uses unified cache (liveStatusByHandle) - no longer uses liveStreamsByChannel
-   *
-   * @param handles Array of channel handles to get status for
-   * @param handleToChannelId Optional map of handle -> channelId for accurate sync
-   */
-  async getLiveStatusForChannels(
-    handles: string[],
-    handleToChannelId?: Map<string, string>,
-  ): Promise<Map<string, LiveStatusCache>> {
-    const results = new Map<string, LiveStatusCache>();
-    const handlesNeedingUpdate: string[] = [];
-
-    for (const handle of handles) {
-      const cached = await this.getCachedLiveStatus(handle);
-      if (cached) {
-        const needsUpdate = await this.shouldUpdateCache(cached);
-        if (!needsUpdate) {
-          // Cache is fresh, use it
-          results.set(handle, cached);
-        } else {
-          // Cache exists but is stale
-          // CRITICAL: Still return stale cache instead of nothing to prevent excessive async fetches
-          // The background cron will update it, but we don't want every request triggering fetches
-          // Only return empty if cache is truly missing or extremely old (>30 minutes)
-          const age = Date.now() - cached.lastUpdated;
-          const ageMinutes = age / (60 * 1000);
-
-          if (ageMinutes < 30) {
-            // Return stale cache - better than triggering expensive API calls
-            // Background cron (runs every 2 min) will refresh it soon
-            this.logger.debug(
-              `[LIVE-STATUS-BG] Returning stale cache for ${handle} (${Math.round(ageMinutes)}min old) to prevent async fetch`,
-            );
-            results.set(handle, cached);
-          } else {
-            // Cache is very old (>30 min) - don't return it, let async fetch happen
-            this.logger.debug(
-              `[LIVE-STATUS-BG] Cache for ${handle} too old (${Math.round(ageMinutes)}min), not returning to allow refresh`,
-            );
-            handlesNeedingUpdate.push(handle);
-          }
-        }
-      } else {
-        // liveStatusByHandle missing
-        // Note: liveStreamsByChannel no longer exists - everything uses liveStatusByHandle
-        handlesNeedingUpdate.push(handle);
-      }
-    }
-
-    // Note: updateChannelsInBatches expects channelIds, so we can't use it here
-    // For now, return cached results (including stale ones <30min old). Fresh updates are handled by the background cron.
-
-    return results;
-  }
-
-  /**
    * Update channels in batches to avoid API rate limits
    */
   private async updateChannelsInBatches(
