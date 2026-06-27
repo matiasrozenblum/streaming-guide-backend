@@ -60,7 +60,7 @@ export class WeeklyOverridesController {
     return this.weeklyOverridesService.createWeeklyOverride(dto);
   }
 
-  @Put(':overrideId(.+)')
+  @Put(':overrideId')
   @ApiOperation({ summary: 'Update a weekly override' })
   @ApiResponse({ status: 200, description: 'Override updated successfully' })
   async updateOverride(
@@ -70,14 +70,14 @@ export class WeeklyOverridesController {
     return this.weeklyOverridesService.updateWeeklyOverride(overrideId, dto);
   }
 
-  @Get(':overrideId(.+)')
+  @Get(':overrideId')
   @ApiOperation({ summary: 'Get a specific weekly override' })
   @ApiResponse({ status: 200, description: 'Override details' })
   async getOverride(@Param('overrideId') overrideId: string) {
     return this.weeklyOverridesService.getWeeklyOverride(overrideId);
   }
 
-  @Delete(':overrideId(.+)')
+  @Delete(':overrideId')
   @ApiOperation({ summary: 'Delete a weekly override' })
   @ApiResponse({ status: 200, description: 'Override deleted successfully' })
   async deleteOverride(@Param('overrideId') overrideId: string) {
