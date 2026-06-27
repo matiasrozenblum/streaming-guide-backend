@@ -33,14 +33,21 @@ export class WeeklyOverridesController {
   ) {}
 
   @Post('bulk')
-  @ApiOperation({ summary: 'Create a special program override for multiple channels at once' })
-  @ApiResponse({ status: 201, description: 'Bulk overrides created successfully' })
+  @ApiOperation({
+    summary: 'Create a special program override for multiple channels at once',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Bulk overrides created successfully',
+  })
   async createBulkOverride(@Body() dto: BulkWeeklyOverrideDto) {
     return this.weeklyOverridesService.createBulk(dto);
   }
 
   @Post('resolve-conflicts')
-  @ApiOperation({ summary: 'Resolve schedule conflicts after a linked-program override' })
+  @ApiOperation({
+    summary: 'Resolve schedule conflicts after a linked-program override',
+  })
   @ApiResponse({ status: 201, description: 'Conflicts resolved successfully' })
   async resolveConflicts(@Body() dto: ResolveConflictsDto) {
     return this.weeklyOverridesService.resolveConflicts(dto);
@@ -53,7 +60,7 @@ export class WeeklyOverridesController {
     return this.weeklyOverridesService.createWeeklyOverride(dto);
   }
 
-  @Put(':overrideId')
+  @Put(':overrideId(.+)')
   @ApiOperation({ summary: 'Update a weekly override' })
   @ApiResponse({ status: 200, description: 'Override updated successfully' })
   async updateOverride(
@@ -63,14 +70,14 @@ export class WeeklyOverridesController {
     return this.weeklyOverridesService.updateWeeklyOverride(overrideId, dto);
   }
 
-  @Get(':overrideId')
+  @Get(':overrideId(.+)')
   @ApiOperation({ summary: 'Get a specific weekly override' })
   @ApiResponse({ status: 200, description: 'Override details' })
   async getOverride(@Param('overrideId') overrideId: string) {
     return this.weeklyOverridesService.getWeeklyOverride(overrideId);
   }
 
-  @Delete(':overrideId')
+  @Delete(':overrideId(.+)')
   @ApiOperation({ summary: 'Delete a weekly override' })
   @ApiResponse({ status: 200, description: 'Override deleted successfully' })
   async deleteOverride(@Param('overrideId') overrideId: string) {
