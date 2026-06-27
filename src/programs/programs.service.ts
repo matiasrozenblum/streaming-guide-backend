@@ -5,7 +5,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOneOptions, Repository } from 'typeorm';
+import { FindOneOptions, In, Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
 import { Program } from './programs.entity';
 import { CreateProgramDto } from './dto/create-program.dto';
@@ -96,11 +96,12 @@ export class ProgramsService {
   }
 
   async createBulk(dto: CreateBulkProgramsDto): Promise<any[]> {
-    // Validate all channels exist in parallel
-    const channelResults = await Promise.all(
-      dto.channel_ids.map((id) =>
-        this.channelsRepository.findOne({ where: { id } }),
-      ),
+    const channelResultsUnordered = await this.channelsRepository.find({
+      where: { id: In(dto.channel_ids) },
+    });
+
+    const channelResults = dto.channel_ids.map(
+      (id) => channelResultsUnordered.find((c) => c.id === id) ?? null,
     );
 
     const missingIds = dto.channel_ids.filter((_, i) => !channelResults[i]);
@@ -110,7 +111,9 @@ export class ProgramsService {
       );
     }
 
-    const channels = channelResults as NonNullable<(typeof channelResults)[0]>[];
+    const channels = channelResults as NonNullable<
+      (typeof channelResults)[0]
+    >[];
 
     // Generate a shared UUID when creating for multiple channels so programs are linked
     const linkGroupId = dto.channel_ids.length > 1 ? randomUUID() : null;
@@ -154,7 +157,7 @@ export class ProgramsService {
         savedPrograms.map((program) =>
           this.schedulesService.createBulk({
             programId: program.id.toString(),
-            channelId: program.channel!.id.toString(),
+            channelId: program.channel.id.toString(),
             schedules: dto.schedules!,
             skipLinkPropagation: true,
           }),

@@ -5,6 +5,12 @@ Todas las modificaciones importantes de este proyecto se documentarán en este a
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/)
 y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
+## [1.36.1] - 2026-06-27
+
+### Fixed
+
+- **Login y registro rechazados en mobile**: el `ValidationPipe` con `forbidNonWhitelisted: true` devolvía 400 cuando el cliente mobile incluía `platform` y `appVersion` en el body de `/auth/login` y `/auth/register`. Se agregaron ambos campos como `@IsOptional()` en `LoginDto` y `RegisterDto` para aceptarlos sin romper compatibilidad con web.
+
 ## [1.36.0] - 2026-06-26
 
 ### Added
