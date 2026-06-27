@@ -121,7 +121,7 @@ export class SubscriptionService {
   async getUserSubscriptions(userId: number): Promise<UserSubscription[]> {
     return await this.subscriptionRepository.find({
       where: { user: { id: userId }, isActive: true },
-      relations: ['program', 'program.channel'],
+      relations: ['program', 'program.channel', 'program.schedules'],
       order: { createdAt: 'DESC' },
     });
   }

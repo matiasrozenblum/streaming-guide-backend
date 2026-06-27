@@ -214,7 +214,7 @@ describe('SubscriptionService', () => {
 
       expect(mockUserSubscriptionRepository.find).toHaveBeenCalledWith({
         where: { user: { id: mockUser.id }, isActive: true },
-        relations: ['program', 'program.channel'],
+        relations: ['program', 'program.channel', 'program.schedules'],
         order: { createdAt: 'DESC' },
       });
       expect(result).toEqual(subscriptions);
