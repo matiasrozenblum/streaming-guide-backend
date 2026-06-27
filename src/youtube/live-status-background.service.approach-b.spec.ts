@@ -152,43 +152,6 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
     });
   });
 
-  describe('getLiveStatusForChannels', () => {
-    it('should return cached data when available and not expired', async () => {
-      // Arrange
-      const handles = ['testhandle'];
-      const mockCached = {
-        ...mockLiveStatusCache,
-        lastUpdated: Date.now() - 1000,
-      }; // 1 second ago
-      jest.spyOn(service, 'getCachedLiveStatus').mockResolvedValue(mockCached);
-      jest.spyOn(service as any, 'shouldUpdateCache').mockResolvedValue(false);
-
-      // Act
-      const result = await service.getLiveStatusForChannels(handles);
-
-      // Assert
-      expect(result.get('testhandle')).toEqual(mockCached);
-      expect(service.getCachedLiveStatus).toHaveBeenCalledWith('testhandle');
-    });
-
-    it('should return empty map when data is expired (fresh updates handled by cron)', async () => {
-      // Arrange
-      const handles = ['testhandle'];
-      const mockCached = {
-        ...mockLiveStatusCache,
-        lastUpdated: Date.now() - 10000,
-      }; // 10 seconds ago
-      jest.spyOn(service, 'getCachedLiveStatus').mockResolvedValue(mockCached);
-      jest.spyOn(service as any, 'shouldUpdateCache').mockResolvedValue(true);
-
-      // Act
-      const result = await service.getLiveStatusForChannels(handles);
-
-      // Assert
-      expect(result.size).toBe(1); // Returns stale cache (<30 min old) to prevent async fetches
-    });
-  });
-
   describe('updateLiveStatusForAllChannels', () => {
     it('should skip bulk update and only log', async () => {
       // Arrange

@@ -27,10 +27,7 @@ export class AuthController {
   @Post('login')
   @ApiOperation({ summary: 'Login with email & password' })
   @ApiResponse({ status: 201, description: 'Access token and refresh token' })
-  async loginUser(
-    @Request() req: any,
-    @Body() body: LoginDto,
-  ) {
+  async loginUser(@Request() req: any, @Body() body: LoginDto) {
     const { email, password, deviceId } = body;
     const userAgent = req.headers['user-agent'] || 'Unknown';
 
