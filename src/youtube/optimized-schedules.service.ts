@@ -403,30 +403,26 @@ export class OptimizedSchedulesService {
 
     // Fetch attempt tracking data for all channels to check for not-found escalation
     const attemptTrackingMap = new Map<string, any>();
-    for (const handle of handles) {
-      const attemptTrackingKey = `notFoundAttempts:${handle}`;
-      const attemptTracking =
-        await this.redisService.get<any>(attemptTrackingKey);
-      if (attemptTracking) {
-        attemptTrackingMap.set(handle, attemptTracking);
+    if (handles.length > 0) {
+      const attemptKeys = handles.map((h) => `notFoundAttempts:${h}`);
+      const attemptResults = await this.redisService.mget<any>(attemptKeys);
+      for (let i = 0; i < handles.length; i++) {
+        if (attemptResults[i]) {
+          attemptTrackingMap.set(handles[i], attemptResults[i]);
+        }
       }
     }
 
-    // Check canFetchLive for all handles in parallel (respects holiday overrides)
-    const canFetchLiveMap = new Map<string, boolean>();
-    await Promise.all(
-      handles.map(async (handle) => {
-        try {
-          const canFetch = await this.configService.canFetchLive(handle);
-          canFetchLiveMap.set(handle, canFetch);
-        } catch (error) {
-          this.logger.debug(
-            `[OPTIMIZED-SCHEDULES] Error checking canFetchLive for ${handle}, assuming enabled`,
-          );
-          canFetchLiveMap.set(handle, true);
-        }
-      }),
-    );
+    // Check canFetchLive for all handles in a single batched call
+    let canFetchLiveMap = new Map<string, boolean>();
+    try {
+      canFetchLiveMap = await this.configService.canFetchLiveBulk(handles);
+    } catch (error) {
+      this.logger.debug(
+        `[OPTIMIZED-SCHEDULES] Error checking canFetchLiveBulk, assuming enabled`,
+      );
+      handles.forEach((handle) => canFetchLiveMap.set(handle, true));
+    }
 
     // Enrich schedules with cached live status
     const enriched: any[] = [];

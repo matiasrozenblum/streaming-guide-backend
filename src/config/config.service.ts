@@ -266,6 +266,85 @@ export class ConfigService {
     return value;
   }
 
+  async canFetchLiveBulk(handles: string[]): Promise<Map<string, boolean>> {
+    await this.ensureCacheSeeded();
+
+    const canFetchLiveMap = new Map<string, boolean>();
+    if (handles.length === 0) return canFetchLiveMap;
+
+    const fetchEnabledKeys = handles.map(
+      (h) => `${this.FETCH_ENABLED_PREFIX}youtube.fetch_enabled.${h}`,
+    );
+    const fetchEnabledResults =
+      await this.redisService.mget<boolean>(fetchEnabledKeys);
+    const globalFetchEnabled = await this.redisService.get<boolean>(
+      `${this.FETCH_ENABLED_PREFIX}youtube.fetch_enabled`,
+    );
+
+    const fetchEnabledMap = new Map<string, boolean>();
+    for (let i = 0; i < handles.length; i++) {
+      fetchEnabledMap.set(
+        handles[i],
+        fetchEnabledResults[i] ?? globalFetchEnabled ?? true,
+      );
+    }
+
+    const today = TimezoneUtil.currentDateString();
+    const cachedHoliday = await this.redisService.get<{
+      date: string;
+      isHoliday: boolean;
+    }>(this.HOLIDAY_CACHE_KEY);
+
+    let isHoliday: boolean;
+    if (!cachedHoliday || cachedHoliday.date !== today) {
+      const argentinaDate = TimezoneUtil.now().toDate();
+      isHoliday = !!this.hd.isHoliday(argentinaDate);
+
+      if (!isHoliday) {
+        const customDatesRaw = await this.get('holiday.custom_dates');
+        if (customDatesRaw) {
+          const customDates = customDatesRaw.split(',').map((d) => d.trim());
+          isHoliday = customDates.includes(today);
+        }
+      }
+
+      const ttl = TimezoneUtil.ttlUntilEndOfDay();
+      await this.redisService.set(
+        this.HOLIDAY_CACHE_KEY,
+        { date: today, isHoliday },
+        ttl,
+      );
+    } else {
+      isHoliday = cachedHoliday.isHoliday;
+    }
+
+    if (!isHoliday) {
+      for (const handle of handles) {
+        canFetchLiveMap.set(handle, fetchEnabledMap.get(handle) ?? true);
+      }
+      return canFetchLiveMap;
+    }
+
+    const overrideKeys = handles.map(
+      (h) =>
+        `${this.HOLIDAY_OVERRIDE_PREFIX}youtube.fetch_override_holiday.${h}`,
+    );
+    const overrideResults =
+      await this.redisService.mget<boolean>(overrideKeys);
+
+    for (let i = 0; i < handles.length; i++) {
+      const handle = handles[i];
+      const enabled = fetchEnabledMap.get(handle) ?? true;
+      if (!enabled) {
+        canFetchLiveMap.set(handle, false);
+      } else {
+        canFetchLiveMap.set(handle, overrideResults[i] ?? true);
+      }
+    }
+
+    return canFetchLiveMap;
+  }
+
   async canFetchLive(handle: string): Promise<boolean> {
     // Check if fetch is enabled
     const enabled = await this.isYoutubeFetchEnabledFor(handle);

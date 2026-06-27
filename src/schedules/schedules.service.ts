@@ -938,7 +938,9 @@ export class SchedulesService {
 
   async remove(id: string): Promise<boolean> {
     // Load before delete to capture program_id for link propagation
-    const schedule = await this.schedulesRepository.findOne({ where: { id: +id } });
+    const schedule = await this.schedulesRepository.findOne({
+      where: { id: +id },
+    });
     const programId = schedule ? +schedule.program_id : null;
 
     const result = await this.schedulesRepository.delete(id);
@@ -1074,7 +1076,9 @@ export class SchedulesService {
    * After any schedule mutation on a program, copy its current schedules to all
    * other programs that share the same link_group_id (full replace).
    */
-  private async syncSchedulesToLinkedPrograms(programId: number): Promise<void> {
+  private async syncSchedulesToLinkedPrograms(
+    programId: number,
+  ): Promise<void> {
     const program = await this.programsRepository.findOne({
       where: { id: programId },
       select: ['id', 'link_group_id'],
@@ -1094,7 +1098,9 @@ export class SchedulesService {
     });
 
     for (const other of others) {
-      await this.schedulesRepository.delete({ program_id: other.id.toString() });
+      await this.schedulesRepository.delete({
+        program_id: other.id.toString(),
+      });
       if (sourceSchedules.length > 0) {
         const copies = sourceSchedules.map((s) =>
           this.schedulesRepository.create({
