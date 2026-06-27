@@ -37,5 +37,16 @@ export class RegisterDto {
 
   @ApiProperty({ required: false })
   @IsOptional()
+  @IsString()
   deviceId?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  platform?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  appVersion?: string;
 }
