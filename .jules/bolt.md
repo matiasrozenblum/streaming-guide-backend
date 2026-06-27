@@ -1,7 +1,5 @@
-## 2025-03-05 - [N+1 DB Query Avoidance in Scraper]
-**Learning:** Found N+1 query patterns inside the `insertSchedule` method of `ScraperService`. For every scraped item, it runs `await this.programRepo.find` and then for each day `await this.scheduleRepo.findOne`. This leads to poor performance.
-**Action:** Always pre-fetch existing records into a Map or Dictionary outside of the loops to avoid N+1 DB calls.
+## 2025-02-18 - Replacing N+1 findOne with In operator
 
-## 2025-03-24 - [N+1 Redis Query Avoidance in Streamer Live Status]
-**Learning:** Found N+1 Redis query patterns inside the `getLiveStatuses` method of `StreamerLiveStatusService`. For every requested streamer, it runs `await this.getLiveStatus(id)` concurrently wrapped in `Promise.all`, which executes individual `GET` commands to Redis. This leads to connection overhead and poor performance.
-**Action:** Replace `Promise.all` with individual `get` calls with a single `mget` command to batch the retrieval, mapping the responses back to the input array indices.
+**Learning:** When assigning multiple related entities (like panelists to programs) in bulk creation endpoints, mapping over arrays of IDs and executing `findOne` within a `Promise.all` creates an N+1 query problem. The application already imports TypeORM's `In` operator, which can be leveraged to batch these lookups.
+
+**Action:** Replace `Promise.all(ids.map(id => repository.findOne({ where: { id } })))` with `await repository.find({ where: { id: In(ids) } })` to execute a single, efficient database query. Ensure that the TypeORM `In` helper is imported.
