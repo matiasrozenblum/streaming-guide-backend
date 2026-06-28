@@ -505,9 +505,8 @@ export class SchedulesService {
             this.sentryService,
           );
           // Import dynamically to avoid circular dependency
-          const { createLiveStatusCacheFromStreams } = await import(
-            '../youtube/interfaces/live-status-cache.interface'
-          );
+          const { createLiveStatusCacheFromStreams } =
+            await import('../youtube/interfaces/live-status-cache.interface');
           const cacheData = createLiveStatusCacheFromStreams(
             channelId,
             handle,
