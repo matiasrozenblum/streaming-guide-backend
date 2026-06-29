@@ -266,6 +266,142 @@ export class ConfigService {
     return value;
   }
 
+  /**
+   * Bulk version of canFetchLive to prevent N+1 Redis queries.
+   * Leverages mget to pre-fetch statuses efficiently.
+   */
+  async canFetchLiveBulk(handles: string[]): Promise<Map<string, boolean>> {
+    const result = new Map<string, boolean>();
+    if (!handles || handles.length === 0) return result;
+
+    await this.ensureCacheSeeded();
+
+    // 1. Prepare keys for mget (fetch_enabled)
+    const fetchEnabledKeys = handles.map(
+      (h) => `${this.FETCH_ENABLED_PREFIX}youtube.fetch_enabled.${h}`,
+    );
+    // Add global fetch_enabled key
+    const globalKeyIndex = fetchEnabledKeys.length;
+    fetchEnabledKeys.push(`${this.FETCH_ENABLED_PREFIX}youtube.fetch_enabled`);
+
+    // Fetch all fetch_enabled configs
+    const fetchEnabledResults =
+      await this.redisService.mget<boolean>(fetchEnabledKeys);
+
+    let globalFetchEnabled = fetchEnabledResults[globalKeyIndex];
+    if (globalFetchEnabled === null) {
+      const globalVal = await this.get('youtube.fetch_enabled');
+      globalFetchEnabled = globalVal === 'true';
+      await this.redisService.set(
+        `${this.FETCH_ENABLED_PREFIX}youtube.fetch_enabled`,
+        globalFetchEnabled,
+      );
+    }
+
+    const enabledStatusMap = new Map<string, boolean>();
+
+    // 2. Resolve fetch_enabled for each handle, check cache miss
+    for (let i = 0; i < handles.length; i++) {
+      const handle = handles[i];
+      let isEnabled = fetchEnabledResults[i];
+
+      if (isEnabled === null) {
+        // Cache miss
+        const perChannelKey = `youtube.fetch_enabled.${handle}`;
+        const perChannel = await this.get(perChannelKey);
+
+        if (perChannel != null) {
+          isEnabled = perChannel === 'true';
+          await this.redisService.set(
+            `${this.FETCH_ENABLED_PREFIX}${perChannelKey}`,
+            isEnabled,
+          );
+        } else {
+          isEnabled = globalFetchEnabled;
+        }
+      }
+
+      enabledStatusMap.set(handle, isEnabled);
+      // Fast path: if not enabled, it's false
+      if (!isEnabled) {
+        result.set(handle, false);
+      }
+    }
+
+    // Filter handles that are enabled to check holiday status
+    const remainingHandles = handles.filter(
+      (h) => enabledStatusMap.get(h) === true,
+    );
+    if (remainingHandles.length === 0) {
+      return result;
+    }
+
+    // 3. Holiday check logic (done once)
+    const today = TimezoneUtil.currentDateString(); // YYYY-MM-DD in Argentina time
+    const cachedHoliday = await this.redisService.get<{
+      date: string;
+      isHoliday: boolean;
+    }>(this.HOLIDAY_CACHE_KEY);
+
+    let isHoliday: boolean;
+    if (!cachedHoliday || cachedHoliday.date !== today) {
+      const argentinaDate = TimezoneUtil.now().toDate();
+      isHoliday = !!this.hd.isHoliday(argentinaDate);
+
+      if (!isHoliday) {
+        const customDatesRaw = await this.get('holiday.custom_dates');
+        if (customDatesRaw) {
+          const customDates = customDatesRaw.split(',').map((d) => d.trim());
+          isHoliday = customDates.includes(today);
+        }
+      }
+
+      const ttl = TimezoneUtil.ttlUntilEndOfDay();
+      await this.redisService.set(
+        this.HOLIDAY_CACHE_KEY,
+        { date: today, isHoliday },
+        ttl,
+      );
+    } else {
+      isHoliday = cachedHoliday.isHoliday;
+    }
+
+    if (!isHoliday) {
+      // Not a holiday, all remaining handles are fetchable
+      for (const h of remainingHandles) {
+        result.set(h, true);
+      }
+      return result;
+    }
+
+    // 4. It's a holiday, check overrides
+    const overrideKeys = remainingHandles.map(
+      (h) =>
+        `${this.HOLIDAY_OVERRIDE_PREFIX}youtube.fetch_override_holiday.${h}`,
+    );
+    const overrideResults = await this.redisService.mget<boolean>(overrideKeys);
+
+    for (let i = 0; i < remainingHandles.length; i++) {
+      const handle = remainingHandles[i];
+      let override = overrideResults[i];
+
+      if (override === null) {
+        // Cache miss
+        const overrideKey = `youtube.fetch_override_holiday.${handle}`;
+        const overrideValue = await this.get(overrideKey);
+        override = overrideValue === null ? true : overrideValue === 'true';
+        await this.redisService.set(
+          `${this.HOLIDAY_OVERRIDE_PREFIX}${overrideKey}`,
+          override,
+        );
+      }
+
+      result.set(handle, override);
+    }
+
+    return result;
+  }
+
   async canFetchLive(handle: string): Promise<boolean> {
     // Check if fetch is enabled
     const enabled = await this.isYoutubeFetchEnabledFor(handle);
