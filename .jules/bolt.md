@@ -5,3 +5,7 @@
 ## 2025-03-24 - [N+1 Redis Query Avoidance in Streamer Live Status]
 **Learning:** Found N+1 Redis query patterns inside the `getLiveStatuses` method of `StreamerLiveStatusService`. For every requested streamer, it runs `await this.getLiveStatus(id)` concurrently wrapped in `Promise.all`, which executes individual `GET` commands to Redis. This leads to connection overhead and poor performance.
 **Action:** Replace `Promise.all` with individual `get` calls with a single `mget` command to batch the retrieval, mapping the responses back to the input array indices.
+
+## 2025-05-18 - [N+1 Redis Query Avoidance in Gating Checks]
+**Learning:** Found N+1 Redis query patterns inside the `handleNotificationsCron` method of `PushScheduler`. For every channel with a due schedule, it called `ConfigService.canFetchLive` which triggered a sequence of individual `get` commands to Redis for gating settings. This adds network overhead for bulk tasks.
+**Action:** Implemented `ConfigService.canFetchLiveBulk(handles)` using `RedisService.mget` to pre-fetch both `fetch_enabled` and `fetch_override_holiday` statuses for all channels in just 2 batched round trips, reducing Redis overhead and replacing `Promise.all` `.map()` loops.
