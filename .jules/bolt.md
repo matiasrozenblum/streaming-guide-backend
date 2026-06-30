@@ -5,3 +5,7 @@
 ## 2025-03-24 - [N+1 Redis Query Avoidance in Streamer Live Status]
 **Learning:** Found N+1 Redis query patterns inside the `getLiveStatuses` method of `StreamerLiveStatusService`. For every requested streamer, it runs `await this.getLiveStatus(id)` concurrently wrapped in `Promise.all`, which executes individual `GET` commands to Redis. This leads to connection overhead and poor performance.
 **Action:** Replace `Promise.all` with individual `get` calls with a single `mget` command to batch the retrieval, mapping the responses back to the input array indices.
+
+## 2025-03-31 - [N+1 DB Query Avoidance using TypeORM In Operator]
+**Learning:** Found N+1 query patterns when fetching arrays of entities based on IDs (e.g., retrieving panelists in `ProgramsService.createBulk`). Using `Promise.all` with individual `repository.findOne` calls loops the database access, causing connection overhead.
+**Action:** Replace `Promise.all(ids.map(id => repository.findOne(...)))` with a single `repository.find({ where: { id: In(ids) } })` batch query. Additionally, subsequent `.filter(Boolean)` calls can be removed since `.find()` does not return nulls.
