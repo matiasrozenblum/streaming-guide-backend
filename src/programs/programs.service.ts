@@ -137,12 +137,12 @@ export class ProgramsService {
 
     // Assign panelists to all created programs if provided
     if (dto.panelist_ids && dto.panelist_ids.length > 0) {
-      const panelists = await Promise.all(
-        dto.panelist_ids.map((pid) =>
-          this.panelistsRepository.findOne({ where: { id: pid } }),
-        ),
-      );
-      const validPanelists = panelists.filter(Boolean) as Panelist[];
+      // ⚡ Bolt: Fix N+1 query problem by using TypeORM In() operator
+      // Replaced Promise.all and map containing findOne with a single find method call.
+      const validPanelists = await this.panelistsRepository.find({
+        where: { id: In(dto.panelist_ids) },
+      });
+
       if (validPanelists.length > 0) {
         for (const program of savedPrograms) {
           program.panelists = validPanelists;
