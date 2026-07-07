@@ -137,12 +137,11 @@ export class ProgramsService {
 
     // Assign panelists to all created programs if provided
     if (dto.panelist_ids && dto.panelist_ids.length > 0) {
-      const panelists = await Promise.all(
-        dto.panelist_ids.map((pid) =>
-          this.panelistsRepository.findOne({ where: { id: pid } }),
-        ),
-      );
-      const validPanelists = panelists.filter(Boolean) as Panelist[];
+      // ⚡ Bolt: Prevent N+1 DB queries by using a single .find() with In() operator
+      // Replaces Promise.all with individual .findOne() calls
+      const validPanelists = await this.panelistsRepository.find({
+        where: { id: In(dto.panelist_ids) },
+      });
       if (validPanelists.length > 0) {
         for (const program of savedPrograms) {
           program.panelists = validPanelists;
