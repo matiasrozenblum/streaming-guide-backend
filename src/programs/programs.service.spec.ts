@@ -124,6 +124,7 @@ describe('ProgramsService', () => {
 
     panelistRepository = {
       findOne: jest.fn(),
+      find: jest.fn().mockResolvedValue([]),
     };
 
     channelRepository = {
