@@ -5,6 +5,13 @@ Todas las modificaciones importantes de este proyecto se documentarán en este a
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/)
 y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
+## [1.37.0] - 2026-06-27
+
+### Changed
+
+- **Eliminación del pipeline V1 de enriquecimiento de schedules**: `getSchedulesWithOptimizedLiveStatus` y `enrichWithCachedLiveStatus` no tenían callers en producción (todo el tráfico usa V2 desde la migración). Se eliminaron ~950 líneas de código muerto junto con sus dependencias exclusivas (`getLiveStatusForChannels` en `LiveStatusBackgroundService`, `canFetchLiveBulk` en `ConfigService`, el spec file completo de V1).
+- **`POST /programs/bulk` — optimización de query DB**: reemplaza N consultas `findOne` concurrentes por una sola query `WHERE id IN (...)`, reduciendo los round-trips a la base de datos de O(N) a O(1) al crear programas en múltiples canales.
+
 ## [1.36.1] - 2026-06-27
 
 ### Fixed
