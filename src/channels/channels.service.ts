@@ -11,7 +11,6 @@ import { RedisService } from '@/redis/redis.service';
 import { YoutubeDiscoveryService } from '@/youtube/youtube-discovery.service';
 import { UserSubscription } from '@/users/user-subscription.entity';
 import { Device } from '@/users/device.entity';
-import { User } from '@/users/users.entity';
 import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
 import { ConfigService } from '@/config/config.service';
 import { WeeklyOverridesService } from '@/schedules/weekly-overrides.service';
@@ -446,10 +445,11 @@ export class ChannelsService {
 
   async getChannelsWithSchedules(
     day?: string,
-    deviceId?: string,
+    userId?: number,
     liveStatus?: boolean,
     raw?: string,
     weekStart?: string,
+    legacyDeviceId?: string,
   ): Promise<ChannelWithSchedules[]> {
     const overallStart = Date.now();
     const requestId = Math.random().toString(36).substr(2, 9);
@@ -457,18 +457,33 @@ export class ChannelsService {
       `[CHANNELS-SCHEDULES-${requestId}] Starting fetch - day: ${day || 'all'}, live: ${liveStatus}, raw: ${raw} at ${new Date().toISOString()}`,
     );
 
-    // Pre-fetch user subscriptions if deviceId is provided (optimized query)
+    // Pre-fetch user subscriptions
+    // New path: userId from JWT (direct lookup, no device indirection)
+    // Legacy path: deviceId query param → device → user (for old clients without JWT)
     let subscribedProgramIds: Set<number> = new Set();
-    if (deviceId) {
+    if (userId) {
       try {
-        // Use optimized query to avoid complex JOINs
+        const subscriptions = await this.userSubscriptionRepo.find({
+          where: { user: { id: userId }, isActive: true },
+          relations: ['program'],
+        });
+        subscribedProgramIds = new Set(
+          subscriptions.map((sub) => sub.program.id),
+        );
+      } catch (error) {
+        console.warn(
+          `[CHANNELS-SCHEDULES] Subscription lookup failed for userId ${userId}:`,
+          error.message,
+        );
+      }
+    } else if (legacyDeviceId) {
+      try {
         const device = await this.deviceRepo
           .createQueryBuilder('device')
           .leftJoinAndSelect('device.user', 'user')
           .select(['device.id', 'user.id'])
-          .where('device.deviceId = :deviceId', { deviceId })
+          .where('device.deviceId = :deviceId', { deviceId: legacyDeviceId })
           .getOne();
-
         if (device?.user?.id) {
           const subscriptions = await this.userSubscriptionRepo.find({
             where: { user: { id: device.user.id }, isActive: true },
@@ -480,10 +495,9 @@ export class ChannelsService {
         }
       } catch (error) {
         console.warn(
-          `[CHANNELS-SCHEDULES] Device lookup failed for ${deviceId}:`,
+          `[CHANNELS-SCHEDULES] Legacy device lookup failed for ${legacyDeviceId}:`,
           error.message,
         );
-        // Continue without device filtering if lookup fails
       }
     }
 
@@ -637,30 +651,33 @@ export class ChannelsService {
    * Get today's schedules only - optimized for initial page load
    */
   async getTodaySchedules(
-    deviceId?: string,
+    userId?: number,
     liveStatus?: boolean,
     raw?: string,
+    legacyDeviceId?: string,
   ): Promise<ChannelWithSchedules[]> {
     const today = TimezoneUtil.currentDayOfWeek();
 
-    return this.getChannelsWithSchedules(today, deviceId, liveStatus, raw);
+    return this.getChannelsWithSchedules(today, userId, liveStatus, raw, undefined, legacyDeviceId);
   }
 
   /**
    * Get full week schedules - optimized for background loading
    */
   async getWeekSchedules(
-    deviceId?: string,
+    userId?: number,
     liveStatus?: boolean,
     raw?: string,
     weekStart?: string,
+    legacyDeviceId?: string,
   ): Promise<ChannelWithSchedules[]> {
     return this.getChannelsWithSchedules(
       undefined,
-      deviceId,
+      userId,
       liveStatus,
       raw,
       weekStart,
+      legacyDeviceId,
     );
   }
 
@@ -670,9 +687,10 @@ export class ChannelsService {
    * (~4 round trips instead of ~150), reducing response time from ~7.5s to ~600ms.
    */
   async getTodaySchedulesV2(
-    deviceId?: string,
+    userId?: number,
     liveStatus?: boolean,
     raw?: string,
+    legacyDeviceId?: string,
   ): Promise<ChannelWithSchedules[]> {
     const overallStart = Date.now();
     const today = TimezoneUtil.currentDayOfWeek();
@@ -680,17 +698,32 @@ export class ChannelsService {
       `[CHANNELS-SCHEDULES-V2] Starting fetch - day: ${today}, live: ${liveStatus} at ${new Date().toISOString()}`,
     );
 
-    // Pre-fetch user subscriptions if deviceId is provided
+    // Pre-fetch user subscriptions
+    // New path: userId from JWT — legacy path: deviceId → device → user
     let subscribedProgramIds: Set<number> = new Set();
-    if (deviceId) {
+    if (userId) {
+      try {
+        const subscriptions = await this.userSubscriptionRepo.find({
+          where: { user: { id: userId }, isActive: true },
+          relations: ['program'],
+        });
+        subscribedProgramIds = new Set(
+          subscriptions.map((sub) => sub.program.id),
+        );
+      } catch (error) {
+        console.warn(
+          `[CHANNELS-SCHEDULES-V2] Subscription lookup failed for userId ${userId}:`,
+          error.message,
+        );
+      }
+    } else if (legacyDeviceId) {
       try {
         const device = await this.deviceRepo
           .createQueryBuilder('device')
           .leftJoinAndSelect('device.user', 'user')
           .select(['device.id', 'user.id'])
-          .where('device.deviceId = :deviceId', { deviceId })
+          .where('device.deviceId = :deviceId', { deviceId: legacyDeviceId })
           .getOne();
-
         if (device?.user?.id) {
           const subscriptions = await this.userSubscriptionRepo.find({
             where: { user: { id: device.user.id }, isActive: true },
@@ -702,7 +735,7 @@ export class ChannelsService {
         }
       } catch (error) {
         console.warn(
-          `[CHANNELS-SCHEDULES-V2] Device lookup failed for ${deviceId}:`,
+          `[CHANNELS-SCHEDULES-V2] Legacy device lookup failed for ${legacyDeviceId}:`,
           error.message,
         );
       }
