@@ -382,4 +382,100 @@ export class ConfigService {
     );
     return value;
   }
+
+  /**
+   * Bulk version of canFetchLive to avoid N+1 Redis queries.
+   * Leverages Redis mget to pre-fetch fetch_enabled and fetch_override_holiday statuses efficiently.
+   */
+  async canFetchLiveBulk(handles: string[]): Promise<Map<string, boolean>> {
+    const result = new Map<string, boolean>();
+    if (!handles || handles.length === 0) {
+      return result;
+    }
+
+    await this.ensureCacheSeeded();
+
+    // 1. Prepare keys for mget (fetch_enabled)
+    const fetchEnabledKeys = handles.map(
+      (h) => `${this.FETCH_ENABLED_PREFIX}youtube.fetch_enabled.${h}`,
+    );
+    // Also need global as fallback, we can add it to the end
+    fetchEnabledKeys.push(`${this.FETCH_ENABLED_PREFIX}youtube.fetch_enabled`);
+
+    const fetchEnabledResults =
+      await this.redisService.mget<boolean>(fetchEnabledKeys);
+    const globalFetchEnabled = fetchEnabledResults.pop(); // Remove and get the last element
+
+    // 2. Check if today is a holiday (same logic as single canFetchLive)
+    const today = TimezoneUtil.currentDateString();
+    const cachedHoliday = await this.redisService.get<{
+      date: string;
+      isHoliday: boolean;
+    }>(this.HOLIDAY_CACHE_KEY);
+
+    let isHoliday: boolean;
+    if (!cachedHoliday || cachedHoliday.date !== today) {
+      const argentinaDate = TimezoneUtil.now().toDate();
+      isHoliday = !!this.hd.isHoliday(argentinaDate);
+
+      if (!isHoliday) {
+        const customDatesRaw = await this.get('holiday.custom_dates');
+        if (customDatesRaw) {
+          const customDates = customDatesRaw.split(',').map((d) => d.trim());
+          isHoliday = customDates.includes(today);
+        }
+      }
+
+      const ttl = TimezoneUtil.ttlUntilEndOfDay();
+      await this.redisService.set(
+        this.HOLIDAY_CACHE_KEY,
+        { date: today, isHoliday },
+        ttl,
+      );
+    } else {
+      isHoliday = cachedHoliday.isHoliday;
+    }
+
+    // 3. Prepare keys for holiday overrides if it is a holiday
+    let holidayOverrideResults: (boolean | null)[] = [];
+    if (isHoliday) {
+      const overrideKeys = handles.map(
+        (h) =>
+          `${this.HOLIDAY_OVERRIDE_PREFIX}youtube.fetch_override_holiday.${h}`,
+      );
+      holidayOverrideResults =
+        await this.redisService.mget<boolean>(overrideKeys);
+    }
+
+    // 4. Evaluate logic for each handle
+    for (let i = 0; i < handles.length; i++) {
+      const handle = handles[i];
+      let enabled: boolean | null | undefined = fetchEnabledResults[i];
+
+      // Cache miss check: in a real robust implementation, if it's null we should fallback to DB.
+      // But ensureCacheSeeded() should guarantee it's in cache if it exists in DB.
+      if (enabled === null) {
+        enabled = globalFetchEnabled !== null ? globalFetchEnabled : true;
+      }
+
+      if (!enabled) {
+        result.set(handle, false);
+        continue;
+      }
+
+      if (!isHoliday) {
+        result.set(handle, true);
+        continue;
+      }
+
+      let override: boolean | null | undefined = holidayOverrideResults[i];
+      if (override === null) {
+        // Fallback if not configured is true (enabled on holidays)
+        override = true;
+      }
+      result.set(handle, override);
+    }
+
+    return result;
+  }
 }
