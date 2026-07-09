@@ -9,10 +9,18 @@ export class OptionalJwtAuthGuard extends AuthGuard('jwt') {
 
   handleRequest(err: any, user: any, info: any) {
     if (err) throw err;
-    // info is an Error instance when a token was present but invalid/expired
-    if (!user && info instanceof Error) {
-      throw new UnauthorizedException(info.message);
+    if (!user) {
+      // Reject only when a token WAS sent but is malformed, expired, or otherwise invalid.
+      // When no token is provided, passport-jwt sets info.name = 'Error' (generic) — allow anonymous.
+      const isTokenError =
+        info?.name === 'JsonWebTokenError' ||
+        info?.name === 'TokenExpiredError' ||
+        info?.name === 'NotBeforeError';
+      if (isTokenError) {
+        throw new UnauthorizedException(info.message);
+      }
+      return null;
     }
-    return user || null;
+    return user;
   }
 }
