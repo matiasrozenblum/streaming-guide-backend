@@ -12,6 +12,7 @@ import {
   UploadedFile,
   BadRequestException,
   Headers,
+  Req,
 } from '@nestjs/common';
 import { needsMidnightSplit } from '../utils/app-version.util';
 import { splitCrossMidnightSchedules } from '../utils/midnight-split.util';
@@ -28,6 +29,7 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { SupabaseStorageService } from '../banners/supabase-storage.service';
@@ -56,7 +58,9 @@ export class ChannelsController {
   }
 
   @Get('with-schedules')
+  @UseGuards(OptionalJwtAuthGuard)
   async getChannelsWithSchedules(
+    @Req() req: any,
     @Query('day') day?: string,
     @Query('deviceId') deviceId?: string,
     @Query('live_status') liveStatus?: string,
@@ -64,13 +68,16 @@ export class ChannelsController {
     @Headers('x-app-version') appVersion?: string,
     @Headers('origin') origin?: string,
   ) {
+    const userId = req.user ? Number(req.user.id) : undefined;
     const liveStatusBool =
       liveStatus === 'true' ? true : liveStatus === 'false' ? false : undefined;
     const result = await this.channelsService.getChannelsWithSchedules(
       day,
-      deviceId,
+      userId,
       liveStatusBool,
       raw,
+      undefined,
+      userId ? undefined : deviceId,
     );
     if (needsMidnightSplit(appVersion, origin)) {
       return splitCrossMidnightSchedules(result);
@@ -79,6 +86,7 @@ export class ChannelsController {
   }
 
   @Get('with-schedules/today')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({
     summary: "Get today's schedules only (optimized for initial load)",
   })
@@ -87,18 +95,21 @@ export class ChannelsController {
     description: "Today's schedules for all channels",
   })
   async getTodaySchedules(
+    @Req() req: any,
     @Query('deviceId') deviceId?: string,
     @Query('live_status') liveStatus?: string,
     @Query('raw') raw?: string,
     @Headers('x-app-version') appVersion?: string,
     @Headers('origin') origin?: string,
   ) {
+    const userId = req.user ? Number(req.user.id) : undefined;
     const liveStatusBool =
       liveStatus === 'true' ? true : liveStatus === 'false' ? false : undefined;
     const result = await this.channelsService.getTodaySchedules(
-      deviceId,
+      userId,
       liveStatusBool,
       raw,
+      userId ? undefined : deviceId,
     );
     if (needsMidnightSplit(appVersion, origin)) {
       return splitCrossMidnightSchedules(result);
@@ -107,6 +118,7 @@ export class ChannelsController {
   }
 
   @Get('with-schedules/today/v2')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({
     summary: "V2: Get today's schedules with batched Redis reads (fast)",
   })
@@ -115,18 +127,21 @@ export class ChannelsController {
     description: "Today's schedules with optimized live status",
   })
   async getTodaySchedulesV2(
+    @Req() req: any,
     @Query('deviceId') deviceId?: string,
     @Query('live_status') liveStatus?: string,
     @Query('raw') raw?: string,
     @Headers('x-app-version') appVersion?: string,
     @Headers('origin') origin?: string,
   ) {
+    const userId = req.user ? Number(req.user.id) : undefined;
     const liveStatusBool =
       liveStatus === 'true' ? true : liveStatus === 'false' ? false : undefined;
     const result = await this.channelsService.getTodaySchedulesV2(
-      deviceId,
+      userId,
       liveStatusBool,
       raw,
+      userId ? undefined : deviceId,
     );
     if (needsMidnightSplit(appVersion, origin)) {
       return splitCrossMidnightSchedules(result);
@@ -135,6 +150,7 @@ export class ChannelsController {
   }
 
   @Get('with-schedules/week')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({
     summary: 'Get full week schedules (optimized for background loading)',
   })
@@ -143,6 +159,7 @@ export class ChannelsController {
     description: 'Full week schedules for all channels',
   })
   async getWeekSchedules(
+    @Req() req: any,
     @Query('deviceId') deviceId?: string,
     @Query('live_status') liveStatus?: string,
     @Query('raw') raw?: string,
@@ -150,13 +167,15 @@ export class ChannelsController {
     @Headers('x-app-version') appVersion?: string,
     @Headers('origin') origin?: string,
   ) {
+    const userId = req.user ? Number(req.user.id) : undefined;
     const liveStatusBool =
       liveStatus === 'true' ? true : liveStatus === 'false' ? false : undefined;
     const result = await this.channelsService.getWeekSchedules(
-      deviceId,
+      userId,
       liveStatusBool,
       raw,
       weekStart,
+      userId ? undefined : deviceId,
     );
     if (needsMidnightSplit(appVersion, origin)) {
       return splitCrossMidnightSchedules(result);
