@@ -111,12 +111,8 @@ export class PushScheduler {
           .filter((h): h is string => !!h),
       ),
     );
-    const fetchableMap = new Map<string, boolean>();
-    await Promise.all(
-      uniqueChannelHandles.map(async (handle) => {
-        fetchableMap.set(handle, await this.configService.canFetchLive(handle));
-      }),
-    );
+    const fetchableMap =
+      await this.configService.canFetchLiveBulk(uniqueChannelHandles);
 
     // 6) Enviar notificaciones por programa + usuario (concurrently)
     const pushPromises: Promise<void>[] = [];
