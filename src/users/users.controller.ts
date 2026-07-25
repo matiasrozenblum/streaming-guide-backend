@@ -93,6 +93,17 @@ export class UsersController {
     return this.usersService.addSeenFeature(req.user.id, body.feature);
   }
 
+  /** Resetear features vistos (para testing o si el usuario quiere ver el onboarding de nuevo) */
+  @ApiBearerAuth()
+  @Delete('me/seen-features')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Resetear features vistos. Sin query param limpia todo; con ?feature=X elimina solo ese.' })
+  @ApiQuery({ name: 'feature', required: false, type: String })
+  @ApiResponse({ status: 200, description: 'Lista actualizada de features vistos' })
+  removeSeenFeature(@Req() req, @Query('feature') feature?: string) {
+    return this.usersService.removeSeenFeature(req.user.id, feature);
+  }
+
   /** Obtener usuario por ID (admin o dueño) */
   @UseGuards(JwtAuthGuard, RolesGuard) // ← agregado aquí
   @ApiBearerAuth()
