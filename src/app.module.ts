@@ -62,7 +62,9 @@ import { ConfigModule as AppConfigModule } from './config/config.module';
           ssl: { rejectUnauthorized: false },
           schema: 'public',
           autoLoadEntities: true,
-          synchronize: false, // Temporarily disabled to prevent schema conflicts
+          synchronize: false,
+          migrations: [__dirname + '/migrations/*{.ts,.js}'],
+          migrationsRun: true,
           logging: false,
           extra: {
             max: 35, // Reduced from 50. Supabase Dedicated Pooler allows 40 per user+db. With 1 instance, 35 provides buffer while maximizing throughput. Monitor actual usage.
