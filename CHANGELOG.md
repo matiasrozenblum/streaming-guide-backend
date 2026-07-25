@@ -5,6 +5,21 @@ Todas las modificaciones importantes de este proyecto se documentarán en este a
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/)
 y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
+## [1.39.0] - 2026-07-25
+
+### Added
+- **`seen_features` en usuarios**: nueva columna `seen_features text[]` en la tabla `users` (migración `AddSeenFeaturesToUsers1783100000000`). Nuevo endpoint `POST /users/me/seen-features` (autenticado) que recibe `{ feature: string }` y agrega el feature a la lista del usuario sin duplicados. El campo se devuelve en `GET /users/me`. Permite que web y mobile sincronicen qué tooltips de onboarding ya vio el usuario entre dispositivos.
+
+---
+
+## [1.38.0] - 2026-07-09
+
+### Changed
+
+- **`subscribed` por JWT en lugar de `deviceId`**: los 4 endpoints de schedules (`GET /channels/with-schedules`, `/today`, `/today/v2`, `/week`) ahora determinan el campo `subscribed` usando el `userId` del JWT cuando el header `Authorization: Bearer <token>` está presente. Esto corrige el problema multi-device donde un usuario logueado en un nuevo dispositivo no veía sus suscripciones activas.
+- Se agrega `OptionalJwtAuthGuard`: si hay JWT válido lo usa, si no hay continúa anónimamente, si el JWT es inválido/expirado devuelve 401.
+- Se mantiene fallback legacy por `deviceId` query param para versiones antiguas del mobile que aún no envían JWT — el path legado solo se activa cuando no hay JWT presente.
+
 ## [1.37.0] - 2026-06-27
 
 ### Changed

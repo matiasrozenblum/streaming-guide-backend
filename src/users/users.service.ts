@@ -247,6 +247,27 @@ export class UsersService {
     }
   }
 
+  async addSeenFeature(userId: number, feature: string): Promise<string[]> {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException(`User with ID ${userId} not found`);
+    if (!user.seenFeatures) user.seenFeatures = [];
+    if (!user.seenFeatures.includes(feature)) {
+      user.seenFeatures = [...user.seenFeatures, feature];
+      await this.usersRepository.save(user);
+    }
+    return user.seenFeatures;
+  }
+
+  async removeSeenFeature(userId: number, feature?: string): Promise<string[]> {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException(`User with ID ${userId} not found`);
+    user.seenFeatures = feature
+      ? (user.seenFeatures ?? []).filter((f) => f !== feature)
+      : [];
+    await this.usersRepository.save(user);
+    return user.seenFeatures;
+  }
+
   async remove(id: number): Promise<void> {
     const result = await this.usersRepository.delete(id);
     if (result.affected === 0) {

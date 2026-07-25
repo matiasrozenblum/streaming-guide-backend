@@ -6,6 +6,7 @@ import { ChannelsService } from '../channels/channels.service';
 import { TimezoneUtil } from '../utils/timezone.util';
 import { SupabaseStorageService } from '../banners/supabase-storage.service';
 import { YoutubeLiveService } from '../channels/../youtube/youtube-live.service';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 
 describe('Channels Endpoints Integration Tests', () => {
   let app: INestApplication;
@@ -75,7 +76,10 @@ describe('Channels Endpoints Integration Tests', () => {
           },
         },
       ],
-    }).compile();
+    })
+      .overrideGuard(OptionalJwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     app = module.createNestApplication();
     await app.init();
@@ -94,7 +98,9 @@ describe('Channels Endpoints Integration Tests', () => {
         .expect(200);
 
       expect(response.body).toEqual(mockChannelWithSchedules);
+      // userId=undefined (no JWT in test), liveStatus=undefined, raw=undefined, legacyDeviceId=undefined
       expect(channelsService.getTodaySchedules).toHaveBeenCalledWith(
+        undefined,
         undefined,
         undefined,
         undefined,
@@ -112,10 +118,12 @@ describe('Channels Endpoints Integration Tests', () => {
         .expect(200);
 
       expect(response.body).toEqual(mockChannelWithSchedules);
+      // No JWT → userId=undefined, deviceId goes to legacyDeviceId
       expect(channelsService.getTodaySchedules).toHaveBeenCalledWith(
-        'test-device-123',
+        undefined,
         true,
         'false',
+        'test-device-123',
       );
     });
 
@@ -131,6 +139,7 @@ describe('Channels Endpoints Integration Tests', () => {
         undefined,
         false,
         undefined,
+        undefined,
       );
     });
 
@@ -140,6 +149,7 @@ describe('Channels Endpoints Integration Tests', () => {
         .expect(200);
 
       expect(channelsService.getTodaySchedules).toHaveBeenCalledWith(
+        undefined,
         undefined,
         undefined,
         undefined,
@@ -154,7 +164,9 @@ describe('Channels Endpoints Integration Tests', () => {
         .expect(200);
 
       expect(response.body).toEqual(mockChannelWithSchedules);
+      // userId=undefined (no JWT), liveStatus=undefined, raw=undefined, weekStart=undefined, legacyDeviceId=undefined
       expect(channelsService.getWeekSchedules).toHaveBeenCalledWith(
+        undefined,
         undefined,
         undefined,
         undefined,
@@ -173,11 +185,13 @@ describe('Channels Endpoints Integration Tests', () => {
         .expect(200);
 
       expect(response.body).toEqual(mockChannelWithSchedules);
+      // No JWT → userId=undefined, deviceId goes to legacyDeviceId
       expect(channelsService.getWeekSchedules).toHaveBeenCalledWith(
-        'test-device-456',
+        undefined,
         true,
         'true',
         undefined,
+        'test-device-456',
       );
     });
 
@@ -190,10 +204,11 @@ describe('Channels Endpoints Integration Tests', () => {
         .expect(200);
 
       expect(channelsService.getWeekSchedules).toHaveBeenCalledWith(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
         'partial-device',
-        undefined,
-        undefined,
-        undefined,
       );
     });
   });
@@ -210,11 +225,14 @@ describe('Channels Endpoints Integration Tests', () => {
         .expect(200);
 
       expect(response.body).toEqual(mockChannelWithSchedules);
+      // No JWT → userId=undefined, deviceId goes to legacyDeviceId (6th arg)
       expect(channelsService.getChannelsWithSchedules).toHaveBeenCalledWith(
         'tuesday',
-        'legacy-device',
+        undefined,
         true,
         undefined,
+        undefined,
+        'legacy-device',
       );
     });
 
@@ -225,6 +243,8 @@ describe('Channels Endpoints Integration Tests', () => {
 
       expect(response.body).toEqual(mockChannelWithSchedules);
       expect(channelsService.getChannelsWithSchedules).toHaveBeenCalledWith(
+        undefined,
+        undefined,
         undefined,
         undefined,
         undefined,
@@ -257,6 +277,7 @@ describe('Channels Endpoints Integration Tests', () => {
 
       // Should still call the service, but with undefined for invalid boolean
       expect(channelsService.getTodaySchedules).toHaveBeenCalledWith(
+        undefined,
         undefined,
         undefined,
         undefined,

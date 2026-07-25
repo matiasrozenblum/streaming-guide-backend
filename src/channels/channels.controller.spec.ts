@@ -12,6 +12,9 @@ describe('ChannelsController', () => {
   let controller: ChannelsController;
   let service: ChannelsService;
 
+  // Simulate an unauthenticated request (no JWT)
+  const mockReq = { user: undefined };
+
   const mockChannel: Channel = {
     id: 1,
     name: 'Test Channel',
@@ -148,6 +151,7 @@ describe('ChannelsController', () => {
   describe('getChannelsWithSchedules', () => {
     it('should call service with correct parameters', async () => {
       const result = await controller.getChannelsWithSchedules(
+        mockReq,
         'monday',
         'device123',
         'true',
@@ -155,19 +159,24 @@ describe('ChannelsController', () => {
       );
 
       expect(result).toEqual([]);
+      // No JWT → userId=undefined, deviceId goes to legacyDeviceId (6th arg)
       expect(service.getChannelsWithSchedules).toHaveBeenCalledWith(
         'monday',
-        'device123',
+        undefined,
         true,
         'false',
+        undefined,
+        'device123',
       );
     });
 
     it('should handle undefined parameters', async () => {
-      const result = await controller.getChannelsWithSchedules();
+      const result = await controller.getChannelsWithSchedules(mockReq);
 
       expect(result).toEqual([]);
       expect(service.getChannelsWithSchedules).toHaveBeenCalledWith(
+        undefined,
+        undefined,
         undefined,
         undefined,
         undefined,
@@ -177,6 +186,7 @@ describe('ChannelsController', () => {
 
     it('should handle partial parameters', async () => {
       const result = await controller.getChannelsWithSchedules(
+        mockReq,
         'tuesday',
         undefined,
         'false',
@@ -188,6 +198,8 @@ describe('ChannelsController', () => {
         undefined,
         false,
         undefined,
+        undefined,
+        undefined,
       );
     });
   });
@@ -195,24 +207,28 @@ describe('ChannelsController', () => {
   describe('getTodaySchedules', () => {
     it('should call getTodaySchedules service method', async () => {
       const result = await controller.getTodaySchedules(
+        mockReq,
         'device123',
         'true',
         'false',
       );
 
       expect(result).toEqual([]);
+      // No JWT → userId=undefined, deviceId goes to legacyDeviceId (4th arg)
       expect(service.getTodaySchedules).toHaveBeenCalledWith(
-        'device123',
+        undefined,
         true,
         'false',
+        'device123',
       );
     });
 
     it('should handle undefined parameters', async () => {
-      const result = await controller.getTodaySchedules();
+      const result = await controller.getTodaySchedules(mockReq);
 
       expect(result).toEqual([]);
       expect(service.getTodaySchedules).toHaveBeenCalledWith(
+        undefined,
         undefined,
         undefined,
         undefined,
@@ -220,13 +236,14 @@ describe('ChannelsController', () => {
     });
 
     it('should handle partial parameters', async () => {
-      const result = await controller.getTodaySchedules('device456', 'true');
+      const result = await controller.getTodaySchedules(mockReq, 'device456', 'true');
 
       expect(result).toEqual([]);
       expect(service.getTodaySchedules).toHaveBeenCalledWith(
-        'device456',
+        undefined,
         true,
         undefined,
+        'device456',
       );
     });
   });
@@ -234,25 +251,29 @@ describe('ChannelsController', () => {
   describe('getWeekSchedules', () => {
     it('should call getWeekSchedules service method', async () => {
       const result = await controller.getWeekSchedules(
+        mockReq,
         'device123',
         'true',
         'false',
       );
 
       expect(result).toEqual([]);
+      // No JWT → userId=undefined, deviceId goes to legacyDeviceId (5th arg)
       expect(service.getWeekSchedules).toHaveBeenCalledWith(
-        'device123',
+        undefined,
         true,
         'false',
         undefined,
+        'device123',
       );
     });
 
     it('should handle undefined parameters', async () => {
-      const result = await controller.getWeekSchedules();
+      const result = await controller.getWeekSchedules(mockReq);
 
       expect(result).toEqual([]);
       expect(service.getWeekSchedules).toHaveBeenCalledWith(
+        undefined,
         undefined,
         undefined,
         undefined,
@@ -261,19 +282,21 @@ describe('ChannelsController', () => {
     });
 
     it('should handle partial parameters', async () => {
-      const result = await controller.getWeekSchedules('device789', 'false');
+      const result = await controller.getWeekSchedules(mockReq, 'device789', 'false');
 
       expect(result).toEqual([]);
       expect(service.getWeekSchedules).toHaveBeenCalledWith(
-        'device789',
+        undefined,
         false,
         undefined,
         undefined,
+        'device789',
       );
     });
 
     it('should pass weekStart param to service', async () => {
       const result = await controller.getWeekSchedules(
+        mockReq,
         undefined,
         undefined,
         undefined,
@@ -286,6 +309,7 @@ describe('ChannelsController', () => {
         undefined,
         undefined,
         '2026-06-02',
+        undefined,
       );
     });
   });
