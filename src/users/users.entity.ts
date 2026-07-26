@@ -56,6 +56,9 @@ export class User {
   })
   origin: 'traditional' | 'google' | 'facebook' | 'apple';
 
+  @Column({ type: 'text', array: true, name: 'seen_features', default: '{}' })
+  seenFeatures: string[];
+
   @OneToMany(() => Device, (device) => device.user, { cascade: true })
   devices: Device[];
 
