@@ -258,6 +258,12 @@ export class UsersService {
     return user.seenFeatures;
   }
 
+  async getSeenFeatures(userId: number): Promise<string[]> {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException(`User with ID ${userId} not found`);
+    return user.seenFeatures ?? [];
+  }
+
   async removeSeenFeature(userId: number, feature?: string): Promise<string[]> {
     const user = await this.usersRepository.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException(`User with ID ${userId} not found`);

@@ -83,6 +83,16 @@ export class UsersController {
     return this.usersService.findOne(req.user.id);
   }
 
+  /** Leer features vistos por el usuario autenticado */
+  @ApiBearerAuth()
+  @Get('me/seen-features')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Obtener los features vistos por el usuario autenticado' })
+  @ApiResponse({ status: 200, description: 'Lista de features vistos' })
+  getSeenFeatures(@Req() req) {
+    return this.usersService.getSeenFeatures(req.user.id);
+  }
+
   /** Marcar feature como vista */
   @ApiBearerAuth()
   @Post('me/seen-features')
