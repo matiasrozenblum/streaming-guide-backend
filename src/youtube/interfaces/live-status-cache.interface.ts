@@ -12,6 +12,21 @@ export interface LiveStream {
   liveBroadcastContent?: string; // 'live', 'upcoming', or 'none'
 }
 
+/**
+ * A program whose scheduled block already ended but whose assigned stream is
+ * still broadcasting. Keyed by scheduleId so the extension follows the specific
+ * program that owned the stream, not the channel as a whole.
+ *
+ * scheduleId is a string because special programs created via weekly overrides
+ * use virtual ids (`virtual_<overrideId>`) rather than numeric DB ids.
+ */
+export interface OvertimeEntry {
+  scheduleId: string;
+  videoId: string;
+  streamUrl: string;
+  startedAt: number;
+}
+
 export interface LiveStatusCache {
   channelId: string;
   handle: string;
@@ -20,6 +35,8 @@ export interface LiveStatusCache {
   videoId: string | null;
   lastUpdated: number;
   ttl: number;
+  /** Programs past their scheduled end that are still on air. */
+  overtime?: OvertimeEntry[];
   // Block-aware fields for accurate timing
   blockEndTime: number | null; // When the current block ends (in minutes), null if unknown
   validationCooldown: number; // When we can validate again (timestamp)
