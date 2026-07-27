@@ -188,6 +188,68 @@ describe('LiveStatusBackgroundService — overtime', () => {
     );
   });
 
+  describe('SSE notifications', () => {
+    const notificationWrites = () =>
+      redisService.set.mock.calls.filter((call: any[]) =>
+        String(call[0]).startsWith('live_notification:'),
+      );
+
+    it('announces the start of overtime so clients refresh immediately', async () => {
+      redisService.mget.mockResolvedValue([buildMarker()]);
+      youtubeLiveService.isVideoLive.mockResolvedValue(true);
+
+      await runOvertime();
+
+      const [call] = notificationWrites();
+      expect(call[0]).toMatch(/^live_notification:CHANNEL_123:\d+$/);
+      // Plain object: RedisService.set serialises it. Double-encoding would
+      // collapse every notification onto the same dedup id downstream.
+      expect(call[1]).toEqual(
+        expect.objectContaining({
+          type: 'live_status_changed',
+          channelId: CHANNEL_ID,
+          videoId: 'VIDEO_123',
+        }),
+      );
+    });
+
+    it('announces the end of overtime', async () => {
+      redisService.mget.mockResolvedValue([
+        buildMarker({ overtimeStartedAt: Date.now() - 20 * 60 * 1000 }),
+      ]);
+      youtubeLiveService.isVideoLive.mockResolvedValue(false);
+
+      await runOvertime();
+
+      expect(notificationWrites()[0][1]).toEqual(
+        expect.objectContaining({
+          type: 'live_status_changed',
+          videoId: null,
+        }),
+      );
+    });
+
+    it('stays quiet while overtime simply continues', async () => {
+      redisService.mget.mockResolvedValue([
+        buildMarker({ overtimeStartedAt: Date.now() - 20 * 60 * 1000 }),
+      ]);
+      youtubeLiveService.isVideoLive.mockResolvedValue(true);
+
+      await runOvertime();
+
+      expect(notificationWrites()).toHaveLength(0);
+    });
+
+    it('stays quiet when the stream was already down before overtime began', async () => {
+      redisService.mget.mockResolvedValue([buildMarker()]);
+      youtubeLiveService.isVideoLive.mockResolvedValue(false);
+
+      await runOvertime();
+
+      expect(notificationWrites()).toHaveLength(0);
+    });
+  });
+
   it('skips channels with no recorded stream', async () => {
     redisService.mget.mockResolvedValue([null]);
 

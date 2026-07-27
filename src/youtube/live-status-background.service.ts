@@ -450,11 +450,17 @@ export class LiveStatusBackgroundService {
     };
     await this.cacheLiveStatus(marker.channelId, cacheData);
 
+    const isFirstCycle = marker.overtimeStartedAt === null;
+
     await this.redisService.set(
       key,
       { ...marker, overtimeStartedAt: startedAt, updatedAt: Date.now() },
       (this.OVERTIME_MAX_MINUTES + 10) * 60,
     );
+
+    if (isFirstCycle) {
+      await this.notifyOvertimeChange(marker, marker.videoId);
+    }
 
     this.logger.debug(
       `[OVERTIME] "${marker.programName}" (${marker.handle}) still on air, ${Math.round(elapsedMinutes)}min past its block`,
@@ -479,6 +485,45 @@ export class LiveStatusBackgroundService {
         this.CACHE_TTL,
       ),
     );
+
+    // Only worth telling clients when they were actually shown the overtime.
+    if (marker.overtimeStartedAt !== null) {
+      await this.notifyOvertimeChange(marker, null);
+    }
+  }
+
+  /**
+   * Push an SSE notification so clients refresh right away instead of waiting
+   * up to 5 minutes for their next poll. Fired only on overtime transitions,
+   * never on the steady-state re-validation that runs every cycle.
+   *
+   * The payload goes in as an object because RedisService.set already
+   * serialises it. Double-encoding (as the older call sites do) makes the SSE
+   * controller parse it back into a string, which collapses every notification
+   * onto the same dedup id and silently drops all but the first.
+   */
+  private async notifyOvertimeChange(
+    marker: LastLiveVideoMarker,
+    videoId: string | null,
+  ): Promise<void> {
+    try {
+      const timestamp = Date.now();
+      await this.redisService.set(
+        `live_notification:${marker.channelId}:${timestamp}`,
+        {
+          type: 'live_status_changed',
+          channelId: marker.channelId,
+          videoId,
+          channelName: marker.handle,
+          timestamp,
+        },
+        300,
+      );
+    } catch {
+      this.logger.warn(
+        `[OVERTIME] Could not publish SSE notification for ${marker.handle}`,
+      );
+    }
   }
 
   /**
