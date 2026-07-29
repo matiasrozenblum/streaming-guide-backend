@@ -27,6 +27,7 @@ describe('SubscriptionService', () => {
     birthDate: new Date('1990-01-01'),
     createdAt: new Date(),
     origin: 'traditional',
+    seenFeatures: [],
     devices: [],
     subscriptions: [],
     streamerSubscriptions: [],
