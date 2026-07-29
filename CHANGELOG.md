@@ -5,6 +5,20 @@ Todas las modificaciones importantes de este proyecto se documentarán en este a
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/)
 y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
+## [1.40.0] - 2026-07-29
+
+### Added
+- **Overtime — los programas siguen en vivo mientras la transmisión no corte**: `is_live` se decidía únicamente por la ventana horaria del schedule, así que un programa cargado de 13:00 a 15:00 pasaba a no-live a las 15:00 en punto aunque su stream siguiera al aire. El usuario que había cerrado el reproductor no tenía forma de volver: el bloque ofrecía "Ver en YouTube" en vez del vivo, y el canal desaparecía de la lista de zapping. Además el cron solo consultaba canales con un programa al aire, así que terminado el bloque nadie refrescaba el caché y expiraba.
+
+  Ahora un programa se mantiene en vivo pasado su horario mientras el stream específico que tenía asignado siga transmitiendo, con un tope de 180 minutos, y deja de extenderse apenas otro programa toma el canal. Los programas en overtime exponen `live_overtime: true` junto a `is_live`, y su `stream_url` apunta a la transmisión en curso en lugar del link de canal o playlist guardado en el programa.
+
+  - La validación usa `isVideoLive` (`videos.list`, 1 unidad de quota) y nunca el camino de refresh basado en `search.list`: la quota escasa es "Search Queries per day" (398/día), no "Queries per day" (50.000). Mandar los canales en overtime al refresh normal la habría agotado en una tarde.
+  - Nuevo marcador Redis `lastLiveVideo:{handle}`, que sobrevive al TTL alineado al bloque — ese TTL expira justo cuando el overtime lo necesita — para que siempre haya un `videoId` que validar.
+  - El overtime se keyea por `scheduleId` string, así que los programas especiales de weekly overrides (ids virtuales `virtual_<overrideId>`) quedan cubiertos.
+  - Se notifica por SSE en las dos transiciones (inicio y fin) para que los clientes refresquen en segundos en vez de esperar hasta 5 minutos a su próximo poll. La notificación se escribe como objeto plano: `RedisService.set` ya serializa, y el doble encoding de los call sites viejos hace que el controller SSE la parsee de vuelta a string y colapse todas las notificaciones en el mismo id de dedup.
+
+---
+
 ## [1.39.0] - 2026-07-25
 
 ### Added
