@@ -57,6 +57,8 @@ type ChannelWithSchedules = {
       description: string | null;
       stream_url: string | null;
       is_live: boolean;
+      /** Live past its scheduled end because the stream is still running. */
+      live_overtime?: boolean;
       live_streams?: any[] | null;
       stream_count?: number;
       channel_stream_count?: number;
@@ -623,6 +625,7 @@ export class ChannelsService {
               description: schedule.program.description,
               stream_url: schedule.program.stream_url,
               is_live: schedule.program.is_live,
+              live_overtime: schedule.program.live_overtime ?? false,
               live_streams: schedule.program.live_streams,
               stream_count: schedule.program.stream_count,
               channel_stream_count: schedule.program.channel_stream_count,
@@ -826,6 +829,7 @@ export class ChannelsService {
             description: schedule.program.description,
             stream_url: schedule.program.stream_url,
             is_live: schedule.program.is_live,
+            live_overtime: schedule.program.live_overtime ?? false,
             live_streams: schedule.program.live_streams,
             stream_count: schedule.program.stream_count,
             channel_stream_count: schedule.program.channel_stream_count,
