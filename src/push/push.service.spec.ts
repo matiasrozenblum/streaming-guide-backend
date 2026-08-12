@@ -266,4 +266,56 @@ describe('PushService', () => {
       consoleSpy.mockRestore();
     });
   });
+
+  describe('createFCM device ownership', () => {
+    const ownedDevice = {
+      ...mockDevice,
+      platform: 'android',
+      fcmToken: null,
+      user: { id: 1 },
+    } as unknown as Device;
+
+    it('rejects an anonymous subscribe for a device owned by a user', async () => {
+      mockDeviceRepository.findOne.mockResolvedValue(ownedDevice);
+
+      await expect(
+        service.createFCM('test-device-id', 'fcm-token', 'android', null),
+      ).rejects.toThrow(
+        'Device belongs to another user or no session was provided',
+      );
+
+      expect(mockPushSubscriptionRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('rejects a subscribe from a different user', async () => {
+      mockDeviceRepository.findOne.mockResolvedValue(ownedDevice);
+
+      await expect(
+        service.createFCM('test-device-id', 'fcm-token', 'android', 2),
+      ).rejects.toThrow(
+        'Device belongs to another user or no session was provided',
+      );
+
+      expect(mockPushSubscriptionRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('allows the owning user to subscribe', async () => {
+      const saveable = { ...ownedDevice } as Device;
+      mockDeviceRepository.findOne.mockResolvedValue(saveable);
+      (mockDeviceRepository as any).save = jest.fn().mockResolvedValue(saveable);
+      mockPushSubscriptionRepository.findOne.mockResolvedValue(null);
+      mockPushSubscriptionRepository.create.mockReturnValue(
+        mockPushSubscription,
+      );
+      mockPushSubscriptionRepository.save.mockResolvedValue(
+        mockPushSubscription,
+      );
+
+      await expect(
+        service.createFCM('test-device-id', 'fcm-token', 'android', 1),
+      ).resolves.toEqual(mockPushSubscription);
+
+      expect(mockPushSubscriptionRepository.save).toHaveBeenCalled();
+    });
+  });
 });

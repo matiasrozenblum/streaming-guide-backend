@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as webPush from 'web-push';
@@ -162,9 +162,10 @@ export class PushService {
     deviceId: string,
     fcmToken: string,
     platform: 'ios' | 'android' | 'web',
+    requesterUserId: number | string | null = null,
   ) {
     console.log(
-      `📱 [PushService] createFCM called: deviceId=${deviceId}, platform=${platform}, tokenPrefix=${fcmToken?.substring(0, 20)}...`,
+      `📱 [PushService] createFCM called: deviceId=${deviceId}, platform=${platform}, requesterUserId=${requesterUserId ?? 'anonymous'}, tokenPrefix=${fcmToken?.substring(0, 20)}...`,
     );
 
     if (!fcmToken || fcmToken.trim() === '') {
@@ -174,6 +175,7 @@ export class PushService {
 
     const device = await this.deviceRepository.findOne({
       where: { deviceId },
+      relations: ['user'],
     });
 
     if (!device) {
@@ -181,6 +183,23 @@ export class PushService {
         `❌ [PushService] Device not found for deviceId=${deviceId}`,
       );
       throw new Error('Device not found');
+    }
+
+    // A device row stays bound to its user forever — unsubscribing only clears
+    // the token. So without this check, anyone holding the deviceId (including
+    // the app itself after its session died) can re-arm push delivery for that
+    // user's account.
+    if (
+      device.user &&
+      (requesterUserId === null ||
+        String(device.user.id) !== String(requesterUserId))
+    ) {
+      console.warn(
+        `🚫 [PushService] Rejecting FCM subscribe for device ${deviceId}: owned by user ${device.user.id}, requester=${requesterUserId ?? 'anonymous'}`,
+      );
+      throw new UnauthorizedException(
+        'Device belongs to another user or no session was provided',
+      );
     }
 
     console.log(
@@ -226,13 +245,25 @@ export class PushService {
 
   async unsubscribeFCM(deviceId: string) {
     const device = await this.deviceRepository.findOne({ where: { deviceId } });
-    if (!device) return;
+    if (!device) {
+      console.warn(
+        `⚠️ [PushService] unsubscribeFCM: device not found for deviceId=${deviceId}`,
+      );
+      return;
+    }
 
     // Remove subscriptions for this device that are FCM (null keys)
-    await this.repo.delete({ device: { id: device.id } }); // Delete all pushes for this device for safety
+    const result = await this.repo.delete({ device: { id: device.id } }); // Delete all pushes for this device for safety
 
     device.fcmToken = null;
     await this.deviceRepository.save(device);
+
+    // Logged because this is the only record that a client tore its session
+    // down: the 401 that triggers it never reaches an interceptor, so without
+    // this line a logout leaves no server-side trace at all.
+    console.log(
+      `✅ [PushService] unsubscribeFCM: deviceId=${deviceId}, deleted ${result.affected ?? 0} push subscription(s), fcmToken cleared`,
+    );
     return { success: true };
   }
 
