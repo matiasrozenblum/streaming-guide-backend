@@ -26,6 +26,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { ConfigService } from '../config/config.service';
 import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
 import { TimezoneUtil } from '../utils/timezone.util';
+import { filterVisibleSchedules } from '../utils/scheduleVisibility.util';
 
 const FRONTEND_URL =
   process.env.FRONTEND_URL || 'https://staging.laguiadelstreaming.com';
@@ -461,8 +462,10 @@ export class SchedulesService {
     }
 
     // Find live schedules for this channel (only if liveStatus is enabled)
+    // Hidden programs (is_visible=false) are excluded: they must not trigger YouTube fetches
+    // nor claim a live stream via title matching
     const liveSchedules = liveStatus
-      ? schedules.filter((schedule) => {
+      ? filterVisibleSchedules(schedules).filter((schedule) => {
           const startNum = this.convertTimeToNumber(schedule.start_time);
           const endNum = this.convertTimeToNumber(schedule.end_time);
           return (

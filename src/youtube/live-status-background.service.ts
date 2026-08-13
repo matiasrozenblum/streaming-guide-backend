@@ -11,6 +11,7 @@ import { TimezoneUtil } from '../utils/timezone.util';
 import { Channel } from '../channels/channels.entity';
 import { getCurrentBlockTTL } from '../utils/getBlockTTL.util';
 import { SimilarityUtil } from '../utils/similarity.util';
+import { filterVisibleSchedules } from '../utils/scheduleVisibility.util';
 
 interface LiveStream {
   videoId: string;
@@ -42,6 +43,13 @@ export class LiveStatusBackgroundService {
   private readonly logger = new Logger(LiveStatusBackgroundService.name);
   private readonly CACHE_PREFIX = 'liveStatusByHandle:'; // Migration complete
   private readonly CACHE_TTL = 5 * 60; // 5 minutes default TTL
+  /**
+   * TTL used when a program is on-air but no live stream was found.
+   * Must stay short so the next background run retries instead of freezing the channel as
+   * "not live" for the whole program block (a stream that starts a few minutes late, or that
+   * YouTube's search index hasn't picked up yet, would otherwise never be detected).
+   */
+  private readonly NOT_FOUND_RETRY_TTL = 2 * 60; // 2 minutes
 
   constructor(
     private readonly youtubeLiveService: YoutubeLiveService,
@@ -89,18 +97,24 @@ export class LiveStatusBackgroundService {
 
       // Get schedules with weekly overrides applied (includes virtual/special programs)
       // This is crucial for detecting special programs from weekly overrides
-      const todaySchedules = await this.schedulesService.findAll({
-        dayOfWeek: currentDay,
-        liveStatus: false, // Don't need live status, just schedule data
-        applyOverrides: true, // ✅ CRITICAL: Apply weekly overrides to include special programs
-      });
+      // ✅ Hidden programs/channels (is_visible=false) are backoffice-only and must not take
+      // part in live detection or title matching
+      const todaySchedules = filterVisibleSchedules(
+        await this.schedulesService.findAll({
+          dayOfWeek: currentDay,
+          liveStatus: false, // Don't need live status, just schedule data
+          applyOverrides: true, // ✅ CRITICAL: Apply weekly overrides to include special programs
+        }),
+      );
 
       // Also fetch previous day's schedules to catch cross-midnight programs still running
-      const previousDaySchedules = await this.schedulesService.findAll({
-        dayOfWeek: previousDay,
-        liveStatus: false,
-        applyOverrides: true,
-      });
+      const previousDaySchedules = filterVisibleSchedules(
+        await this.schedulesService.findAll({
+          dayOfWeek: previousDay,
+          liveStatus: false,
+          applyOverrides: true,
+        }),
+      );
       const crossMidnightSchedules = previousDaySchedules.filter((s) => {
         const startNum = this.convertTimeToNumber(s.start_time);
         const endNum = this.convertTimeToNumber(s.end_time);
@@ -287,18 +301,24 @@ export class LiveStatusBackgroundService {
       const currentTime = TimezoneUtil.currentTimeInMinutes();
 
       // Get schedules with weekly overrides applied (includes virtual/special programs)
-      const todayAllSchedules = await this.schedulesService.findAll({
-        dayOfWeek: currentDay,
-        liveStatus: false,
-        applyOverrides: true, // ✅ Include special programs from weekly overrides
-      });
+      // Hidden programs/channels are excluded: they must not drive live detection, block TTL
+      // or title matching (see scheduleVisibility.util)
+      const todayAllSchedules = filterVisibleSchedules(
+        await this.schedulesService.findAll({
+          dayOfWeek: currentDay,
+          liveStatus: false,
+          applyOverrides: true, // ✅ Include special programs from weekly overrides
+        }),
+      );
 
       // Also include previous day's cross-midnight schedules still in progress
-      const previousDayAllSchedules = await this.schedulesService.findAll({
-        dayOfWeek: previousDay,
-        liveStatus: false,
-        applyOverrides: true,
-      });
+      const previousDayAllSchedules = filterVisibleSchedules(
+        await this.schedulesService.findAll({
+          dayOfWeek: previousDay,
+          liveStatus: false,
+          applyOverrides: true,
+        }),
+      );
       const crossMidnightAllSchedules = previousDayAllSchedules.filter((s) => {
         const startNum = this.convertTimeToNumber(s.start_time);
         const endNum = this.convertTimeToNumber(s.end_time);
@@ -583,13 +603,23 @@ export class LiveStatusBackgroundService {
         liveStreams,
       );
 
+      const foundLiveStreams =
+        liveStreams !== null &&
+        liveStreams !== '__SKIPPED__' &&
+        liveStreams.streams.length > 0;
+
+      // A program is on-air (liveSchedules.length > 0) but we found no stream: keep the negative
+      // result short-lived so the next background run retries. Caching it for the whole block
+      // (ttl) would freeze the channel as "not live" until the program ends, even if the stream
+      // shows up a few minutes later.
+      const cacheTTL = foundLiveStreams
+        ? ttl
+        : Math.min(ttl, this.NOT_FOUND_RETRY_TTL);
+
       const cacheData: LiveStatusCache = {
         channelId,
         handle,
-        isLive:
-          liveStreams !== null &&
-          liveStreams !== '__SKIPPED__' &&
-          liveStreams.streams.length > 0,
+        isLive: foundLiveStreams,
         streamUrl:
           liveStreams &&
           liveStreams !== '__SKIPPED__' &&
@@ -601,7 +631,7 @@ export class LiveStatusBackgroundService {
             ? liveStreams.primaryVideoId
             : null,
         lastUpdated: Date.now(),
-        ttl,
+        ttl: cacheTTL,
         blockEndTime,
         validationCooldown: Date.now() + 30 * 60 * 1000, // Can validate again in 30 minutes
         lastValidation: Date.now(),
