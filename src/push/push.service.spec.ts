@@ -275,31 +275,9 @@ describe('PushService', () => {
       user: { id: 1 },
     } as unknown as Device;
 
-    it('rejects an anonymous subscribe for a device owned by a user', async () => {
-      mockDeviceRepository.findOne.mockResolvedValue(ownedDevice);
+    const originalEnforce = process.env.PUSH_ENFORCE_DEVICE_OWNERSHIP;
 
-      await expect(
-        service.createFCM('test-device-id', 'fcm-token', 'android', null),
-      ).rejects.toThrow(
-        'Device belongs to another user or no session was provided',
-      );
-
-      expect(mockPushSubscriptionRepository.save).not.toHaveBeenCalled();
-    });
-
-    it('rejects a subscribe from a different user', async () => {
-      mockDeviceRepository.findOne.mockResolvedValue(ownedDevice);
-
-      await expect(
-        service.createFCM('test-device-id', 'fcm-token', 'android', 2),
-      ).rejects.toThrow(
-        'Device belongs to another user or no session was provided',
-      );
-
-      expect(mockPushSubscriptionRepository.save).not.toHaveBeenCalled();
-    });
-
-    it('allows the owning user to subscribe', async () => {
+    const allowSubscriptionCreation = () => {
       const saveable = { ...ownedDevice } as Device;
       mockDeviceRepository.findOne.mockResolvedValue(saveable);
       (mockDeviceRepository as any).save = jest.fn().mockResolvedValue(saveable);
@@ -310,12 +288,85 @@ describe('PushService', () => {
       mockPushSubscriptionRepository.save.mockResolvedValue(
         mockPushSubscription,
       );
+    };
 
-      await expect(
-        service.createFCM('test-device-id', 'fcm-token', 'android', 1),
-      ).resolves.toEqual(mockPushSubscription);
+    afterEach(() => {
+      if (originalEnforce === undefined) {
+        delete process.env.PUSH_ENFORCE_DEVICE_OWNERSHIP;
+      } else {
+        process.env.PUSH_ENFORCE_DEVICE_OWNERSHIP = originalEnforce;
+      }
+    });
 
-      expect(mockPushSubscriptionRepository.save).toHaveBeenCalled();
+    describe('when enforcing', () => {
+      beforeEach(() => {
+        process.env.PUSH_ENFORCE_DEVICE_OWNERSHIP = 'true';
+      });
+
+      it('rejects an anonymous subscribe for a device owned by a user', async () => {
+        mockDeviceRepository.findOne.mockResolvedValue(ownedDevice);
+
+        await expect(
+          service.createFCM('test-device-id', 'fcm-token', 'android', null),
+        ).rejects.toThrow(
+          'Device belongs to another user or no session was provided',
+        );
+
+        expect(mockPushSubscriptionRepository.save).not.toHaveBeenCalled();
+      });
+
+      it('rejects a subscribe from a different user', async () => {
+        mockDeviceRepository.findOne.mockResolvedValue(ownedDevice);
+
+        await expect(
+          service.createFCM('test-device-id', 'fcm-token', 'android', 2),
+        ).rejects.toThrow(
+          'Device belongs to another user or no session was provided',
+        );
+
+        expect(mockPushSubscriptionRepository.save).not.toHaveBeenCalled();
+      });
+
+      it('allows the owning user to subscribe', async () => {
+        allowSubscriptionCreation();
+
+        await expect(
+          service.createFCM('test-device-id', 'fcm-token', 'android', 1),
+        ).resolves.toEqual(mockPushSubscription);
+
+        expect(mockPushSubscriptionRepository.save).toHaveBeenCalled();
+      });
+    });
+
+    describe('report-only (default)', () => {
+      beforeEach(() => {
+        delete process.env.PUSH_ENFORCE_DEVICE_OWNERSHIP;
+      });
+
+      it('warns with the app version but still subscribes on a mismatch', async () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+        allowSubscriptionCreation();
+
+        await expect(
+          service.createFCM(
+            'test-device-id',
+            'fcm-token',
+            'android',
+            null,
+            '1.0.15',
+          ),
+        ).resolves.toEqual(mockPushSubscription);
+
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('appVersion=1.0.15'),
+        );
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('enforcing=false'),
+        );
+        expect(mockPushSubscriptionRepository.save).toHaveBeenCalled();
+
+        warnSpy.mockRestore();
+      });
     });
   });
 });

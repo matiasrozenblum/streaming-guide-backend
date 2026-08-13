@@ -46,14 +46,16 @@ export class PushController {
       platform: 'ios' | 'android' | 'web';
     },
   ) {
+    const appVersion = req.headers?.['x-app-version'] || 'unknown';
     this.logger.log(
-      `📱 FCM subscribe request: deviceId=${body.deviceId}, platform=${body.platform}, userId=${req.user?.id ?? 'anonymous'}, tokenPrefix=${body.fcmToken?.substring(0, 20)}...`,
+      `📱 FCM subscribe request: deviceId=${body.deviceId}, platform=${body.platform}, userId=${req.user?.id ?? 'anonymous'}, appVersion=${appVersion}, tokenPrefix=${body.fcmToken?.substring(0, 20)}...`,
     );
     return this.svc.createFCM(
       body.deviceId,
       body.fcmToken,
       body.platform,
       req.user?.id ?? null,
+      appVersion,
     );
   }
 

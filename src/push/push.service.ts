@@ -163,6 +163,8 @@ export class PushService {
     fcmToken: string,
     platform: 'ios' | 'android' | 'web',
     requesterUserId: number | string | null = null,
+    /** Only used to attribute report-only ownership warnings to a build. */
+    appVersion?: string,
   ) {
     console.log(
       `📱 [PushService] createFCM called: deviceId=${deviceId}, platform=${platform}, requesterUserId=${requesterUserId ?? 'anonymous'}, tokenPrefix=${fcmToken?.substring(0, 20)}...`,
@@ -189,17 +191,28 @@ export class PushService {
     // the token. So without this check, anyone holding the deviceId (including
     // the app itself after its session died) can re-arm push delivery for that
     // user's account.
+    //
+    // Rolled out in report-only mode: mobile builds before 1.0.17 do not attach
+    // the JWT to this endpoint (the request interceptor gained that in 3b613b3),
+    // so enforcing immediately would silently stop push registration for anyone
+    // still on an older build. The warning below records the app version of
+    // every would-be rejection; once the logs confirm no old client is hitting
+    // it, set PUSH_ENFORCE_DEVICE_OWNERSHIP=true to start rejecting.
     if (
       device.user &&
       (requesterUserId === null ||
         String(device.user.id) !== String(requesterUserId))
     ) {
+      const enforcing =
+        process.env.PUSH_ENFORCE_DEVICE_OWNERSHIP === 'true';
       console.warn(
-        `🚫 [PushService] Rejecting FCM subscribe for device ${deviceId}: owned by user ${device.user.id}, requester=${requesterUserId ?? 'anonymous'}`,
+        `🚫 [PushService] FCM subscribe ownership mismatch: deviceId=${deviceId}, ownedByUser=${device.user.id}, requester=${requesterUserId ?? 'anonymous'}, appVersion=${appVersion ?? 'unknown'}, enforcing=${enforcing}`,
       );
-      throw new UnauthorizedException(
-        'Device belongs to another user or no session was provided',
-      );
+      if (enforcing) {
+        throw new UnauthorizedException(
+          'Device belongs to another user or no session was provided',
+        );
+      }
     }
 
     console.log(
