@@ -185,6 +185,10 @@ export class StreamerSubscriptionService {
           if (device.pushSubscriptions && device.pushSubscriptions.length > 0) {
             for (const pushSub of device.pushSubscriptions) {
               try {
+                // The device relation is not loaded on the inverse side here,
+                // which is why sendNotification used to log "device unknown"
+                // for every streamer push. Attach it so sends are traceable.
+                pushSub.device = pushSub.device ?? device;
                 await this.pushService.sendNotification(pushSub, {
                   title,
                   options: {

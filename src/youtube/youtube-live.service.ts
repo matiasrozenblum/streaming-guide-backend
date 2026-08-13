@@ -26,6 +26,7 @@ import {
   extractLiveStreamsResult,
 } from './interfaces/live-status-cache.interface';
 import { SimilarityUtil } from '../utils/similarity.util';
+import { filterVisibleSchedules } from '../utils/scheduleVisibility.util';
 
 const HolidaysClass = (DateHolidays as any).default ?? DateHolidays;
 
@@ -1058,20 +1059,24 @@ export class YoutubeLiveService {
         );
       }
 
-      if (liveStreams.length === 0 && currentProgramIsPremiere) {
-        // Fallback: YouTube premieres (estrenos) don't appear in search?eventType=live
-        // but ARE reported as liveBroadcastContent=live by the videos API.
-        // Only runs when the current program is flagged as is_premiere to avoid
-        // wasting quota on channels that are genuinely offline.
-        const premiereStream = await this.findActivePremiereFromUploads(
+      if (liveStreams.length === 0 && currentProgramName) {
+        // Fallback via the uploads playlist. Two cases where search?eventType=live returns
+        // nothing even though the channel IS live:
+        //   1. Premieres (estrenos) never show up in search?eventType=live at all.
+        //   2. The search index lags behind the real start of a broadcast (minutes), so a
+        //      program that just started looks offline and gets escalated to not-found.
+        // videos?part=snippet reports both correctly as liveBroadcastContent=live, and this
+        // path costs ~4 quota units (playlistItems + up to 3 videos) vs 100 for a search.
+        // Gated on currentProgramName so it only runs while a visible program is on-air.
+        const uploadStream = await this.findActiveLiveFromUploads(
           channelId,
           handle,
           currentProgramName,
         );
-        if (premiereStream) {
-          liveStreams.push(premiereStream);
+        if (uploadStream) {
+          liveStreams.push(uploadStream);
           this.logger.debug(
-            `🎬 [Premiere] Found active premiere for ${handle}: ${premiereStream.videoId} - ${premiereStream.title}`,
+            `🎬 [UploadsFallback] Found active live/premiere for ${handle} (is_premiere=${currentProgramIsPremiere}): ${uploadStream.videoId} - ${uploadStream.title}`,
           );
         }
       }
@@ -1255,12 +1260,13 @@ export class YoutubeLiveService {
   }
 
   /**
-   * Fallback for YouTube premieres (estrenos): the search?eventType=live endpoint does not
-   * return premieres, but videos?part=snippet correctly reports them as liveBroadcastContent=live.
+   * Fallback for broadcasts that search?eventType=live misses: premieres (estrenos) are never
+   * returned by it, and a freshly started live stream can take several minutes to reach the
+   * search index. videos?part=snippet reports both as liveBroadcastContent=live.
    * Fetches the channel's 3 most recent uploads via playlistItems (1 quota unit) and checks
    * each one with isVideoLive().
    */
-  private async findActivePremiereFromUploads(
+  private async findActiveLiveFromUploads(
     channelId: string,
     handle: string,
     currentProgramName: string | null = null,
@@ -1281,7 +1287,7 @@ export class YoutubeLiveService {
 
       const items: any[] = data.items || [];
       this.logger.debug(
-        `🎬 [Premiere] Checking ${items.length} recent uploads for ${handle}`,
+        `🎬 [UploadsFallback] Checking ${items.length} recent uploads for ${handle}`,
       );
 
       const liveStreams: LiveStream[] = [];
@@ -1318,7 +1324,7 @@ export class YoutubeLiveService {
             ),
         );
         this.logger.debug(
-          `🎬 [Premiere] Multiple live premieres for ${handle}, selected best match: ${liveStreams[0].videoId} - ${liveStreams[0].title}`,
+          `🎬 [UploadsFallback] Multiple live videos for ${handle}, selected best match: ${liveStreams[0].videoId} - ${liveStreams[0].title}`,
         );
       }
 
@@ -1330,7 +1336,7 @@ export class YoutubeLiveService {
         );
       }
       this.logger.warn(
-        `⚠️ [Premiere] Fallback check failed for ${handle}: ${err.message}`,
+        `⚠️ [UploadsFallback] Check failed for ${handle}: ${err.message}`,
       );
       return null;
     }
@@ -1406,7 +1412,7 @@ export class YoutubeLiveService {
 
     for (const schedule of onAirPrograms) {
       const programName = schedule.program?.name ?? 'Desconocido';
-      const stream = await this.findActivePremiereFromUploads(
+      const stream = await this.findActiveLiveFromUploads(
         channelId,
         handle,
         programName,
@@ -2230,19 +2236,21 @@ export class YoutubeLiveService {
         applyOverrides: true,
       });
 
-      // Find current program for this channel
-      const currentProgram = schedules.find((schedule) => {
-        const channelIdFromSchedule =
-          schedule.program?.channel?.youtube_channel_id;
-        if (channelIdFromSchedule !== channelId) return false;
+      // Find current program for this channel (hidden programs don't define the block end)
+      const currentProgram = filterVisibleSchedules(schedules).find(
+        (schedule) => {
+          const channelIdFromSchedule =
+            schedule.program?.channel?.youtube_channel_id;
+          if (channelIdFromSchedule !== channelId) return false;
 
-        const startMinutes = this.convertTimeToMinutes(schedule.start_time);
-        const endMinutes = this.convertTimeToMinutes(schedule.end_time);
-        return (
-          startMinutes <= currentTimeInMinutes &&
-          endMinutes > currentTimeInMinutes
-        );
-      });
+          const startMinutes = this.convertTimeToMinutes(schedule.start_time);
+          const endMinutes = this.convertTimeToMinutes(schedule.end_time);
+          return (
+            startMinutes <= currentTimeInMinutes &&
+            endMinutes > currentTimeInMinutes
+          );
+        },
+      );
 
       if (currentProgram) {
         const endMinutes = this.convertTimeToMinutes(currentProgram.end_time);
@@ -2289,7 +2297,7 @@ export class YoutubeLiveService {
           applyOverrides: true,
         });
 
-        const channelSchedules = schedules.filter(
+        const channelSchedules = filterVisibleSchedules(schedules).filter(
           (s) => s.program?.channel?.youtube_channel_id === channelId,
         );
 

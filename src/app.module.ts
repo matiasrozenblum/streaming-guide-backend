@@ -36,6 +36,8 @@ import { BannersModule } from './banners/banners.module';
 import { ResourceMonitorService } from './services/resource-monitor.service';
 import { ConnectionPoolMonitorService } from './services/connection-pool-monitor.service';
 import { PerformanceInterceptor } from './interceptors/performance.interceptor';
+import { HttpErrorLogFilter } from './interceptors/http-error-log.filter';
+import { APP_FILTER } from '@nestjs/core';
 import { UpdatesModule } from './updates/updates.module';
 import { ConfigModule as AppConfigModule } from './config/config.module';
 
@@ -134,6 +136,11 @@ import { ConfigModule as AppConfigModule } from './config/config.module';
     {
       provide: 'APP_INTERCEPTOR',
       useClass: PerformanceInterceptor,
+    },
+    {
+      // Catches guard rejections too, which never reach the interceptor above.
+      provide: APP_FILTER,
+      useClass: HttpErrorLogFilter,
     },
   ],
 })

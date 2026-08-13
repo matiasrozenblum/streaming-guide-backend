@@ -1,7 +1,16 @@
-import { Controller, Post, Body, Get, Logger } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Get,
+  Logger,
+  Request,
+  UseGuards,
+} from '@nestjs/common';
 import { PushService } from './push.service';
 import { CreatePushSubscriptionDto } from './dto/create-push-subscription.dto';
 import { ScheduleNotificationDto } from './dto/schedule-notification.dto';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 
 @Controller('push')
 export class PushController {
@@ -18,8 +27,18 @@ export class PushController {
     return this.svc.create(dto);
   }
 
+  /**
+   * Optional auth rather than a hard guard: the caller may legitimately be
+   * anonymous when the device has never been claimed by a user. What must not
+   * happen is an unauthenticated call re-subscribing a device that *is* owned —
+   * that is how a logged-out app resurrected its own push subscription moments
+   * after logout and kept delivering notifications for days. Ownership is
+   * enforced in the service.
+   */
   @Post('fcm/subscribe')
+  @UseGuards(OptionalJwtAuthGuard)
   subscribeFCM(
+    @Request() req: any,
     @Body()
     body: {
       deviceId: string;
@@ -27,14 +46,22 @@ export class PushController {
       platform: 'ios' | 'android' | 'web';
     },
   ) {
+    const appVersion = req.headers?.['x-app-version'] || 'unknown';
     this.logger.log(
-      `📱 FCM subscribe request: deviceId=${body.deviceId}, platform=${body.platform}, tokenPrefix=${body.fcmToken?.substring(0, 20)}...`,
+      `📱 FCM subscribe request: deviceId=${body.deviceId}, platform=${body.platform}, userId=${req.user?.id ?? 'anonymous'}, appVersion=${appVersion}, tokenPrefix=${body.fcmToken?.substring(0, 20)}...`,
     );
-    return this.svc.createFCM(body.deviceId, body.fcmToken, body.platform);
+    return this.svc.createFCM(
+      body.deviceId,
+      body.fcmToken,
+      body.platform,
+      req.user?.id ?? null,
+      appVersion,
+    );
   }
 
   @Post('fcm/unsubscribe')
   unsubscribeFCM(@Body() body: { deviceId: string }) {
+    this.logger.log(`📱 FCM unsubscribe request: deviceId=${body.deviceId}`);
     return this.svc.unsubscribeFCM(body.deviceId);
   }
 
