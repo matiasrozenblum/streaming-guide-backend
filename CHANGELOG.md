@@ -5,6 +5,29 @@ Todas las modificaciones importantes de este proyecto se documentarán en este a
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/)
 y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
+## [1.41.0] - 2026-08-13
+
+### Added
+
+- **Verificación de propiedad del device en `POST /push/fcm/subscribe`** (modo report-only): el endpoint no tenía ningún guard, y como la fila de `devices` queda ligada a su usuario para siempre (el unsubscribe solo limpia el token), cualquiera con el `deviceId` podía volver a habilitar push para esa cuenta. Esto es lo que permitió que un mobile con la sesión ya muerta se re-suscribiera 0,7s después de desregistrarse y siguiera recibiendo notificaciones durante cinco días. Usa `OptionalJwtAuthGuard`: un device nunca reclamado sigue registrándose, pero uno con dueño no puede re-suscribirse anónimamente. Se despliega en modo report-only porque los builds de mobile anteriores a 1.0.17 no adjuntan el JWT a este endpoint; el warning registra el `X-App-Version` de cada rechazo potencial. Se activa con `PUSH_ENFORCE_DEVICE_OWNERSHIP=true` sin necesidad de redeploy.
+- **Filtro global de excepciones que loguea todos los errores HTTP** con endpoint, status, `deviceId`, `userId` y versión de app. En el ciclo de vida de Nest los guards corren *antes* que los interceptors, así que `PerformanceInterceptor` nunca veía un rechazo de `JwtAuthGuard`: los 401, el fallo más común del sistema, no dejaban ningún rastro en producción.
+
+### Fixed
+
+- **Programas ocultos manejando la detección de live**: el cron de live status leía schedules con `findAll()` sin filtrar por visibilidad, así que un programa con `is_visible=false` podía ser elegido como programa actual y su nombre comparado contra el título del video en vivo del programa visible del mismo bloque, dando 0% de match y forzando validaciones repetidas. Los ocultos también se filtraban al cálculo de TTL de bloque / `blockEndTime`, a la escalación a not-found y al enriquecimiento on-demand. Se agrega `scheduleVisibility.util` aplicado en `LiveStatusBackgroundService`, `getCurrentBlockTTL`, `getCurrentProgramEndTime`, `syncLiveStatusCacheFromStreams` y `enrichSchedulesForChannel`. El backoffice no se ve afectado: usa sus propias queries.
+- **Streams que nunca se detectaban como en vivo**: `search?eventType=live` puede devolver 0 items para un canal que está transmitiendo — el índice va atrasado respecto del inicio real de una emisión, y a veces directamente no devuelve una transmisión en curso. Eso escalaba el canal a not-found por el resto del bloque. Ahora el fallback por playlist de uploads corre siempre que search no encuentra nada y hay un programa visible al aire (no solo para `is_premiere`): `videos?part=snippet` sí las reporta como `liveBroadcastContent=live` y el camino cuesta ~4 unidades de quota contra 100 de un search.
+- **Reintento efectivo mientras hay programa al aire**: la marca `videoIdNotFound` ahora vive 2 minutos en vez de 15 cuando hay un programa visible al aire, y conserva los 15 completos cuando no hay nada programado. Acortar solo el TTL del cache de estado no alcanzaba: `liveStatusByHandle` y `videoIdNotFound` son llaves distintas, y el ciclo de background consulta la marca *antes* de fetchear, así que la entrada de cache expiraba pero el reintento se cortocircuitaba igual y el intervalo real seguía siendo de 15 minutos. La cadencia de reintento quedó desacoplada de la escalera de escalación: un intento solo se cuenta cuando pasaron los 15 minutos originales, de modo que la escalación sigue requiriendo 3 intentos y ~30 minutos y no se dispara (ni manda mail) a los pocos minutos de arrancar un programa.
+
+### Performance
+
+- **Los reintentos de not-found ya no gastan un `search`**: reintentar cada 2 minutos con un search de 100 unidades habría llevado el costo de un bloque programado que nunca sale al aire de ~310 a ~1560 unidades de quota (5x), sin ningún guard diario que lo contenga (`canFetchLive` solo mira el flag de habilitación y los feriados). Dentro de la ventana de reintento ahora se saltea el search y se usa directamente la playlist de uploads (~4 unidades: 1 de `playlistItems` + hasta 3 de `videos`), lo que deja el mismo bloque en ~350 unidades conservando 5x más oportunidades de recuperación. El camino barato es además el más certero en este escenario: durante el incidente de Luzu TV el search devolvió `totalResults: 0` para una emisión que llevaba 49 minutos en vivo y estaba en la posición 0 de la playlist de uploads. Los intentos contados siguen ejecutando el search completo, porque una transmisión larga puede quedar fuera de los 3 uploads más recientes si se publican shorts después.
+
+### Changed
+
+- **`unsubscribeFCM` ahora loguea** el `deviceId` y la cantidad de suscripciones borradas. Es el único registro del lado servidor de que un cliente cerró su sesión, y su ausencia obligaba a inferir los logouts a partir de aritmética sobre los conteos del scheduler diario.
+- Las notificaciones de streamers ya no loguean `device unknown`: se adjunta el device a la suscripción antes de enviar.
+
+
 ## [1.40.0] - 2026-07-29
 
 ### Added
