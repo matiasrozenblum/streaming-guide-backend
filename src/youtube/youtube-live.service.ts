@@ -988,45 +988,66 @@ export class YoutubeLiveService {
       // Track API usage
       // YouTube API usage tracking removed
 
-      const requestUrl = `${this.apiUrl}/search?part=snippet&channelId=${channelId}&eventType=live&type=video&key=${this.apiKey}&maxResults=5`;
-      this.logger.debug(
-        `🔍 [getLiveStreams] Making request for ${handle}: ${requestUrl}`,
-      );
-      this.logger.debug(
-        `🔍 [getLiveStreams] Using API key: ${this.apiKey ? this.apiKey.substring(0, 10) + '...' : 'NOT_SET'}`,
-      );
-
-      const { data } = await axios.get(`${this.apiUrl}/search`, {
-        timeout: this.YOUTUBE_API_TIMEOUT_MS,
-        params: {
-          part: 'snippet',
-          channelId,
-          eventType: 'live',
-          type: 'video',
-          key: this.apiKey,
-          maxResults: 5, // YouTube API limitation: maxResults should be 1-5 for eventType=live
-          regionCode: 'AR',
-        },
-      });
-
-      this.logger.debug(
-        `🔍 [getLiveStreams] Response for ${handle}:`,
-        JSON.stringify(data, null, 2),
+      // Retrying every 2 minutes with a 100-unit search would cost ~1.5k quota units per
+      // program block that never goes live. Inside the retry window we skip the search and
+      // let the uploads fallback below (~4 units) do the work — which the Luzu TV incident
+      // showed is also the more reliable of the two: search reported 0 results for a
+      // broadcast that had been live for 49 minutes and sat at position 0 of the uploads
+      // playlist. Counted attempts still run the search, because a long-running stream can
+      // fall outside the 3 most recent uploads once enough shorts are published after it.
+      const uploadsOnlyRetry = await this.isUploadsOnlyRetry(
+        handle,
+        currentProgramName,
+        cronType,
       );
 
-      const allStreams: LiveStream[] = (data.items || []).map((item: any) => ({
-        videoId: item.id.videoId,
-        title: item.snippet.title,
-        publishedAt: item.snippet.publishedAt,
-        description: item.snippet.description,
-        thumbnailUrl: item.snippet.thumbnails?.medium?.url,
-        channelTitle: item.snippet.channelTitle,
-        liveBroadcastContent: item.snippet.liveBroadcastContent, // Add this for validation
-      }));
+      let allStreams: LiveStream[] = [];
 
-      this.logger.debug(
-        `🔍 [getLiveStreams] Found ${allStreams.length} streams from search API for ${handle}. liveBroadcastContent from search: ${allStreams.map((s) => `${s.videoId}:${s.liveBroadcastContent}`).join(', ')}`,
-      );
+      if (uploadsOnlyRetry) {
+        this.logger.debug(
+          `💸 [getLiveStreams] Skipping search for ${handle} (inside not-found retry window), relying on uploads fallback`,
+        );
+      } else {
+        const requestUrl = `${this.apiUrl}/search?part=snippet&channelId=${channelId}&eventType=live&type=video&key=${this.apiKey}&maxResults=5`;
+        this.logger.debug(
+          `🔍 [getLiveStreams] Making request for ${handle}: ${requestUrl}`,
+        );
+        this.logger.debug(
+          `🔍 [getLiveStreams] Using API key: ${this.apiKey ? this.apiKey.substring(0, 10) + '...' : 'NOT_SET'}`,
+        );
+
+        const { data } = await axios.get(`${this.apiUrl}/search`, {
+          timeout: this.YOUTUBE_API_TIMEOUT_MS,
+          params: {
+            part: 'snippet',
+            channelId,
+            eventType: 'live',
+            type: 'video',
+            key: this.apiKey,
+            maxResults: 5, // YouTube API limitation: maxResults should be 1-5 for eventType=live
+            regionCode: 'AR',
+          },
+        });
+
+        this.logger.debug(
+          `🔍 [getLiveStreams] Response for ${handle}:`,
+          JSON.stringify(data, null, 2),
+        );
+
+        allStreams = (data.items || []).map((item: any) => ({
+          videoId: item.id.videoId,
+          title: item.snippet.title,
+          publishedAt: item.snippet.publishedAt,
+          description: item.snippet.description,
+          thumbnailUrl: item.snippet.thumbnails?.medium?.url,
+          channelTitle: item.snippet.channelTitle,
+          liveBroadcastContent: item.snippet.liveBroadcastContent, // Add this for validation
+        }));
+
+        this.logger.debug(
+          `🔍 [getLiveStreams] Found ${allStreams.length} streams from search API for ${handle}. liveBroadcastContent from search: ${allStreams.map((s) => `${s.videoId}:${s.liveBroadcastContent}`).join(', ')}`,
+        );
+      }
 
       // Filter out scheduled streams - only keep actually live streams
       const liveStreams: LiveStream[] = [];
@@ -1887,6 +1908,42 @@ export class YoutubeLiveService {
   /**
    * Handle not-found escalation for main cron and manual execution - should extend not-found marks
    */
+  /**
+   * True when the current run is an *uncounted* fast retry of a channel already marked
+   * not-found, and can therefore skip the expensive search in favour of the uploads
+   * playlist.
+   *
+   * Deliberately mirrors the "don't count this attempt" rule in
+   * handleNotFoundEscalationMain, so the cheap path and the uncounted attempts are exactly
+   * the same set of runs: retries stay cheap, and the three counted attempts that drive
+   * escalation still get a full search.
+   */
+  private async isUploadsOnlyRetry(
+    handle: string,
+    currentProgramName: string | null,
+    cronType: 'main' | 'back-to-back-fix' | 'manual',
+  ): Promise<boolean> {
+    // The uploads fallback only runs while a visible program is on-air, and the
+    // back-to-back cron has its own escalation ladder.
+    if (!currentProgramName || cronType === 'back-to-back-fix') return false;
+
+    try {
+      const tracking = await this.redisService.get<AttemptTracking>(
+        `notFoundAttempts:${handle}`,
+      );
+      if (!tracking || tracking.escalated) return false;
+      return (
+        Date.now() - tracking.lastAttempt < this.NOT_FOUND_ATTEMPT_INTERVAL_MS
+      );
+    } catch (err) {
+      // Never let a Redis hiccup silently downgrade detection — fall back to the search.
+      this.logger.warn(
+        `⚠️ [getLiveStreams] Could not read not-found tracking for ${handle}: ${err instanceof Error ? err.message : err}`,
+      );
+      return false;
+    }
+  }
+
   private async handleNotFoundEscalationMain(
     channelId: string,
     handle: string,

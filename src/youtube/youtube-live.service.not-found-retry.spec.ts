@@ -166,6 +166,85 @@ describe('YoutubeLiveService not-found retry cadence', () => {
     });
   });
 
+  describe('quota: which runs are allowed to spend a search', () => {
+    const isUploadsOnlyRetry = (
+      programName: string | null = 'Nadie Dice Nada',
+      cronType: 'main' | 'back-to-back-fix' | 'manual' = 'main',
+    ) =>
+      (service as any).isUploadsOnlyRetry(HANDLE, programName, cronType);
+
+    it('skips the search on an uncounted retry', async () => {
+      redisService.get.mockResolvedValue({
+        attempts: 1,
+        firstAttempt: Date.now() - 4 * 60 * 1000,
+        lastAttempt: Date.now() - 4 * 60 * 1000,
+        escalated: false,
+      } as any);
+
+      await expect(isUploadsOnlyRetry()).resolves.toBe(true);
+    });
+
+    it('spends a search on a counted attempt', async () => {
+      redisService.get.mockResolvedValue({
+        attempts: 1,
+        firstAttempt: Date.now() - 16 * 60 * 1000,
+        lastAttempt: Date.now() - 16 * 60 * 1000,
+        escalated: false,
+      } as any);
+
+      await expect(isUploadsOnlyRetry()).resolves.toBe(false);
+    });
+
+    it('spends a search on the first look, with no tracking yet', async () => {
+      redisService.get.mockResolvedValue(null);
+
+      await expect(isUploadsOnlyRetry()).resolves.toBe(false);
+    });
+
+    it('does not apply once escalated', async () => {
+      redisService.get.mockResolvedValue({
+        attempts: 3,
+        firstAttempt: Date.now() - 40 * 60 * 1000,
+        lastAttempt: Date.now() - 60 * 1000,
+        escalated: true,
+      } as any);
+
+      await expect(isUploadsOnlyRetry()).resolves.toBe(false);
+    });
+
+    it('does not apply when no visible program is on-air', async () => {
+      redisService.get.mockResolvedValue({
+        attempts: 1,
+        firstAttempt: Date.now() - 60 * 1000,
+        lastAttempt: Date.now() - 60 * 1000,
+        escalated: false,
+      } as any);
+
+      // Without a program name the uploads fallback would not run either, so skipping
+      // the search would leave nothing to detect with.
+      await expect(isUploadsOnlyRetry(null)).resolves.toBe(false);
+    });
+
+    it('leaves the back-to-back cron on its own ladder', async () => {
+      redisService.get.mockResolvedValue({
+        attempts: 1,
+        firstAttempt: Date.now() - 60 * 1000,
+        lastAttempt: Date.now() - 60 * 1000,
+        escalated: false,
+      } as any);
+
+      await expect(
+        isUploadsOnlyRetry('Nadie Dice Nada', 'back-to-back-fix'),
+      ).resolves.toBe(false);
+    });
+
+    it('falls back to the search when tracking cannot be read', async () => {
+      redisService.get.mockRejectedValue(new Error('redis down'));
+
+      await expect(isUploadsOnlyRetry()).resolves.toBe(false);
+    });
+  });
+
   it('still escalates on the third counted attempt', async () => {
     redisService.get.mockResolvedValue({
       attempts: 2,
