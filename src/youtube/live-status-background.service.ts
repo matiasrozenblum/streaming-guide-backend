@@ -21,6 +21,30 @@ interface LiveStream {
   publishedAt?: string;
 }
 
+interface OvertimeEntry {
+  scheduleId: string;
+  videoId: string;
+  streamUrl: string;
+  startedAt: number;
+}
+
+/**
+ * Snapshot of the last stream known to be live on a channel, kept alive well
+ * past the block TTL so the overtime pass still has a videoId to validate once
+ * the regular live-status cache has expired.
+ */
+interface LastLiveVideoMarker {
+  channelId: string;
+  handle: string;
+  scheduleId: string;
+  programName: string;
+  videoId: string;
+  streamUrl: string;
+  stream: LiveStream | null;
+  overtimeStartedAt: number | null;
+  updatedAt: number;
+}
+
 interface LiveStatusCache {
   channelId: string;
   handle: string;
@@ -29,6 +53,7 @@ interface LiveStatusCache {
   videoId: string | null;
   lastUpdated: number;
   ttl: number;
+  overtime?: OvertimeEntry[];
   // Block-aware fields for accurate timing
   blockEndTime: number | null; // When the current block ends (in minutes), null if unknown
   validationCooldown: number; // When we can validate again (timestamp)
@@ -50,6 +75,16 @@ export class LiveStatusBackgroundService {
    * YouTube's search index hasn't picked up yet, would otherwise never be detected).
    */
   private readonly NOT_FOUND_RETRY_TTL = 2 * 60; // 2 minutes
+
+  // ── Overtime: programs still on air after their scheduled block ended ──
+  private readonly LAST_LIVE_PREFIX = 'lastLiveVideo:';
+  /** Hard cap on how long a program may extend past its scheduled end. */
+  private readonly OVERTIME_MAX_MINUTES = 180;
+  /**
+   * Short TTL for overtime cache entries. The block-aligned TTL is meaningless
+   * here — the block is over — so we re-validate every cron cycle instead.
+   */
+  private readonly OVERTIME_TTL = 150; // 2.5 minutes (cron runs every 2)
 
   constructor(
     private readonly youtubeLiveService: YoutubeLiveService,
@@ -163,6 +198,15 @@ export class LiveStatusBackgroundService {
           continue;
         }
 
+        // A program is on air on this channel, so any overtime left over from
+        // the previous one is stale. Drop it now — updateChannelLiveStatus has
+        // paths that mutate and re-save the cached object, which would
+        // otherwise carry it forward and light up two programs at once.
+        if (cached.overtime?.length) {
+          delete cached.overtime;
+          await this.cacheLiveStatus(channelId, cached);
+        }
+
         // Find current program name for this channel
         const currentSchedule = allSchedules.find((schedule) => {
           const scheduleChannelId =
@@ -179,6 +223,10 @@ export class LiveStatusBackgroundService {
           );
         });
         const currentProgramName = currentSchedule?.program?.name || '';
+
+        // Remember the stream currently on air so the overtime pass can keep
+        // validating it after the block-aligned cache TTL expires.
+        await this.recordLastLiveVideo(cached, currentSchedule);
 
         // Check if title matching is disabled for this channel
         // Some channels use a single unified live stream for all programs
@@ -213,14 +261,18 @@ export class LiveStatusBackgroundService {
 
       if (channelsToUpdate.length === 0) {
         this.logger.log('✅ All channels up to date, skipping update');
-        return;
+      } else {
+        // Update live status for channels in batches
+        await this.updateChannelsInBatches(channelsToUpdate);
+
+        // Update unified enriched cache with fresh live status
+        await this.updateLiveStatusForAllChannels();
       }
 
-      // Update live status for channels in batches
-      await this.updateChannelsInBatches(channelsToUpdate);
-
-      // Update unified enriched cache with fresh live status
-      await this.updateLiveStatusForAllChannels();
+      // Channels with no program on air right now may still be broadcasting the
+      // stream of a program that just ended. This runs on every cycle, including
+      // when nothing above needed an update.
+      await this.processOvertimeChannels(new Set(liveChannels.keys()));
 
       const duration = Date.now() - startTime;
       this.logger.log(
@@ -248,6 +300,244 @@ export class LiveStatusBackgroundService {
     }
 
     return null;
+  }
+
+  /**
+   * Persist the stream currently on air for a channel.
+   *
+   * The regular live-status cache uses a block-aligned TTL, so it expires right
+   * about when the program ends — exactly when the overtime pass needs it. This
+   * marker outlives the block so we always have a videoId to validate.
+   */
+  private async recordLastLiveVideo(
+    cached: LiveStatusCache,
+    currentSchedule:
+      | { id: number | string; program?: { name?: string } }
+      | undefined,
+  ): Promise<void> {
+    if (!cached.isLive || !cached.videoId || !cached.handle) return;
+    if (!currentSchedule?.id) return;
+
+    const key = `${this.LAST_LIVE_PREFIX}${cached.handle}`;
+    const existing = await this.redisService.get<LastLiveVideoMarker>(key);
+
+    const marker: LastLiveVideoMarker = {
+      channelId: cached.channelId,
+      handle: cached.handle,
+      // String: special programs from weekly overrides use `virtual_<id>` ids.
+      scheduleId: String(currentSchedule.id),
+      programName: currentSchedule.program?.name || '',
+      videoId: cached.videoId,
+      streamUrl:
+        cached.streamUrl ||
+        `https://www.youtube.com/embed/${cached.videoId}?autoplay=1`,
+      stream: cached.streams?.[0] ?? existing?.stream ?? null,
+      // The program is on air right now, so it is not in overtime yet.
+      overtimeStartedAt: null,
+      updatedAt: Date.now(),
+    };
+
+    await this.redisService.set(
+      key,
+      marker,
+      (this.OVERTIME_MAX_MINUTES + 10) * 60,
+    );
+  }
+
+  /**
+   * Keep programs live past their scheduled end while their stream is still up.
+   *
+   * Only runs for channels with nothing on air right now — a channel whose next
+   * program already started has handed the stream over, so the previous program
+   * must not extend.
+   */
+  private async processOvertimeChannels(
+    liveChannelIds: Set<string>,
+  ): Promise<void> {
+    try {
+      const channels = await this.channelsRepository.find();
+      const candidates = channels.filter(
+        (c) =>
+          c.handle &&
+          c.youtube_channel_id &&
+          !liveChannelIds.has(c.youtube_channel_id),
+      );
+      if (candidates.length === 0) return;
+
+      const markers = await this.redisService.mget<LastLiveVideoMarker>(
+        candidates.map((c) => `${this.LAST_LIVE_PREFIX}${c.handle}`),
+      );
+
+      const pending = markers.filter(
+        (m): m is LastLiveVideoMarker => !!m?.videoId && !!m.handle,
+      );
+      if (pending.length === 0) return;
+
+      let extended = 0;
+      let ended = 0;
+      for (const marker of pending) {
+        const result = await this.resolveOvertimeForChannel(marker);
+        if (result === 'extended') extended++;
+        else if (result === 'ended') ended++;
+      }
+
+      this.logger.log(
+        `⏱️  Overtime pass: ${pending.length} candidates, ${extended} still on air, ${ended} ended`,
+      );
+    } catch (error) {
+      this.logger.error('❌ Error in overtime pass:', error);
+    }
+  }
+
+  /**
+   * Decide whether a single channel's just-ended program is still broadcasting.
+   *
+   * Uses `isVideoLive` (videos.list, 1 quota unit) rather than the search-based
+   * refresh path — the daily search budget is the scarce one and must not be
+   * spent on polling programs that already ended.
+   */
+  private async resolveOvertimeForChannel(
+    marker: LastLiveVideoMarker,
+  ): Promise<'extended' | 'ended' | 'skipped'> {
+    const key = `${this.LAST_LIVE_PREFIX}${marker.handle}`;
+
+    // Same guards as the regular path: disabled channels, holidays.
+    let canFetch = true;
+    try {
+      canFetch = await this.configService.canFetchLive(marker.handle);
+    } catch {
+      this.logger.debug(
+        `[OVERTIME] Could not read fetch config for ${marker.handle}, skipping`,
+      );
+      canFetch = false;
+    }
+    if (!canFetch) {
+      await this.endOvertime(marker, key);
+      return 'skipped';
+    }
+
+    // On the first overtime cycle, fall back to the last time we confirmed the
+    // program was on air — effectively its block end. Anchoring to `now` instead
+    // would restart the cap from zero after any gap in cron execution.
+    const startedAt =
+      marker.overtimeStartedAt ?? marker.updatedAt ?? Date.now();
+    const elapsedMinutes = (Date.now() - startedAt) / 60000;
+    if (elapsedMinutes > this.OVERTIME_MAX_MINUTES) {
+      this.logger.log(
+        `[OVERTIME] Cap reached for ${marker.handle} (${Math.round(elapsedMinutes)}min), ending overtime for "${marker.programName}"`,
+      );
+      await this.endOvertime(marker, key);
+      return 'ended';
+    }
+
+    const stillLive = await this.youtubeLiveService.isVideoLive(marker.videoId);
+    if (!stillLive) {
+      this.logger.log(
+        `[OVERTIME] Stream ${marker.videoId} ended for ${marker.handle} ("${marker.programName}")`,
+      );
+      await this.endOvertime(marker, key);
+      return 'ended';
+    }
+
+    const cacheData: LiveStatusCache = {
+      channelId: marker.channelId,
+      handle: marker.handle,
+      isLive: true,
+      streamUrl: marker.streamUrl,
+      videoId: marker.videoId,
+      lastUpdated: Date.now(),
+      ttl: this.OVERTIME_TTL,
+      overtime: [
+        {
+          scheduleId: marker.scheduleId,
+          videoId: marker.videoId,
+          streamUrl: marker.streamUrl,
+          startedAt,
+        },
+      ],
+      // The block is over, so there is no meaningful block end to track.
+      blockEndTime: null,
+      validationCooldown: Date.now() + this.OVERTIME_TTL * 1000,
+      lastValidation: Date.now(),
+      streams: marker.stream ? [marker.stream] : [],
+      streamCount: marker.stream ? 1 : 0,
+    };
+    await this.cacheLiveStatus(marker.channelId, cacheData);
+
+    const isFirstCycle = marker.overtimeStartedAt === null;
+
+    await this.redisService.set(
+      key,
+      { ...marker, overtimeStartedAt: startedAt, updatedAt: Date.now() },
+      (this.OVERTIME_MAX_MINUTES + 10) * 60,
+    );
+
+    if (isFirstCycle) {
+      await this.notifyOvertimeChange(marker, marker.videoId);
+    }
+
+    this.logger.debug(
+      `[OVERTIME] "${marker.programName}" (${marker.handle}) still on air, ${Math.round(elapsedMinutes)}min past its block`,
+    );
+    return 'extended';
+  }
+
+  /**
+   * Drop the overtime marker and publish a not-live status so clients stop
+   * showing the program as live instead of waiting for the entry to expire.
+   */
+  private async endOvertime(
+    marker: LastLiveVideoMarker,
+    key: string,
+  ): Promise<void> {
+    await this.redisService.del(key);
+    await this.cacheLiveStatus(
+      marker.channelId,
+      this.createNotLiveCacheData(
+        marker.channelId,
+        marker.handle,
+        this.CACHE_TTL,
+      ),
+    );
+
+    // Only worth telling clients when they were actually shown the overtime.
+    if (marker.overtimeStartedAt !== null) {
+      await this.notifyOvertimeChange(marker, null);
+    }
+  }
+
+  /**
+   * Push an SSE notification so clients refresh right away instead of waiting
+   * up to 5 minutes for their next poll. Fired only on overtime transitions,
+   * never on the steady-state re-validation that runs every cycle.
+   *
+   * The payload goes in as an object because RedisService.set already
+   * serialises it. Double-encoding (as the older call sites do) makes the SSE
+   * controller parse it back into a string, which collapses every notification
+   * onto the same dedup id and silently drops all but the first.
+   */
+  private async notifyOvertimeChange(
+    marker: LastLiveVideoMarker,
+    videoId: string | null,
+  ): Promise<void> {
+    try {
+      const timestamp = Date.now();
+      await this.redisService.set(
+        `live_notification:${marker.channelId}:${timestamp}`,
+        {
+          type: 'live_status_changed',
+          channelId: marker.channelId,
+          videoId,
+          channelName: marker.handle,
+          timestamp,
+        },
+        300,
+      );
+    } catch {
+      this.logger.warn(
+        `[OVERTIME] Could not publish SSE notification for ${marker.handle}`,
+      );
+    }
   }
 
   /**

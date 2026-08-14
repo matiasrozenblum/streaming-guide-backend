@@ -191,6 +191,20 @@ export class OptimizedSchedulesService {
     const previousDay = TimezoneUtil.previousDayOfWeek();
     const currentTime = TimezoneUtil.currentTimeInMinutes();
 
+    // Channels with something on air right now. A program that already handed
+    // the channel over to the next one must never extend into overtime, even if
+    // the cron has not cleared the entry yet (up to one 2-minute cycle of lag).
+    const channelsAiringNow = new Set<string>();
+    for (const schedule of schedules) {
+      const channelId = schedule.program.channel?.youtube_channel_id;
+      if (!channelId) continue;
+      if (
+        this.isScheduleAiring(schedule, currentDay, previousDay, currentTime)
+      ) {
+        channelsAiringNow.add(channelId);
+      }
+    }
+
     for (const schedule of schedules) {
       const enrichedSchedule = { ...schedule };
       const channelId = schedule.program.channel?.youtube_channel_id;
@@ -218,17 +232,28 @@ export class OptimizedSchedulesService {
         ? (canFetchLiveMap.get(handle) ?? true)
         : true;
 
-      const startNum = this.convertTimeToNumber(schedule.start_time);
-      const endNum = this.convertTimeToNumber(schedule.end_time);
-      const isCurrentlyLive =
-        (schedule.day_of_week === currentDay &&
-          TimezoneUtil.isTimeInRange(startNum, endNum, currentTime)) ||
-        (endNum < startNum &&
-          schedule.day_of_week === previousDay &&
-          currentTime < endNum);
+      const isCurrentlyLive = this.isScheduleAiring(
+        schedule,
+        currentDay,
+        previousDay,
+        currentTime,
+      );
 
       if (channelId && liveStatusMap.has(channelId)) {
         const liveStatus = liveStatusMap.get(channelId)!;
+
+        // The scheduled block is over but the stream this program was on is
+        // still broadcasting — keep it live so viewers can get back to it.
+        const overtimeEntry =
+          !isCurrentlyLive &&
+          !isEscalated &&
+          canFetchLive &&
+          !channelsAiringNow.has(channelId)
+            ? (liveStatus.overtime || []).find(
+                (o: { scheduleId: string }) =>
+                  String(o.scheduleId) === String(schedule.id),
+              )
+            : undefined;
 
         if (isEscalated && isCurrentlyLive) {
           enrichedSchedule.program = {
@@ -275,6 +300,17 @@ export class OptimizedSchedulesService {
             live_streams: [],
             stream_count: 0,
           };
+        } else if (overtimeEntry) {
+          enrichedSchedule.program = {
+            ...schedule.program,
+            is_live: true,
+            live_overtime: true,
+            // Always the overtime stream: the program's stored stream_url is
+            // usually a channel or playlist link, not the running broadcast.
+            stream_url: overtimeEntry.streamUrl,
+            live_streams: liveStatus.streams || [],
+            stream_count: liveStatus.streamCount || 0,
+          };
         } else {
           enrichedSchedule.program = {
             ...schedule.program,
@@ -308,10 +344,35 @@ export class OptimizedSchedulesService {
         }
       }
 
+      // Keep the field on every program so clients get a stable contract.
+      enrichedSchedule.program.live_overtime =
+        enrichedSchedule.program.live_overtime ?? false;
+
       enriched.push(enrichedSchedule);
     }
 
     return enriched;
+  }
+
+  /**
+   * Whether a schedule's own time block contains the current minute.
+   * Handles cross-midnight blocks, which land on the previous day of week.
+   */
+  private isScheduleAiring(
+    schedule: { day_of_week: string; start_time: string; end_time: string },
+    currentDay: string,
+    previousDay: string,
+    currentTime: number,
+  ): boolean {
+    const startNum = this.convertTimeToNumber(schedule.start_time);
+    const endNum = this.convertTimeToNumber(schedule.end_time);
+    return (
+      (schedule.day_of_week === currentDay &&
+        TimezoneUtil.isTimeInRange(startNum, endNum, currentTime)) ||
+      (endNum < startNum &&
+        schedule.day_of_week === previousDay &&
+        currentTime < endNum)
+    );
   }
 
   /**
