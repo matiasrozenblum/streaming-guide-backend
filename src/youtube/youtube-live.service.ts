@@ -49,6 +49,23 @@ export class YoutubeLiveService {
   private readonly MAX_IN_FLIGHT = 50; // Safety cap — auto-clear if set grows beyond this
   private readonly YOUTUBE_API_TIMEOUT_MS = 10_000;
 
+  /** Not-found mark lifetime when nothing is on-air — the channel is simply offline. */
+  private readonly NOT_FOUND_TTL = 900; // 15 minutes
+  /**
+   * Shorter mark used while a *visible* program is on-air, so the next background run
+   * actually re-queries YouTube instead of being short-circuited by the not-found gate.
+   * search?eventType=live can report 0 results for a channel that is demonstrably live
+   * (the index lags, and sometimes just misses an ongoing broadcast), and freezing the
+   * channel for 15 minutes on the first miss is what turns that into a lost program.
+   */
+  private readonly NOT_FOUND_ON_AIR_RETRY_TTL = 120; // 2 minutes
+  /**
+   * Minimum time between *counted* attempts. Retries happen every couple of minutes while
+   * a program is on-air, but the escalation ladder must stay time-based: without this, three
+   * fast retries would escalate a channel to not-found (and email about it) within minutes.
+   */
+  private readonly NOT_FOUND_ATTEMPT_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+
   // YouTube API usage tracking removed - no longer needed
 
   constructor(
@@ -1875,6 +1892,12 @@ export class YoutubeLiveService {
     handle: string,
     notFoundKey: string,
   ): Promise<void> {
+    // Whether a visible program is currently on-air. Drives how long the not-found
+    // mark lives: if nothing is scheduled the channel is just offline and there is
+    // nothing to retry for, but if a program *should* be streaming we want to keep
+    // asking YouTube.
+    let visibleProgramOnAir = false;
+
     // Visibility guard: do not escalate for non-visible channel/program
     try {
       const channel = await this.channelsRepository.findOne({
@@ -1908,6 +1931,7 @@ export class YoutubeLiveService {
         );
         return;
       }
+      visibleProgramOnAir = !!currentProgram;
     } catch (visErr) {
       this.logger.warn(
         `⚠️ [Main] Visibility check failed for ${handle}: ${visErr instanceof Error ? visErr.message : visErr}`,
@@ -1939,10 +1963,17 @@ export class YoutubeLiveService {
       );
 
       // Phase 4: Set not-found mark for main cron and manual execution - both formats
-      await this.redisService.set(notFoundKey, '1', 900);
-      await this.redisService.set(`videoIdNotFound:${handle}`, '1', 900);
+      const firstAttemptTTL = visibleProgramOnAir
+        ? this.NOT_FOUND_ON_AIR_RETRY_TTL
+        : this.NOT_FOUND_TTL;
+      await this.redisService.set(notFoundKey, '1', firstAttemptTTL);
+      await this.redisService.set(
+        `videoIdNotFound:${handle}`,
+        '1',
+        firstAttemptTTL,
+      );
       this.logger.debug(
-        `🚫 [First attempt] No live video for ${handle}, marking not-found for 15 minutes`,
+        `🚫 [First attempt] No live video for ${handle}, marking not-found for ${firstAttemptTTL}s (visibleProgramOnAir=${visibleProgramOnAir})`,
       );
       return;
     }
@@ -1981,6 +2012,32 @@ export class YoutubeLiveService {
           Math.floor(ttlUntilProgramEndForNotFound / 1000),
         );
       }
+      return;
+    }
+
+    // Retry cadence is decoupled from the escalation ladder. While a visible program is
+    // on-air the mark only lives 2 minutes so the next run re-queries YouTube, but an
+    // attempt is only counted once the normal 15-minute window has elapsed — otherwise
+    // those fast retries would reach 3 attempts (and send the escalation email) within
+    // minutes of a program starting. lastAttempt is deliberately left untouched here.
+    const sinceLastAttempt = Date.now() - tracking.lastAttempt;
+    if (
+      visibleProgramOnAir &&
+      sinceLastAttempt < this.NOT_FOUND_ATTEMPT_INTERVAL_MS
+    ) {
+      await this.redisService.set(
+        notFoundKey,
+        '1',
+        this.NOT_FOUND_ON_AIR_RETRY_TTL,
+      );
+      await this.redisService.set(
+        `videoIdNotFound:${handle}`,
+        '1',
+        this.NOT_FOUND_ON_AIR_RETRY_TTL,
+      );
+      this.logger.debug(
+        `🔁 [Retry] Still no live video for ${handle}, retrying in ${this.NOT_FOUND_ON_AIR_RETRY_TTL}s (attempt ${tracking.attempts} stands, ${Math.round(sinceLastAttempt / 1000)}s since last counted attempt)`,
+      );
       return;
     }
 
@@ -2035,10 +2092,17 @@ export class YoutubeLiveService {
       }
     } else {
       // Second attempt - extend not-found mark for main cron and manual execution - both formats
-      await this.redisService.set(notFoundKey, '1', 900);
-      await this.redisService.set(`videoIdNotFound:${handle}`, '1', 900);
+      const secondAttemptTTL = visibleProgramOnAir
+        ? this.NOT_FOUND_ON_AIR_RETRY_TTL
+        : this.NOT_FOUND_TTL;
+      await this.redisService.set(notFoundKey, '1', secondAttemptTTL);
+      await this.redisService.set(
+        `videoIdNotFound:${handle}`,
+        '1',
+        secondAttemptTTL,
+      );
       this.logger.debug(
-        `🚫 [Second attempt] Still no live video for ${handle}, extending not-found for another 15 minutes`,
+        `🚫 [Second attempt] Still no live video for ${handle}, extending not-found for ${secondAttemptTTL}s (visibleProgramOnAir=${visibleProgramOnAir})`,
       );
     }
 
