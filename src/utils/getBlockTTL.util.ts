@@ -5,6 +5,7 @@ import * as timezone from 'dayjs/plugin/timezone';
 import { convertTimeToMinutes } from './convertTimeToMinutes.util';
 import { SentryService } from '../sentry/sentry.service';
 import { TimezoneUtil } from './timezone.util';
+import { isScheduleVisible } from './scheduleVisibility.util';
 
 // Simple in-memory cache to prevent duplicate alerts for the same channel within a short time window
 const alertCache = new Map<string, number>();
@@ -26,9 +27,14 @@ export async function getCurrentBlockTTL(
   const now = TimezoneUtil.now();
   const currentTimeInMinutes = TimezoneUtil.currentTimeInMinutes();
 
-  // Filtrar sólo del canal
+  // Filtrar sólo del canal, ignorando programas/canales ocultos (is_visible=false):
+  // no deben definir los límites del bloque ni el TTL del cache de live status
   const channelSched = schedules
-    .filter((s) => s.program.channel?.youtube_channel_id === channelId)
+    .filter(
+      (s) =>
+        s.program.channel?.youtube_channel_id === channelId &&
+        isScheduleVisible(s),
+    )
     .map((s) => ({
       start: convertTimeToMinutes(s.start_time),
       end: convertTimeToMinutes(s.end_time),

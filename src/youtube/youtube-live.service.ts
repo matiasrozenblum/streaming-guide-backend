@@ -26,6 +26,7 @@ import {
   extractLiveStreamsResult,
 } from './interfaces/live-status-cache.interface';
 import { SimilarityUtil } from '../utils/similarity.util';
+import { filterVisibleSchedules } from '../utils/scheduleVisibility.util';
 
 const HolidaysClass = (DateHolidays as any).default ?? DateHolidays;
 
@@ -47,6 +48,23 @@ export class YoutubeLiveService {
   private readonly inFlightFetches = new Set<string>(); // Track in-flight YouTube API requests to prevent duplicates
   private readonly MAX_IN_FLIGHT = 50; // Safety cap — auto-clear if set grows beyond this
   private readonly YOUTUBE_API_TIMEOUT_MS = 10_000;
+
+  /** Not-found mark lifetime when nothing is on-air — the channel is simply offline. */
+  private readonly NOT_FOUND_TTL = 900; // 15 minutes
+  /**
+   * Shorter mark used while a *visible* program is on-air, so the next background run
+   * actually re-queries YouTube instead of being short-circuited by the not-found gate.
+   * search?eventType=live can report 0 results for a channel that is demonstrably live
+   * (the index lags, and sometimes just misses an ongoing broadcast), and freezing the
+   * channel for 15 minutes on the first miss is what turns that into a lost program.
+   */
+  private readonly NOT_FOUND_ON_AIR_RETRY_TTL = 120; // 2 minutes
+  /**
+   * Minimum time between *counted* attempts. Retries happen every couple of minutes while
+   * a program is on-air, but the escalation ladder must stay time-based: without this, three
+   * fast retries would escalate a channel to not-found (and email about it) within minutes.
+   */
+  private readonly NOT_FOUND_ATTEMPT_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 
   // YouTube API usage tracking removed - no longer needed
 
@@ -970,45 +988,66 @@ export class YoutubeLiveService {
       // Track API usage
       // YouTube API usage tracking removed
 
-      const requestUrl = `${this.apiUrl}/search?part=snippet&channelId=${channelId}&eventType=live&type=video&key=${this.apiKey}&maxResults=5`;
-      this.logger.debug(
-        `🔍 [getLiveStreams] Making request for ${handle}: ${requestUrl}`,
-      );
-      this.logger.debug(
-        `🔍 [getLiveStreams] Using API key: ${this.apiKey ? this.apiKey.substring(0, 10) + '...' : 'NOT_SET'}`,
-      );
-
-      const { data } = await axios.get(`${this.apiUrl}/search`, {
-        timeout: this.YOUTUBE_API_TIMEOUT_MS,
-        params: {
-          part: 'snippet',
-          channelId,
-          eventType: 'live',
-          type: 'video',
-          key: this.apiKey,
-          maxResults: 5, // YouTube API limitation: maxResults should be 1-5 for eventType=live
-          regionCode: 'AR',
-        },
-      });
-
-      this.logger.debug(
-        `🔍 [getLiveStreams] Response for ${handle}:`,
-        JSON.stringify(data, null, 2),
+      // Retrying every 2 minutes with a 100-unit search would cost ~1.5k quota units per
+      // program block that never goes live. Inside the retry window we skip the search and
+      // let the uploads fallback below (~4 units) do the work — which the Luzu TV incident
+      // showed is also the more reliable of the two: search reported 0 results for a
+      // broadcast that had been live for 49 minutes and sat at position 0 of the uploads
+      // playlist. Counted attempts still run the search, because a long-running stream can
+      // fall outside the 3 most recent uploads once enough shorts are published after it.
+      const uploadsOnlyRetry = await this.isUploadsOnlyRetry(
+        handle,
+        currentProgramName,
+        cronType,
       );
 
-      const allStreams: LiveStream[] = (data.items || []).map((item: any) => ({
-        videoId: item.id.videoId,
-        title: item.snippet.title,
-        publishedAt: item.snippet.publishedAt,
-        description: item.snippet.description,
-        thumbnailUrl: item.snippet.thumbnails?.medium?.url,
-        channelTitle: item.snippet.channelTitle,
-        liveBroadcastContent: item.snippet.liveBroadcastContent, // Add this for validation
-      }));
+      let allStreams: LiveStream[] = [];
 
-      this.logger.debug(
-        `🔍 [getLiveStreams] Found ${allStreams.length} streams from search API for ${handle}. liveBroadcastContent from search: ${allStreams.map((s) => `${s.videoId}:${s.liveBroadcastContent}`).join(', ')}`,
-      );
+      if (uploadsOnlyRetry) {
+        this.logger.debug(
+          `💸 [getLiveStreams] Skipping search for ${handle} (inside not-found retry window), relying on uploads fallback`,
+        );
+      } else {
+        const requestUrl = `${this.apiUrl}/search?part=snippet&channelId=${channelId}&eventType=live&type=video&key=${this.apiKey}&maxResults=5`;
+        this.logger.debug(
+          `🔍 [getLiveStreams] Making request for ${handle}: ${requestUrl}`,
+        );
+        this.logger.debug(
+          `🔍 [getLiveStreams] Using API key: ${this.apiKey ? this.apiKey.substring(0, 10) + '...' : 'NOT_SET'}`,
+        );
+
+        const { data } = await axios.get(`${this.apiUrl}/search`, {
+          timeout: this.YOUTUBE_API_TIMEOUT_MS,
+          params: {
+            part: 'snippet',
+            channelId,
+            eventType: 'live',
+            type: 'video',
+            key: this.apiKey,
+            maxResults: 5, // YouTube API limitation: maxResults should be 1-5 for eventType=live
+            regionCode: 'AR',
+          },
+        });
+
+        this.logger.debug(
+          `🔍 [getLiveStreams] Response for ${handle}:`,
+          JSON.stringify(data, null, 2),
+        );
+
+        allStreams = (data.items || []).map((item: any) => ({
+          videoId: item.id.videoId,
+          title: item.snippet.title,
+          publishedAt: item.snippet.publishedAt,
+          description: item.snippet.description,
+          thumbnailUrl: item.snippet.thumbnails?.medium?.url,
+          channelTitle: item.snippet.channelTitle,
+          liveBroadcastContent: item.snippet.liveBroadcastContent, // Add this for validation
+        }));
+
+        this.logger.debug(
+          `🔍 [getLiveStreams] Found ${allStreams.length} streams from search API for ${handle}. liveBroadcastContent from search: ${allStreams.map((s) => `${s.videoId}:${s.liveBroadcastContent}`).join(', ')}`,
+        );
+      }
 
       // Filter out scheduled streams - only keep actually live streams
       const liveStreams: LiveStream[] = [];
@@ -1058,20 +1097,24 @@ export class YoutubeLiveService {
         );
       }
 
-      if (liveStreams.length === 0 && currentProgramIsPremiere) {
-        // Fallback: YouTube premieres (estrenos) don't appear in search?eventType=live
-        // but ARE reported as liveBroadcastContent=live by the videos API.
-        // Only runs when the current program is flagged as is_premiere to avoid
-        // wasting quota on channels that are genuinely offline.
-        const premiereStream = await this.findActivePremiereFromUploads(
+      if (liveStreams.length === 0 && currentProgramName) {
+        // Fallback via the uploads playlist. Two cases where search?eventType=live returns
+        // nothing even though the channel IS live:
+        //   1. Premieres (estrenos) never show up in search?eventType=live at all.
+        //   2. The search index lags behind the real start of a broadcast (minutes), so a
+        //      program that just started looks offline and gets escalated to not-found.
+        // videos?part=snippet reports both correctly as liveBroadcastContent=live, and this
+        // path costs ~4 quota units (playlistItems + up to 3 videos) vs 100 for a search.
+        // Gated on currentProgramName so it only runs while a visible program is on-air.
+        const uploadStream = await this.findActiveLiveFromUploads(
           channelId,
           handle,
           currentProgramName,
         );
-        if (premiereStream) {
-          liveStreams.push(premiereStream);
+        if (uploadStream) {
+          liveStreams.push(uploadStream);
           this.logger.debug(
-            `🎬 [Premiere] Found active premiere for ${handle}: ${premiereStream.videoId} - ${premiereStream.title}`,
+            `🎬 [UploadsFallback] Found active live/premiere for ${handle} (is_premiere=${currentProgramIsPremiere}): ${uploadStream.videoId} - ${uploadStream.title}`,
           );
         }
       }
@@ -1255,12 +1298,13 @@ export class YoutubeLiveService {
   }
 
   /**
-   * Fallback for YouTube premieres (estrenos): the search?eventType=live endpoint does not
-   * return premieres, but videos?part=snippet correctly reports them as liveBroadcastContent=live.
+   * Fallback for broadcasts that search?eventType=live misses: premieres (estrenos) are never
+   * returned by it, and a freshly started live stream can take several minutes to reach the
+   * search index. videos?part=snippet reports both as liveBroadcastContent=live.
    * Fetches the channel's 3 most recent uploads via playlistItems (1 quota unit) and checks
    * each one with isVideoLive().
    */
-  private async findActivePremiereFromUploads(
+  private async findActiveLiveFromUploads(
     channelId: string,
     handle: string,
     currentProgramName: string | null = null,
@@ -1281,7 +1325,7 @@ export class YoutubeLiveService {
 
       const items: any[] = data.items || [];
       this.logger.debug(
-        `🎬 [Premiere] Checking ${items.length} recent uploads for ${handle}`,
+        `🎬 [UploadsFallback] Checking ${items.length} recent uploads for ${handle}`,
       );
 
       const liveStreams: LiveStream[] = [];
@@ -1318,7 +1362,7 @@ export class YoutubeLiveService {
             ),
         );
         this.logger.debug(
-          `🎬 [Premiere] Multiple live premieres for ${handle}, selected best match: ${liveStreams[0].videoId} - ${liveStreams[0].title}`,
+          `🎬 [UploadsFallback] Multiple live videos for ${handle}, selected best match: ${liveStreams[0].videoId} - ${liveStreams[0].title}`,
         );
       }
 
@@ -1330,7 +1374,7 @@ export class YoutubeLiveService {
         );
       }
       this.logger.warn(
-        `⚠️ [Premiere] Fallback check failed for ${handle}: ${err.message}`,
+        `⚠️ [UploadsFallback] Check failed for ${handle}: ${err.message}`,
       );
       return null;
     }
@@ -1406,7 +1450,7 @@ export class YoutubeLiveService {
 
     for (const schedule of onAirPrograms) {
       const programName = schedule.program?.name ?? 'Desconocido';
-      const stream = await this.findActivePremiereFromUploads(
+      const stream = await this.findActiveLiveFromUploads(
         channelId,
         handle,
         programName,
@@ -1864,11 +1908,53 @@ export class YoutubeLiveService {
   /**
    * Handle not-found escalation for main cron and manual execution - should extend not-found marks
    */
+  /**
+   * True when the current run is an *uncounted* fast retry of a channel already marked
+   * not-found, and can therefore skip the expensive search in favour of the uploads
+   * playlist.
+   *
+   * Deliberately mirrors the "don't count this attempt" rule in
+   * handleNotFoundEscalationMain, so the cheap path and the uncounted attempts are exactly
+   * the same set of runs: retries stay cheap, and the three counted attempts that drive
+   * escalation still get a full search.
+   */
+  private async isUploadsOnlyRetry(
+    handle: string,
+    currentProgramName: string | null,
+    cronType: 'main' | 'back-to-back-fix' | 'manual',
+  ): Promise<boolean> {
+    // The uploads fallback only runs while a visible program is on-air, and the
+    // back-to-back cron has its own escalation ladder.
+    if (!currentProgramName || cronType === 'back-to-back-fix') return false;
+
+    try {
+      const tracking = await this.redisService.get<AttemptTracking>(
+        `notFoundAttempts:${handle}`,
+      );
+      if (!tracking || tracking.escalated) return false;
+      return (
+        Date.now() - tracking.lastAttempt < this.NOT_FOUND_ATTEMPT_INTERVAL_MS
+      );
+    } catch (err) {
+      // Never let a Redis hiccup silently downgrade detection — fall back to the search.
+      this.logger.warn(
+        `⚠️ [getLiveStreams] Could not read not-found tracking for ${handle}: ${err instanceof Error ? err.message : err}`,
+      );
+      return false;
+    }
+  }
+
   private async handleNotFoundEscalationMain(
     channelId: string,
     handle: string,
     notFoundKey: string,
   ): Promise<void> {
+    // Whether a visible program is currently on-air. Drives how long the not-found
+    // mark lives: if nothing is scheduled the channel is just offline and there is
+    // nothing to retry for, but if a program *should* be streaming we want to keep
+    // asking YouTube.
+    let visibleProgramOnAir = false;
+
     // Visibility guard: do not escalate for non-visible channel/program
     try {
       const channel = await this.channelsRepository.findOne({
@@ -1902,6 +1988,7 @@ export class YoutubeLiveService {
         );
         return;
       }
+      visibleProgramOnAir = !!currentProgram;
     } catch (visErr) {
       this.logger.warn(
         `⚠️ [Main] Visibility check failed for ${handle}: ${visErr instanceof Error ? visErr.message : visErr}`,
@@ -1933,10 +2020,17 @@ export class YoutubeLiveService {
       );
 
       // Phase 4: Set not-found mark for main cron and manual execution - both formats
-      await this.redisService.set(notFoundKey, '1', 900);
-      await this.redisService.set(`videoIdNotFound:${handle}`, '1', 900);
+      const firstAttemptTTL = visibleProgramOnAir
+        ? this.NOT_FOUND_ON_AIR_RETRY_TTL
+        : this.NOT_FOUND_TTL;
+      await this.redisService.set(notFoundKey, '1', firstAttemptTTL);
+      await this.redisService.set(
+        `videoIdNotFound:${handle}`,
+        '1',
+        firstAttemptTTL,
+      );
       this.logger.debug(
-        `🚫 [First attempt] No live video for ${handle}, marking not-found for 15 minutes`,
+        `🚫 [First attempt] No live video for ${handle}, marking not-found for ${firstAttemptTTL}s (visibleProgramOnAir=${visibleProgramOnAir})`,
       );
       return;
     }
@@ -1975,6 +2069,32 @@ export class YoutubeLiveService {
           Math.floor(ttlUntilProgramEndForNotFound / 1000),
         );
       }
+      return;
+    }
+
+    // Retry cadence is decoupled from the escalation ladder. While a visible program is
+    // on-air the mark only lives 2 minutes so the next run re-queries YouTube, but an
+    // attempt is only counted once the normal 15-minute window has elapsed — otherwise
+    // those fast retries would reach 3 attempts (and send the escalation email) within
+    // minutes of a program starting. lastAttempt is deliberately left untouched here.
+    const sinceLastAttempt = Date.now() - tracking.lastAttempt;
+    if (
+      visibleProgramOnAir &&
+      sinceLastAttempt < this.NOT_FOUND_ATTEMPT_INTERVAL_MS
+    ) {
+      await this.redisService.set(
+        notFoundKey,
+        '1',
+        this.NOT_FOUND_ON_AIR_RETRY_TTL,
+      );
+      await this.redisService.set(
+        `videoIdNotFound:${handle}`,
+        '1',
+        this.NOT_FOUND_ON_AIR_RETRY_TTL,
+      );
+      this.logger.debug(
+        `🔁 [Retry] Still no live video for ${handle}, retrying in ${this.NOT_FOUND_ON_AIR_RETRY_TTL}s (attempt ${tracking.attempts} stands, ${Math.round(sinceLastAttempt / 1000)}s since last counted attempt)`,
+      );
       return;
     }
 
@@ -2029,10 +2149,17 @@ export class YoutubeLiveService {
       }
     } else {
       // Second attempt - extend not-found mark for main cron and manual execution - both formats
-      await this.redisService.set(notFoundKey, '1', 900);
-      await this.redisService.set(`videoIdNotFound:${handle}`, '1', 900);
+      const secondAttemptTTL = visibleProgramOnAir
+        ? this.NOT_FOUND_ON_AIR_RETRY_TTL
+        : this.NOT_FOUND_TTL;
+      await this.redisService.set(notFoundKey, '1', secondAttemptTTL);
+      await this.redisService.set(
+        `videoIdNotFound:${handle}`,
+        '1',
+        secondAttemptTTL,
+      );
       this.logger.debug(
-        `🚫 [Second attempt] Still no live video for ${handle}, extending not-found for another 15 minutes`,
+        `🚫 [Second attempt] Still no live video for ${handle}, extending not-found for ${secondAttemptTTL}s (visibleProgramOnAir=${visibleProgramOnAir})`,
       );
     }
 
@@ -2230,19 +2357,21 @@ export class YoutubeLiveService {
         applyOverrides: true,
       });
 
-      // Find current program for this channel
-      const currentProgram = schedules.find((schedule) => {
-        const channelIdFromSchedule =
-          schedule.program?.channel?.youtube_channel_id;
-        if (channelIdFromSchedule !== channelId) return false;
+      // Find current program for this channel (hidden programs don't define the block end)
+      const currentProgram = filterVisibleSchedules(schedules).find(
+        (schedule) => {
+          const channelIdFromSchedule =
+            schedule.program?.channel?.youtube_channel_id;
+          if (channelIdFromSchedule !== channelId) return false;
 
-        const startMinutes = this.convertTimeToMinutes(schedule.start_time);
-        const endMinutes = this.convertTimeToMinutes(schedule.end_time);
-        return (
-          startMinutes <= currentTimeInMinutes &&
-          endMinutes > currentTimeInMinutes
-        );
-      });
+          const startMinutes = this.convertTimeToMinutes(schedule.start_time);
+          const endMinutes = this.convertTimeToMinutes(schedule.end_time);
+          return (
+            startMinutes <= currentTimeInMinutes &&
+            endMinutes > currentTimeInMinutes
+          );
+        },
+      );
 
       if (currentProgram) {
         const endMinutes = this.convertTimeToMinutes(currentProgram.end_time);
@@ -2289,7 +2418,7 @@ export class YoutubeLiveService {
           applyOverrides: true,
         });
 
-        const channelSchedules = schedules.filter(
+        const channelSchedules = filterVisibleSchedules(schedules).filter(
           (s) => s.program?.channel?.youtube_channel_id === channelId,
         );
 
