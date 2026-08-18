@@ -5,7 +5,7 @@ import { AuthService } from '../auth/auth.service';
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/roles.decorator';
+import {} from '../auth/roles.decorator';
 import { OtpService } from '../auth/otp.service';
 
 const mockUser = {

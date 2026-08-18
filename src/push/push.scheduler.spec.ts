@@ -1,14 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
-import { Logger } from '@nestjs/common';
+import {} from '@nestjs/common';
 import { PushScheduler } from './push.scheduler';
 import { PushService } from './push.service';
 import { EmailService } from '../email/email.service';
 import { Schedule } from '../schedules/schedules.entity';
 import { UserSubscription } from '../users/user-subscription.entity';
 import { PushSubscriptionEntity } from './push-subscription.entity';
-import * as dayjs from 'dayjs';
 import { ConfigService } from '../config/config.service';
 import { SchedulesService } from '../schedules/schedules.service';
 
@@ -45,11 +44,11 @@ jest.mock('dayjs', () => {
 describe('PushScheduler', () => {
   let module: TestingModule;
   let scheduler: PushScheduler;
-  let pushService: PushService;
-  let emailService: EmailService;
-  let scheduleRepository: Repository<Schedule>;
-  let userSubscriptionRepository: Repository<UserSubscription>;
-  let pushSubscriptionRepository: Repository<PushSubscriptionEntity>;
+  let _pushService: PushService;
+  let _emailService: EmailService;
+  let _scheduleRepository: Repository<Schedule>;
+  let _userSubscriptionRepository: Repository<UserSubscription>;
+  let _pushSubscriptionRepository: Repository<PushSubscriptionEntity>;
 
   const mockChannel = {
     id: 1,
@@ -168,17 +167,17 @@ describe('PushScheduler', () => {
     }).compile();
 
     scheduler = module.get<PushScheduler>(PushScheduler);
-    pushService = module.get<PushService>(PushService);
-    emailService = module.get<EmailService>(EmailService);
-    scheduleRepository = module.get<Repository<Schedule>>(
+    _pushService = module.get<PushService>(PushService);
+    _emailService = module.get<EmailService>(EmailService);
+    _scheduleRepository = module.get<Repository<Schedule>>(
       getRepositoryToken(Schedule),
     );
-    userSubscriptionRepository = module.get<Repository<UserSubscription>>(
+    _userSubscriptionRepository = module.get<Repository<UserSubscription>>(
       getRepositoryToken(UserSubscription),
     );
-    pushSubscriptionRepository = module.get<Repository<PushSubscriptionEntity>>(
-      getRepositoryToken(PushSubscriptionEntity),
-    );
+    _pushSubscriptionRepository = module.get<
+      Repository<PushSubscriptionEntity>
+    >(getRepositoryToken(PushSubscriptionEntity));
 
     // Mock logger methods
     jest.spyOn(scheduler['logger'], 'log').mockImplementation();

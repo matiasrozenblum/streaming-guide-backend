@@ -10,7 +10,6 @@ import {
   Req,
   ForbiddenException,
   NotFoundException,
-  UnauthorizedException,
   Query,
 } from '@nestjs/common';
 import {

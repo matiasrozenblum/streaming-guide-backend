@@ -49,7 +49,7 @@ export class ComprehensiveReportService {
       throw new Error('Channel not found');
     }
 
-    const reportParams = {
+    const _reportParams = {
       type: ReportType.COMPREHENSIVE_CHANNEL_SUMMARY,
       format,
       from,

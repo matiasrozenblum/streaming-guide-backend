@@ -3,7 +3,7 @@ import { StatisticsController } from './statistics.controller';
 import { StatisticsService } from './statistics.service';
 import { ReportsProxyService } from './reports-proxy.service';
 import { EmailService } from '../email/email.service';
-import { NotFoundException } from '@nestjs/common';
+import {} from '@nestjs/common';
 import { Response } from 'express';
 
 describe('StatisticsController', () => {

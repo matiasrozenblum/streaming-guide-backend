@@ -1,5 +1,5 @@
 import { YoutubeLiveService } from './youtube-live.service';
-import { ConfigService } from '../config/config.service';
+import {} from '../config/config.service';
 import { SchedulesService } from '../schedules/schedules.service';
 import { RedisService } from '../redis/redis.service';
 import { SentryService } from '../sentry/sentry.service';

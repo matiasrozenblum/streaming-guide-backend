@@ -13,7 +13,6 @@ jest.mock('ioredis', () => ({
 }));
 
 import { RedisService } from './redis.service';
-import Redis from 'ioredis';
 import { SentryService } from '../sentry/sentry.service';
 
 describe('RedisService', () => {

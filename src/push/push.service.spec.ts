@@ -14,8 +14,8 @@ const mockWebPush = webpush as jest.Mocked<typeof webpush>;
 
 describe('PushService', () => {
   let service: PushService;
-  let pushSubscriptionRepository: Repository<PushSubscriptionEntity>;
-  let deviceRepository: Repository<Device>;
+  let _pushSubscriptionRepository: Repository<PushSubscriptionEntity>;
+  let _deviceRepository: Repository<Device>;
 
   const mockDevice: Partial<Device> = {
     id: 'device-uuid',
@@ -78,10 +78,10 @@ describe('PushService', () => {
     }).compile();
 
     service = module.get<PushService>(PushService);
-    pushSubscriptionRepository = module.get<Repository<PushSubscriptionEntity>>(
-      getRepositoryToken(PushSubscriptionEntity),
-    );
-    deviceRepository = module.get<Repository<Device>>(
+    _pushSubscriptionRepository = module.get<
+      Repository<PushSubscriptionEntity>
+    >(getRepositoryToken(PushSubscriptionEntity));
+    _deviceRepository = module.get<Repository<Device>>(
       getRepositoryToken(Device),
     );
 

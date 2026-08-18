@@ -83,7 +83,7 @@ import { ConfigModule as AppConfigModule } from './config/config.module';
           },
           cache: { duration: 30000 },
           // Enhanced error handling for database connection
-          onConnect: async (connection) => {
+          onConnect: async (_connection) => {
             console.log('✅ Database connected successfully');
           },
           onError: (error) => {

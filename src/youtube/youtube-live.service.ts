@@ -6,7 +6,7 @@ import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
 import * as DateHolidays from 'date-holidays';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository } from 'typeorm';
 
 import { SchedulesService } from '../schedules/schedules.service';
 import { RedisService } from '../redis/redis.service';
@@ -28,7 +28,7 @@ import {
 import { SimilarityUtil } from '../utils/similarity.util';
 import { filterVisibleSchedules } from '../utils/scheduleVisibility.util';
 
-const HolidaysClass = (DateHolidays as any).default ?? DateHolidays;
+const _HolidaysClass = (DateHolidays as any).default ?? DateHolidays;
 
 interface AttemptTracking {
   attempts: number;
@@ -554,7 +554,7 @@ export class YoutubeLiveService {
         // Send individual PostHog events for each channel in the batch
         for (const channelId of chunk) {
           // Find the channel handle from the provided mapping
-          const handle = channelHandleMap?.get(channelId) || 'unknown';
+          const _handle = channelHandleMap?.get(channelId) || 'unknown';
 
           // Track API usage for this specific channel
           // YouTube API usage tracking removed

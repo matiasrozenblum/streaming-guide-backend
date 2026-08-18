@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Post,
-  Get,
-  Inject,
-  UseGuards,
-  Query,
-} from '@nestjs/common';
+import { Controller, Post, Get, UseGuards, Query } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Channel } from './channels/channels.entity';
@@ -18,7 +11,6 @@ import { RedisService } from './redis/redis.service'; // 🔥
 import { AuthGuard } from '@nestjs/passport';
 import * as DateHolidays from 'date-holidays';
 import { Roles } from './auth/roles.decorator';
-import { Response } from 'express';
 import { AppService } from './app.service';
 import { SentryService } from './sentry/sentry.service';
 import { ResourceMonitorService } from './services/resource-monitor.service';

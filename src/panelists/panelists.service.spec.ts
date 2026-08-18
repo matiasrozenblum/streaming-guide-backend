@@ -4,7 +4,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Panelist } from './panelists.entity';
 import { Program } from '../programs/programs.entity';
 import { CreatePanelistDto } from './dto/create-panelist.dto';
-import { UpdatePanelistDto } from './dto/update-panelist.dto';
+import {} from './dto/update-panelist.dto';
 import { RedisService } from '../redis/redis.service';
 import { NotFoundException } from '@nestjs/common';
 import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';

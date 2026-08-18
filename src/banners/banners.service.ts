@@ -5,13 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import {
-  Repository,
-  MoreThanOrEqual,
-  LessThanOrEqual,
-  IsNull,
-  QueryFailedError,
-} from 'typeorm';
+import { Repository, QueryFailedError } from 'typeorm';
 import { Banner } from './banners.entity';
 import { CreateBannerDto } from './dto/create-banner.dto';
 import { UpdateBannerDto } from './dto/update-banner.dto';

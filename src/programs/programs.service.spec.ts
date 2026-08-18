@@ -32,7 +32,7 @@ describe('ProgramsService', () => {
     is_visible: true,
   };
 
-  const mockProgram = {
+  const _mockProgram = {
     id: 1,
     name: 'Test Program',
     description: 'Test Description',

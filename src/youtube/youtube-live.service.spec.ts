@@ -4,7 +4,6 @@ import { SchedulesService } from '../schedules/schedules.service';
 import { RedisService } from '../redis/redis.service';
 import { SentryService } from '../sentry/sentry.service';
 import axios from 'axios';
-import * as dayjs from 'dayjs';
 
 describe('YoutubeLiveService', () => {
   let service: YoutubeLiveService;

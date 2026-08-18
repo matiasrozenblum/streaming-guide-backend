@@ -1,7 +1,5 @@
 import { TimezoneUtil } from './timezone.util';
 import * as dayjs from 'dayjs';
-import * as utc from 'dayjs/plugin/utc';
-import * as timezone from 'dayjs/plugin/timezone';
 
 // Mock dayjs
 jest.mock('dayjs', () => {

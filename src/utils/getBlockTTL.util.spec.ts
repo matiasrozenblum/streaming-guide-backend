@@ -7,7 +7,7 @@ jest.mock('dayjs', () => {
   const mockDayjs = jest.fn(() => ({
     hour: () => 10,
     minute: () => 0,
-    format: (format?: string) => '2025-09-15 10:00:00',
+    format: (_format?: string) => '2025-09-15 10:00:00',
     startOf: jest.fn().mockReturnThis(),
     endOf: jest.fn().mockReturnThis(),
     diff: jest.fn().mockReturnValue(10800),

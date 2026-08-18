@@ -1382,7 +1382,7 @@ export class WeeklyOverridesService {
    */
   async cleanupExpiredOverrides(): Promise<number> {
     const pattern = 'weekly_override:*';
-    const overrides: WeeklyOverride[] = [];
+    const _overrides: WeeklyOverride[] = [];
 
     // Use Redis SCAN to find all weekly override keys
     const stream = (this.redisService as any).client.scanStream({

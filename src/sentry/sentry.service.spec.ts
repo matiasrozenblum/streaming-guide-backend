@@ -17,7 +17,7 @@ jest.mock('@sentry/node', () => ({
 }));
 
 describe('SentryService', () => {
-  let service: SentryService;
+  let _service: SentryService;
   let mockScope: any;
 
   beforeEach(() => {
@@ -28,7 +28,7 @@ describe('SentryService', () => {
     (Sentry.withScope as jest.Mock).mockImplementation((callback) =>
       callback(mockScope),
     );
-    service = new SentryService();
+    _service = new SentryService();
   });
 
   afterEach(() => {

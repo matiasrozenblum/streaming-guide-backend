@@ -6,7 +6,6 @@ import {
   Body,
   Param,
   UseGuards,
-  HttpStatus,
   Put,
 } from '@nestjs/common';
 import {

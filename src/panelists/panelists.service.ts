@@ -5,7 +5,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOneOptions, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Panelist } from './panelists.entity';
 import { CreatePanelistDto } from './dto/create-panelist.dto';
 import { UpdatePanelistDto } from './dto/update-panelist.dto';
@@ -63,7 +63,7 @@ export class PanelistsService {
   }
 
   async findOne(id: string | number): Promise<Panelist> {
-    const startTime = Date.now();
+    const _startTime = Date.now();
     const cacheKey = `panelists:${id}`;
     console.log(`[Cache] Attempting to get panelist ${id} from cache`);
 
