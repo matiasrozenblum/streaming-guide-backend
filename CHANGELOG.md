@@ -5,6 +5,22 @@ Todas las modificaciones importantes de este proyecto se documentarán en este a
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/)
 y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
+## [1.43.0] - 2026-08-18
+
+### Performance
+
+- **N+1 al asignar panelistas en la creación bulk de programas**: `ProgramsService.createBulk` resolvía los panelistas con un `findOne` por id dentro de un `Promise.all`, así que crear un programa en N canales con M panelistas disparaba M queries independientes. Pasa a un único `find({ id: In(...) })`. De paso deduplica ids repetidos en el DTO y vuelve innecesario el `filter(Boolean)` posterior, porque `find` no devuelve huecos.
+- **N+1 de Redis en el gating de configuración del cron de push**: `handleNotificationsCron` evaluaba `configService.canFetchLive(handle)` por cada handle único, y cada llamada emite sus propios `GET` de `youtube.fetch_enabled` y `youtube.fetch_override_holiday`. Se agrega `ConfigService.canFetchLiveBulk(handles)`, que batchea las lecturas cacheadas con `mget` y resuelve el feriado una sola vez para todo el lote. Ante cualquier cache miss delega en `canFetchLive(handle)`, de modo que la precedencia de fallback (por canal → global → DB) y el calentamiento del cache quedan exactamente como estaban. La lógica de feriado se extrae a `isHolidayToday()` para no quedar duplicada entre ambos caminos.
+
+### Fixed
+
+- **Faltaba el `await` en la revalidación de `ConfigService.set`**: era el único de los más de veinte call sites de `notifyAndRevalidate` del repo que no lo esperaba, así que al cambiar `holiday.custom_dates` la respuesta del endpoint podía volver antes de que el frontend se revalidara, y un rechazo quedaba como unhandled rejection. Afecta solo al backoffice.
+- **Promesas flotantes y callbacks async en timers**: `main.ts`, `ConnectionPoolMonitorService`, `SchedulesService`, `YoutubeLiveService` y `YoutubeController` pasaban funciones `async` a `setTimeout`/`setInterval`/`setImmediate`, que descartan la promesa devuelta. Todos los cuerpos ya capturaban sus propios errores, así que el comportamiento no cambia, pero ahora el fire-and-forget es explícito y ningún rechazo puede escaparse sin handler.
+
+### Changed
+
+- **El linter queda en cero hallazgos y bloquea en CI**: `npm run lint` levantaba 3082 problemas (2728 errores y 354 warnings), suficiente ruido como para que nadie lo mirara y cada cambio nuevo sumara más. El 82% era la familia `no-unsafe-*`, que solo se elimina de verdad retipando los 71 servicios de `src/`: se apaga por configuración, coherente con el `no-explicit-any: off` que el proyecto ya tenía. `require-await`, `no-require-imports` y `unbound-method` (este último solo en specs) se apagan tras revisar caso por caso que son usos deliberados —`async` como contrato de interfaz, lazy imports para cortar dependencias circulares, mocks de jest—. Se mantienen en `error` las reglas que atrapan bugs reales: `no-floating-promises`, `no-misused-promises` y `no-unused-vars`. Se eliminan 60 imports muertos y se marcan con prefijo `_` las variables y parámetros que deben existir pero no se usan. Nuevo script `lint:ci` (sin `--fix`, `--max-warnings=0`) y job `lint` en el workflow de PRs, para que ningún cambio nuevo vuelva a acumular deuda.
+
 ## [1.42.0] - 2026-08-18
 
 ### Added
