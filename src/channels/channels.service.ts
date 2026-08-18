@@ -661,7 +661,14 @@ export class ChannelsService {
   ): Promise<ChannelWithSchedules[]> {
     const today = TimezoneUtil.currentDayOfWeek();
 
-    return this.getChannelsWithSchedules(today, userId, liveStatus, raw, undefined, legacyDeviceId);
+    return this.getChannelsWithSchedules(
+      today,
+      userId,
+      liveStatus,
+      raw,
+      undefined,
+      legacyDeviceId,
+    );
   }
 
   /**

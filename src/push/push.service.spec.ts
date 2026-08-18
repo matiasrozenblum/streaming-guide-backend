@@ -280,7 +280,9 @@ describe('PushService', () => {
     const allowSubscriptionCreation = () => {
       const saveable = { ...ownedDevice } as Device;
       mockDeviceRepository.findOne.mockResolvedValue(saveable);
-      (mockDeviceRepository as any).save = jest.fn().mockResolvedValue(saveable);
+      (mockDeviceRepository as any).save = jest
+        .fn()
+        .mockResolvedValue(saveable);
       mockPushSubscriptionRepository.findOne.mockResolvedValue(null);
       mockPushSubscriptionRepository.create.mockReturnValue(
         mockPushSubscription,

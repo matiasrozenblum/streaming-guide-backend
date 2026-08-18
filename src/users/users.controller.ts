@@ -87,7 +87,9 @@ export class UsersController {
   @ApiBearerAuth()
   @Get('me/seen-features')
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Obtener los features vistos por el usuario autenticado' })
+  @ApiOperation({
+    summary: 'Obtener los features vistos por el usuario autenticado',
+  })
   @ApiResponse({ status: 200, description: 'Lista de features vistos' })
   getSeenFeatures(@Req() req) {
     return this.usersService.getSeenFeatures(req.user.id);
@@ -97,8 +99,13 @@ export class UsersController {
   @ApiBearerAuth()
   @Post('me/seen-features')
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Marcar un feature como visto por el usuario autenticado' })
-  @ApiResponse({ status: 201, description: 'Lista actualizada de features vistos' })
+  @ApiOperation({
+    summary: 'Marcar un feature como visto por el usuario autenticado',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Lista actualizada de features vistos',
+  })
   addSeenFeature(@Req() req, @Body() body: { feature: string }) {
     return this.usersService.addSeenFeature(req.user.id, body.feature);
   }
@@ -107,9 +114,15 @@ export class UsersController {
   @ApiBearerAuth()
   @Delete('me/seen-features')
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Resetear features vistos. Sin query param limpia todo; con ?feature=X elimina solo ese.' })
+  @ApiOperation({
+    summary:
+      'Resetear features vistos. Sin query param limpia todo; con ?feature=X elimina solo ese.',
+  })
   @ApiQuery({ name: 'feature', required: false, type: String })
-  @ApiResponse({ status: 200, description: 'Lista actualizada de features vistos' })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista actualizada de features vistos',
+  })
   removeSeenFeature(@Req() req, @Query('feature') feature?: string) {
     return this.usersService.removeSeenFeature(req.user.id, feature);
   }

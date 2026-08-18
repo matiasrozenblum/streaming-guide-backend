@@ -33,14 +33,21 @@ export class WeeklyOverridesController {
   ) {}
 
   @Post('bulk')
-  @ApiOperation({ summary: 'Create a special program override for multiple channels at once' })
-  @ApiResponse({ status: 201, description: 'Bulk overrides created successfully' })
+  @ApiOperation({
+    summary: 'Create a special program override for multiple channels at once',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Bulk overrides created successfully',
+  })
   async createBulkOverride(@Body() dto: BulkWeeklyOverrideDto) {
     return this.weeklyOverridesService.createBulk(dto);
   }
 
   @Post('resolve-conflicts')
-  @ApiOperation({ summary: 'Resolve schedule conflicts after a linked-program override' })
+  @ApiOperation({
+    summary: 'Resolve schedule conflicts after a linked-program override',
+  })
   @ApiResponse({ status: 201, description: 'Conflicts resolved successfully' })
   async resolveConflicts(@Body() dto: ResolveConflictsDto) {
     return this.weeklyOverridesService.resolveConflicts(dto);
