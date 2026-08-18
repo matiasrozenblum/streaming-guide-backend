@@ -63,7 +63,7 @@ export class BackfillChannelYouTubeConfigs1754000000000
     }
   }
 
-  public async down(queryRunner: QueryRunner): Promise<void> {
+  public async down(_queryRunner: QueryRunner): Promise<void> {
     // This migration only creates missing configs, so the down migration
     // would need to know which configs were created by this migration.
     // Since we can't easily track that, we'll leave the configs in place.

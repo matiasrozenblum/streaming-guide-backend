@@ -53,22 +53,22 @@ jest.mock('dayjs', () => {
         return parseInt(m);
       },
       tz: () => mockDayjs(),
-      startOf: (unit: string) => {
+      startOf: (_unit: string) => {
         // Return a mock object with the add method that can be chained
         return {
-          add: (amount: number, unit: string) => {
+          add: (_amount: number, _unit: string) => {
             // Return a mock object with the diff method and more add methods
             return {
-              add: (amount: number, unit: string) => {
+              add: (_amount: number, _unit: string) => {
                 // Return a mock object with the diff method
                 return {
-                  diff: (date: any, unit: string) => {
+                  diff: (_date: any, _unit: string) => {
                     // Return a reasonable TTL value for testing
                     return 3600; // 1 hour in seconds
                   },
                 };
               },
-              diff: (date: any, unit: string) => {
+              diff: (_date: any, _unit: string) => {
                 // Return a reasonable TTL value for testing
                 return 3600; // 1 hour in seconds
               },
@@ -88,12 +88,12 @@ jest.mock('dayjs', () => {
         ];
         return days.indexOf(currentDay);
       },
-      add: (amount: number, unit: string) => makeChainable(),
-      diff: (date: any, unit: string) => {
+      add: (_amount: number, _unit: string) => makeChainable(),
+      diff: (_date: any, _unit: string) => {
         // Return a reasonable TTL value for testing
         return 3600; // 1 hour in seconds
       },
-      endOf: (unit: string) => makeChainable(),
+      endOf: (_unit: string) => makeChainable(),
     };
   };
 

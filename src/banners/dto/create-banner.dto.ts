@@ -7,7 +7,6 @@ import {
   IsInt,
   IsUrl,
   ValidateIf,
-  Validate,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { LinkType, BannerType } from '../banners.entity';

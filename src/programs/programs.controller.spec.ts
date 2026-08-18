@@ -3,11 +3,10 @@ import { ProgramsController } from './programs.controller';
 import { ProgramsService } from './programs.service';
 import { SubscriptionService } from '../users/subscription.service';
 import { CreateProgramDto } from './dto/create-program.dto';
-import { Program } from './programs.entity';
 
 describe('ProgramsController', () => {
   let controller: ProgramsController;
-  let service: ProgramsService;
+  let _service: ProgramsService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -45,7 +44,7 @@ describe('ProgramsController', () => {
     }).compile();
 
     controller = module.get<ProgramsController>(ProgramsController);
-    service = module.get<ProgramsService>(ProgramsService);
+    _service = module.get<ProgramsService>(ProgramsService);
   });
 
   it('should be defined', () => {

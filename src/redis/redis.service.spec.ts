@@ -13,7 +13,6 @@ jest.mock('ioredis', () => ({
 }));
 
 import { RedisService } from './redis.service';
-import Redis from 'ioredis';
 import { SentryService } from '../sentry/sentry.service';
 
 describe('RedisService', () => {
@@ -102,9 +101,10 @@ describe('RedisService', () => {
 
   describe('delByPattern', () => {
     it('deletes keys matching pattern', async () => {
-      const onHandlers: Record<string, Function> = {};
+      type StreamHandler = (...args: any[]) => void;
+      const onHandlers: Record<string, StreamHandler> = {};
       const fakeStream = {
-        on: (event: string, handler: Function) => {
+        on: (event: string, handler: StreamHandler) => {
           onHandlers[event] = handler;
         },
       };

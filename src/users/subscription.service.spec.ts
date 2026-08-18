@@ -6,14 +6,14 @@ import { UserSubscription } from './user-subscription.entity';
 import { Program } from '../programs/programs.entity';
 import { User } from './users.entity';
 import { Channel } from '../channels/channels.entity';
-import { NotFoundException, ConflictException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { Device } from './device.entity';
 import { PushSubscriptionEntity } from '../push/push-subscription.entity';
 
 describe('SubscriptionService', () => {
   let service: SubscriptionService;
-  let userSubscriptionRepository: Repository<UserSubscription>;
-  let programRepository: Repository<Program>;
+  let _userSubscriptionRepository: Repository<UserSubscription>;
+  let _programRepository: Repository<Program>;
 
   const mockUser: User = {
     id: 1,
@@ -121,10 +121,10 @@ describe('SubscriptionService', () => {
     }).compile();
 
     service = module.get<SubscriptionService>(SubscriptionService);
-    userSubscriptionRepository = module.get<Repository<UserSubscription>>(
+    _userSubscriptionRepository = module.get<Repository<UserSubscription>>(
       getRepositoryToken(UserSubscription),
     );
-    programRepository = module.get<Repository<Program>>(
+    _programRepository = module.get<Repository<Program>>(
       getRepositoryToken(Program),
     );
   });

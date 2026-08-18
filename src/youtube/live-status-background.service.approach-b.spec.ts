@@ -36,7 +36,7 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
   let schedulesService: SchedulesService;
   let redisService: RedisService;
   let configService: ConfigService;
-  let channelsRepository: any;
+  let _channelsRepository: any;
 
   const mockLiveStatusCache = {
     channelId: 'CHANNEL_123',
@@ -116,7 +116,7 @@ describe('LiveStatusBackgroundService (Approach B)', () => {
     schedulesService = module.get<SchedulesService>(SchedulesService);
     redisService = module.get<RedisService>(RedisService);
     configService = module.get<ConfigService>(ConfigService);
-    channelsRepository = module.get(getRepositoryToken(Channel));
+    _channelsRepository = module.get(getRepositoryToken(Channel));
   });
 
   afterEach(() => {

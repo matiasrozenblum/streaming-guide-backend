@@ -5,6 +5,35 @@ Todas las modificaciones importantes de este proyecto se documentarán en este a
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/)
 y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
+## [1.43.0] - 2026-08-18
+
+### Performance
+
+- **N+1 al asignar panelistas en la creación bulk de programas**: `ProgramsService.createBulk` resolvía los panelistas con un `findOne` por id dentro de un `Promise.all`, así que crear un programa en N canales con M panelistas disparaba M queries independientes. Pasa a un único `find({ id: In(...) })`. De paso deduplica ids repetidos en el DTO y vuelve innecesario el `filter(Boolean)` posterior, porque `find` no devuelve huecos.
+- **N+1 de Redis en el gating de configuración del cron de push**: `handleNotificationsCron` evaluaba `configService.canFetchLive(handle)` por cada handle único, y cada llamada emite sus propios `GET` de `youtube.fetch_enabled` y `youtube.fetch_override_holiday`. Se agrega `ConfigService.canFetchLiveBulk(handles)`, que batchea las lecturas cacheadas con `mget` y resuelve el feriado una sola vez para todo el lote. Ante cualquier cache miss delega en `canFetchLive(handle)`, de modo que la precedencia de fallback (por canal → global → DB) y el calentamiento del cache quedan exactamente como estaban. La lógica de feriado se extrae a `isHolidayToday()` para no quedar duplicada entre ambos caminos.
+
+### Fixed
+
+- **Faltaba el `await` en la revalidación de `ConfigService.set`**: era el único de los más de veinte call sites de `notifyAndRevalidate` del repo que no lo esperaba, así que al cambiar `holiday.custom_dates` la respuesta del endpoint podía volver antes de que el frontend se revalidara, y un rechazo quedaba como unhandled rejection. Afecta solo al backoffice.
+- **Promesas flotantes y callbacks async en timers**: `main.ts`, `ConnectionPoolMonitorService`, `SchedulesService`, `YoutubeLiveService` y `YoutubeController` pasaban funciones `async` a `setTimeout`/`setInterval`/`setImmediate`, que descartan la promesa devuelta. Todos los cuerpos ya capturaban sus propios errores, así que el comportamiento no cambia, pero ahora el fire-and-forget es explícito y ningún rechazo puede escaparse sin handler.
+
+### Changed
+
+- **El linter queda en cero hallazgos y bloquea en CI**: `npm run lint` levantaba 3082 problemas (2728 errores y 354 warnings), suficiente ruido como para que nadie lo mirara y cada cambio nuevo sumara más. El 82% era la familia `no-unsafe-*`, que solo se elimina de verdad retipando los 71 servicios de `src/`: se apaga por configuración, coherente con el `no-explicit-any: off` que el proyecto ya tenía. `require-await`, `no-require-imports` y `unbound-method` (este último solo en specs) se apagan tras revisar caso por caso que son usos deliberados —`async` como contrato de interfaz, lazy imports para cortar dependencias circulares, mocks de jest—. Se mantienen en `error` las reglas que atrapan bugs reales: `no-floating-promises`, `no-misused-promises` y `no-unused-vars`. Se eliminan 60 imports muertos y se marcan con prefijo `_` las variables y parámetros que deben existir pero no se usan. Nuevo script `lint:ci` (sin `--fix`, `--max-warnings=0`) y job `lint` en el workflow de PRs, para que ningún cambio nuevo vuelva a acumular deuda.
+
+## [1.42.0] - 2026-08-18
+
+### Added
+
+- **Programas especiales basados en un programa existente**: los weekly overrides de tipo `create` arman un programa virtual desde cero, así que una transmisión especial de un programa que ya existe perdía todo lo del original y el admin retipeaba nombre, imagen y playlist y volvía a elegir los panelistas a mano. Se agregan dos campos a `specialProgram`, ambos opcionales y guardados en Redis junto al resto del override (sin migración): `sourceProgramId`, el programa real en que se basa el especial, validado contra la DB al crear —tanto en el alta simple como en la bulk— para no dejar una referencia colgada que la resolución de push descartaría en silencio; y `style_override`, para que el especial se vea igual que el programa original en lugar de caer al estilo por defecto. El schedule virtual propaga los dos. El autocompletado que los llena vive en el backoffice (frontend 1.31.0); un especial creado sin elegir programa base sigue funcionando exactamente como antes.
+
+### Fixed
+
+- **Los programas especiales nunca disparaban notificaciones**: el cron de push filtra por `is_visible === true`, y el programa virtual que arma `applyWeeklyOverrides` no traía el campo, así que todos los especiales quedaban afuera. El resto del código chequea `!== false`, por eso el hueco solo se manifestaba acá. Ahora el virtual declara `is_visible: true` explícito —existen porque un admin los programó, no hay caso en que sean invisibles— y las suscripciones se resuelven por `sourceProgramId ?? program.id`, de modo que los suscriptos del programa original reciben la push de la transmisión especial. Un especial sin programa base sigue sin notificar: no hay programa en la DB al que alguien pueda estar suscripto.
+- **Un especial al aire podía tumbar el cron de notificaciones entero**: el `program.id` de un programa virtual es el string `virtual_program_...`, y mandarlo dentro de `In(programIds)` contra la columna integer de suscripciones hace fallar la query completa, no solo esa fila. Hasta ahora estaba tapado por el filtro de `is_visible` que descartaba los especiales antes de llegar ahí; volverlos visibles lo habría destapado. Los schedules sin un id numérico que resolver se filtran antes de armar la query.
+- **Push duplicada cuando un programa arranca en varios schedules a la vez**: su emisión regular más una transmisión especial basada en ella, o un mismo especial creado en varios canales, son schedules distintos que empiezan en el mismo minuto y resuelven al mismo programa. Se manda una sola notificación por (suscripción de push, programa).
+
+
 ## [1.41.0] - 2026-08-13
 
 ### Added

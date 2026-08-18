@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const API_URL = 'http://localhost:3000'; // Local environment for testing
-const LOCAL_API_URL = 'http://localhost:3000';
+const _LOCAL_API_URL = 'http://localhost:3000';
 
 interface PerformanceResult {
   endpoint: string;

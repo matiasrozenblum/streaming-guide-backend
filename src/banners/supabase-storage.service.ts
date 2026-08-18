@@ -66,7 +66,7 @@ export class SupabaseStorageService {
 
     try {
       // Upload file to Supabase Storage
-      const { data, error } = await this.supabase.storage
+      const { data: _data, error } = await this.supabase.storage
         .from(bucketName)
         .upload(filename, file.buffer, {
           contentType: file.mimetype,

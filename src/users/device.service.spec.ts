@@ -7,7 +7,7 @@ import { User } from './users.entity';
 
 describe('DeviceService', () => {
   let service: DeviceService;
-  let repository: Repository<Device>;
+  let _repository: Repository<Device>;
 
   const mockUser: User = {
     id: 1,
@@ -64,7 +64,7 @@ describe('DeviceService', () => {
     }).compile();
 
     service = module.get<DeviceService>(DeviceService);
-    repository = module.get<Repository<Device>>(getRepositoryToken(Device));
+    _repository = module.get<Repository<Device>>(getRepositoryToken(Device));
   });
 
   afterEach(() => {

@@ -15,7 +15,7 @@ import { Streamer } from './streamers/streamers.entity';
 import { Category } from './categories/categories.entity';
 import { Banner } from './banners/banners.entity';
 
-const isProduction = process.env.NODE_ENV === 'production';
+const _isProduction = process.env.NODE_ENV === 'production';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',

@@ -4,7 +4,6 @@ import { StreamerLiveStatusService } from '../streamers/streamer-live-status.ser
 import { StreamersService } from '../streamers/streamers.service';
 import { RedisService } from '../redis/redis.service';
 import { Streamer } from '../streamers/streamers.entity';
-import { NotifyAndRevalidateUtil } from '../utils/notify-and-revalidate.util';
 
 // Mock the NotifyAndRevalidateUtil
 jest.mock('../utils/notify-and-revalidate.util', () => ({
@@ -16,7 +15,7 @@ jest.mock('../utils/notify-and-revalidate.util', () => ({
 describe('KickWebhookController', () => {
   let controller: KickWebhookController;
   let streamerLiveStatusService: StreamerLiveStatusService;
-  let streamersService: StreamersService;
+  let _streamersService: StreamersService;
 
   const mockStreamer: Streamer = {
     id: 1,
@@ -74,7 +73,7 @@ describe('KickWebhookController', () => {
     streamerLiveStatusService = module.get<StreamerLiveStatusService>(
       StreamerLiveStatusService,
     );
-    streamersService = module.get<StreamersService>(StreamersService);
+    _streamersService = module.get<StreamersService>(StreamersService);
   });
 
   afterEach(() => {

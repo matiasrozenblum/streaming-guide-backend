@@ -14,9 +14,7 @@ import { EmailService } from '../email/email.service';
 import { Response } from 'express';
 import { UnifiedReportDto } from './dto/unified-report.dto';
 import {
-  ChannelReportDto,
   ChannelReportEmailDto,
-  PeriodicReportDto,
   PeriodicReportEmailDto,
 } from './dto/channel-report.dto';
 
