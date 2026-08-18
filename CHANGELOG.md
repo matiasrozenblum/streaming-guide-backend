@@ -5,6 +5,19 @@ Todas las modificaciones importantes de este proyecto se documentarán en este a
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/)
 y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
+## [1.42.0] - 2026-08-18
+
+### Added
+
+- **Programas especiales basados en un programa existente**: los weekly overrides de tipo `create` arman un programa virtual desde cero, así que una transmisión especial de un programa que ya existe perdía todo lo del original y el admin retipeaba nombre, imagen y playlist y volvía a elegir los panelistas a mano. Se agregan dos campos a `specialProgram`, ambos opcionales y guardados en Redis junto al resto del override (sin migración): `sourceProgramId`, el programa real en que se basa el especial, validado contra la DB al crear —tanto en el alta simple como en la bulk— para no dejar una referencia colgada que la resolución de push descartaría en silencio; y `style_override`, para que el especial se vea igual que el programa original en lugar de caer al estilo por defecto. El schedule virtual propaga los dos. El autocompletado que los llena vive en el backoffice (frontend 1.31.0); un especial creado sin elegir programa base sigue funcionando exactamente como antes.
+
+### Fixed
+
+- **Los programas especiales nunca disparaban notificaciones**: el cron de push filtra por `is_visible === true`, y el programa virtual que arma `applyWeeklyOverrides` no traía el campo, así que todos los especiales quedaban afuera. El resto del código chequea `!== false`, por eso el hueco solo se manifestaba acá. Ahora el virtual declara `is_visible: true` explícito —existen porque un admin los programó, no hay caso en que sean invisibles— y las suscripciones se resuelven por `sourceProgramId ?? program.id`, de modo que los suscriptos del programa original reciben la push de la transmisión especial. Un especial sin programa base sigue sin notificar: no hay programa en la DB al que alguien pueda estar suscripto.
+- **Un especial al aire podía tumbar el cron de notificaciones entero**: el `program.id` de un programa virtual es el string `virtual_program_...`, y mandarlo dentro de `In(programIds)` contra la columna integer de suscripciones hace fallar la query completa, no solo esa fila. Hasta ahora estaba tapado por el filtro de `is_visible` que descartaba los especiales antes de llegar ahí; volverlos visibles lo habría destapado. Los schedules sin un id numérico que resolver se filtran antes de armar la query.
+- **Push duplicada cuando un programa arranca en varios schedules a la vez**: su emisión regular más una transmisión especial basada en ella, o un mismo especial creado en varios canales, son schedules distintos que empiezan en el mismo minuto y resuelven al mismo programa. Se manda una sola notificación por (suscripción de push, programa).
+
+
 ## [1.41.0] - 2026-08-13
 
 ### Added

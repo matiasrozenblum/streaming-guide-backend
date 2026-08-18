@@ -40,6 +40,11 @@ export interface WeeklyOverrideDto {
     imageUrl?: string;
     stream_url?: string;
     is_premiere?: boolean;
+    style_override?: string | null;
+    // Program this special is based on. Lets the special inherit the real
+    // program's identity for push notifications (subscribers of the original
+    // get notified about the one-off broadcast).
+    sourceProgramId?: number;
   };
 }
 
@@ -97,6 +102,8 @@ export interface BulkWeeklyOverrideDto {
     imageUrl?: string;
     stream_url?: string;
     is_premiere?: boolean;
+    style_override?: string | null;
+    sourceProgramId?: number;
   };
 }
 
@@ -140,6 +147,8 @@ export interface WeeklyOverride {
     imageUrl?: string;
     stream_url?: string;
     is_premiere?: boolean;
+    style_override?: string | null;
+    sourceProgramId?: number;
   };
 }
 
@@ -178,6 +187,27 @@ export class WeeklyOverridesService {
       FRONTEND_URL,
       REVALIDATE_SECRET,
     );
+  }
+
+  /**
+   * A special program may be based on an existing program (an extra broadcast
+   * of a show that already lives in the DB). Validate the reference so we never
+   * store a dangling sourceProgramId that push resolution would silently drop.
+   */
+  private async assertSourceProgramExists(
+    sourceProgramId?: number,
+  ): Promise<void> {
+    if (sourceProgramId === undefined || sourceProgramId === null) return;
+
+    const [row] = await this.dataSource.query(
+      'SELECT id FROM program WHERE id = $1',
+      [sourceProgramId],
+    );
+    if (!row) {
+      throw new NotFoundException(
+        `Source program with ID ${sourceProgramId} not found`,
+      );
+    }
   }
 
   /**
@@ -244,6 +274,7 @@ export class WeeklyOverridesService {
           'Start time, end time, and day of week are required for create overrides',
         );
       }
+      await this.assertSourceProgramExists(dto.specialProgram.sourceProgramId);
     }
 
     // Calculate target week
@@ -551,6 +582,7 @@ export class WeeklyOverridesService {
           'Start time, end time, and day of week are required for create overrides',
         );
       }
+      await this.assertSourceProgramExists(dto.specialProgram.sourceProgramId);
     }
 
     // Validate override type requirements
@@ -1296,6 +1328,13 @@ export class WeeklyOverridesService {
             logo_url: override.specialProgram.imageUrl || '',
             stream_url: override.specialProgram.stream_url || null,
             is_premiere: override.specialProgram.is_premiere ?? false,
+            style_override: override.specialProgram.style_override ?? null,
+            // Specials are always visible — they only exist because an admin
+            // scheduled them. Set explicitly so consumers that require `true`
+            // (push scheduler) don't skip them on an absent field.
+            is_visible: true,
+            // Real program this special stands in for, when there is one.
+            sourceProgramId: override.specialProgram.sourceProgramId,
             channel: channel
               ? {
                   id: channel.id,
@@ -1424,6 +1463,8 @@ export class WeeklyOverridesService {
         'Start time, end time, and day of week are required',
       );
     }
+
+    await this.assertSourceProgramExists(dto.specialProgram.sourceProgramId);
 
     // Calculate target week (same logic as createWeeklyOverride)
     const now = this.dayjs().tz('America/Argentina/Buenos_Aires');
