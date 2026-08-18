@@ -151,6 +151,11 @@ describe('PushScheduler', () => {
           provide: ConfigService,
           useValue: {
             canFetchLive: jest.fn().mockResolvedValue(true),
+            canFetchLiveBulk: jest
+              .fn()
+              .mockImplementation((handles: string[] = []) =>
+                Promise.resolve(new Map(handles.map((h) => [h, true]))),
+              ),
           },
         },
         {
