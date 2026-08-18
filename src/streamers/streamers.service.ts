@@ -662,7 +662,11 @@ export class StreamersService {
       } else if (service.service === 'twitch') {
         const username = service.username || extractTwitchUsername(service.url);
         if (username) {
-          const result = await this.streamerLiveStatusService.syncLiveStatusFromTwitch(streamerId, username);
+          const result =
+            await this.streamerLiveStatusService.syncLiveStatusFromTwitch(
+              streamerId,
+              username,
+            );
           results.push({
             service: 'twitch',
             username,
