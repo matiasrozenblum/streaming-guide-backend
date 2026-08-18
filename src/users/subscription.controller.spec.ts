@@ -4,8 +4,6 @@ import { SubscriptionService } from './subscription.service';
 import { DeviceService } from './device.service';
 import { UsersService } from './users.service';
 
-import {} from '@nestjs/common';
-
 describe('SubscriptionController', () => {
   let controller: SubscriptionController;
   let _subscriptionService: SubscriptionService;

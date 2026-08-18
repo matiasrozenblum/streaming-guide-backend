@@ -4,7 +4,6 @@ import { StreamerLiveStatusService } from '../streamers/streamer-live-status.ser
 import { StreamersService } from '../streamers/streamers.service';
 import { RedisService } from '../redis/redis.service';
 import { Streamer } from '../streamers/streamers.entity';
-import {} from '../utils/notify-and-revalidate.util';
 
 // Mock the NotifyAndRevalidateUtil
 jest.mock('../utils/notify-and-revalidate.util', () => ({

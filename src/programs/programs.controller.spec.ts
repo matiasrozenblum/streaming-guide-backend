@@ -3,7 +3,6 @@ import { ProgramsController } from './programs.controller';
 import { ProgramsService } from './programs.service';
 import { SubscriptionService } from '../users/subscription.service';
 import { CreateProgramDto } from './dto/create-program.dto';
-import {} from './programs.entity';
 
 describe('ProgramsController', () => {
   let controller: ProgramsController;

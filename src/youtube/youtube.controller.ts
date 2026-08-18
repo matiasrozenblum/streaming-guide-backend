@@ -1,7 +1,5 @@
 import { Controller, Sse, Post, Body, Logger } from '@nestjs/common';
-import {} from 'express';
 import { Observable } from 'rxjs';
-import {} from 'rxjs/operators';
 import { YoutubeLiveService } from './youtube-live.service';
 import { RedisService } from '../redis/redis.service';
 

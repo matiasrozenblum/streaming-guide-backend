@@ -3,7 +3,6 @@ import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
 import { ChannelsController } from '../channels/channels.controller';
 import { ChannelsService } from '../channels/channels.service';
-import {} from '../utils/timezone.util';
 import { SupabaseStorageService } from '../banners/supabase-storage.service';
 import { YoutubeLiveService } from '../channels/../youtube/youtube-live.service';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';

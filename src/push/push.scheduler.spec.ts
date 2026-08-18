@@ -1,7 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
-import {} from '@nestjs/common';
 import { PushScheduler } from './push.scheduler';
 import { PushService } from './push.service';
 import { EmailService } from '../email/email.service';
