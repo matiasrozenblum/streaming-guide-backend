@@ -203,8 +203,7 @@ export class PushService {
       (requesterUserId === null ||
         String(device.user.id) !== String(requesterUserId))
     ) {
-      const enforcing =
-        process.env.PUSH_ENFORCE_DEVICE_OWNERSHIP === 'true';
+      const enforcing = process.env.PUSH_ENFORCE_DEVICE_OWNERSHIP === 'true';
       console.warn(
         `🚫 [PushService] FCM subscribe ownership mismatch: deviceId=${deviceId}, ownedByUser=${device.user.id}, requester=${requesterUserId ?? 'anonymous'}, appVersion=${appVersion ?? 'unknown'}, enforcing=${enforcing}`,
       );

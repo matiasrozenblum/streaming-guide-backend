@@ -14,7 +14,7 @@ export class PerformanceInterceptor implements NestInterceptor {
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const request = context.switchToHttp().getRequest();
-    const response = context.switchToHttp().getResponse();
+    const _response = context.switchToHttp().getResponse();
     const startTime = Date.now();
 
     // Generate unique request ID for tracing
@@ -46,7 +46,7 @@ export class PerformanceInterceptor implements NestInterceptor {
     });
 
     return next.handle().pipe(
-      tap((data) => {
+      tap((_data) => {
         const responseTime = Date.now() - startTime;
 
         // Log performance metrics with request ID

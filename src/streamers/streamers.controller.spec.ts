@@ -5,7 +5,6 @@ import { SupabaseStorageService } from '../banners/supabase-storage.service';
 import { CreateStreamerDto, StreamingService } from './dto/create-streamer.dto';
 import { UpdateStreamerDto } from './dto/update-streamer.dto';
 import { Streamer } from './streamers.entity';
-import { NotFoundException } from '@nestjs/common';
 
 describe('StreamersController', () => {
   let controller: StreamersController;

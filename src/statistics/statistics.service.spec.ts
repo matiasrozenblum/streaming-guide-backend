@@ -14,9 +14,9 @@ describe('StatisticsService', () => {
   let userRepo: Repository<User>;
   let subscriptionRepo: Repository<UserSubscription>;
   let programRepo: Repository<Program>;
-  let channelRepo: Repository<Channel>;
+  let _channelRepo: Repository<Channel>;
   let reportsProxyService: ReportsProxyService;
-  let emailService: EmailService;
+  let _emailService: EmailService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -63,9 +63,9 @@ describe('StatisticsService', () => {
       getRepositoryToken(UserSubscription),
     );
     programRepo = module.get<Repository<Program>>(getRepositoryToken(Program));
-    channelRepo = module.get<Repository<Channel>>(getRepositoryToken(Channel));
+    _channelRepo = module.get<Repository<Channel>>(getRepositoryToken(Channel));
     reportsProxyService = module.get<ReportsProxyService>(ReportsProxyService);
-    emailService = module.get<EmailService>(EmailService);
+    _emailService = module.get<EmailService>(EmailService);
   });
 
   it('should be defined', () => {

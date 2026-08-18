@@ -5,7 +5,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 
 describe('PushController', () => {
   let controller: PushController;
-  let pushService: PushService;
+  let _pushService: PushService;
 
   const mockPushService = {
     create: jest.fn(),
@@ -33,7 +33,7 @@ describe('PushController', () => {
     }).compile();
 
     controller = module.get<PushController>(PushController);
-    pushService = module.get<PushService>(PushService);
+    _pushService = module.get<PushService>(PushService);
   });
 
   afterEach(() => {

@@ -10,15 +10,12 @@ import {
 import { Response } from 'express';
 import { ComprehensiveReportService } from './comprehensive-report.service';
 import {
-  BaseReportDto,
   ChannelReportDto,
   PeriodicReportDto,
   BatchReportDto,
-  AutomaticReportDto,
   ReportPeriod,
   ReportFormat,
   ReportAction,
-  ReportType,
 } from './dto/report.dto';
 
 @ApiTags('comprehensive-reports')

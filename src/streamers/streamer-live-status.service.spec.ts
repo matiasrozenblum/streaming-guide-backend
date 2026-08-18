@@ -7,8 +7,8 @@ import { StreamerLiveStatusCache } from './interfaces/streamer-live-status-cache
 
 describe('StreamerLiveStatusService', () => {
   let service: StreamerLiveStatusService;
-  let redisService: RedisService;
-  let subscriptionService: StreamerSubscriptionService;
+  let _redisService: RedisService;
+  let _subscriptionService: StreamerSubscriptionService;
 
   const mockRedisService = {
     get: jest.fn(),
@@ -52,8 +52,8 @@ describe('StreamerLiveStatusService', () => {
     }).compile();
 
     service = module.get<StreamerLiveStatusService>(StreamerLiveStatusService);
-    redisService = module.get<RedisService>(RedisService);
-    subscriptionService = module.get<StreamerSubscriptionService>(
+    _redisService = module.get<RedisService>(RedisService);
+    _subscriptionService = module.get<StreamerSubscriptionService>(
       StreamerSubscriptionService,
     );
   });

@@ -8,7 +8,7 @@ import { NotFoundException } from '@nestjs/common';
 
 describe('CategoriesController', () => {
   let controller: CategoriesController;
-  let service: CategoriesService;
+  let _service: CategoriesService;
 
   const mockCategory: Category = {
     id: 1,
@@ -41,7 +41,7 @@ describe('CategoriesController', () => {
     }).compile();
 
     controller = module.get<CategoriesController>(CategoriesController);
-    service = module.get<CategoriesService>(CategoriesService);
+    _service = module.get<CategoriesService>(CategoriesService);
   });
 
   afterEach(() => {

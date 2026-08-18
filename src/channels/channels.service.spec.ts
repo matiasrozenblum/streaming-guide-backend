@@ -21,7 +21,7 @@ describe('ChannelsService - Channel Handle Change Detection', () => {
   let service: ChannelsService;
   let channelsRepository: Repository<Channel>;
   let redisService: RedisService;
-  let schedulesService: SchedulesService;
+  let _schedulesService: SchedulesService;
   let youtubeDiscoveryService: YoutubeDiscoveryService;
 
   const mockChannel = {
@@ -158,7 +158,7 @@ describe('ChannelsService - Channel Handle Change Detection', () => {
       getRepositoryToken(Channel),
     );
     redisService = module.get<RedisService>(RedisService);
-    schedulesService = module.get<SchedulesService>(SchedulesService);
+    _schedulesService = module.get<SchedulesService>(SchedulesService);
     youtubeDiscoveryService = module.get<YoutubeDiscoveryService>(
       YoutubeDiscoveryService,
     );

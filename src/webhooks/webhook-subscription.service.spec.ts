@@ -10,8 +10,8 @@ const mockedAxios = axios as jest.Mocked<typeof axios>;
 
 describe('WebhookSubscriptionService', () => {
   let service: WebhookSubscriptionService;
-  let configService: ConfigService;
-  let redisService: RedisService;
+  let _configService: ConfigService;
+  let _redisService: RedisService;
 
   const mockConfigService = {
     get: jest.fn(),
@@ -51,8 +51,8 @@ describe('WebhookSubscriptionService', () => {
     service = module.get<WebhookSubscriptionService>(
       WebhookSubscriptionService,
     );
-    configService = module.get<ConfigService>(ConfigService);
-    redisService = module.get<RedisService>(RedisService);
+    _configService = module.get<ConfigService>(ConfigService);
+    _redisService = module.get<RedisService>(RedisService);
   });
 
   afterEach(() => {

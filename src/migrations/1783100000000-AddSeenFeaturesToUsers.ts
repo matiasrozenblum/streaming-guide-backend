@@ -10,8 +10,6 @@ export class AddSeenFeaturesToUsers1783100000000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      `ALTER TABLE "users" DROP COLUMN "seen_features"`,
-    );
+    await queryRunner.query(`ALTER TABLE "users" DROP COLUMN "seen_features"`);
   }
 }

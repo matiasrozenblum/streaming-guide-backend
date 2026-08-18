@@ -19,6 +19,6 @@ export function generateServiceUrl(
       // YouTube URLs are more complex (videos, channels, etc.), so we don't auto-generate
       throw new Error('YouTube URLs cannot be auto-generated from username');
     default:
-      throw new Error(`Unknown service: ${service}`);
+      throw new Error(`Unknown service: ${String(service)}`);
   }
 }

@@ -5,7 +5,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOneOptions, In, Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
 import { Program } from './programs.entity';
 import { CreateProgramDto } from './dto/create-program.dto';
@@ -137,12 +137,10 @@ export class ProgramsService {
 
     // Assign panelists to all created programs if provided
     if (dto.panelist_ids && dto.panelist_ids.length > 0) {
-      const panelists = await Promise.all(
-        dto.panelist_ids.map((pid) =>
-          this.panelistsRepository.findOne({ where: { id: pid } }),
-        ),
-      );
-      const validPanelists = panelists.filter(Boolean) as Panelist[];
+      // Batch fetch: evita N+1 (un findOne por panelista)
+      const validPanelists = await this.panelistsRepository.find({
+        where: { id: In(dto.panelist_ids) },
+      });
       if (validPanelists.length > 0) {
         for (const program of savedPrograms) {
           program.panelists = validPanelists;

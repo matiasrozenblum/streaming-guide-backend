@@ -236,8 +236,8 @@ export class WebhookSubscriptionService {
     kickUsername: string,
     userId?: number,
   ): Promise<string | null> {
-    const clientId = this.configService.get<string>('KICK_CLIENT_ID');
-    const clientSecret = this.configService.get<string>('KICK_CLIENT_SECRET');
+    const _clientId = this.configService.get<string>('KICK_CLIENT_ID');
+    const _clientSecret = this.configService.get<string>('KICK_CLIENT_SECRET');
     // Use token refresh service to get token (checks Redis cache first, falls back to env)
     const appAccessToken = await this.tokenRefreshService.getKickAccessToken();
     const webhookBaseUrl =
@@ -577,7 +577,7 @@ export class WebhookSubscriptionService {
     // First, get the user ID if not provided
     let channelUserId = userId;
     if (!channelUserId) {
-      const clientId = this.configService.get<string>('KICK_CLIENT_ID');
+      const _clientId = this.configService.get<string>('KICK_CLIENT_ID');
       const appAccessToken =
         await this.tokenRefreshService.getKickAccessToken();
 

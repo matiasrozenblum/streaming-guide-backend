@@ -326,9 +326,8 @@ export class AuthController {
 
     // Validate registration token and get email and origin
     const tokenStart = Date.now();
-    const { email, origin } = await this.authService.verifyRegistrationToken(
-      dto.registration_token,
-    );
+    const { email, origin: _origin } =
+      await this.authService.verifyRegistrationToken(dto.registration_token);
     console.log(
       '⏱️ [AuthController] Token verification took:',
       Date.now() - tokenStart,

@@ -8,7 +8,7 @@ export class ConnectionPoolMonitorService implements OnModuleInit {
 
   async onModuleInit() {
     // Log initial pool status
-    this.logPoolStatus();
+    await this.logPoolStatus();
   }
 
   /**

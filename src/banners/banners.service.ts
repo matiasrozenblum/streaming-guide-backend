@@ -5,13 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import {
-  Repository,
-  MoreThanOrEqual,
-  LessThanOrEqual,
-  IsNull,
-  QueryFailedError,
-} from 'typeorm';
+import { Repository, QueryFailedError } from 'typeorm';
 import { Banner } from './banners.entity';
 import { CreateBannerDto } from './dto/create-banner.dto';
 import { UpdateBannerDto } from './dto/update-banner.dto';
@@ -202,7 +196,7 @@ export class BannersService {
 
         if (startDate >= endDate) {
           this.logger.error(
-            `Validation failed: start_date (${startDate}) must be before end_date (${endDate})`,
+            `Validation failed: start_date (${startDate.toISOString()}) must be before end_date (${endDate.toISOString()})`,
           );
           throw new BadRequestException('start_date must be before end_date');
         }

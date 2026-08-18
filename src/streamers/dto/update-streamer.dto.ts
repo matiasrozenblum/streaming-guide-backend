@@ -8,10 +8,9 @@ import {
   IsArray,
   IsNumber,
   ValidateNested,
-  IsEnum,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { StreamerServiceDto, StreamingService } from './create-streamer.dto';
+import { StreamerServiceDto } from './create-streamer.dto';
 
 export class UpdateStreamerDto {
   @ApiProperty({ required: false })

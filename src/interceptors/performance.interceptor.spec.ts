@@ -1,8 +1,8 @@
 import { PerformanceInterceptor } from './performance.interceptor';
 import { SentryService } from '../sentry/sentry.service';
 import { ExecutionContext, CallHandler } from '@nestjs/common';
-import { of, throwError, timer } from 'rxjs';
-import { map, delay } from 'rxjs/operators';
+import { of, throwError } from 'rxjs';
+import { delay } from 'rxjs/operators';
 
 describe('PerformanceInterceptor', () => {
   let interceptor: PerformanceInterceptor;

@@ -10,7 +10,7 @@ import { User } from '../users/users.entity';
 describe('AuthService', () => {
   let service: AuthService;
   let jwtService: JwtService;
-  let configService: ConfigService;
+  let _configService: ConfigService;
   let usersService: UsersService;
 
   const mockUser = {
@@ -78,7 +78,7 @@ describe('AuthService', () => {
 
     service = module.get<AuthService>(AuthService);
     jwtService = module.get<JwtService>(JwtService);
-    configService = module.get<ConfigService>(ConfigService);
+    _configService = module.get<ConfigService>(ConfigService);
     usersService = module.get<UsersService>(UsersService);
   });
 

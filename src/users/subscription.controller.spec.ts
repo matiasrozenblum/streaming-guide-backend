@@ -4,11 +4,9 @@ import { SubscriptionService } from './subscription.service';
 import { DeviceService } from './device.service';
 import { UsersService } from './users.service';
 
-import { NotFoundException } from '@nestjs/common';
-
 describe('SubscriptionController', () => {
   let controller: SubscriptionController;
-  let subscriptionService: SubscriptionService;
+  let _subscriptionService: SubscriptionService;
 
   const mockUser = {
     id: 1,
@@ -68,7 +66,7 @@ describe('SubscriptionController', () => {
     }).compile();
 
     controller = module.get<SubscriptionController>(SubscriptionController);
-    subscriptionService = module.get<SubscriptionService>(SubscriptionService);
+    _subscriptionService = module.get<SubscriptionService>(SubscriptionService);
   });
 
   afterEach(() => {

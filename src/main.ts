@@ -6,7 +6,7 @@ import { ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  const configService = app.get(ConfigService);
+  const _configService = app.get(ConfigService);
 
   const config = new DocumentBuilder()
     .setTitle('Streaming Guide API')
@@ -40,4 +40,4 @@ async function bootstrap() {
   await app.listen(port, '0.0.0.0');
   console.log(`🚀 Application is running on port ${port}`);
 }
-bootstrap();
+void bootstrap();

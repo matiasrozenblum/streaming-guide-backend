@@ -4,7 +4,7 @@ import { TokenRefreshService } from './token-refresh.service';
 
 describe('TokenRefreshController', () => {
   let controller: TokenRefreshController;
-  let tokenRefreshService: TokenRefreshService;
+  let _tokenRefreshService: TokenRefreshService;
 
   const mockTokenRefreshService = {
     refreshTwitchToken: jest.fn(),
@@ -28,7 +28,7 @@ describe('TokenRefreshController', () => {
     }).compile();
 
     controller = module.get<TokenRefreshController>(TokenRefreshController);
-    tokenRefreshService = module.get<TokenRefreshService>(TokenRefreshService);
+    _tokenRefreshService = module.get<TokenRefreshService>(TokenRefreshService);
   });
 
   afterEach(() => {

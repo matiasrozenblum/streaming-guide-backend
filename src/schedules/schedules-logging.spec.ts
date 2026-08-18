@@ -13,8 +13,8 @@ import { SentryService } from '../sentry/sentry.service';
 
 describe('SchedulesService Logging Improvements', () => {
   let service: SchedulesService;
-  let schedulesRepository: Repository<Schedule>;
-  let redisService: RedisService;
+  let _schedulesRepository: Repository<Schedule>;
+  let _redisService: RedisService;
 
   const mockSchedule: Schedule = {
     id: 1,
@@ -130,10 +130,10 @@ describe('SchedulesService Logging Improvements', () => {
     }).compile();
 
     service = module.get<SchedulesService>(SchedulesService);
-    schedulesRepository = module.get<Repository<Schedule>>(
+    _schedulesRepository = module.get<Repository<Schedule>>(
       getRepositoryToken(Schedule),
     );
-    redisService = module.get<RedisService>(RedisService);
+    _redisService = module.get<RedisService>(RedisService);
   });
 
   afterEach(() => {

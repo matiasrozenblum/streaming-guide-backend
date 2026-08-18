@@ -160,7 +160,7 @@ export class KickWebhookController {
       throw new Error('Invalid signature');
     }
 
-    const payload = body;
+    const payload = body as KickWebhookPayload;
 
     // Handle both new format (data.broadcaster) and legacy format (broadcaster)
     const broadcaster = payload.data?.broadcaster || payload.broadcaster;
