@@ -6,7 +6,6 @@ import {
   Param,
   Delete,
   UseGuards,
-  ParseIntPipe,
 } from '@nestjs/common';
 import { Roles } from '../auth/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';

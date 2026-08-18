@@ -187,7 +187,7 @@ export class ConfigService {
     // When holiday custom dates change: invalidate holiday cache + revalidate frontend
     if (key === 'holiday.custom_dates') {
       await this.redisService.del(this.HOLIDAY_CACHE_KEY);
-      this.notifyUtil.notifyAndRevalidate({
+      await this.notifyUtil.notifyAndRevalidate({
         eventType: 'config.updated',
         entity: 'config',
         entityId: key,
@@ -266,45 +266,135 @@ export class ConfigService {
     return value;
   }
 
+  /**
+   * Versión bulk de canFetchLive: batchea las lecturas de Redis con mget
+   * para evitar N+1 cuando hay que evaluar muchos handles a la vez.
+   *
+   * La semántica es idéntica a canFetchLive: ante cualquier cache miss se
+   * delega en canFetchLive(handle), que resuelve contra la DB y calienta
+   * el cache exactamente igual que antes.
+   */
+  async canFetchLiveBulk(handles: string[]): Promise<Map<string, boolean>> {
+    const result = new Map<string, boolean>();
+    if (!handles || handles.length === 0) return result;
+
+    const uniqueHandles = Array.from(new Set(handles));
+
+    await this.ensureCacheSeeded();
+
+    // 1) Batch de youtube.fetch_enabled (por canal + global al final)
+    const fetchEnabledKeys = uniqueHandles.map(
+      (h) => `${this.FETCH_ENABLED_PREFIX}youtube.fetch_enabled.${h}`,
+    );
+    fetchEnabledKeys.push(`${this.FETCH_ENABLED_PREFIX}youtube.fetch_enabled`);
+
+    const fetchEnabledResults =
+      await this.redisService.mget<boolean>(fetchEnabledKeys);
+    const globalFetchEnabled = fetchEnabledResults[uniqueHandles.length];
+
+    // Handles que no se pudieron resolver desde cache: se resuelven de a uno
+    const needsFallback: string[] = [];
+    // Handles habilitados según cache; sólo estos siguen a la lógica de feriado
+    const enabledHandles: string[] = [];
+
+    for (let i = 0; i < uniqueHandles.length; i++) {
+      const handle = uniqueHandles[i];
+      const perChannel = fetchEnabledResults[i];
+      // Misma precedencia que isYoutubeFetchEnabledFor: por canal -> global -> DB
+      const enabled = perChannel !== null ? perChannel : globalFetchEnabled;
+
+      if (enabled === null) {
+        needsFallback.push(handle);
+      } else if (!enabled) {
+        result.set(handle, false);
+      } else {
+        enabledHandles.push(handle);
+      }
+    }
+
+    if (enabledHandles.length > 0) {
+      const isHoliday = await this.isHolidayToday();
+
+      if (!isHoliday) {
+        for (const handle of enabledHandles) {
+          result.set(handle, true);
+        }
+      } else {
+        // 2) Batch de overrides de feriado
+        const overrideKeys = enabledHandles.map(
+          (h) =>
+            `${this.HOLIDAY_OVERRIDE_PREFIX}youtube.fetch_override_holiday.${h}`,
+        );
+        const overrideResults =
+          await this.redisService.mget<boolean>(overrideKeys);
+
+        for (let i = 0; i < enabledHandles.length; i++) {
+          const handle = enabledHandles[i];
+          const override = overrideResults[i];
+          if (override === null) {
+            needsFallback.push(handle);
+          } else {
+            result.set(handle, override);
+          }
+        }
+      }
+    }
+
+    // 3) Cache misses: camino original, uno por uno (calienta el cache)
+    for (const handle of needsFallback) {
+      result.set(handle, await this.canFetchLive(handle));
+    }
+
+    return result;
+  }
+
+  /**
+   * Resuelve si hoy es feriado (cacheado hasta fin de día, hora Argentina).
+   * Extraído de canFetchLive para poder reutilizarlo desde canFetchLiveBulk.
+   */
+  private async isHolidayToday(): Promise<boolean> {
+    const today = TimezoneUtil.currentDateString(); // YYYY-MM-DD in Argentina time
+
+    const cachedHoliday = await this.redisService.get<{
+      date: string;
+      isHoliday: boolean;
+    }>(this.HOLIDAY_CACHE_KEY);
+
+    if (cachedHoliday && cachedHoliday.date === today) {
+      return cachedHoliday.isHoliday;
+    }
+
+    // Check date-holidays library
+    const argentinaDate = TimezoneUtil.now().toDate();
+    let isHoliday = !!this.hd.isHoliday(argentinaDate);
+
+    // Also check custom dates config (bridge days / "días no laborables")
+    if (!isHoliday) {
+      const customDatesRaw = await this.get('holiday.custom_dates');
+      if (customDatesRaw) {
+        const customDates = customDatesRaw.split(',').map((d) => d.trim());
+        isHoliday = customDates.includes(today);
+      }
+    }
+
+    // Cache until end of day (Argentina time)
+    const ttl = TimezoneUtil.ttlUntilEndOfDay();
+    await this.redisService.set(
+      this.HOLIDAY_CACHE_KEY,
+      { date: today, isHoliday },
+      ttl,
+    );
+
+    return isHoliday;
+  }
+
   async canFetchLive(handle: string): Promise<boolean> {
     // Check if fetch is enabled
     const enabled = await this.isYoutubeFetchEnabledFor(handle);
     if (!enabled) return false;
 
     // Check if today is a holiday (cached daily) - using Argentina/Buenos Aires timezone
-    const today = TimezoneUtil.currentDateString(); // YYYY-MM-DD in Argentina time
-
-    // Check Redis for holiday status
-    const cachedHoliday = await this.redisService.get<{
-      date: string;
-      isHoliday: boolean;
-    }>(this.HOLIDAY_CACHE_KEY);
-
-    let isHoliday: boolean;
-    if (!cachedHoliday || cachedHoliday.date !== today) {
-      // Check date-holidays library
-      const argentinaDate = TimezoneUtil.now().toDate();
-      isHoliday = !!this.hd.isHoliday(argentinaDate);
-
-      // Also check custom dates config (bridge days / "días no laborables")
-      if (!isHoliday) {
-        const customDatesRaw = await this.get('holiday.custom_dates');
-        if (customDatesRaw) {
-          const customDates = customDatesRaw.split(',').map((d) => d.trim());
-          isHoliday = customDates.includes(today);
-        }
-      }
-
-      // Cache until end of day (Argentina time)
-      const ttl = TimezoneUtil.ttlUntilEndOfDay();
-      await this.redisService.set(
-        this.HOLIDAY_CACHE_KEY,
-        { date: today, isHoliday },
-        ttl,
-      );
-    } else {
-      isHoliday = cachedHoliday.isHoliday;
-    }
+    const isHoliday = await this.isHolidayToday();
 
     if (!isHoliday) {
       return true; // Not a holiday, can fetch

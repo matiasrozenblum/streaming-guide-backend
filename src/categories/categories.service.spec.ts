@@ -10,7 +10,7 @@ import { RedisService } from '../redis/redis.service';
 
 describe('CategoriesService', () => {
   let service: CategoriesService;
-  let repository: Repository<Category>;
+  let _repository: Repository<Category>;
 
   const mockCategories: Category[] = [
     {
@@ -79,7 +79,9 @@ describe('CategoriesService', () => {
     }).compile();
 
     service = module.get<CategoriesService>(CategoriesService);
-    repository = module.get<Repository<Category>>(getRepositoryToken(Category));
+    _repository = module.get<Repository<Category>>(
+      getRepositoryToken(Category),
+    );
   });
 
   afterEach(() => {

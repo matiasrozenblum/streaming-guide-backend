@@ -6,17 +6,13 @@ import { User } from './users.entity';
 import { DeviceService } from './device.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import {
-  NotFoundException,
-  UnauthorizedException,
-  BadRequestException,
-} from '@nestjs/common';
+import { NotFoundException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 
 describe('UsersService', () => {
   let service: UsersService;
-  let repository: Repository<User>;
-  let deviceService: DeviceService;
+  let _repository: Repository<User>;
+  let _deviceService: DeviceService;
 
   const mockUser = {
     id: 1,
@@ -59,8 +55,8 @@ describe('UsersService', () => {
     }).compile();
 
     service = module.get<UsersService>(UsersService);
-    repository = module.get<Repository<User>>(getRepositoryToken(User));
-    deviceService = module.get<DeviceService>(DeviceService);
+    _repository = module.get<Repository<User>>(getRepositoryToken(User));
+    _deviceService = module.get<DeviceService>(DeviceService);
   });
 
   afterEach(() => {

@@ -1,5 +1,4 @@
 import { YoutubeLiveService } from './youtube-live.service';
-import { ConfigService } from '../config/config.service';
 import { SchedulesService } from '../schedules/schedules.service';
 import { RedisService } from '../redis/redis.service';
 import { SentryService } from '../sentry/sentry.service';
@@ -123,9 +122,7 @@ describe('YoutubeLiveService not-found retry cadence', () => {
 
     it('keeps the long mark when nothing is on-air', async () => {
       // Program already finished — there is nothing to retry for.
-      jest
-        .spyOn(TimezoneUtil, 'currentTimeInMinutes')
-        .mockReturnValue(13 * 60);
+      jest.spyOn(TimezoneUtil, 'currentTimeInMinutes').mockReturnValue(13 * 60);
 
       await escalate();
 
@@ -170,8 +167,7 @@ describe('YoutubeLiveService not-found retry cadence', () => {
     const isUploadsOnlyRetry = (
       programName: string | null = 'Nadie Dice Nada',
       cronType: 'main' | 'back-to-back-fix' | 'manual' = 'main',
-    ) =>
-      (service as any).isUploadsOnlyRetry(HANDLE, programName, cronType);
+    ) => (service as any).isUploadsOnlyRetry(HANDLE, programName, cronType);
 
     it('skips the search on an uncounted retry', async () => {
       redisService.get.mockResolvedValue({

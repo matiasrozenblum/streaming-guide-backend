@@ -8,7 +8,7 @@ import { RedisService } from '../redis/redis.service';
 
 describe('BannersService', () => {
   let service: BannersService;
-  let repository: Repository<Banner>;
+  let _repository: Repository<Banner>;
 
   const mockRepository = {
     find: jest.fn(),
@@ -71,7 +71,7 @@ describe('BannersService', () => {
     }).compile();
 
     service = module.get<BannersService>(BannersService);
-    repository = module.get<Repository<Banner>>(getRepositoryToken(Banner));
+    _repository = module.get<Repository<Banner>>(getRepositoryToken(Banner));
   });
 
   afterEach(() => {

@@ -3,7 +3,6 @@ import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
 import { ChannelsController } from '../channels/channels.controller';
 import { ChannelsService } from '../channels/channels.service';
-import { TimezoneUtil } from '../utils/timezone.util';
 import { SupabaseStorageService } from '../banners/supabase-storage.service';
 import { YoutubeLiveService } from '../channels/../youtube/youtube-live.service';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
@@ -128,7 +127,7 @@ describe('Channels Endpoints Integration Tests', () => {
     });
 
     it('should handle boolean parameters correctly', async () => {
-      const response = await request(app.getHttpServer())
+      const _response = await request(app.getHttpServer())
         .get('/channels/with-schedules/today')
         .query({
           live_status: 'false',
@@ -144,7 +143,7 @@ describe('Channels Endpoints Integration Tests', () => {
     });
 
     it('should handle missing query parameters', async () => {
-      const response = await request(app.getHttpServer())
+      const _response = await request(app.getHttpServer())
         .get('/channels/with-schedules/today')
         .expect(200);
 
@@ -196,7 +195,7 @@ describe('Channels Endpoints Integration Tests', () => {
     });
 
     it('should handle partial query parameters', async () => {
-      const response = await request(app.getHttpServer())
+      const _response = await request(app.getHttpServer())
         .get('/channels/with-schedules/week')
         .query({
           deviceId: 'partial-device',
@@ -268,7 +267,7 @@ describe('Channels Endpoints Integration Tests', () => {
       // Mock the service to return success for invalid parameters
       mockChannelsService.getTodaySchedules.mockResolvedValue([]);
 
-      const response = await request(app.getHttpServer())
+      const _response = await request(app.getHttpServer())
         .get('/channels/with-schedules/today')
         .query({
           live_status: 'invalid-boolean',

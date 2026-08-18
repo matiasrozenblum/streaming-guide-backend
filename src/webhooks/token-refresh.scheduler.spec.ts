@@ -4,7 +4,7 @@ import { TokenRefreshService } from './token-refresh.service';
 
 describe('TokenRefreshScheduler', () => {
   let scheduler: TokenRefreshScheduler;
-  let tokenRefreshService: TokenRefreshService;
+  let _tokenRefreshService: TokenRefreshService;
 
   const mockTokenRefreshService = {
     checkAndRefreshTokens: jest.fn(),
@@ -22,7 +22,7 @@ describe('TokenRefreshScheduler', () => {
     }).compile();
 
     scheduler = module.get<TokenRefreshScheduler>(TokenRefreshScheduler);
-    tokenRefreshService = module.get<TokenRefreshService>(TokenRefreshService);
+    _tokenRefreshService = module.get<TokenRefreshService>(TokenRefreshService);
   });
 
   afterEach(() => {

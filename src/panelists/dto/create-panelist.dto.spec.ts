@@ -32,7 +32,7 @@ describe('CreatePanelistDto', () => {
 
   it('should fail if name is not a string', async () => {
     const dto = new CreatePanelistDto();
-    // @ts-expect-error
+    // @ts-expect-error - asignacion invalida a proposito para probar la validacion
     dto.name = 123;
     dto.bio = 'Bio válida';
 
@@ -44,7 +44,7 @@ describe('CreatePanelistDto', () => {
   it('should fail if bio is not a string', async () => {
     const dto = new CreatePanelistDto();
     dto.name = 'Nombre válido';
-    // @ts-expect-error
+    // @ts-expect-error - asignacion invalida a proposito para probar la validacion
     dto.bio = 123;
 
     const errors = await validate(dto);

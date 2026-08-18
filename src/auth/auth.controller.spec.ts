@@ -5,14 +5,13 @@ import { OtpService } from './otp.service';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { UnauthorizedException, BadRequestException } from '@nestjs/common';
 
 describe('AuthController', () => {
   let controller: AuthController;
   let authService: AuthService;
   let otpService: OtpService;
   let usersService: UsersService;
-  let jwtService: JwtService;
+  let _jwtService: JwtService;
 
   const mockUser = {
     id: 1,
@@ -91,7 +90,7 @@ describe('AuthController', () => {
     authService = module.get<AuthService>(AuthService);
     otpService = module.get<OtpService>(OtpService);
     usersService = module.get<UsersService>(UsersService);
-    jwtService = module.get<JwtService>(JwtService);
+    _jwtService = module.get<JwtService>(JwtService);
   });
 
   it('should be defined', () => {
@@ -156,7 +155,7 @@ describe('AuthController', () => {
 
   describe('verifyCode', () => {
     it('should return access and refresh tokens for existing user', async () => {
-      const mockTokens = {
+      const _mockTokens = {
         access_token: 'test-token',
         refresh_token: 'refresh-token',
       };
@@ -547,7 +546,7 @@ describe('AuthController', () => {
     });
 
     it('should not require password for social users', async () => {
-      const mockTokens = {
+      const _mockTokens = {
         access_token: 'test-token',
         refresh_token: 'refresh-token',
       };

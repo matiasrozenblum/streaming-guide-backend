@@ -15,8 +15,8 @@ export class AuthService {
   async loginUser(
     email: string,
     password: string,
-    userAgent?: string,
-    deviceId?: string,
+    _userAgent?: string,
+    _deviceId?: string,
   ): Promise<{ access_token: string; refresh_token: string }> {
     email = email.toLowerCase().trim();
     const user = await this.usersService.findByEmail(email);
@@ -29,7 +29,7 @@ export class AuthService {
     }
 
     // Device creation will be handled by frontend useDeviceId hook with correct user-agent
-    const birthDate =
+    const _birthDate =
       user.birthDate instanceof Date
         ? user.birthDate.toISOString().split('T')[0]
         : typeof user.birthDate === 'string'

@@ -7,7 +7,6 @@ import { Program } from '../programs/programs.entity';
 import { Channel } from '../channels/channels.entity';
 import { ReportsProxyService } from './reports-proxy.service';
 import { EmailService } from '../email/email.service';
-import * as dayjs from 'dayjs';
 
 export interface UserDemographics {
   totalUsers: number;

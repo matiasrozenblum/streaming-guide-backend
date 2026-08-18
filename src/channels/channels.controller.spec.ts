@@ -236,7 +236,11 @@ describe('ChannelsController', () => {
     });
 
     it('should handle partial parameters', async () => {
-      const result = await controller.getTodaySchedules(mockReq, 'device456', 'true');
+      const result = await controller.getTodaySchedules(
+        mockReq,
+        'device456',
+        'true',
+      );
 
       expect(result).toEqual([]);
       expect(service.getTodaySchedules).toHaveBeenCalledWith(
@@ -282,7 +286,11 @@ describe('ChannelsController', () => {
     });
 
     it('should handle partial parameters', async () => {
-      const result = await controller.getWeekSchedules(mockReq, 'device789', 'false');
+      const result = await controller.getWeekSchedules(
+        mockReq,
+        'device789',
+        'false',
+      );
 
       expect(result).toEqual([]);
       expect(service.getWeekSchedules).toHaveBeenCalledWith(

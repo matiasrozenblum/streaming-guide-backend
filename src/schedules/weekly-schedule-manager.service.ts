@@ -1,8 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { WeeklyOverridesService } from './weekly-overrides.service';
 import { RedisService } from '../redis/redis.service';
-import * as dayjs from 'dayjs';
 
 @Injectable()
 export class WeeklyScheduleManagerService {

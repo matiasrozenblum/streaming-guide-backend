@@ -1,11 +1,6 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import {
-  Repository,
-  FindOneOptions,
-  FindManyOptions,
-  FindOptionsWhere,
-} from 'typeorm';
+import { Repository, FindOneOptions } from 'typeorm';
 import { Schedule } from './schedules.entity';
 import { Program } from '../programs/programs.entity';
 import {
@@ -14,7 +9,6 @@ import {
 } from './dto/create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { YoutubeLiveService } from '../youtube/youtube-live.service';
-import { LiveStream } from '../youtube/interfaces/live-stream.interface';
 import { RedisService } from '../redis/redis.service';
 import { WeeklyOverridesService } from './weekly-overrides.service';
 import { SentryService } from '../sentry/sentry.service';
@@ -81,10 +75,10 @@ export class SchedulesService {
     const {
       dayOfWeek,
       relations = ['program', 'program.channel', 'program.panelists'],
-      select,
+      select: _select,
       skipCache = false,
-      applyOverrides = true,
-      liveStatus = false,
+      applyOverrides: _applyOverrides = true,
+      liveStatus: _liveStatus = false,
       raw = false,
     } = options;
 
@@ -169,7 +163,7 @@ export class SchedulesService {
    */
   private async fetchSchedulesFromDatabase(
     dayOfWeek?: string,
-    relations?: string[],
+    _relations?: string[],
   ): Promise<Schedule[]> {
     const dbStart = Date.now();
 
@@ -289,7 +283,7 @@ export class SchedulesService {
       this.isWarmingCache = false;
       if (this.pendingWarm) {
         this.pendingWarm = false;
-        setImmediate(() => this.warmSchedulesCache());
+        setImmediate(() => void this.warmSchedulesCache());
       }
     }
   }
@@ -305,7 +299,7 @@ export class SchedulesService {
     }
     this.warmCacheTimer = setTimeout(() => {
       this.warmCacheTimer = null;
-      this.warmSchedulesCache();
+      void this.warmSchedulesCache();
     }, SchedulesService.WARM_CACHE_DEBOUNCE_MS);
   }
 
@@ -313,7 +307,7 @@ export class SchedulesService {
     schedules: Schedule[],
     liveStatus: boolean = false,
   ): Promise<any[]> {
-    const now = TimezoneUtil.now();
+    const _now = TimezoneUtil.now();
     const currentNum = TimezoneUtil.currentTimeInMinutes();
     const currentDay = TimezoneUtil.currentDayOfWeek();
     const previousDay = TimezoneUtil.previousDayOfWeek();
@@ -358,7 +352,7 @@ export class SchedulesService {
 
       if (liveChannelIds.length > 0) {
         // Trigger async background fetch (non-blocking)
-        setImmediate(async () => {
+        setImmediate(() => {
           try {
             // Background live status will be handled by OptimizedSchedulesService
           } catch (error) {
@@ -566,9 +560,9 @@ export class SchedulesService {
     }
 
     // Count live programs for this channel
-    const liveProgramCount = liveSchedules.length;
+    const _liveProgramCount = liveSchedules.length;
     // Total streams available from YouTube API
-    const totalStreamsAvailable = channelStreamCount;
+    const _totalStreamsAvailable = channelStreamCount;
 
     // Distribute streams to live schedules using title matching
     const usedStreams = new Set<string>();
@@ -731,7 +725,7 @@ export class SchedulesService {
   private findBestMatchingStream(
     programName: string,
     availableStreams: any[],
-  ): any | null {
+  ): any {
     if (availableStreams.length === 0) return null;
 
     // Simple title similarity matching (Jaccard similarity)

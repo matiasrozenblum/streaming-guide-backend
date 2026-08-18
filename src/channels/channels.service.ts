@@ -16,7 +16,6 @@ import { ConfigService } from '@/config/config.service';
 import { WeeklyOverridesService } from '@/schedules/weekly-overrides.service';
 import { YoutubeLiveService } from '@/youtube/youtube-live.service';
 import { OptimizedSchedulesService } from '@/youtube/optimized-schedules.service';
-import { getCurrentBlockTTL } from '@/utils/getBlockTTL.util';
 import { TimezoneUtil } from '../utils/timezone.util';
 import { Category } from '../categories/categories.entity';
 import * as dayjs from 'dayjs';
@@ -561,7 +560,7 @@ export class ChannelsService {
     );
 
     // Group schedules by channel
-    const groupStart = Date.now();
+    const _groupStart = Date.now();
     const schedulesGroupedByChannelId = allSchedules.reduce(
       (acc, schedule) => {
         const channelId = schedule.program?.channel?.id;
@@ -661,7 +660,14 @@ export class ChannelsService {
   ): Promise<ChannelWithSchedules[]> {
     const today = TimezoneUtil.currentDayOfWeek();
 
-    return this.getChannelsWithSchedules(today, userId, liveStatus, raw, undefined, legacyDeviceId);
+    return this.getChannelsWithSchedules(
+      today,
+      userId,
+      liveStatus,
+      raw,
+      undefined,
+      legacyDeviceId,
+    );
   }
 
   /**
