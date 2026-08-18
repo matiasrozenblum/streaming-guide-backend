@@ -173,6 +173,65 @@ describe('WeeklyOverridesService', () => {
       expect(redisService.del).toHaveBeenCalledWith('schedules:week:complete');
     });
 
+    it('should throw NotFoundException when sourceProgramId does not exist', async () => {
+      const dto: WeeklyOverrideDto = {
+        targetWeek: 'current',
+        overrideType: 'create',
+        newStartTime: '14:00',
+        newEndTime: '16:00',
+        newDayOfWeek: 'monday',
+        specialProgram: {
+          name: 'PLP - Especial',
+          channelId: 1,
+          sourceProgramId: 999,
+        },
+      };
+
+      jest.spyOn(redisService, 'get').mockResolvedValue(null);
+      jest.spyOn(dataSource, 'query').mockResolvedValue([]);
+
+      await expect(service.createWeeklyOverride(dto)).rejects.toThrow(
+        NotFoundException,
+      );
+      // A dangling reference must not reach Redis: push resolution would drop it
+      // silently and the special would never notify.
+      expect(redisService.set).not.toHaveBeenCalled();
+    });
+
+    it('should persist sourceProgramId and style when the program exists', async () => {
+      const dto: WeeklyOverrideDto = {
+        targetWeek: 'current',
+        overrideType: 'create',
+        newStartTime: '14:00',
+        newEndTime: '16:00',
+        newDayOfWeek: 'monday',
+        specialProgram: {
+          name: 'PLP - Especial',
+          channelId: 1,
+          sourceProgramId: 42,
+          style_override: 'neon',
+        },
+      };
+
+      jest.spyOn(redisService, 'get').mockResolvedValue(null);
+      jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
+      jest.spyOn(redisService, 'del').mockResolvedValue(undefined);
+      jest.spyOn(dataSource, 'query').mockImplementation((sql: string) => {
+        if (sql.includes('FROM program')) {
+          return Promise.resolve([{ id: 42 }]);
+        }
+        if (sql.includes('FROM channel')) {
+          return Promise.resolve([{ id: 1, name: 'Test Channel' }]);
+        }
+        return Promise.resolve([]);
+      });
+
+      const result = await service.createWeeklyOverride(dto);
+
+      expect(result.specialProgram!.sourceProgramId).toBe(42);
+      expect(result.specialProgram!.style_override).toBe('neon');
+    });
+
     it('should throw BadRequestException when create override missing special program data', async () => {
       const dto: WeeklyOverrideDto = {
         targetWeek: 'current',
@@ -620,6 +679,109 @@ describe('WeeklyOverridesService', () => {
       expect(virtualSchedule!.day_of_week).toBe('monday');
       expect((virtualSchedule as any).isWeeklyOverride).toBe(true);
       expect((virtualSchedule as any).overrideType).toBe('create');
+    });
+
+    it('should carry source program identity onto the virtual schedule', async () => {
+      const schedules = [mockSchedule as any];
+      const weekStartDate = '2024-01-01';
+      const override = {
+        id: 'special_channel_1_plp_monday_2024-01-01',
+        overrideType: 'create',
+        newStartTime: '14:00',
+        newEndTime: '16:00',
+        newDayOfWeek: 'monday',
+        specialProgram: {
+          name: 'PLP - Especial',
+          channelId: 1,
+          channel: {
+            id: 1,
+            name: 'Test Channel',
+            handle: 'test',
+            youtube_channel_id: 'test123',
+            logo_url: null,
+            description: null,
+            order: 1,
+            is_visible: true,
+          },
+          style_override: 'neon',
+          sourceProgramId: 42,
+        },
+      };
+
+      const mockStream = {
+        [Symbol.asyncIterator]: async function* () {
+          yield ['weekly_override:special_channel_1_plp_monday_2024-01-01'];
+        },
+      };
+      jest
+        .spyOn(mockRedisService.client, 'scanStream')
+        .mockReturnValue(mockStream);
+
+      const mockPipeline = {
+        get: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue([[null, JSON.stringify(override)]]),
+      };
+      jest
+        .spyOn(mockRedisService.client, 'pipeline')
+        .mockReturnValue(mockPipeline);
+
+      const result = await service.applyWeeklyOverrides(
+        schedules,
+        weekStartDate,
+      );
+
+      const virtualSchedule: any = result.find((s) =>
+        String(s.id).startsWith('virtual_'),
+      );
+      expect(virtualSchedule.program.style_override).toBe('neon');
+      expect(virtualSchedule.program.sourceProgramId).toBe(42);
+      // Explicit `true`, not just "not false": the push scheduler requires it.
+      expect(virtualSchedule.program.is_visible).toBe(true);
+    });
+
+    it('should default style and source when the special stands alone', async () => {
+      const schedules = [mockSchedule as any];
+      const weekStartDate = '2024-01-01';
+      const override = {
+        id: 'special_channel_1_gala_monday_2024-01-01',
+        overrideType: 'create',
+        newStartTime: '14:00',
+        newEndTime: '16:00',
+        newDayOfWeek: 'monday',
+        specialProgram: {
+          name: 'Gala especial',
+          channelId: 1,
+          channel: { id: 1, name: 'Test Channel' },
+        },
+      };
+
+      const mockStream = {
+        [Symbol.asyncIterator]: async function* () {
+          yield ['weekly_override:special_channel_1_gala_monday_2024-01-01'];
+        },
+      };
+      jest
+        .spyOn(mockRedisService.client, 'scanStream')
+        .mockReturnValue(mockStream);
+
+      const mockPipeline = {
+        get: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue([[null, JSON.stringify(override)]]),
+      };
+      jest
+        .spyOn(mockRedisService.client, 'pipeline')
+        .mockReturnValue(mockPipeline);
+
+      const result = await service.applyWeeklyOverrides(
+        schedules,
+        weekStartDate,
+      );
+
+      const virtualSchedule: any = result.find((s) =>
+        String(s.id).startsWith('virtual_'),
+      );
+      expect(virtualSchedule.program.style_override).toBeNull();
+      expect(virtualSchedule.program.sourceProgramId).toBeUndefined();
     });
 
     it('should handle mixed overrides (regular + create)', async () => {

@@ -33,6 +33,26 @@ export class PushScheduler {
     private readonly schedulesService: SchedulesService,
   ) {}
 
+  /**
+   * Programa al que se le buscan suscriptores para este schedule.
+   *
+   * Los schedules reales traen un program.id numérico. Los programas especiales
+   * son virtuales: su id es un string (`virtual_program_...`) que no matchea
+   * ninguna suscripción, así que solo notifican si el admin los creó a partir de
+   * un programa existente (sourceProgramId). Devuelve null cuando no hay a quién
+   * notificar — filtrar esos casos también evita mandar el id string a una query
+   * sobre una columna integer.
+   */
+  private resolveNotifyProgramId(program: {
+    id: unknown;
+    sourceProgramId?: unknown;
+  }): number | null {
+    const candidate = program?.sourceProgramId ?? program?.id;
+    return typeof candidate === 'number' && Number.isInteger(candidate)
+      ? candidate
+      : null;
+  }
+
   @Cron(CronExpression.EVERY_MINUTE, {
     timeZone: 'America/Argentina/Buenos_Aires',
   })
@@ -54,10 +74,28 @@ export class PushScheduler {
       skipCache: false, // ✅ IMPORTANTE: Usar cache para reducir carga en DB
     });
 
-    // Filtrar schedules que empiezan en 10 min, excluyendo programas ocultos
-    const dueSchedules = allSchedules.filter(
-      (s) => s.start_time === timeString && s.program?.is_visible === true,
-    );
+    // Filtrar schedules que empiezan en 10 min, excluyendo programas ocultos.
+    // Los programas especiales (weekly overrides de tipo `create`) tienen un
+    // program.id virtual de tipo string: solo notifican si el admin los basó en
+    // un programa real, vía sourceProgramId.
+    const dueSchedules = allSchedules
+      .filter(
+        (s) => s.start_time === timeString && s.program?.is_visible === true,
+      )
+      .map((s) => ({
+        schedule: s,
+        notifyProgramId: this.resolveNotifyProgramId(
+          s.program as { id: unknown; sourceProgramId?: unknown },
+        ),
+      }))
+      .filter(
+        (
+          entry,
+        ): entry is {
+          schedule: (typeof allSchedules)[number];
+          notifyProgramId: number;
+        } => entry.notifyProgramId !== null,
+      );
     if (dueSchedules.length === 0) {
       this.logger.debug('Ningún programa coincide.');
       return;
@@ -66,10 +104,11 @@ export class PushScheduler {
       `Encontrados ${dueSchedules.length} programas que coinciden.`,
     );
     this.logger.log(
-      dueSchedules.map((s) => {
+      dueSchedules.map(({ schedule: s, notifyProgramId }) => {
         return {
           id: s.id,
           programId: s.program.id,
+          notifyProgramId,
           programName: s.program.name,
           channelName: s.program.channel?.name,
           start_time: s.start_time,
@@ -80,7 +119,7 @@ export class PushScheduler {
 
     // 3) IDs únicos de programas
     const programIds = Array.from(
-      new Set(dueSchedules.map((s) => s.program.id)),
+      new Set(dueSchedules.map((e) => e.notifyProgramId)),
     );
 
     // 4) Traer subscripciones de usuarios para esos programas
@@ -107,7 +146,7 @@ export class PushScheduler {
     const uniqueChannelHandles = Array.from(
       new Set(
         dueSchedules
-          .map((s) => s.program.channel?.handle)
+          .map((e) => e.schedule.program.channel?.handle)
           .filter((h): h is string => !!h),
       ),
     );
@@ -121,7 +160,12 @@ export class PushScheduler {
     // 6) Enviar notificaciones por programa + usuario (concurrently)
     const pushPromises: Promise<void>[] = [];
 
-    for (const schedule of dueSchedules) {
+    // Un mismo programa puede estar por empezar en varios schedules a la vez
+    // (su emisión regular más una transmisión especial, o un especial creado en
+    // varios canales). Sin esto el suscripto recibiría una push por cada uno.
+    const notified = new Set<string>();
+
+    for (const { schedule, notifyProgramId } of dueSchedules) {
       const program = schedule.program;
       const title = program.name;
       const channelHandle = program.channel?.handle;
@@ -136,7 +180,7 @@ export class PushScheduler {
 
       // subscripciones para este programa específico
       const programSubscriptions = allUserSubscriptions.filter(
-        (sub) => sub.program.id === program.id,
+        (sub) => sub.program.id === notifyProgramId,
       );
 
       for (const subscription of programSubscriptions) {
@@ -156,6 +200,10 @@ export class PushScheduler {
               device.pushSubscriptions.length > 0
             ) {
               for (const pushSub of device.pushSubscriptions) {
+                const dedupeKey = `${pushSub.id}:${notifyProgramId}`;
+                if (notified.has(dedupeKey)) continue;
+                notified.add(dedupeKey);
+
                 pushPromises.push(
                   (async () => {
                     const isNative = !pushSub.p256dh && !pushSub.auth;

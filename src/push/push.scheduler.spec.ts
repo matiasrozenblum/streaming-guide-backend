@@ -512,6 +512,97 @@ describe('PushScheduler', () => {
       expect(mockPushService.sendNotification).not.toHaveBeenCalled();
     });
 
+    it('should notify subscribers of the source program for a special program', async () => {
+      // Special programs are virtual: string id, no DB row. When the admin based
+      // it on an existing program, its subscribers must still be notified.
+      const specialSchedule = {
+        ...mockSchedule,
+        id: 'virtual_special_channel_1_plp_friday_2023-11-27',
+        program: {
+          ...mockProgram,
+          id: 'virtual_program_special_channel_1_plp_friday_2023-11-27',
+          name: 'Test Program - Especial',
+          sourceProgramId: mockProgram.id,
+        },
+      };
+
+      const schedulesService = module.get(SchedulesService);
+      jest
+        .spyOn(schedulesService, 'findAll')
+        .mockResolvedValue([specialSchedule]);
+      mockUserSubscriptionRepository.find.mockResolvedValue([
+        mockUserSubscription,
+      ]);
+      mockPushService.sendNotification.mockResolvedValue(true);
+
+      await scheduler.handleNotificationsCron();
+
+      // Subscriptions looked up by the real program id, never the virtual string
+      expect(mockUserSubscriptionRepository.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { program: { id: In([mockProgram.id]) }, isActive: true },
+        }),
+      );
+
+      // …but the notification carries the special's own name
+      expect(mockPushService.sendNotification).toHaveBeenCalledWith(
+        mockUser.devices[0].pushSubscriptions[0],
+        expect.objectContaining({ title: 'Test Program - Especial' }),
+      );
+    });
+
+    it('should skip special programs that are not based on an existing program', async () => {
+      const standaloneSpecial = {
+        ...mockSchedule,
+        id: 'virtual_special_channel_1_gala_friday_2023-11-27',
+        program: {
+          ...mockProgram,
+          id: 'virtual_program_special_channel_1_gala_friday_2023-11-27',
+          name: 'Gala especial',
+          sourceProgramId: undefined,
+        },
+      };
+
+      const schedulesService = module.get(SchedulesService);
+      jest
+        .spyOn(schedulesService, 'findAll')
+        .mockResolvedValue([standaloneSpecial]);
+
+      await scheduler.handleNotificationsCron();
+
+      // No numeric id to resolve — bailing out also keeps the virtual string id
+      // out of the integer-typed subscription query.
+      expect(mockUserSubscriptionRepository.find).not.toHaveBeenCalled();
+      expect(mockPushService.sendNotification).not.toHaveBeenCalled();
+    });
+
+    it('should send a single push when a program airs twice at the same time', async () => {
+      // Regular broadcast + a special based on it, both starting now.
+      const specialSchedule = {
+        ...mockSchedule,
+        id: 'virtual_special_channel_1_plp_friday_2023-11-27',
+        program: {
+          ...mockProgram,
+          id: 'virtual_program_special_channel_1_plp_friday_2023-11-27',
+          name: 'Test Program - Especial',
+          sourceProgramId: mockProgram.id,
+        },
+      };
+
+      const schedulesService = module.get(SchedulesService);
+      jest
+        .spyOn(schedulesService, 'findAll')
+        .mockResolvedValue([mockSchedule, specialSchedule]);
+      mockUserSubscriptionRepository.find.mockResolvedValue([
+        mockUserSubscription,
+      ]);
+      mockPushService.sendNotification.mockResolvedValue(true);
+
+      await scheduler.handleNotificationsCron();
+
+      expect(mockPushService.sendNotification).toHaveBeenCalledTimes(1);
+    });
+
     it('should handle null/undefined push subscriptions gracefully', async () => {
       const deviceWithNullSubscriptions = {
         ...mockUser.devices[0],
