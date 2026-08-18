@@ -159,7 +159,8 @@ export class YoutubeLiveService {
     handle: string,
     blockTTL: number,
     context: 'cron' | 'onDemand' | 'program-start',
-  ): Promise<string | null | '__SKIPPED__'> {
+    // El sentinela '__SKIPPED__' esta cubierto por `string`
+  ): Promise<string | null> {
     // gating centralizado
     try {
       if (!(await this.configService.canFetchLive(handle))) {
@@ -1705,8 +1706,8 @@ export class YoutubeLiveService {
 
       // Schedule a follow-up check 7 minutes later for delayed starts
       setTimeout(
-        async () => {
-          await this.checkDelayedProgramStarts(startingPrograms);
+        () => {
+          void this.checkDelayedProgramStarts(startingPrograms);
         },
         7 * 60 * 1000,
       ); // 7 minutes

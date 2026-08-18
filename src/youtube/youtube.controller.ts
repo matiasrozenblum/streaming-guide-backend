@@ -44,92 +44,94 @@ export class YoutubeController {
       }, 30000);
 
       // Set up polling for live status changes
-      const interval = setInterval(async () => {
-        try {
-          // Check for recent live notifications (last 60 seconds to give more time)
-          const sixtySecondsAgo = Date.now() - 60000;
-          const keys = await this.redisService.client.keys(
-            'live_notification:*',
-          );
+      const interval = setInterval(() => {
+        void (async () => {
+          try {
+            // Check for recent live notifications (last 60 seconds to give more time)
+            const sixtySecondsAgo = Date.now() - 60000;
+            const keys = await this.redisService.client.keys(
+              'live_notification:*',
+            );
 
-          if (keys.length > 0) {
-            const keysToFetch: string[] = [];
-            const keysToDelete: string[] = [];
+            if (keys.length > 0) {
+              const keysToFetch: string[] = [];
+              const keysToDelete: string[] = [];
 
-            // First pass: classify keys by timestamp
-            for (const key of keys) {
-              const parts = key.split(':');
-              const timestamp = parseInt(parts[parts.length - 1]);
+              // First pass: classify keys by timestamp
+              for (const key of keys) {
+                const parts = key.split(':');
+                const timestamp = parseInt(parts[parts.length - 1]);
 
-              if (isNaN(timestamp)) {
-                this.logger.warn(
-                  `Invalid timestamp in notification key: ${key}`,
+                if (isNaN(timestamp)) {
+                  this.logger.warn(
+                    `Invalid timestamp in notification key: ${key}`,
+                  );
+                  continue;
+                }
+
+                if (timestamp > sixtySecondsAgo) {
+                  keysToFetch.push(key);
+                } else {
+                  keysToDelete.push(key);
+                }
+              }
+
+              // Batch fetch recent notifications in a single mget
+              if (keysToFetch.length > 0) {
+                const notificationStrings = await this.redisService.client.mget(
+                  ...keysToFetch,
                 );
-                continue;
-              }
 
-              if (timestamp > sixtySecondsAgo) {
-                keysToFetch.push(key);
-              } else {
-                keysToDelete.push(key);
-              }
-            }
+                for (const notificationString of notificationStrings) {
+                  if (
+                    notificationString &&
+                    typeof notificationString === 'string'
+                  ) {
+                    try {
+                      const notification = JSON.parse(
+                        notificationString,
+                      ) as LiveNotification;
 
-            // Batch fetch recent notifications in a single mget
-            if (keysToFetch.length > 0) {
-              const notificationStrings = await this.redisService.client.mget(
-                ...keysToFetch,
-              );
+                      // Create a unique identifier for this notification
+                      const notificationId = notification.channelId
+                        ? `${notification.type}:${notification.channelId}:${notification.timestamp}`
+                        : `${notification.type}:${notification.entity}:${notification.entityId}:${notification.timestamp}`;
 
-              for (const notificationString of notificationStrings) {
-                if (
-                  notificationString &&
-                  typeof notificationString === 'string'
-                ) {
-                  try {
-                    const notification = JSON.parse(
-                      notificationString,
-                    ) as LiveNotification;
+                      // Only send if we haven't sent this notification before (per-connection)
+                      if (!this.sentNotifications.has(notificationId)) {
+                        this.sentNotifications.add(notificationId);
 
-                    // Create a unique identifier for this notification
-                    const notificationId = notification.channelId
-                      ? `${notification.type}:${notification.channelId}:${notification.timestamp}`
-                      : `${notification.type}:${notification.entity}:${notification.entityId}:${notification.timestamp}`;
+                        subscriber.next({
+                          data: JSON.stringify(notification),
+                          type: 'message',
+                        } as MessageEvent);
 
-                    // Only send if we haven't sent this notification before (per-connection)
-                    if (!this.sentNotifications.has(notificationId)) {
-                      this.sentNotifications.add(notificationId);
+                        // IMPORTANT: Do NOT delete the Redis key here.
+                        // We want ALL connected clients to receive the notification.
+                        // Each connection tracks what it has already sent via sentNotifications.
+                        // Old notifications are cleaned up below (timestamp check) or by TTL.
 
-                      subscriber.next({
-                        data: JSON.stringify(notification),
-                        type: 'message',
-                      } as MessageEvent);
-
-                      // IMPORTANT: Do NOT delete the Redis key here.
-                      // We want ALL connected clients to receive the notification.
-                      // Each connection tracks what it has already sent via sentNotifications.
-                      // Old notifications are cleaned up below (timestamp check) or by TTL.
-
-                      // Clean up the tracking set after 1 minute to prevent memory leaks
-                      setTimeout(() => {
-                        this.sentNotifications.delete(notificationId);
-                      }, 60000);
+                        // Clean up the tracking set after 1 minute to prevent memory leaks
+                        setTimeout(() => {
+                          this.sentNotifications.delete(notificationId);
+                        }, 60000);
+                      }
+                    } catch (error) {
+                      this.logger.error('Error parsing notification:', error);
                     }
-                  } catch (error) {
-                    this.logger.error('Error parsing notification:', error);
                   }
                 }
               }
-            }
 
-            // Batch delete expired notifications in a single DEL
-            if (keysToDelete.length > 0) {
-              await this.redisService.del(keysToDelete);
+              // Batch delete expired notifications in a single DEL
+              if (keysToDelete.length > 0) {
+                await this.redisService.del(keysToDelete);
+              }
             }
+          } catch (error) {
+            this.logger.error('Error in live events SSE polling:', error);
           }
-        } catch (error) {
-          this.logger.error('Error in live events SSE polling:', error);
-        }
+        })();
       }, 2000); // Check every 2 seconds
 
       // Cleanup on disconnect

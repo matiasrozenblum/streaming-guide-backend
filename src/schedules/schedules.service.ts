@@ -289,7 +289,7 @@ export class SchedulesService {
       this.isWarmingCache = false;
       if (this.pendingWarm) {
         this.pendingWarm = false;
-        setImmediate(() => this.warmSchedulesCache());
+        setImmediate(() => void this.warmSchedulesCache());
       }
     }
   }
@@ -305,7 +305,7 @@ export class SchedulesService {
     }
     this.warmCacheTimer = setTimeout(() => {
       this.warmCacheTimer = null;
-      this.warmSchedulesCache();
+      void this.warmSchedulesCache();
     }, SchedulesService.WARM_CACHE_DEBOUNCE_MS);
   }
 
@@ -358,7 +358,7 @@ export class SchedulesService {
 
       if (liveChannelIds.length > 0) {
         // Trigger async background fetch (non-blocking)
-        setImmediate(async () => {
+        setImmediate(() => {
           try {
             // Background live status will be handled by OptimizedSchedulesService
           } catch (error) {
@@ -731,7 +731,7 @@ export class SchedulesService {
   private findBestMatchingStream(
     programName: string,
     availableStreams: any[],
-  ): any | null {
+  ): any {
     if (availableStreams.length === 0) return null;
 
     // Simple title similarity matching (Jaccard similarity)

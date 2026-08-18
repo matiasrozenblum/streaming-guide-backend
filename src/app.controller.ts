@@ -311,7 +311,7 @@ export class AppController {
             resolve(true);
           },
         );
-        socket.on('error', (err) => {
+        socket.on('error', (err: Error) => {
           console.log('❌ TCP connection failed:', err.message);
           reject(err);
         });

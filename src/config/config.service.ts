@@ -187,7 +187,7 @@ export class ConfigService {
     // When holiday custom dates change: invalidate holiday cache + revalidate frontend
     if (key === 'holiday.custom_dates') {
       await this.redisService.del(this.HOLIDAY_CACHE_KEY);
-      this.notifyUtil.notifyAndRevalidate({
+      await this.notifyUtil.notifyAndRevalidate({
         eventType: 'config.updated',
         entity: 'config',
         entityId: key,

@@ -10,7 +10,7 @@ interface CreateProposedChangeInput {
   action: 'create' | 'update' | 'delete';
   channelName: string;
   programName: string;
-  before: any | null;
+  before: any;
   after: any;
 }
 

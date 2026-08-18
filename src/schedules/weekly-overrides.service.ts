@@ -1185,7 +1185,7 @@ export class WeeklyOverridesService {
           case 'cancel':
             // Skip all schedules for this program
             continue;
-          case 'time_change':
+          case 'time_change': {
             // Apply time change to all schedules of this program
             const modifiedSchedule1 = {
               ...schedule,
@@ -1208,7 +1208,8 @@ export class WeeklyOverridesService {
 
             modifiedSchedules.push(modifiedSchedule1);
             break;
-          case 'reschedule':
+          }
+          case 'reschedule': {
             // Apply reschedule to all schedules of this program
             const modifiedSchedule2 = {
               ...schedule,
@@ -1232,6 +1233,7 @@ export class WeeklyOverridesService {
 
             modifiedSchedules.push(modifiedSchedule2);
             break;
+          }
           default:
             modifiedSchedules.push(schedule);
         }
@@ -1251,7 +1253,7 @@ export class WeeklyOverridesService {
           // Skip cancelled programs
           continue;
 
-        case 'time_change':
+        case 'time_change': {
           const modifiedSchedule3 = {
             ...schedule,
             start_time: scheduleOverride.newStartTime || schedule.start_time,
@@ -1273,8 +1275,9 @@ export class WeeklyOverridesService {
 
           modifiedSchedules.push(modifiedSchedule3);
           break;
+        }
 
-        case 'reschedule':
+        case 'reschedule': {
           const modifiedSchedule4 = {
             ...schedule,
             start_time: scheduleOverride.newStartTime || schedule.start_time,
@@ -1297,6 +1300,7 @@ export class WeeklyOverridesService {
 
           modifiedSchedules.push(modifiedSchedule4);
           break;
+        }
 
         default:
           modifiedSchedules.push(schedule);
