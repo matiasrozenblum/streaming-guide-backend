@@ -422,13 +422,21 @@ export class ProgramsService {
         relations: ['panelists'],
       });
       const others = linked.filter((p) => p.id !== programId);
+      const othersToUpdate: Program[] = [];
+      const cacheKeysToDel: string[] = [];
+
       for (const other of others) {
         if (!other.panelists) other.panelists = [];
         if (!other.panelists.some((p) => p.id === panelistId)) {
           other.panelists.push(panelist);
-          await this.programsRepository.save(other);
-          await this.redisService.del([`programs:${other.id}`]);
+          othersToUpdate.push(other);
+          cacheKeysToDel.push(`programs:${other.id}`);
         }
+      }
+
+      if (othersToUpdate.length > 0) {
+        await this.programsRepository.save(othersToUpdate);
+        await this.redisService.del(cacheKeysToDel);
       }
     }
 
@@ -467,12 +475,23 @@ export class ProgramsService {
         relations: ['panelists'],
       });
       const others = linked.filter((p) => p.id !== programId);
+      const othersToUpdate: Program[] = [];
+      const cacheKeysToDel: string[] = [];
+
       for (const other of others) {
         if (other.panelists) {
+          const originalLength = other.panelists.length;
           other.panelists = other.panelists.filter((p) => p.id !== panelistId);
-          await this.programsRepository.save(other);
-          await this.redisService.del([`programs:${other.id}`]);
+          if (other.panelists.length !== originalLength) {
+            othersToUpdate.push(other);
+            cacheKeysToDel.push(`programs:${other.id}`);
+          }
         }
+      }
+
+      if (othersToUpdate.length > 0) {
+        await this.programsRepository.save(othersToUpdate);
+        await this.redisService.del(cacheKeysToDel);
       }
     }
 
