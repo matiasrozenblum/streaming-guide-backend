@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner, TableColumn } from 'typeorm';
 
-export class AddIsVisibleToCategories1752000000001
-  implements MigrationInterface
-{
+export class AddIsVisibleToCategories1752000000001 implements MigrationInterface {
   name = 'AddIsVisibleToCategories1752000000001';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

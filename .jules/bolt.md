@@ -17,3 +17,7 @@
 ## 2026-08-18 - [Un PR por hallazgo, no uno por dia]
 **Learning:** Se acumularon 12 PRs abiertos que en realidad eran 3 cambios distintos: el mismo N+1 de `ProgramsService.createBulk` fue "descubierto" y re-parcheado 10 veces en dias consecutivos.
 **Action:** Antes de abrir un PR, revisar los PRs abiertos existentes. Si el hallazgo ya tiene un PR, no abrir otro. Ademas: nunca reformatear archivos no relacionados (varios PRs des-formateaban `src/migrations/*` a lineas largas, rompiendo prettier).
+
+## 2023-10-27 - [Batching Relational Updates to Prevent N+1 Overhead]
+**Learning:** In TypeORM, modifying linked or related entities within a loop and individually calling `repository.save()` and `redisService.del()` creates significant N+1 database query and Redis network overhead. Collecting the modified entities and cache keys into arrays and executing a single bulk `repository.save(entitiesArray)` and `redisService.del(keysArray)` outside the loop dramatically improves performance.
+**Action:** When propagating changes to multiple related entities, always collect the entities and cache keys first, and execute batched operations at the end of the process block.

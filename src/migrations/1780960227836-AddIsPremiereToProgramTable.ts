@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddIsPremiereToProgramTable1780960227836
-  implements MigrationInterface
-{
+export class AddIsPremiereToProgramTable1780960227836 implements MigrationInterface {
   name = 'AddIsPremiereToProgramTable1780960227836';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

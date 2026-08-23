@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddLinkGroupIdToPrograms1782250703030
-  implements MigrationInterface
-{
+export class AddLinkGroupIdToPrograms1782250703030 implements MigrationInterface {
   name = 'AddLinkGroupIdToPrograms1782250703030';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
