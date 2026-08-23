@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddMonthlyScheduleFields1779630918547
-  implements MigrationInterface
-{
+export class AddMonthlyScheduleFields1779630918547 implements MigrationInterface {
   name = 'AddMonthlyScheduleFields1779630918547';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

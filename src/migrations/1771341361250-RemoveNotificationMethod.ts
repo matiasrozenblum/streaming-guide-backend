@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class RemoveNotificationMethod1771341361250
-  implements MigrationInterface
-{
+export class RemoveNotificationMethod1771341361250 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Drop column from user_subscriptions if exists
     await queryRunner.query(
