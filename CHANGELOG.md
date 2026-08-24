@@ -5,6 +5,15 @@ Todas las modificaciones importantes de este proyecto se documentarán en este a
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/)
 y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
+## [1.43.1] - 2026-08-23
+
+### Fixed
+
+- **El refresh de tokens siempre fallaba con 400, dejando la sesión rota a los 7 días**: el parser JSON de Express corre en modo `strict` por defecto, que solo acepta objetos y arrays en el nivel superior. Los clientes mobile llaman a `POST /auth/refresh` con body `null` (el refresh token viaja en el header `Authorization`, así que no hay nada que enviar), y ese body se rechazaba con `400 Unexpected token 'n', "null" is not valid JSON` **antes de llegar al handler**. Resultado: ningún access token podía renovarse nunca, y toda sesión quedaba inutilizable al vencer (7 días después del login). El parser ahora usa `strict: false` — `null` es JSON válido — lo que además arregla todas las versiones de la app ya publicadas sin necesidad de un release.
+- **La grilla quedaba vacía para usuarios logueados con token vencido**: `OptionalJwtAuthGuard` rechazaba con 401 un token expirado o malformado, dejando al usuario autenticado en peor situación que al anónimo — este último cargaba la grilla sin problemas. Ahora degrada a anónimo y sirve igual la parte pública de la respuesta, perdiendo solo los campos personalizados (`subscribed`). Los endpoints que sí requieren usuario siguen usando `JwtAuthGuard`, que rechaza, así que los clientes se siguen enterando de que su token está vencido (`GET /users/me` corre en cada arranque) y el refresh se dispara normalmente.
+
+---
+
 ## [1.43.0] - 2026-08-18
 
 ### Performance
