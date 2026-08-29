@@ -33,6 +33,7 @@ describe('WeeklyOverridesService', () => {
 
   const mockRedisService = {
     get: jest.fn(),
+    mget: jest.fn().mockResolvedValue([]),
     set: jest.fn(),
     del: jest.fn(),
     delByPattern: jest.fn(),
@@ -549,13 +550,8 @@ describe('WeeklyOverridesService', () => {
         .mockReturnValue(mockStream);
 
       // Mock pipeline exec to return the override data
-      const mockPipeline = {
-        get: jest.fn().mockReturnThis(),
-        exec: jest.fn().mockResolvedValue([[null, JSON.stringify(override)]]),
-      };
-      jest
-        .spyOn(mockRedisService.client, 'pipeline')
-        .mockReturnValue(mockPipeline);
+      const mockResolvedValue = [override];
+      jest.spyOn(mockRedisService, 'mget').mockResolvedValue(mockResolvedValue);
 
       const result = await service.applyWeeklyOverrides(
         schedules,
@@ -587,13 +583,8 @@ describe('WeeklyOverridesService', () => {
         .mockReturnValue(mockStream);
 
       // Mock pipeline exec to return the override data
-      const mockPipeline = {
-        get: jest.fn().mockReturnThis(),
-        exec: jest.fn().mockResolvedValue([[null, JSON.stringify(override)]]),
-      };
-      jest
-        .spyOn(mockRedisService.client, 'pipeline')
-        .mockReturnValue(mockPipeline);
+      const mockResolvedValue = [override];
+      jest.spyOn(mockRedisService, 'mget').mockResolvedValue(mockResolvedValue);
 
       const result = await service.applyWeeklyOverrides(
         schedules,
@@ -643,13 +634,8 @@ describe('WeeklyOverridesService', () => {
         .mockReturnValue(mockStream);
 
       // Mock pipeline exec to return the override data
-      const mockPipeline = {
-        get: jest.fn().mockReturnThis(),
-        exec: jest.fn().mockResolvedValue([[null, JSON.stringify(override)]]),
-      };
-      jest
-        .spyOn(mockRedisService.client, 'pipeline')
-        .mockReturnValue(mockPipeline);
+      const mockResolvedValue = [override];
+      jest.spyOn(mockRedisService, 'mget').mockResolvedValue(mockResolvedValue);
 
       jest.spyOn(dataSource, 'query').mockResolvedValue([
         {
@@ -717,13 +703,8 @@ describe('WeeklyOverridesService', () => {
         .spyOn(mockRedisService.client, 'scanStream')
         .mockReturnValue(mockStream);
 
-      const mockPipeline = {
-        get: jest.fn().mockReturnThis(),
-        exec: jest.fn().mockResolvedValue([[null, JSON.stringify(override)]]),
-      };
-      jest
-        .spyOn(mockRedisService.client, 'pipeline')
-        .mockReturnValue(mockPipeline);
+      const mockResolvedValue = [override];
+      jest.spyOn(mockRedisService, 'mget').mockResolvedValue(mockResolvedValue);
 
       const result = await service.applyWeeklyOverrides(
         schedules,
@@ -764,13 +745,8 @@ describe('WeeklyOverridesService', () => {
         .spyOn(mockRedisService.client, 'scanStream')
         .mockReturnValue(mockStream);
 
-      const mockPipeline = {
-        get: jest.fn().mockReturnThis(),
-        exec: jest.fn().mockResolvedValue([[null, JSON.stringify(override)]]),
-      };
-      jest
-        .spyOn(mockRedisService.client, 'pipeline')
-        .mockReturnValue(mockPipeline);
+      const mockResolvedValue = [override];
+      jest.spyOn(mockRedisService, 'mget').mockResolvedValue(mockResolvedValue);
 
       const result = await service.applyWeeklyOverrides(
         schedules,
@@ -822,16 +798,8 @@ describe('WeeklyOverridesService', () => {
         .mockReturnValue(mockStream);
 
       // Mock pipeline exec to return both overrides
-      const mockPipeline = {
-        get: jest.fn().mockReturnThis(),
-        exec: jest.fn().mockResolvedValue([
-          [null, JSON.stringify(regularOverride)],
-          [null, JSON.stringify(createOverride)],
-        ]),
-      };
-      jest
-        .spyOn(mockRedisService.client, 'pipeline')
-        .mockReturnValue(mockPipeline);
+      const mockResolvedValue = [regularOverride, createOverride];
+      jest.spyOn(mockRedisService, 'mget').mockResolvedValue(mockResolvedValue);
 
       jest.spyOn(dataSource, 'query').mockResolvedValue([
         {
@@ -880,13 +848,8 @@ describe('WeeklyOverridesService', () => {
         .mockReturnValue(mockStream);
 
       // Mock pipeline exec to return the override data
-      const mockPipeline = {
-        get: jest.fn().mockReturnThis(),
-        exec: jest.fn().mockResolvedValue([[null, JSON.stringify(override)]]),
-      };
-      jest
-        .spyOn(mockRedisService.client, 'pipeline')
-        .mockReturnValue(mockPipeline);
+      const mockResolvedValue = [override];
+      jest.spyOn(mockRedisService, 'mget').mockResolvedValue(mockResolvedValue);
 
       const result = await service.applyWeeklyOverrides(
         schedules,
@@ -923,13 +886,8 @@ describe('WeeklyOverridesService', () => {
         .mockReturnValue(mockStream);
 
       // Mock pipeline exec to return the override data
-      const mockPipeline = {
-        get: jest.fn().mockReturnThis(),
-        exec: jest.fn().mockResolvedValue([[null, JSON.stringify(override)]]),
-      };
-      jest
-        .spyOn(mockRedisService.client, 'pipeline')
-        .mockReturnValue(mockPipeline);
+      const mockResolvedValue = [override];
+      jest.spyOn(mockRedisService, 'mget').mockResolvedValue(mockResolvedValue);
 
       const result = await service.applyWeeklyOverrides(
         schedules,
@@ -979,16 +937,8 @@ describe('WeeklyOverridesService', () => {
         .mockReturnValue(mockStream);
 
       // Mock pipeline exec to return both overrides
-      const mockPipeline = {
-        get: jest.fn().mockReturnThis(),
-        exec: jest.fn().mockResolvedValue([
-          [null, JSON.stringify(programOverride)],
-          [null, JSON.stringify(scheduleOverride)],
-        ]),
-      };
-      jest
-        .spyOn(mockRedisService.client, 'pipeline')
-        .mockReturnValue(mockPipeline);
+      const mockResolvedValue = [programOverride, scheduleOverride];
+      jest.spyOn(mockRedisService, 'mget').mockResolvedValue(mockResolvedValue);
 
       const result = await service.applyWeeklyOverrides(
         schedules,
@@ -1043,15 +993,8 @@ describe('WeeklyOverridesService', () => {
         .mockReturnValue(mockStream);
 
       // Mock pipeline exec to return the override data
-      const mockPipeline = {
-        get: jest.fn().mockReturnThis(),
-        exec: jest
-          .fn()
-          .mockResolvedValue([[null, JSON.stringify(expiredOverride)]]),
-      };
-      jest
-        .spyOn(mockRedisService.client, 'pipeline')
-        .mockReturnValue(mockPipeline);
+      const mockResolvedValue = [expiredOverride];
+      jest.spyOn(mockRedisService, 'mget').mockResolvedValue(mockResolvedValue);
 
       jest.spyOn(redisService, 'del').mockResolvedValue(undefined);
       jest.spyOn(redisService, 'delByPattern').mockResolvedValue(undefined);
@@ -1082,15 +1025,8 @@ describe('WeeklyOverridesService', () => {
         .mockReturnValue(mockStream);
 
       // Mock pipeline exec to return the override data
-      const mockPipeline = {
-        get: jest.fn().mockReturnThis(),
-        exec: jest
-          .fn()
-          .mockResolvedValue([[null, JSON.stringify(validOverride)]]),
-      };
-      jest
-        .spyOn(mockRedisService.client, 'pipeline')
-        .mockReturnValue(mockPipeline);
+      const mockResolvedValue = [validOverride];
+      jest.spyOn(mockRedisService, 'mget').mockResolvedValue(mockResolvedValue);
 
       jest.spyOn(redisService, 'del').mockResolvedValue(undefined);
 

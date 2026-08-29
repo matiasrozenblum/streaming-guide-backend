@@ -17,3 +17,7 @@
 ## 2026-08-18 - [Un PR por hallazgo, no uno por dia]
 **Learning:** Se acumularon 12 PRs abiertos que en realidad eran 3 cambios distintos: el mismo N+1 de `ProgramsService.createBulk` fue "descubierto" y re-parcheado 10 veces en dias consecutivos.
 **Action:** Antes de abrir un PR, revisar los PRs abiertos existentes. Si el hallazgo ya tiene un PR, no abrir otro. Ademas: nunca reformatear archivos no relacionados (varios PRs des-formateaban `src/migrations/*` a lineas largas, rompiendo prettier).
+
+## 2026-08-29 - [Eliminate raw Redis pipeline parsing overhead]
+**Learning:** Found multiple usages of `(this.redisService as any).client.pipeline()` in `WeeklyOverridesService` to fetch multiple keys. This anti-pattern requires bypassing TS safety, manually parsing JSON strings, and handling missing keys.
+**Action:** Always replace raw `pipeline.get()` + manual `JSON.parse` with the built-in `RedisService.mget<T>()`, which correctly handles generic types and parses JSON internally.
