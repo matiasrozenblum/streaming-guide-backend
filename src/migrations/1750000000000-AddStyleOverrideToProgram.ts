@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner, TableColumn } from 'typeorm';
 
-export class AddStyleOverrideToProgram1750000000000
-  implements MigrationInterface
-{
+export class AddStyleOverrideToProgram1750000000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.addColumn(
       'program',

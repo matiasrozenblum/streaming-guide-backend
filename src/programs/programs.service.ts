@@ -422,13 +422,25 @@ export class ProgramsService {
         relations: ['panelists'],
       });
       const others = linked.filter((p) => p.id !== programId);
+
+      const toUpdate: Program[] = [];
+      const redisKeysToDel: string[] = [];
+
       for (const other of others) {
         if (!other.panelists) other.panelists = [];
         if (!other.panelists.some((p) => p.id === panelistId)) {
           other.panelists.push(panelist);
-          await this.programsRepository.save(other);
-          await this.redisService.del([`programs:${other.id}`]);
+          toUpdate.push(other);
+          redisKeysToDel.push(`programs:${other.id}`);
         }
+      }
+
+      if (toUpdate.length > 0) {
+        // Optimize: Batch TypeORM save to prevent N+1 queries
+        await this.programsRepository.save(toUpdate);
+
+        // Optimize: Batch Redis cache invalidation
+        await this.redisService.del(redisKeysToDel);
       }
     }
 
@@ -467,12 +479,24 @@ export class ProgramsService {
         relations: ['panelists'],
       });
       const others = linked.filter((p) => p.id !== programId);
+
+      const toUpdate: Program[] = [];
+      const redisKeysToDel: string[] = [];
+
       for (const other of others) {
         if (other.panelists) {
           other.panelists = other.panelists.filter((p) => p.id !== panelistId);
-          await this.programsRepository.save(other);
-          await this.redisService.del([`programs:${other.id}`]);
+          toUpdate.push(other);
+          redisKeysToDel.push(`programs:${other.id}`);
         }
+      }
+
+      if (toUpdate.length > 0) {
+        // Optimize: Batch TypeORM save to prevent N+1 queries
+        await this.programsRepository.save(toUpdate);
+
+        // Optimize: Batch Redis cache invalidation
+        await this.redisService.del(redisKeysToDel);
       }
     }
 
