@@ -17,3 +17,7 @@
 ## 2026-08-18 - [Un PR por hallazgo, no uno por dia]
 **Learning:** Se acumularon 12 PRs abiertos que en realidad eran 3 cambios distintos: el mismo N+1 de `ProgramsService.createBulk` fue "descubierto" y re-parcheado 10 veces en dias consecutivos.
 **Action:** Antes de abrir un PR, revisar los PRs abiertos existentes. Si el hallazgo ya tiene un PR, no abrir otro. Ademas: nunca reformatear archivos no relacionados (varios PRs des-formateaban `src/migrations/*` a lineas largas, rompiendo prettier).
+
+## 2026-08-30 - [N+1 DB Query Avoidance in Program Panelist Modifications]
+**Learning:** Found N+1 query patterns inside the `addPanelist` and `removePanelist` methods of `ProgramsService`. For every linked program, it ran `await this.programsRepository.save(other)` and `await this.redisService.del(['programs:${other.id}'])`. This leads to poor performance.
+**Action:** Consolidate multiple iterative `.save` calls on individual entities into a single batch save using an array of entities, and batch invalidate Redis keys simultaneously using `this.redisService.del(redisKeysToDel)`.
