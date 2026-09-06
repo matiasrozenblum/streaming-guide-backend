@@ -176,6 +176,8 @@ export class StreamerSubscriptionService {
       url: liveUrl,
     };
 
+    const pushPromises: Promise<void>[] = [];
+
     for (const subscription of subscriptions) {
       const user = subscription.user;
 
@@ -184,29 +186,37 @@ export class StreamerSubscriptionService {
         for (const device of user.devices) {
           if (device.pushSubscriptions && device.pushSubscriptions.length > 0) {
             for (const pushSub of device.pushSubscriptions) {
-              try {
-                // The device relation is not loaded on the inverse side here,
-                // which is why sendNotification used to log "device unknown"
-                // for every streamer push. Attach it so sends are traceable.
-                pushSub.device = pushSub.device ?? device;
-                await this.pushService.sendNotification(pushSub, {
-                  title,
-                  options: {
-                    body,
-                    icon,
-                  },
-                  data: notificationData,
-                });
-              } catch (error) {
-                this.logger.error(
-                  `Failed to send push notification to user ${user.id}`,
-                  error,
-                );
-              }
+              pushPromises.push(
+                (async () => {
+                  try {
+                    // The device relation is not loaded on the inverse side here,
+                    // which is why sendNotification used to log "device unknown"
+                    // for every streamer push. Attach it so sends are traceable.
+                    pushSub.device = pushSub.device ?? device;
+                    await this.pushService.sendNotification(pushSub, {
+                      title,
+                      options: {
+                        body,
+                        icon,
+                      },
+                      data: notificationData,
+                    });
+                  } catch (error) {
+                    this.logger.error(
+                      `Failed to send push notification to user ${user.id}`,
+                      error,
+                    );
+                  }
+                })(),
+              );
             }
           }
         }
       }
+    }
+
+    if (pushPromises.length > 0) {
+      await Promise.allSettled(pushPromises);
     }
 
     this.logger.log(
