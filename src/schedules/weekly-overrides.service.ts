@@ -1021,26 +1021,22 @@ export class WeeklyOverridesService {
       keys.push(...keyChunk);
     }
 
-    // OPTIMIZATION: Use Redis pipeline to fetch all overrides in one round trip
+    // OPTIMIZATION: Use mget to fetch all overrides in one round trip
     if (keys.length > 0) {
-      const pipeline = (this.redisService as any).client.pipeline();
-      keys.forEach((key) => pipeline.get(key));
-      const results = await pipeline.exec();
+      const results = await this.redisService.mget<WeeklyOverride>(keys);
 
-      // Process pipeline results and migrate if needed
+      // Process results and migrate if needed
       for (let i = 0; i < results.length; i++) {
-        const result = results[i];
-        if (result[0] === null && result[1]) {
-          // No error and has data
+        const override = results[i];
+        if (override) {
           try {
-            const override = JSON.parse(result[1]);
             // Migrate override to new structure if needed
             const migratedOverride =
               await this.migrateOverrideToNewStructure(override);
             overrides.push(migratedOverride);
           } catch (error) {
             this.logger.warn(
-              `[WEEKLY-OVERRIDES] Failed to parse override ${keys[i]}:`,
+              `[WEEKLY-OVERRIDES] Failed to process override ${keys[i]}:`,
               error,
             );
           }
@@ -1398,22 +1394,17 @@ export class WeeklyOverridesService {
     const now = this.dayjs().tz('America/Argentina/Buenos_Aires');
     let cleaned = 0;
 
-    // OPTIMIZATION: Use Redis pipeline to fetch all overrides in one round trip
+    // OPTIMIZATION: Use mget to fetch all overrides in one round trip
     if (keys.length > 0) {
-      const pipeline = (this.redisService as any).client.pipeline();
-      keys.forEach((key) => pipeline.get(key));
-      const results = await pipeline.exec();
+      const results = await this.redisService.mget<WeeklyOverride>(keys);
 
       const expiredKeys: string[] = [];
 
-      // Process pipeline results
-      results.forEach((result, index) => {
-        if (result[0] === null && result[1]) {
-          // No error and has data
+      // Process results
+      results.forEach((override, index) => {
+        if (override) {
           try {
-            const override = JSON.parse(result[1]);
             if (
-              override &&
               this.dayjs(override.expiresAt)
                 .tz('America/Argentina/Buenos_Aires')
                 .isBefore(now)
@@ -1422,7 +1413,7 @@ export class WeeklyOverridesService {
             }
           } catch (error) {
             this.logger.warn(
-              `[WEEKLY-OVERRIDES] Failed to parse override ${keys[index]} for cleanup:`,
+              `[WEEKLY-OVERRIDES] Failed to process override ${keys[index]} for cleanup:`,
               error,
             );
           }
@@ -1631,25 +1622,18 @@ export class WeeklyOverridesService {
 
     if (keys.length === 0) return 0;
 
-    // Batch GET all override values in a single pipeline round-trip
-    const pipeline = (this.redisService as any).client.pipeline();
-    keys.forEach((key) => pipeline.get(key));
-    const results = await pipeline.exec();
+    // Batch GET all override values in a single round-trip using mget
+    const results = await this.redisService.mget<WeeklyOverride>(keys);
 
     // Identify matching keys in-memory (no extra Redis round-trips)
     const keysToDelete: string[] = [];
-    results.forEach((result: [Error | null, string | null], i: number) => {
-      if (result[0] === null && result[1]) {
-        try {
-          const override: WeeklyOverride = JSON.parse(result[1]);
-          if (
-            (override.programId && override.programId === programId) ||
-            (override.scheduleId && scheduleIds.includes(override.scheduleId))
-          ) {
-            keysToDelete.push(keys[i]);
-          }
-        } catch {
-          // malformed key — skip
+    results.forEach((override: WeeklyOverride | null, i: number) => {
+      if (override) {
+        if (
+          (override.programId && override.programId === programId) ||
+          (override.scheduleId && scheduleIds.includes(override.scheduleId))
+        ) {
+          keysToDelete.push(keys[i]);
         }
       }
     });
