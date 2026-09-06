@@ -19,6 +19,7 @@ describe('ProgramsService', () => {
   let panelistRepository: Partial<Repository<Panelist>>;
   let channelRepository: Partial<Repository<Channel>>;
   let weeklyOverridesService: { deleteOverridesForProgram: jest.Mock };
+  let mockQueryBuilder: any;
   let notifyUtil: NotifyAndRevalidateUtil;
 
   const mockChannel = {
@@ -89,7 +90,7 @@ describe('ProgramsService', () => {
   beforeEach(async () => {
     let queryId: number | null = null;
 
-    const mockQueryBuilder = {
+    mockQueryBuilder = {
       leftJoinAndSelect: jest.fn().mockReturnThis(),
       where: jest.fn().mockImplementation((condition, params) => {
         if (params?.id) {
@@ -379,5 +380,100 @@ describe('ProgramsService', () => {
     ).toHaveBeenCalledWith(1, [10, 11]);
     expect(programRepository.delete).toHaveBeenCalledWith(1);
     expect(spy).toHaveBeenCalled();
+  });
+
+  describe('panelist propagation to linked programs', () => {
+    const panelist = { id: 7, name: 'Panelista' };
+
+    const linkedProgram = (id: number, panelists: any[]) => ({
+      ...mockProgramWithChannel,
+      id,
+      link_group_id: 'group-1',
+      panelists,
+    });
+
+    beforeEach(() => {
+      jest
+        .spyOn(service['notifyUtil'], 'notifyAndRevalidate')
+        .mockResolvedValue(undefined as any);
+    });
+
+    it('addPanelist batches the linked saves and cache deletions into one call each', async () => {
+      const source = linkedProgram(1, []);
+      const other2 = linkedProgram(2, []);
+      const other3 = linkedProgram(3, []);
+      mockQueryBuilder.getOne.mockResolvedValueOnce(source);
+      (panelistRepository.findOne as jest.Mock).mockResolvedValueOnce(panelist);
+      (programRepository.find as jest.Mock).mockResolvedValueOnce([
+        source,
+        other2,
+        other3,
+      ]);
+
+      await service.addPanelist(1, 7);
+
+      // 1 save for the source program + 1 batched save for the linked ones
+      expect(programRepository.save).toHaveBeenCalledTimes(2);
+      expect(programRepository.save).toHaveBeenLastCalledWith([other2, other3]);
+      expect(other2.panelists).toContain(panelist);
+      expect(other3.panelists).toContain(panelist);
+
+      const redis = service['redisService'];
+      expect(redis.del).toHaveBeenCalledWith(['programs:2', 'programs:3']);
+    });
+
+    it('addPanelist skips linked programs that already have the panelist', async () => {
+      const source = linkedProgram(1, []);
+      const alreadyHasIt = linkedProgram(2, [panelist]);
+      mockQueryBuilder.getOne.mockResolvedValueOnce(source);
+      (panelistRepository.findOne as jest.Mock).mockResolvedValueOnce(panelist);
+      (programRepository.find as jest.Mock).mockResolvedValueOnce([
+        source,
+        alreadyHasIt,
+      ]);
+
+      await service.addPanelist(1, 7);
+
+      // only the source program is saved; nothing to propagate
+      expect(programRepository.save).toHaveBeenCalledTimes(1);
+      const redis = service['redisService'];
+      expect(redis.del).not.toHaveBeenCalledWith(['programs:2']);
+    });
+
+    it('removePanelist only saves and invalidates the linked programs that changed', async () => {
+      const source = linkedProgram(1, [panelist]);
+      const hadPanelist = linkedProgram(2, [panelist]);
+      const untouched = linkedProgram(3, [{ id: 99, name: 'Otro' }]);
+      mockQueryBuilder.getOne.mockResolvedValueOnce(source);
+      (programRepository.find as jest.Mock).mockResolvedValueOnce([
+        source,
+        hadPanelist,
+        untouched,
+      ]);
+
+      await service.removePanelist(1, 7);
+
+      expect(programRepository.save).toHaveBeenCalledTimes(2);
+      expect(programRepository.save).toHaveBeenLastCalledWith([hadPanelist]);
+      expect(hadPanelist.panelists).toEqual([]);
+
+      const redis = service['redisService'];
+      expect(redis.del).toHaveBeenCalledWith(['programs:2']);
+      expect(redis.del).not.toHaveBeenCalledWith(['programs:3']);
+    });
+
+    it('does not touch linked programs when the program has no link_group_id', async () => {
+      mockQueryBuilder.getOne.mockResolvedValueOnce({
+        ...mockProgramWithChannel,
+        link_group_id: null,
+        panelists: [],
+      });
+      (panelistRepository.findOne as jest.Mock).mockResolvedValueOnce(panelist);
+
+      await service.addPanelist(1, 7);
+
+      expect(programRepository.find).not.toHaveBeenCalled();
+      expect(programRepository.save).toHaveBeenCalledTimes(1);
+    });
   });
 });

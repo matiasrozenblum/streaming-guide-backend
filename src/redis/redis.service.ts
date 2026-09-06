@@ -81,7 +81,17 @@ export class RedisService implements OnModuleInit {
   async mget<T>(keys: string[]): Promise<(T | null)[]> {
     if (keys.length === 0) return [];
     const values = await this.client.mget(...keys);
-    return values.map((v) => (v ? JSON.parse(v) : null));
+    return values.map((v, i) => {
+      if (!v) return null;
+      try {
+        return JSON.parse(v) as T;
+      } catch {
+        // Un valor corrupto no puede tumbar el batch entero: los callers
+        // ya tratan null como "no esta cacheado" y recalculan.
+        console.warn(`[REDIS] Valor no parseable en ${keys[i]}, se ignora`);
+        return null;
+      }
+    });
   }
 
   async del(key: string | string[]): Promise<void> {

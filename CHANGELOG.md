@@ -5,6 +5,33 @@ Todas las modificaciones importantes de este proyecto se documentarán en este a
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/)
 y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
+## [1.44.0] - 2026-09-06
+
+### Performance
+
+- **N+1 de DB y Redis al propagar panelistas a programas linkeados**: `ProgramsService.addPanelist` y `removePanelist` recorrian los programas del mismo `link_group_id` con un `save()` y un `del()` de Redis por iteracion, asi que agregar un panelista a un programa emitido en N canales disparaba N escrituras y N invalidaciones secuenciales. Se acumulan las entidades modificadas y se ejecuta un unico `save(array)` y un unico `del(keys)`. Efecto lateral: el batch corre en una sola transaccion, de modo que un fallo a mitad de camino ya no deja la mitad de los programas linkeados actualizados y la otra mitad no.
+- **Push notifications de streamers en paralelo**: `StreamerSubscriptionService.notifySubscribers` mandaba cada push con `await` dentro de un triple loop (suscripciones → devices → push subscriptions), serializando una llamada de red por cada una. Cuando un streamer con muchos suscriptores arranca stream, el cron quedaba bloqueado el tiempo acumulado de todos los envios. Pasan a dispararse en paralelo con `Promise.allSettled`, cada una con su propio `try/catch` para que un endpoint caido no corte al resto — el mismo patron que `PushService.sendNotificationToDevices` ya usaba para las notificaciones de programas.
+
+### Changed
+
+- **`WeeklyOverridesService` deja de usar el cliente crudo de Redis**: tres metodos leian N claves armando `(this.redisService as any).client.pipeline()` a mano, con parseo de JSON propio y manejo de tuplas `[error, value]`. Pasan a `RedisService.mget<WeeklyOverride>()`, que ya hace exactamente eso con tipado real. Son 76 lineas menos y se elimina el cast a `any` que esquivaba el chequeo de tipos.
+
+### Fixed
+
+- **`removePanelist` invalidaba cache de programas que no habia tocado**: guardaba y borraba la clave `programs:<id>` de todos los programas del `link_group_id`, tuvieran o no al panelista que se estaba quitando. Ahora solo se persiste e invalida el que realmente cambio.
+- **Un valor corrupto en Redis tumbaba un batch entero de lecturas**: `RedisService.mget` hacia `JSON.parse` dentro de un `map` sin proteccion, asi que una sola clave con contenido malformado hacia fallar la lectura completa y con ella la request. El codigo que usaba pipelines crudos atrapaba el error por clave y salteaba solo esa; al migrar a `mget` esa tolerancia se hubiera perdido. Ahora `mget` devuelve `null` para la clave rota y loguea un warning, que es lo que los callers ya interpretan como "no esta cacheado" para recalcular.
+
+---
+
+## [1.43.1] - 2026-08-23
+
+### Fixed
+
+- **El refresh de tokens siempre fallaba con 400, dejando la sesión rota a los 7 días**: el parser JSON de Express corre en modo `strict` por defecto, que solo acepta objetos y arrays en el nivel superior. Los clientes mobile llaman a `POST /auth/refresh` con body `null` (el refresh token viaja en el header `Authorization`, así que no hay nada que enviar), y ese body se rechazaba con `400 Unexpected token 'n', "null" is not valid JSON` **antes de llegar al handler**. Resultado: ningún access token podía renovarse nunca, y toda sesión quedaba inutilizable al vencer (7 días después del login). El parser ahora usa `strict: false` — `null` es JSON válido — lo que además arregla todas las versiones de la app ya publicadas sin necesidad de un release.
+- **La grilla quedaba vacía para usuarios logueados con token vencido**: `OptionalJwtAuthGuard` rechazaba con 401 un token expirado o malformado, dejando al usuario autenticado en peor situación que al anónimo — este último cargaba la grilla sin problemas. Ahora degrada a anónimo y sirve igual la parte pública de la respuesta, perdiendo solo los campos personalizados (`subscribed`). Los endpoints que sí requieren usuario siguen usando `JwtAuthGuard`, que rechaza, así que los clientes se siguen enterando de que su token está vencido (`GET /users/me` corre en cada arranque) y el refresh se dispara normalmente.
+
+---
+
 ## [1.43.0] - 2026-08-18
 
 ### Performance

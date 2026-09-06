@@ -17,3 +17,19 @@
 ## 2026-08-18 - [Un PR por hallazgo, no uno por dia]
 **Learning:** Se acumularon 12 PRs abiertos que en realidad eran 3 cambios distintos: el mismo N+1 de `ProgramsService.createBulk` fue "descubierto" y re-parcheado 10 veces en dias consecutivos.
 **Action:** Antes de abrir un PR, revisar los PRs abiertos existentes. Si el hallazgo ya tiene un PR, no abrir otro. Ademas: nunca reformatear archivos no relacionados (varios PRs des-formateaban `src/migrations/*` a lineas largas, rompiendo prettier).
+
+## 2026-09-06 - [Otra vez cuatro PRs para el mismo hallazgo]
+**Learning:** De los 6 PRs abiertos (#406-#411), #406/#408 y #407/#410 eran el mismo cambio en `ProgramsService.addPanelist/removePanelist` re-descubierto cuatro veces. Ademas #407 y #410 volvieron a reformatear `src/migrations/*` a lineas largas, rompiendo prettier y el job `lint` - exactamente lo que ya estaba anotado en la entrada del 2026-08-18. Las fechas de las entradas tambien salieron mal (2023-10-27, 2024-05-30).
+**Action:** Antes de abrir un PR: (1) `gh pr list` y comparar el diff con lo ya abierto; (2) correr `npm run lint:ci` y no commitear archivos fuera del alcance del hallazgo - `npm run lint` corre con `--fix` sobre todo el repo; (3) fechar la entrada con la fecha real de hoy.
+
+## 2026-09-06 - [Batch de saves y del en propagacion de panelistas]
+**Learning:** `ProgramsService.addPanelist` y `removePanelist` propagaban el cambio a los programas del mismo `link_group_id` con un `save()` y un `del()` por iteracion (N+1 de DB y de Redis). `removePanelist` ademas guardaba e invalidaba cache de programas que no habian cambiado.
+**Action:** Acumular las entidades modificadas en un array y hacer un unico `repository.save(array)` + un unico `redisService.del(keys)` fuera del loop, y solo encolar la entidad si realmente cambio (comparar longitud antes/despues del filter).
+
+## 2026-09-06 - [mget tipado en vez de pipeline crudo]
+**Learning:** `WeeklyOverridesService` usaba `(this.redisService as any).client.pipeline()` en tres lugares para leer N claves, con parseo manual de JSON y manejo de tuplas `[err, value]`. El cast a `any` esquivaba el tipado y duplicaba logica que `RedisService.mget<T>()` ya provee.
+**Action:** Usar `redisService.mget<T>(keys)`, que devuelve `(T | null)[]` en el mismo orden. Al migrar, `mget` quedo con `JSON.parse` tolerante por clave: antes un valor corrupto solo salteaba esa clave y ahora no debe tumbar el batch entero.
+
+## 2026-09-06 - [Push concurrente en StreamerSubscriptionService]
+**Learning:** `notifySubscribers` mandaba las push notifications con `await` dentro de un triple loop, serializando una llamada de red por suscripcion. `PushService.sendNotificationToDevices` ya resolvia esto con IIAFEs + `Promise.all`.
+**Action:** Encolar cada envio como funcion async auto-invocada con su propio try/catch y esperar todo con `Promise.allSettled`, siguiendo el patron que ya existia en `push.service.ts`.

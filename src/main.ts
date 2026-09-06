@@ -3,9 +3,20 @@ import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { ValidationPipe } from '@nestjs/common';
+import { json, urlencoded } from 'express';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // Body parsing is configured explicitly so that `strict: false` applies.
+  // Express's default JSON parser is strict: it only accepts objects and arrays
+  // at the top level, so a body of `null` is rejected with a 400 before ever
+  // reaching a handler. Mobile clients call POST /auth/refresh with a null body
+  // (the refresh token travels in the Authorization header, so there is nothing
+  // to send), which made every token refresh fail — and with it, every logged-in
+  // session once its access token expired. `null` is valid JSON; treating it as
+  // such costs nothing and keeps already-released clients working.
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+  app.use(json({ strict: false, limit: '10mb' }));
+  app.use(urlencoded({ extended: true, limit: '10mb' }));
   const _configService = app.get(ConfigService);
 
   const config = new DocumentBuilder()
