@@ -3,10 +3,12 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AnalyticsEvent } from './entities/analytics-event.entity';
 import { AnalyticsDailyProgram } from './entities/analytics-daily-program.entity';
 import { AnalyticsDailyChannel } from './entities/analytics-daily-channel.entity';
+import { AnalyticsDailyStreamer } from './entities/analytics-daily-streamer.entity';
 import { AnalyticsDailyUser } from './entities/analytics-daily-user.entity';
 import { AnalyticsDailyTotals } from './entities/analytics-daily-totals.entity';
 import { Program } from '../programs/programs.entity';
 import { Channel } from '../channels/channels.entity';
+import { Streamer } from '../streamers/streamers.entity';
 import { AnalyticsIngestController } from './ingest/analytics-ingest.controller';
 import { AnalyticsIngestService } from './ingest/analytics-ingest.service';
 import { AnalyticsRollupService } from './rollup/analytics-rollup.service';
@@ -30,10 +32,12 @@ import { SentryModule } from '../sentry/sentry.module';
       AnalyticsEvent,
       AnalyticsDailyProgram,
       AnalyticsDailyChannel,
+      AnalyticsDailyStreamer,
       AnalyticsDailyUser,
       AnalyticsDailyTotals,
       Program,
       Channel,
+      Streamer,
     ]),
     RedisModule,
     SentryModule,

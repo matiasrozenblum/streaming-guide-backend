@@ -11,6 +11,12 @@ import { Granularity } from '../dto/analytics-query.dto';
  */
 export const DEFAULT_METRIC = 'click_youtube_live';
 
+/**
+ * Streamers have no live-click event of their own — the equivalent action is
+ * following the link out to their Twitch/Kick/YouTube channel.
+ */
+export const DEFAULT_STREAMER_METRIC = 'streamer_service_click';
+
 export interface OverviewTile {
   metric: string;
   value: number;
@@ -29,6 +35,9 @@ export interface RankingRow {
   position: number;
   program_id?: number;
   program_name?: string;
+  streamer_id?: number;
+  streamer_name?: string;
+  streamer_logo_url?: string | null;
   channel_id: number | null;
   channel_name: string | null;
   channel_logo_url: string | null;
@@ -331,6 +340,76 @@ export class AnalyticsAdminService {
       channel_name: string;
       channel_logo_url: string | null;
       channel_background_color: string | null;
+      value: string;
+      unique_users: string;
+    }>;
+  }
+
+  /**
+   * Top streamers for the range. Streamers have no channel, so the branding
+   * fields carry the streamer's own logo instead.
+   */
+  async getStreamerRanking(
+    from: string,
+    to: string,
+    metric: string = DEFAULT_STREAMER_METRIC,
+    limit = 10,
+  ): Promise<RankingRow[]> {
+    const previous = this.previousRange(from, to);
+
+    const [current, prior] = await Promise.all([
+      this.rankStreamers(from, to, metric, limit),
+      this.rankStreamers(previous.from, previous.to, metric, limit * 5),
+    ]);
+
+    const priorPositions = new Map(
+      prior.map((row, index) => [row.streamer_id, index + 1]),
+    );
+
+    return current.map((row, index) => ({
+      position: index + 1,
+      streamer_id: row.streamer_id,
+      streamer_name: row.streamer_name,
+      streamer_logo_url: row.streamer_logo_url,
+      channel_id: null,
+      channel_name: null,
+      channel_logo_url: null,
+      channel_background_color: null,
+      value: Number(row.value),
+      unique_users: Number(row.unique_users),
+      previous_position: priorPositions.get(row.streamer_id) ?? null,
+    }));
+  }
+
+  private async rankStreamers(
+    from: string,
+    to: string,
+    metric: string,
+    limit: number,
+  ) {
+    const rows = await this.programRepository.manager
+      .createQueryBuilder()
+      .select('s.streamer_id', 'streamer_id')
+      .addSelect('st.name', 'streamer_name')
+      .addSelect('st.logo_url', 'streamer_logo_url')
+      .addSelect('SUM(s.count)', 'value')
+      .addSelect('SUM(s.unique_users)', 'unique_users')
+      .from('analytics_daily_streamer', 's')
+      .innerJoin('streamer', 'st', 'st.id = s.streamer_id')
+      .where('s.date BETWEEN :from AND :to', { from, to })
+      .andWhere('s.event_name = :metric', { metric })
+      .groupBy('s.streamer_id')
+      .addGroupBy('st.name')
+      .addGroupBy('st.logo_url')
+      .orderBy('SUM(s.count)', 'DESC')
+      .addOrderBy('st.name', 'ASC')
+      .limit(limit)
+      .getRawMany();
+
+    return rows as Array<{
+      streamer_id: number;
+      streamer_name: string;
+      streamer_logo_url: string | null;
       value: string;
       unique_users: string;
     }>;

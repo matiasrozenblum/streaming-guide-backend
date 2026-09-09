@@ -39,6 +39,10 @@ export class IngestEventDto {
   @IsInt()
   channel_id?: number;
 
+  @IsOptional()
+  @IsInt()
+  streamer_id?: number;
+
   /**
    * Name fallbacks for clients that predate id-tagged events — notably mobile
    * builds already in the wild, which only ever sent program_name/channel_name.
@@ -54,6 +58,11 @@ export class IngestEventDto {
   @IsString()
   @MaxLength(255)
   channel_name?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  streamer_name?: string;
 
   @IsOptional()
   @IsObject()

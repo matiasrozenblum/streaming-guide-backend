@@ -4,6 +4,7 @@ import { AnalyticsIngestService } from './analytics-ingest.service';
 import { AnalyticsEvent } from '../entities/analytics-event.entity';
 import { Program } from '../../programs/programs.entity';
 import { Channel } from '../../channels/channels.entity';
+import { Streamer } from '../../streamers/streamers.entity';
 import { RedisService } from '../../redis/redis.service';
 import { SentryService } from '../../sentry/sentry.service';
 import { IngestEventsDto, IngestPlatform } from '../dto/ingest-events.dto';
@@ -75,6 +76,10 @@ describe('AnalyticsIngestService', () => {
         },
         {
           provide: getRepositoryToken(Channel),
+          useValue: { find: jest.fn().mockResolvedValue([]) },
+        },
+        {
+          provide: getRepositoryToken(Streamer),
           useValue: { find: jest.fn().mockResolvedValue([]) },
         },
         { provide: RedisService, useValue: redisService },
@@ -237,6 +242,41 @@ describe('AnalyticsIngestService', () => {
       expect(await service.flush()).toBe(2);
       expect(insertBuilder.execute).toHaveBeenCalledTimes(1);
       expect(insertBuilder.values.mock.calls[0][0]).toHaveLength(2);
+    });
+
+    it('resolves a streamer sent by name, as older clients do', async () => {
+      const streamerRepo = { find: jest.fn().mockResolvedValue([]) };
+      const buffered = JSON.stringify({
+        event_name: 'streamer_service_click',
+        occurred_at: new Date().toISOString(),
+        platform: 'web',
+        app_version: null,
+        user_id: null,
+        device_id: 'd',
+        session_id: 's',
+        program_id: null,
+        channel_id: null,
+        streamer_id: null,
+        program_name: null,
+        channel_name: null,
+        streamer_name: 'Coscu',
+        user_gender: null,
+        user_age_group: null,
+        properties: {},
+      });
+      streamerRepo.find.mockResolvedValue([{ id: 9, name: 'Coscu' }]);
+      // El servicio ya se construyo con otro doble, asi que se reemplaza el mapa
+      // cacheado que lee de Redis por el resultado de la consulta.
+      redisService.get.mockResolvedValue(null);
+      (service as any).streamerRepository = streamerRepo;
+
+      redisClient.lpop
+        .mockResolvedValueOnce([buffered])
+        .mockResolvedValueOnce(null);
+
+      await service.flush();
+
+      expect(insertBuilder.values.mock.calls[0][0][0].streamer_id).toBe(9);
     });
 
     it('skips a corrupt entry without losing the rest of the chunk', async () => {

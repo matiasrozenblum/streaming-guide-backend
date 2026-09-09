@@ -16,6 +16,7 @@ import { Roles } from '../../auth/roles.decorator';
 import {
   AnalyticsAdminService,
   DEFAULT_METRIC,
+  DEFAULT_STREAMER_METRIC,
 } from './analytics-admin.service';
 import { AnalyticsRollupService } from '../rollup/analytics-rollup.service';
 import {
@@ -77,6 +78,17 @@ export class AnalyticsAdminController {
       query.from,
       query.to,
       query.metric ?? DEFAULT_METRIC,
+      query.limit ?? 10,
+    );
+  }
+
+  @Get('rankings/streamers')
+  @ApiOperation({ summary: 'Top streamers, with logo and movement' })
+  async getStreamerRanking(@Query() query: RankingQueryDto) {
+    return this.adminService.getStreamerRanking(
+      query.from,
+      query.to,
+      query.metric ?? DEFAULT_STREAMER_METRIC,
       query.limit ?? 10,
     );
   }

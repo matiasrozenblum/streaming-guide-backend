@@ -9,6 +9,7 @@ import {
 import { User } from '../../users/users.entity';
 import { Program } from '../../programs/programs.entity';
 import { Channel } from '../../channels/channels.entity';
+import { Streamer } from '../../streamers/streamers.entity';
 
 export type AnalyticsPlatform = 'web' | 'ios' | 'android';
 
@@ -29,6 +30,7 @@ export type AnalyticsPlatform = 'web' | 'ios' | 'android';
 @Index(['event_name', 'occurred_at'])
 @Index(['program_id', 'occurred_at'])
 @Index(['channel_id', 'occurred_at'])
+@Index(['streamer_id', 'occurred_at'])
 @Index(['user_id', 'occurred_at'])
 @Index(['device_id', 'occurred_at'])
 export class AnalyticsEvent {
@@ -84,6 +86,13 @@ export class AnalyticsEvent {
   @ManyToOne(() => Channel, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'channel_id' })
   channel: Channel | null;
+
+  @Column({ type: 'int', nullable: true })
+  streamer_id: number | null;
+
+  @ManyToOne(() => Streamer, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'streamer_id' })
+  streamer: Streamer | null;
 
   @Column({ type: 'varchar', length: 24, nullable: true })
   user_gender: string | null;

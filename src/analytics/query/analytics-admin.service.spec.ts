@@ -328,6 +328,61 @@ describe('AnalyticsAdminService', () => {
     });
   });
 
+  describe('getStreamerRanking', () => {
+    const row = (id: number, name: string, value: string) => ({
+      streamer_id: id,
+      streamer_name: name,
+      streamer_logo_url: 'logo.png',
+      value,
+      unique_users: '4',
+    });
+
+    it('carries the streamer logo instead of channel branding', async () => {
+      queue.push([row(1, 'Coscu', '80')], []);
+
+      const result = await service.getStreamerRanking(
+        '2026-09-01',
+        '2026-09-07',
+      );
+
+      expect(result[0]).toMatchObject({
+        position: 1,
+        streamer_name: 'Coscu',
+        streamer_logo_url: 'logo.png',
+        channel_id: null,
+        channel_name: null,
+      });
+    });
+
+    it('defaults to the streamer click metric, not the live-click one', async () => {
+      queue.push([], []);
+
+      await service.getStreamerRanking('2026-09-01', '2026-09-07');
+
+      const metricFilter = programBuilder.state.wheres.find(([sql]) =>
+        sql.includes('event_name'),
+      );
+      expect(metricFilter?.[1]).toMatchObject({
+        metric: 'streamer_service_click',
+      });
+    });
+
+    it('resolves movement against the prior window', async () => {
+      queue.push(
+        [row(1, 'A', '100'), row(2, 'B', '50')],
+        [row(2, 'B', '90'), row(1, 'A', '10')],
+      );
+
+      const result = await service.getStreamerRanking(
+        '2026-09-01',
+        '2026-09-07',
+      );
+
+      expect(result[0]).toMatchObject({ position: 1, previous_position: 2 });
+      expect(result[1]).toMatchObject({ position: 2, previous_position: 1 });
+    });
+  });
+
   describe('getProgramTrend', () => {
     it('scopes the series to the requested program', async () => {
       queue.push([]);
