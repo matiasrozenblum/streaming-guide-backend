@@ -78,3 +78,11 @@ export class RecapQueryDto {
   @Matches(ISO_DATE, { message: 'date must be YYYY-MM-DD' })
   date?: string;
 }
+
+export class RollupRangeDto {
+  @Matches(ISO_DATE, { message: 'from must be YYYY-MM-DD' })
+  from: string;
+
+  @Matches(ISO_DATE, { message: 'to must be YYYY-MM-DD' })
+  to: string;
+}
