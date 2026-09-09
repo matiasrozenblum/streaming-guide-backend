@@ -65,6 +65,41 @@ describe('Analytics controller access control', () => {
     });
   });
 
+  describe('rollup endpoint', () => {
+    const controller = () =>
+      new AnalyticsAdminController(
+        {} as never,
+        { backfill: jest.fn().mockResolvedValue(3) } as never,
+      );
+
+    it('rejects an inverted range', async () => {
+      await expect(
+        controller().runRollup({ from: '2026-09-10', to: '2026-09-01' }),
+      ).rejects.toThrow('from must not be after to');
+    });
+
+    it('rejects a range long enough to starve the request path', async () => {
+      await expect(
+        controller().runRollup({ from: '2024-01-01', to: '2026-09-01' }),
+      ).rejects.toThrow(/370/);
+    });
+
+    it('accepts a single day', async () => {
+      await expect(
+        controller().runRollup({ from: '2026-09-01', to: '2026-09-01' }),
+      ).resolves.toMatchObject({ days_processed: 3 });
+    });
+
+    it('delegates the range to the rollup service', async () => {
+      const rollup = { backfill: jest.fn().mockResolvedValue(2) };
+      const c = new AnalyticsAdminController({} as never, rollup as never);
+
+      await c.runRollup({ from: '2026-09-01', to: '2026-09-02' });
+
+      expect(rollup.backfill).toHaveBeenCalledWith('2026-09-01', '2026-09-02');
+    });
+  });
+
   describe('AnalyticsRecapController', () => {
     it('requires a real session', () => {
       expect(guardsOf(AnalyticsRecapController)).toEqual([JwtAuthGuard]);

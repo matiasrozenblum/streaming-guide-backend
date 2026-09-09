@@ -1,10 +1,13 @@
 import {
   Controller,
   Get,
+  Post,
+  Body,
   Query,
   Param,
   UseGuards,
   ParseIntPipe,
+  BadRequestException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -14,11 +17,13 @@ import {
   AnalyticsAdminService,
   DEFAULT_METRIC,
 } from './analytics-admin.service';
+import { AnalyticsRollupService } from '../rollup/analytics-rollup.service';
 import {
   DateRangeDto,
   TrendQueryDto,
   RankingQueryDto,
   ProgramTrendQueryDto,
+  RollupRangeDto,
   Granularity,
 } from '../dto/analytics-query.dto';
 
@@ -27,7 +32,10 @@ import {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('admin')
 export class AnalyticsAdminController {
-  constructor(private readonly adminService: AnalyticsAdminService) {}
+  constructor(
+    private readonly adminService: AnalyticsAdminService,
+    private readonly rollupService: AnalyticsRollupService,
+  ) {}
 
   @Get('overview')
   @ApiOperation({
@@ -92,5 +100,36 @@ export class AnalyticsAdminController {
   @ApiOperation({ summary: 'Event names that have recorded data' })
   async getEventNames() {
     return this.adminService.getEventNames();
+  }
+
+  /**
+   * Recompute the daily rollups for a date range, on demand.
+   *
+   * The nightly cron covers normal operation, but three cases need this:
+   * seeding history after a bulk import, re-deriving everything when the
+   * aggregation logic changes, and checking on a fresh environment without
+   * waiting until 03:15. Safe to call repeatedly — each day is a full
+   * recompute with an UPSERT, never an increment.
+   */
+  @Post('rollup')
+  @ApiOperation({ summary: 'Recompute daily rollups for a date range' })
+  async runRollup(@Body() body: RollupRangeDto) {
+    const from = new Date(`${body.from}T00:00:00Z`);
+    const to = new Date(`${body.to}T00:00:00Z`);
+
+    if (from > to) {
+      throw new BadRequestException('from must not be after to');
+    }
+
+    // Each day is several full-table aggregations; an unbounded range would
+    // hold a connection for as long as it takes and starve the request path.
+    const days =
+      Math.round((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+    if (days > 370) {
+      throw new BadRequestException('El rango no puede superar los 370 dias');
+    }
+
+    const processed = await this.rollupService.backfill(body.from, body.to);
+    return { from: body.from, to: body.to, days_processed: processed };
   }
 }
