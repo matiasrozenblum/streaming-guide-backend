@@ -5,6 +5,15 @@ Todas las modificaciones importantes de este proyecto se documentarán en este a
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/)
 y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
+## [1.46.0] - 2026-09-09
+
+### Added
+
+- **Ranking de streamers (`GET /analytics/rankings/streamers`)**: los eventos de streamers (`streamer_service_click`, `streamer_subscribe`) ya viajaban con `streamer_id` en sus propiedades, pero `analytics_event` no tenia esa columna, asi que quedaban enterrados en el jsonb y no habia forma de rankearlos. Se promueve a columna con su FK e indice parcial, se suma la tabla de rollup `analytics_daily_streamer`, y el ranking devuelve el logo del streamer donde los otros devuelven el del canal. La metrica por defecto es `streamer_service_click` y no `click_youtube_live`: un streamer no tiene evento de click en vivo propio, la accion equivalente es salir hacia su canal de Twitch/Kick/YouTube.
+- La ingesta acepta `streamer_id` o `streamer_name`, resolviendo el nombre contra el mismo mapa cacheado que ya usaban programas y canales.
+
+---
+
 ## [1.45.0] - 2026-09-09
 
 ### Added

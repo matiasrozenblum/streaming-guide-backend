@@ -27,15 +27,25 @@ describe('AnalyticsRollupService', () => {
     service = module.get<AnalyticsRollupService>(AnalyticsRollupService);
   });
 
-  it('recomputes all four rollup tables for a date', async () => {
+  it('recomputes every rollup table for a date', async () => {
     await service.rollupDate('2026-09-01');
 
     const statements = query.mock.calls.map((call) => call[0] as string);
-    expect(statements).toHaveLength(4);
+    expect(statements).toHaveLength(5);
     expect(statements.join()).toContain('analytics_daily_totals');
     expect(statements.join()).toContain('analytics_daily_program');
     expect(statements.join()).toContain('analytics_daily_channel');
+    expect(statements.join()).toContain('analytics_daily_streamer');
     expect(statements.join()).toContain('analytics_daily_user');
+  });
+
+  it('excludes rows that cannot be attributed from the streamer rollup', async () => {
+    await service.rollupDate('2026-09-01');
+
+    const streamerSql = query.mock.calls
+      .map((call) => call[0] as string)
+      .find((sql) => sql.includes('analytics_daily_streamer'))!;
+    expect(streamerSql).toContain('e.streamer_id IS NOT NULL');
   });
 
   it('upserts rather than increments, so a rerun is idempotent', async () => {
@@ -106,8 +116,8 @@ describe('AnalyticsRollupService', () => {
         'error',
         expect.objectContaining({ error_type: 'rollup_failed' }),
       );
-      // The remaining days still ran: 4 statements each for the days after
-      // the one that threw.
+      // The remaining days still ran: one batch of statements each for the
+      // days after the one that threw.
       expect(query.mock.calls.length).toBeGreaterThan(1);
     });
   });

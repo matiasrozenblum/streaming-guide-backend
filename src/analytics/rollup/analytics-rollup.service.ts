@@ -71,6 +71,7 @@ export class AnalyticsRollupService {
     await this.rollupTotals(date);
     await this.rollupPrograms(date);
     await this.rollupChannels(date);
+    await this.rollupStreamers(date);
     await this.rollupUsers(date);
   }
 
@@ -176,6 +177,31 @@ export class AnalyticsRollupService {
         AND e.channel_id IS NOT NULL
       GROUP BY e.channel_id, e.event_name
       ON CONFLICT (date, channel_id, event_name) DO UPDATE SET
+        count = EXCLUDED.count,
+        unique_users = EXCLUDED.unique_users,
+        unique_devices = EXCLUDED.unique_devices
+      `,
+      [date],
+    );
+  }
+
+  private async rollupStreamers(date: string): Promise<void> {
+    await this.eventRepository.query(
+      `
+      INSERT INTO analytics_daily_streamer
+        (date, streamer_id, event_name, count, unique_users, unique_devices)
+      SELECT
+        $1::date,
+        e.streamer_id,
+        e.event_name,
+        COUNT(*)::int,
+        COUNT(DISTINCT e.user_id)::int,
+        COUNT(DISTINCT e.device_id)::int
+      FROM analytics_event e
+      WHERE ${this.dayExpression()} = $1::date
+        AND e.streamer_id IS NOT NULL
+      GROUP BY e.streamer_id, e.event_name
+      ON CONFLICT (date, streamer_id, event_name) DO UPDATE SET
         count = EXCLUDED.count,
         unique_users = EXCLUDED.unique_users,
         unique_devices = EXCLUDED.unique_devices

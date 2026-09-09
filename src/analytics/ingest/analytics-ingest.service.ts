@@ -8,6 +8,7 @@ import {
 } from '../entities/analytics-event.entity';
 import { Program } from '../../programs/programs.entity';
 import { Channel } from '../../channels/channels.entity';
+import { Streamer } from '../../streamers/streamers.entity';
 import { RedisService } from '../../redis/redis.service';
 import { SentryService } from '../../sentry/sentry.service';
 import { IngestEventsDto } from '../dto/ingest-events.dto';
@@ -32,8 +33,10 @@ interface BufferedEvent {
   session_id: string | null;
   program_id: number | null;
   channel_id: number | null;
+  streamer_id: number | null;
   program_name: string | null;
   channel_name: string | null;
+  streamer_name: string | null;
   user_gender: string | null;
   user_age_group: string | null;
   properties: Record<string, any>;
@@ -69,6 +72,8 @@ export class AnalyticsIngestService {
     private readonly programRepository: Repository<Program>,
     @InjectRepository(Channel)
     private readonly channelRepository: Repository<Channel>,
+    @InjectRepository(Streamer)
+    private readonly streamerRepository: Repository<Streamer>,
     private readonly redisService: RedisService,
     private readonly sentryService: SentryService,
   ) {}
@@ -112,8 +117,10 @@ export class AnalyticsIngestService {
         session_id: dto.session_id ?? null,
         program_id: event.program_id ?? null,
         channel_id: event.channel_id ?? null,
+        streamer_id: event.streamer_id ?? null,
         program_name: event.program_name ?? null,
         channel_name: event.channel_name ?? null,
+        streamer_name: event.streamer_name ?? null,
         user_gender: dto.user_gender ?? null,
         user_age_group: dto.user_age_group ?? null,
         properties: event.properties ?? {},
@@ -229,7 +236,8 @@ export class AnalyticsIngestService {
   private async persist(events: BufferedEvent[]): Promise<void> {
     if (events.length === 0) return;
 
-    const { programs, channels } = await this.resolveNameMaps(events);
+    const { programs, channels, streamers } =
+      await this.resolveNameMaps(events);
 
     const rows = events.map((e) => {
       // Prefer ids; fall back to name resolution for older clients. A name that
@@ -245,6 +253,11 @@ export class AnalyticsIngestService {
         (e.channel_name
           ? (channels.get(e.channel_name.toLowerCase()) ?? null)
           : null);
+      const streamerId =
+        e.streamer_id ??
+        (e.streamer_name
+          ? (streamers.get(e.streamer_name.toLowerCase()) ?? null)
+          : null);
 
       return {
         event_name: e.event_name,
@@ -256,6 +269,7 @@ export class AnalyticsIngestService {
         session_id: e.session_id,
         program_id: programId,
         channel_id: channelId,
+        streamer_id: streamerId,
         user_gender: e.user_gender,
         user_age_group: e.user_age_group,
         properties: e.properties,
@@ -278,9 +292,13 @@ export class AnalyticsIngestService {
   private async resolveNameMaps(events: BufferedEvent[]): Promise<{
     programs: Map<string, number>;
     channels: Map<string, number>;
+    streamers: Map<string, number>;
   }> {
     const needsPrograms = events.some((e) => !e.program_id && e.program_name);
     const needsChannels = events.some((e) => !e.channel_id && e.channel_name);
+    const needsStreamers = events.some(
+      (e) => !e.streamer_id && e.streamer_name,
+    );
 
     const programs = needsPrograms
       ? await this.nameMap('analytics:namemap:programs', () =>
@@ -294,7 +312,13 @@ export class AnalyticsIngestService {
         )
       : new Map<string, number>();
 
-    return { programs, channels };
+    const streamers = needsStreamers
+      ? await this.nameMap('analytics:namemap:streamers', () =>
+          this.streamerRepository.find({ select: ['id', 'name'] }),
+        )
+      : new Map<string, number>();
+
+    return { programs, channels, streamers };
   }
 
   private async nameMap(
