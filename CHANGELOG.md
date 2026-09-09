@@ -5,6 +5,23 @@ Todas las modificaciones importantes de este proyecto se documentarán en este a
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/)
 y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
+## [1.45.0] - 2026-09-09
+
+### Added
+
+- **Pipeline propio de analiticas de comportamiento (`AnalyticsModule`)**: hasta ahora todo lo que hacian los usuarios se reportaba unicamente a herramientas de terceros — PostHog, Datadog RUM, GA4, Firebase y Clarity — y ninguna las guarda lo suficiente como para responder "como vino este programa a lo largo del año": Datadog RUM retiene un mes. El backend no tenia ni un solo evento de comportamiento; `StatisticsModule` reporta sobre el *estado* de la base (quien se registro, quien se suscribio), no sobre lo que la gente hace. Este modulo agrega el registro de primera mano, en tres piezas:
+  - **Ingesta** (`POST /analytics/events`): batches de hasta 50 eventos, publico via `OptionalJwtAuthGuard` porque el trafico anonimo es la mayor parte y es justamente lo que miden los rankings. El `user_id` sale siempre del JWT y nunca del payload, asi que nadie puede imputar eventos a otra cuenta. Los eventos de admins se descartan, replicando el filtro que los clientes ya aplican. Las escrituras se bufferean en una lista de Redis y se drenan con un `INSERT` multi-row por minuto, para no gastar una conexion del pool compartido (max 35) por cada click; si Redis no responde se escribe directo, porque una caida de cache no deberia abrir un agujero en el historico. Responde `202` siempre: perder un evento es aceptable, hacer el producto mas lento para registrarlo no.
+  - **Rollups diarios**: un cron a las 03:15 ART agrega los eventos crudos en `analytics_daily_program`, `analytics_daily_channel`, `analytics_daily_user` y `analytics_daily_totals`. Los crudos se podan a los 90 dias; los rollups son permanentes y son los que sostienen el historico. Cada rollup es un recalculo completo del dia con `UPSERT`, nunca un incremento, asi que reejecutar una noche fallida o backfillear tras cambiar la logica de agregacion no duplica nada. La ventana de recalculo es de 3 dias porque mobile encola eventos mientras esta en background y los manda en el siguiente arranque — recalcular solo "ayer" congelaba esos numeros permanentemente por debajo.
+  - **APIs de lectura**: `/analytics/overview`, `/analytics/trends`, `/analytics/rankings/programs`, `/analytics/rankings/channels`, `/analytics/programs/:id/trend` y `/analytics/event-names`, todas restringidas a admin. Los rankings devuelven el logo y el color de marca del canal, de modo que un consumidor puede armar la imagen compartible con una sola llamada, e incluyen `previous_position` contra la ventana previa del mismo largo para que el ranking se lea como movimiento y no como foto fija.
+- **Recap personal estilo Wrapped (`GET /analytics/me/recap`)**: top 5 de programas, top 3 de canales, totales, dia favorito y comparacion con el periodo anterior, en ventanas semanal, mensual o anual. Lee solo de `analytics_daily_user`, asi que el recap sigue disponible por todo el historico retenido y no por los 90 dias de eventos crudos. El id de usuario viene del JWT y no hay parametro para sobreescribirlo: la unica cuenta que alguien puede leer es la propia. Debajo de 3 reproducciones devuelve `enough_data: false` para que el cliente muestre un estado vacio en vez de un Wrapped triste.
+
+### Notes
+
+- Los dias se agrupan en horario de Argentina, no UTC: un click a las 22:00 ART pertenece a esa noche, y agrupar por UTC lo empujaba al dia siguiente.
+- La ingesta acepta tanto `program_id`/`channel_id` como `program_name`/`channel_name`, resolviendo los nombres contra un mapa cacheado. Las builds de mobile ya publicadas solo mandan nombres, y asi siguen alimentando los rankings sin necesidad de un release.
+
+---
+
 ## [1.44.0] - 2026-09-06
 
 ### Performance
