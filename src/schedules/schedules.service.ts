@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindOneOptions } from 'typeorm';
+import { Repository, FindOneOptions, In } from 'typeorm';
 import { Schedule } from './schedules.entity';
 import { Program } from '../programs/programs.entity';
 import {
@@ -1094,11 +1094,20 @@ export class SchedulesService {
       where: { program_id: programId.toString() },
     });
 
-    for (const other of others) {
+    // ⚡ Bolt Optimization: Batch delete and insert schedules for linked programs
+    // to avoid N+1 DB queries in a loop.
+    const otherProgramIds = others.map((p) => p.id.toString());
+
+    // Batch delete existing schedules for all other linked programs in a single query
+    if (otherProgramIds.length > 0) {
       await this.schedulesRepository.delete({
-        program_id: other.id.toString(),
+        program_id: In(otherProgramIds),
       });
-      if (sourceSchedules.length > 0) {
+    }
+
+    if (sourceSchedules.length > 0) {
+      const allCopies: Schedule[] = [];
+      for (const other of others) {
         const copies = sourceSchedules.map((s) =>
           this.schedulesRepository.create({
             day_of_week: s.day_of_week,
@@ -1110,8 +1119,10 @@ export class SchedulesService {
             program_id: other.id.toString(),
           }),
         );
-        await this.schedulesRepository.save(copies);
+        allCopies.push(...copies);
       }
+      // Batch save all new schedule copies in a single query
+      await this.schedulesRepository.save(allCopies);
     }
   }
 
