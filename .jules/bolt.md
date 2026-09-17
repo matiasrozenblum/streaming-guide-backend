@@ -33,3 +33,7 @@
 ## 2026-09-06 - [Push concurrente en StreamerSubscriptionService]
 **Learning:** `notifySubscribers` mandaba las push notifications con `await` dentro de un triple loop, serializando una llamada de red por suscripcion. `PushService.sendNotificationToDevices` ya resolvia esto con IIAFEs + `Promise.all`.
 **Action:** Encolar cada envio como funcion async auto-invocada con su propio try/catch y esperar todo con `Promise.allSettled`, siguiendo el patron que ya existia en `push.service.ts`.
+
+## 2026-09-17 - [Refactoring Schedule Deletion and Creation]
+**Learning:** In the TypeORM repository layer, iterating through an array and executing 'await delete()' and 'await save()' sequentially causes N+1 overhead and heavily slows down database operations, particularly during large cascade updates like propagating schedules across linked programs.
+**Action:** Consistently replace iterative delete and save loops with batch operations by leveraging TypeORM's 'In()' operator for deletes and accumulating all entity objects into a single array for a unified 'save()' call.
