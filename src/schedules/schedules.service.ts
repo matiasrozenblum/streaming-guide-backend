@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindOneOptions } from 'typeorm';
+import { Repository, FindOneOptions, In } from 'typeorm';
 import { Schedule } from './schedules.entity';
 import { Program } from '../programs/programs.entity';
 import {
@@ -1094,23 +1094,30 @@ export class SchedulesService {
       where: { program_id: programId.toString() },
     });
 
-    for (const other of others) {
+    // Optimize: Batch delete and save to eliminate N+1 overhead during schedule propagation.
+    // This reduces the number of database queries from O(N) to O(1) where N is the number of linked programs.
+    const otherIds = others.map((o) => o.id.toString());
+    if (otherIds.length > 0) {
       await this.schedulesRepository.delete({
-        program_id: other.id.toString(),
+        program_id: In(otherIds),
       });
       if (sourceSchedules.length > 0) {
-        const copies = sourceSchedules.map((s) =>
-          this.schedulesRepository.create({
-            day_of_week: s.day_of_week,
-            start_time: s.start_time,
-            end_time: s.end_time,
-            schedule_type: s.schedule_type,
-            week_number_in_month: s.week_number_in_month,
-            specific_date: s.specific_date,
-            program_id: other.id.toString(),
-          }),
-        );
-        await this.schedulesRepository.save(copies);
+        const allCopies: Schedule[] = [];
+        for (const other of others) {
+          const copies = sourceSchedules.map((s) =>
+            this.schedulesRepository.create({
+              day_of_week: s.day_of_week,
+              start_time: s.start_time,
+              end_time: s.end_time,
+              schedule_type: s.schedule_type,
+              week_number_in_month: s.week_number_in_month,
+              specific_date: s.specific_date,
+              program_id: other.id.toString(),
+            }),
+          );
+          allCopies.push(...copies);
+        }
+        await this.schedulesRepository.save(allCopies);
       }
     }
   }
