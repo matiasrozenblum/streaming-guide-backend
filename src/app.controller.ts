@@ -10,6 +10,7 @@ import { YoutubeLiveService } from './youtube/youtube-live.service';
 import { RedisService } from './redis/redis.service'; // 🔥
 import { AuthGuard } from '@nestjs/passport';
 import * as DateHolidays from 'date-holidays';
+import * as v8 from 'v8';
 import { Roles } from './auth/roles.decorator';
 import { AppService } from './app.service';
 import { SentryService } from './sentry/sentry.service';
@@ -19,6 +20,11 @@ import { TimezoneUtil } from './utils/timezone.util';
 import { ConfigService as AppConfigService } from './config/config.service';
 
 const HolidaysClass = (DateHolidays as any).default ?? DateHolidays;
+
+/** Bytes a MB con un decimal, para que /health se lea de un vistazo. */
+function toMb(bytes: number): number {
+  return Math.round((bytes / 1024 / 1024) * 10) / 10;
+}
 
 @Controller()
 export class AppController {
@@ -52,7 +58,37 @@ export class AppController {
 
   @Get('health')
   health() {
-    return { status: 'ok', timestamp: new Date().toISOString() };
+    // `status` y `timestamp` se mantienen en la raiz: el healthcheck de Railway
+    // ya consume esta respuesta y no queremos romperle la forma.
+    const mem = process.memoryUsage();
+    const heap = v8.getHeapStatistics();
+
+    return {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptimeSeconds: Math.round(process.uptime()),
+      memory: {
+        // Lo que Railway grafica. Incluye heap + off-heap + binario + Chromium
+        // si hay un scraper corriendo, asi que puede superar por mucho al heap.
+        rssMb: toMb(mem.rss),
+        // heapUsed vs heapTotal responde la pregunta que importa: si heapUsed es
+        // bajo y rss alto, la memoria no esta viva sino reservada por V8 (o es
+        // off-heap) y el problema es de tuning, no un leak de objetos JS.
+        heapUsedMb: toMb(mem.heapUsed),
+        heapTotalMb: toMb(mem.heapTotal),
+        // Buffers de ioredis/HTTP y demas memoria fuera del heap de V8.
+        externalMb: toMb(mem.external),
+        arrayBuffersMb: toMb(mem.arrayBuffers),
+        // El techo que V8 eligio solo. Sin --max-old-space-size lo deduce de la
+        // memoria que ve la VM (no del limite del contenedor), y hasta no
+        // acercarse a este numero no dispara GC mayor.
+        heapSizeLimitMb: toMb(heap.heap_size_limit),
+        heapUsedPercentOfLimit:
+          heap.heap_size_limit > 0
+            ? Math.round((mem.heapUsed / heap.heap_size_limit) * 1000) / 10
+            : null,
+      },
+    };
   }
 
   @Get('db-pool-status')
