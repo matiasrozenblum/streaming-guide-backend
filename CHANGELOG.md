@@ -5,6 +5,14 @@ Todas las modificaciones importantes de este proyecto se documentarán en este a
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/)
 y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
+## [Unreleased]
+
+### Added
+
+- **`/health` expone metricas de heap y RSS del proceso**: el monitoreo que ya existia no servia para diagnosticar el uso de memoria del servicio en Railway. `ResourceMonitorService.getMemoryUsage()` mide `os.totalmem()` y `os.freemem()`, que dentro de un contenedor reportan la memoria del **host**, no la del proceso ni la del cgroup; por eso los umbrales de 85% y 95% nunca dispararon una alerta a pesar de los picos visibles en las graficas. `GET /health` ahora agrega `process.memoryUsage()` y `v8.getHeapStatistics()` (`rssMb`, `heapUsedMb`, `heapTotalMb`, `externalMb`, `arrayBuffersMb`, `heapSizeLimitMb`, `heapUsedPercentOfLimit`, `uptimeSeconds`), que son las cifras que permiten separar un leak real de objetos JS — `heapUsed` alto y creciendo — de memoria simplemente reservada por V8 y nunca devuelta al OS — `heapUsed` bajo con `rss`/`heapTotal` altos — o de consumo off-heap por buffers de ioredis y HTTP. `heapSizeLimitMb` expone ademas el techo que V8 elige solo: sin `--max-old-space-size` lo deduce de la memoria que ve la VM y no de la asignada al contenedor, y no dispara GC mayor hasta acercarse a el. `status` y `timestamp` se mantienen en la raiz de la respuesta para no alterar lo que consume el healthcheck de Railway.
+
+---
+
 ## [1.44.0] - 2026-09-06
 
 ### Performance
