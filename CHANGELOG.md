@@ -5,6 +5,19 @@ Todas las modificaciones importantes de este proyecto se documentarán en este a
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/)
 y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
+## [Unreleased]
+
+### Added
+
+- **`/health` expone metricas de heap y RSS del proceso**: investigando el uso de memoria del servicio en Railway (picos con correlacion horaria y un baseline de ~1.2 GB que sube en escalones y no baja) no habia forma de medir el proceso desde afuera. `GET /health` ahora agrega `process.memoryUsage()` y `v8.getHeapStatistics()` (`rssMb`, `heapUsedMb`, `heapTotalMb`, `externalMb`, `arrayBuffersMb`, `heapSizeLimitMb`, `heapUsedPercentOfLimit`, `uptimeSeconds`), que son las cifras que permiten separar un leak real de objetos JS — `heapUsed` alto y creciendo — de memoria simplemente reservada por V8 y nunca devuelta al OS — `heapUsed` bajo con `rss`/`heapTotal` altos — o de consumo off-heap por buffers de ioredis y HTTP. `heapSizeLimitMb` expone ademas el techo que V8 elige solo: sin `--max-old-space-size` lo deduce de la memoria que ve la VM y no de la asignada al contenedor, y no dispara GC mayor hasta acercarse a el. `status` y `timestamp` se mantienen en la raiz de la respuesta para no alterar lo que consume el healthcheck de Railway.
+
+### Fixed
+
+- **Las alertas de memoria median la maquina y no el proceso**: `ResourceMonitorService.getMemoryUsage()` calculaba el porcentaje como `(os.totalmem() - os.freemem()) / os.totalmem()`. Dentro de un contenedor esas dos funciones reportan la memoria del **host**, no la del cgroup ni la del proceso, asi que el numero no tenia ninguna relacion con lo que consume el servicio: los umbrales de 85% y 95% nunca dispararon una alerta aun con el backend estacionado en 1.2-1.5 GB en Railway. Ahora el porcentaje es `heapUsed / heap_size_limit` — el techo que V8 le impone al proceso y la unica razon por la que un proceso Node muere por OOM de heap — y el contexto que viaja a Sentry incluye `heap_used`, `heap_total`, `heap_limit`, `rss` y `external`. `rss` y `external` se reportan aparte a proposito: un RSS alto con el heap tranquilo es consumo off-heap (buffers de ioredis/HTTP, Chromium cuando corre un scraper) y no un leak de objetos JS, y distinguir esos dos casos es justamente lo que antes no se podia.
+- **Cambio de forma en `GET /health/resources`**: como consecuencia de lo anterior, el objeto `memory` deja de exponer `total`/`used`/`free` (memoria del host) y pasa a exponer `heapUsed`/`heapTotal`/`heapLimit`/`rss`/`external`. `percentage` se mantiene como clave pero ahora significa heap sobre el limite de V8. Es un endpoint de diagnostico, no lo consume ningun cliente.
+
+---
+
 ## [1.46.0] - 2026-09-09
 
 ### Added
