@@ -1,6 +1,7 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { SentryService } from '../sentry/sentry.service';
 import * as os from 'os';
+import * as v8 from 'v8';
 
 @Injectable()
 export class ResourceMonitorService implements OnModuleInit {
@@ -41,10 +42,14 @@ export class ResourceMonitorService implements OnModuleInit {
           {
             service: 'server',
             error_type: 'high_memory_usage',
-            memory_percentage: memoryUsage.percentage,
-            memory_used: memoryUsage.used,
-            memory_total: memoryUsage.total,
-            memory_free: memoryUsage.free,
+            heap_used_percent_of_limit: memoryUsage.percentage,
+            heap_used: memoryUsage.heapUsed,
+            heap_total: memoryUsage.heapTotal,
+            heap_limit: memoryUsage.heapLimit,
+            // rss y external no entran en el porcentaje: sirven para distinguir
+            // un leak de objetos JS de un crecimiento off-heap.
+            rss: memoryUsage.rss,
+            external: memoryUsage.external,
             threshold: 85,
             timestamp: new Date().toISOString(),
           },
@@ -66,10 +71,14 @@ export class ResourceMonitorService implements OnModuleInit {
           {
             service: 'server',
             error_type: 'critical_memory_usage',
-            memory_percentage: memoryUsage.percentage,
-            memory_used: memoryUsage.used,
-            memory_total: memoryUsage.total,
-            memory_free: memoryUsage.free,
+            heap_used_percent_of_limit: memoryUsage.percentage,
+            heap_used: memoryUsage.heapUsed,
+            heap_total: memoryUsage.heapTotal,
+            heap_limit: memoryUsage.heapLimit,
+            // rss y external no entran en el porcentaje: sirven para distinguir
+            // un leak de objetos JS de un crecimiento off-heap.
+            rss: memoryUsage.rss,
+            external: memoryUsage.external,
             threshold: 95,
             timestamp: new Date().toISOString(),
           },
@@ -128,16 +137,32 @@ export class ResourceMonitorService implements OnModuleInit {
     }
   }
 
+  /**
+   * Mide el proceso, no la maquina.
+   *
+   * Antes esto usaba `os.totalmem()` / `os.freemem()`, que dentro de un
+   * contenedor reportan la memoria del **host** y no la del cgroup ni la del
+   * proceso. En Railway eso daba una cifra que no tiene relacion con lo que
+   * consume el servicio, y por eso los umbrales de 85% y 95% jamas dispararon
+   * una alerta aun con el backend estacionado en 1.2-1.5 GB.
+   *
+   * El porcentaje ahora es heap usado sobre el techo que V8 impone al proceso,
+   * que es la unica razon por la que un proceso Node muere por OOM de heap.
+   * `rss` va aparte en el contexto: crece con memoria off-heap (buffers de
+   * ioredis/HTTP, y Chromium cuando corre un scraper) que este porcentaje no
+   * cubre a proposito.
+   */
   private getMemoryUsage() {
-    const total = os.totalmem();
-    const free = os.freemem();
-    const used = total - free;
-    const percentage = total > 0 ? (used / total) * 100 : 0;
+    const mem = process.memoryUsage();
+    const heapLimit = v8.getHeapStatistics().heap_size_limit;
+    const percentage = heapLimit > 0 ? (mem.heapUsed / heapLimit) * 100 : 0;
 
     return {
-      total: this.formatBytes(total),
-      used: this.formatBytes(used),
-      free: this.formatBytes(free),
+      heapUsed: this.formatBytes(mem.heapUsed),
+      heapTotal: this.formatBytes(mem.heapTotal),
+      heapLimit: this.formatBytes(heapLimit),
+      rss: this.formatBytes(mem.rss),
+      external: this.formatBytes(mem.external),
       percentage,
     };
   }
