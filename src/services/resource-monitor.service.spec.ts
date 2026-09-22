@@ -1,20 +1,46 @@
 import { ResourceMonitorService } from './resource-monitor.service';
 import { SentryService } from '../sentry/sentry.service';
 import * as os from 'os';
+import * as v8 from 'v8';
 
-// Mock the os module
+// Mock the os module. Solo queda lo que usa el monitor de CPU y los datos de
+// plataforma: la memoria ya no se mide con os.totalmem()/os.freemem() porque
+// dentro de un contenedor reportan la memoria del host, no la del proceso.
 jest.mock('os', () => ({
-  totalmem: jest.fn(),
-  freemem: jest.fn(),
   cpus: jest.fn(),
   uptime: jest.fn(),
   platform: jest.fn(),
   arch: jest.fn(),
 }));
 
+jest.mock('v8', () => ({
+  getHeapStatistics: jest.fn(),
+}));
+
+const GB = 1024 * 1024 * 1024;
+
 describe('ResourceMonitorService', () => {
   let service: ResourceMonitorService;
   let mockSentryService: jest.Mocked<SentryService>;
+
+  /** Fija heap usado y techo de heap para que el porcentaje sea determinista. */
+  const setHeap = (
+    heapUsed: number,
+    heapLimit: number,
+    extra: Partial<NodeJS.MemoryUsage> = {},
+  ) => {
+    jest.spyOn(process, 'memoryUsage').mockReturnValue({
+      rss: 5 * GB,
+      heapTotal: heapUsed,
+      heapUsed,
+      external: 1 * GB,
+      arrayBuffers: 0,
+      ...extra,
+    } as NodeJS.MemoryUsage);
+    (v8.getHeapStatistics as jest.Mock).mockReturnValue({
+      heap_size_limit: heapLimit,
+    });
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -26,9 +52,9 @@ describe('ResourceMonitorService', () => {
       addBreadcrumb: jest.fn(),
     } as any;
 
-    // Set up default OS mocks
-    (os.totalmem as jest.Mock).mockReturnValue(8 * 1024 * 1024 * 1024); // 8GB
-    (os.freemem as jest.Mock).mockReturnValue(4 * 1024 * 1024 * 1024); // 4GB
+    // Default: 4GB de heap usado sobre un techo de 8GB = 50%
+    setHeap(4 * GB, 8 * GB);
+
     (os.cpus as jest.Mock).mockReturnValue([
       {
         times: { user: 100, nice: 0, sys: 50, idle: 850, irq: 0 },
@@ -42,16 +68,12 @@ describe('ResourceMonitorService', () => {
   });
 
   afterEach(() => {
+    jest.restoreAllMocks();
     jest.clearAllMocks();
     // Clean up any intervals that might be running
     if (service['monitoringInterval']) {
       clearInterval(service['monitoringInterval']);
     }
-  });
-
-  afterAll(() => {
-    // Ensure all intervals are cleared
-    jest.restoreAllMocks();
   });
 
   describe('onModuleInit', () => {
@@ -80,10 +102,8 @@ describe('ResourceMonitorService', () => {
       );
     });
 
-    it('triggers high memory usage alert when memory > 85%', () => {
-      // Mock 90% memory usage
-      (os.totalmem as jest.Mock).mockReturnValue(1000);
-      (os.freemem as jest.Mock).mockReturnValue(100); // 10% free = 90% used
+    it('triggers high memory usage alert when heap > 85% of the limit', () => {
+      setHeap(900, 1000); // 90%
 
       service['checkResources']();
 
@@ -95,7 +115,7 @@ describe('ResourceMonitorService', () => {
         expect.objectContaining({
           service: 'server',
           error_type: 'high_memory_usage',
-          memory_percentage: 90,
+          heap_used_percent_of_limit: 90,
           threshold: 85,
         }),
       );
@@ -110,10 +130,8 @@ describe('ResourceMonitorService', () => {
       );
     });
 
-    it('triggers critical memory usage alert when memory > 95%', () => {
-      // Mock 97% memory usage
-      (os.totalmem as jest.Mock).mockReturnValue(1000);
-      (os.freemem as jest.Mock).mockReturnValue(30); // 3% free = 97% used
+    it('triggers critical memory usage alert when heap > 95% of the limit', () => {
+      setHeap(970, 1000); // 97%
 
       // Reset the last alert time to ensure critical alert can fire
       (service as any).lastCriticalMemoryAlert = 0;
@@ -128,7 +146,7 @@ describe('ResourceMonitorService', () => {
         expect.objectContaining({
           service: 'server',
           error_type: 'critical_memory_usage',
-          memory_percentage: 97,
+          heap_used_percent_of_limit: 97,
           threshold: 95,
         }),
       );
@@ -140,6 +158,24 @@ describe('ResourceMonitorService', () => {
       expect(mockSentryService.setTag).toHaveBeenCalledWith(
         'error_type',
         'critical_memory_usage',
+      );
+    });
+
+    it('reports rss and external separately from the heap percentage', () => {
+      // Un RSS enorme con el heap tranquilo es el caso que hay que poder
+      // distinguir: no es un leak de objetos JS sino consumo off-heap.
+      setHeap(900, 1000, { rss: 3 * GB, external: 2 * GB });
+
+      service['checkResources']();
+
+      expect(mockSentryService.captureMessage).toHaveBeenCalledWith(
+        expect.any(String),
+        'warning',
+        expect.objectContaining({
+          heap_used_percent_of_limit: 90,
+          rss: '3 GB',
+          external: '2 GB',
+        }),
       );
     });
 
@@ -177,9 +213,23 @@ describe('ResourceMonitorService', () => {
     });
 
     it('does not trigger alerts when resources are normal', () => {
-      // Mock normal usage (50% memory, 30% CPU)
-      (os.totalmem as jest.Mock).mockReturnValue(1000);
-      (os.freemem as jest.Mock).mockReturnValue(500);
+      // Mock normal usage (50% heap, 30% CPU)
+      setHeap(500, 1000);
+      (os.cpus as jest.Mock).mockReturnValue([
+        {
+          times: { user: 300, nice: 0, sys: 100, idle: 600, irq: 0 },
+        },
+      ]);
+
+      service['checkResources']();
+
+      expect(mockSentryService.captureMessage).not.toHaveBeenCalled();
+    });
+
+    it('does not alert on a high rss while the heap stays healthy', () => {
+      // Esto es exactamente lo que el monitor no podia ver antes: medir el host
+      // hacia que el porcentaje no tuviera relacion con el proceso.
+      setHeap(200, 1000, { rss: 7 * GB });
       (os.cpus as jest.Mock).mockReturnValue([
         {
           times: { user: 300, nice: 0, sys: 100, idle: 600, irq: 0 },
@@ -193,8 +243,7 @@ describe('ResourceMonitorService', () => {
 
     it('prevents spam by only alerting once every 5 minutes', () => {
       // Mock high memory usage
-      (os.totalmem as jest.Mock).mockReturnValue(1000);
-      (os.freemem as jest.Mock).mockReturnValue(100);
+      setHeap(900, 1000);
 
       // First call
       service['checkResources']();
@@ -207,33 +256,31 @@ describe('ResourceMonitorService', () => {
   });
 
   describe('getMemoryUsage', () => {
-    it('calculates memory usage correctly', () => {
-      (os.totalmem as jest.Mock).mockReturnValue(8 * 1024 * 1024 * 1024); // 8GB
-      (os.freemem as jest.Mock).mockReturnValue(4 * 1024 * 1024 * 1024); // 4GB
+    it('reports heap usage against the V8 limit, not the host memory', () => {
+      setHeap(4 * GB, 8 * GB, { rss: 5 * GB, external: 1 * GB });
 
       const result = service['getMemoryUsage']();
 
       expect(result).toEqual({
-        total: '8 GB',
-        used: '4 GB',
-        free: '4 GB',
+        heapUsed: '4 GB',
+        heapTotal: '4 GB',
+        heapLimit: '8 GB',
+        rss: '5 GB',
+        external: '1 GB',
         percentage: 50,
       });
     });
 
-    it('handles zero memory', () => {
-      (os.totalmem as jest.Mock).mockReturnValue(0);
-      (os.freemem as jest.Mock).mockReturnValue(0);
+    it('handles a zero heap limit without producing NaN', () => {
+      setHeap(0, 0);
 
       const result = service['getMemoryUsage']();
 
-      // When total is 0, percentage should be 0 to avoid NaN
       expect(result.percentage).toBe(0);
     });
 
-    it('handles edge case where total memory is very small', () => {
-      (os.totalmem as jest.Mock).mockReturnValue(1);
-      (os.freemem as jest.Mock).mockReturnValue(0);
+    it('reports 100% when the heap has reached its limit', () => {
+      setHeap(1000, 1000);
 
       const result = service['getMemoryUsage']();
 
@@ -288,9 +335,11 @@ describe('ResourceMonitorService', () => {
 
       expect(result).toEqual({
         memory: {
-          total: '8 GB',
-          used: '4 GB',
-          free: '4 GB',
+          heapUsed: '4 GB',
+          heapTotal: '4 GB',
+          heapLimit: '8 GB',
+          rss: '5 GB',
+          external: '1 GB',
           percentage: 50,
         },
         cpu: expect.any(Number),

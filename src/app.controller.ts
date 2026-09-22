@@ -10,6 +10,8 @@ import { YoutubeLiveService } from './youtube/youtube-live.service';
 import { RedisService } from './redis/redis.service'; // 🔥
 import { AuthGuard } from '@nestjs/passport';
 import * as DateHolidays from 'date-holidays';
+import * as v8 from 'v8';
+import * as fs from 'fs';
 import { Roles } from './auth/roles.decorator';
 import { AppService } from './app.service';
 import { SentryService } from './sentry/sentry.service';
@@ -19,6 +21,83 @@ import { TimezoneUtil } from './utils/timezone.util';
 import { ConfigService as AppConfigService } from './config/config.service';
 
 const HolidaysClass = (DateHolidays as any).default ?? DateHolidays;
+
+/** Bytes a MB con un decimal, para que /health se lea de un vistazo. */
+function toMb(bytes: number): number {
+  return Math.round((bytes / 1024 / 1024) * 10) / 10;
+}
+
+/** Lee un entero de un pseudo-archivo de cgroup. null si no existe o dice "max". */
+function readCgroupNumber(path: string): number | null {
+  try {
+    const raw = fs.readFileSync(path, 'utf8').trim();
+    if (raw === 'max') return null;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Lee una clave de un memory.stat de cgroup (formato "<clave> <bytes>" por linea). */
+function readCgroupStat(path: string, key: string): number | null {
+  try {
+    for (const line of fs.readFileSync(path, 'utf8').split('\n')) {
+      const [k, v] = line.split(' ');
+      if (k === key) {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+      }
+    }
+  } catch {
+    /* sin cgroup (macOS, tests) */
+  }
+  return null;
+}
+
+/**
+ * Memoria del contenedor, que es lo que Railway grafica y factura.
+ *
+ * Existe porque `process.memoryUsage().rss` mide **solo el proceso Node**: un
+ * Chromium lanzado por Puppeteer es un proceso hijo y su memoria no aparece ahi,
+ * pero si en el cgroup. Tener los dos numeros juntos es lo que permite decir si
+ * un escalon en el grafico de Railway es memoria de Node o de otra cosa.
+ *
+ * Soporta cgroup v2 (Railway hoy) y cae a v1 si hiciera falta. Todo devuelve
+ * null fuera de un contenedor, asi que el endpoint sigue funcionando en local.
+ */
+function readContainerMemory(nodeRssBytes: number) {
+  const V2 = '/sys/fs/cgroup';
+  const V1 = '/sys/fs/cgroup/memory';
+
+  const isV2 = fs.existsSync(`${V2}/memory.current`);
+  const current = isV2
+    ? readCgroupNumber(`${V2}/memory.current`)
+    : readCgroupNumber(`${V1}/memory.usage_in_bytes`);
+  const limit = isV2
+    ? readCgroupNumber(`${V2}/memory.max`)
+    : readCgroupNumber(`${V1}/memory.limit_in_bytes`);
+  // anon = memoria anonima de todos los procesos del contenedor (Node + hijos).
+  // file = page cache, reclamable por el kernel y por eso irrelevante para un leak.
+  const anon = isV2
+    ? readCgroupStat(`${V2}/memory.stat`, 'anon')
+    : readCgroupStat(`${V1}/memory.stat`, 'total_rss');
+  const file = isV2
+    ? readCgroupStat(`${V2}/memory.stat`, 'file')
+    : readCgroupStat(`${V1}/memory.stat`, 'total_cache');
+
+  return {
+    currentMb: current === null ? null : toMb(current),
+    limitMb: limit === null ? null : toMb(limit),
+    anonMb: anon === null ? null : toMb(anon),
+    fileMb: file === null ? null : toMb(file),
+    // El numero que importa: memoria anonima del contenedor que NO es de Node.
+    // Si esto crece mientras el rss de Node se mantiene, hay procesos hijos
+    // acumulandose (tipicamente Chromium huerfano de un scraper que fallo).
+    outsideNodeMb:
+      anon === null ? null : toMb(Math.max(0, anon - nodeRssBytes)),
+  };
+}
 
 @Controller()
 export class AppController {
@@ -52,7 +131,39 @@ export class AppController {
 
   @Get('health')
   health() {
-    return { status: 'ok', timestamp: new Date().toISOString() };
+    // `status` y `timestamp` se mantienen en la raiz: el healthcheck de Railway
+    // ya consume esta respuesta y no queremos romperle la forma.
+    const mem = process.memoryUsage();
+    const heap = v8.getHeapStatistics();
+
+    return {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptimeSeconds: Math.round(process.uptime()),
+      memory: {
+        // Lo que Railway grafica. Incluye heap + off-heap + binario + Chromium
+        // si hay un scraper corriendo, asi que puede superar por mucho al heap.
+        rssMb: toMb(mem.rss),
+        // heapUsed vs heapTotal responde la pregunta que importa: si heapUsed es
+        // bajo y rss alto, la memoria no esta viva sino reservada por V8 (o es
+        // off-heap) y el problema es de tuning, no un leak de objetos JS.
+        heapUsedMb: toMb(mem.heapUsed),
+        heapTotalMb: toMb(mem.heapTotal),
+        // Buffers de ioredis/HTTP y demas memoria fuera del heap de V8.
+        externalMb: toMb(mem.external),
+        arrayBuffersMb: toMb(mem.arrayBuffers),
+        // El techo que V8 eligio solo. Sin --max-old-space-size lo deduce de la
+        // memoria que ve la VM (no del limite del contenedor), y hasta no
+        // acercarse a este numero no dispara GC mayor.
+        heapSizeLimitMb: toMb(heap.heap_size_limit),
+        heapUsedPercentOfLimit:
+          heap.heap_size_limit > 0
+            ? Math.round((mem.heapUsed / heap.heap_size_limit) * 1000) / 10
+            : null,
+      },
+      // Todo null fuera de un contenedor (local, tests).
+      container: readContainerMemory(mem.rss),
+    };
   }
 
   @Get('db-pool-status')
