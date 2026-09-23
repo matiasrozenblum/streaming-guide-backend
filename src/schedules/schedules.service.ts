@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindOneOptions } from 'typeorm';
+import { Repository, FindOneOptions, In } from 'typeorm';
 import { Schedule } from './schedules.entity';
 import { Program } from '../programs/programs.entity';
 import {
@@ -1094,10 +1094,14 @@ export class SchedulesService {
       where: { program_id: programId.toString() },
     });
 
-    for (const other of others) {
+    // Optimize: Bulk delete to avoid N+1 overhead
+    const otherIds = others.map((o) => o.id.toString());
+    if (otherIds.length > 0) {
       await this.schedulesRepository.delete({
-        program_id: other.id.toString(),
+        program_id: In(otherIds),
       });
+    }
+    for (const other of others) {
       if (sourceSchedules.length > 0) {
         const copies = sourceSchedules.map((s) =>
           this.schedulesRepository.create({
