@@ -7,6 +7,10 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **La edad minima de registro no se validaba en el servidor**: la regla de 18 anios existia unicamente en los formularios de la web y de la app, asi que cualquier llamada directa a la API podia registrar una fecha de nacimiento de un menor, o una fecha cualquiera. Se agrega el decorador `@IsAdult()` a `birthDate` en `RegisterDto`, `CreateUserDto` y `UpdateUserDto`. Ademas de la edad minima descarta fechas futuras y anios implausibles, que hasta ahora caian silenciosamente en el bucket etario mas alto y ensuciaban los reportes de audiencia. `UpdateUserDto` validaba `birthDate` como `@IsString()`, es decir aceptaba cualquier texto; pasa a `@IsDateString()` como los otros dos.
+
 ### Added
 
 - **`/health` expone metricas de heap y RSS del proceso**: investigando el uso de memoria del servicio en Railway (picos con correlacion horaria y un baseline de ~1.2 GB que sube en escalones y no baja) no habia forma de medir el proceso desde afuera. `GET /health` ahora agrega `process.memoryUsage()` y `v8.getHeapStatistics()` (`rssMb`, `heapUsedMb`, `heapTotalMb`, `externalMb`, `arrayBuffersMb`, `heapSizeLimitMb`, `heapUsedPercentOfLimit`, `uptimeSeconds`), que son las cifras que permiten separar un leak real de objetos JS — `heapUsed` alto y creciendo — de memoria simplemente reservada por V8 y nunca devuelta al OS — `heapUsed` bajo con `rss`/`heapTotal` altos — o de consumo off-heap por buffers de ioredis y HTTP. `heapSizeLimitMb` expone ademas el techo que V8 elige solo: sin `--max-old-space-size` lo deduce de la memoria que ve la VM y no de la asignada al contenedor, y no dispara GC mayor hasta acercarse a el. `status` y `timestamp` se mantienen en la raiz de la respuesta para no alterar lo que consume el healthcheck de Railway.

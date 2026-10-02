@@ -7,6 +7,7 @@ import {
   IsEnum,
   IsDateString,
 } from 'class-validator';
+import { IsAdult } from '../../utils/is-adult.validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateUserDto {
@@ -42,5 +43,6 @@ export class CreateUserDto {
   @ApiProperty({ example: '1990-01-01', required: false })
   @IsOptional()
   @IsDateString()
+  @IsAdult()
   birthDate?: string;
 }
