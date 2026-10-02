@@ -5,6 +5,7 @@ import {
   IsDateString,
   IsOptional,
 } from 'class-validator';
+import { IsAdult } from '../../utils/is-adult.validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class RegisterDto {
@@ -32,6 +33,7 @@ export class RegisterDto {
   @ApiProperty({ example: '1990-01-01', required: false })
   @IsOptional()
   @IsDateString()
+  @IsAdult()
   birthDate?: string;
 
   @ApiProperty({ required: false })

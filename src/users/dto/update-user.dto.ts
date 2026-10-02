@@ -1,11 +1,13 @@
 import {
-  IsString,
+  IsDateString,
   IsEmail,
-  MinLength,
-  Matches,
-  IsOptional,
   IsEnum,
+  IsOptional,
+  IsString,
+  Matches,
+  MinLength,
 } from 'class-validator';
+import { IsAdult } from '../../utils/is-adult.validator';
 
 export class UpdateUserDto {
   @IsOptional()
@@ -41,6 +43,7 @@ export class UpdateUserDto {
   gender?: 'male' | 'female' | 'non_binary' | 'rather_not_say';
 
   @IsOptional()
-  @IsString()
+  @IsDateString()
+  @IsAdult()
   birthDate?: string;
 }
