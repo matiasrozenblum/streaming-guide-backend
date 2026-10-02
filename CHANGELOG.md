@@ -20,6 +20,18 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.47.0] - 2026-10-02
+
+### Fixed
+
+- **Dar de baja una cuenta no borraba todo el historial de esa persona**: `analytics_event` ya tenia FK con `ON DELETE SET NULL`, asi que sus eventos quedaban huerfanos correctamente, pero `analytics_daily_user` —la unica tabla de rollup con datos por persona— se creo **sin ninguna FK**, de modo que conservaba el `user_id` intacto tras la baja. La politica de privacidad promete lo contrario. Se agrega la constraint con `ON DELETE CASCADE`.
+  - Es `CASCADE` y no `SET NULL` porque `user_id` forma parte de la PRIMARY KEY y una columna de clave no admite nulos: anonimizar ahi significa necesariamente borrar las filas.
+  - Es ademas inocuo para los reportes: esa tabla solo alimenta el recap por usuario. Los rollups de programas, canales, streamers y totales se calculan por separado y no se tocan.
+  - La migracion borra primero las filas cuyo usuario ya no existe, que son anteriores a la constraint y la bloquearian al crearse.
+  - Verificado contra Postgres real: tras borrar un usuario quedan cero filas suyas en ambas tablas, las de otro usuario siguen intactas y el rollup agregado no cambia.
+
+---
+
 ## [1.46.0] - 2026-09-09
 
 ### Added
