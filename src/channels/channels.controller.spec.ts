@@ -23,6 +23,7 @@ describe('ChannelsController', () => {
     description: 'Test Description',
     programs: [],
     youtube_channel_id: 'test-channel-id',
+    youtube_live_video_id: null,
     order: 1,
     is_visible: true,
     background_color: null,
