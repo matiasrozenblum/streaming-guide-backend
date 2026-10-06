@@ -71,6 +71,12 @@ export class YoutubeLiveService {
    * that are simply offline — once the id is pinned, the cheap videos?id= path takes over.
    */
   private readonly PINNED_REDISCOVER_COOLDOWN = 600; // 10 minutes
+  /**
+   * How long a broadcast must have been on air before it counts as *permanent* and earns
+   * a pin. Separates a 24/7 signal from an ordinary program stream that discovery happened
+   * to surface; see rediscoverPinnedLiveStream for why pinning the latter would hurt.
+   */
+  private readonly PERMANENT_BROADCAST_MIN_HOURS = 24;
 
   // YouTube API usage tracking removed - no longer needed
 
@@ -1595,12 +1601,15 @@ export class YoutubeLiveService {
     }
 
     // One batched call for the whole page: videos?id= accepts up to 50 ids per request.
-    let liveStreams: LiveStream[] = [];
+    // liveStreamingDetails rides along for actualStartTime — it decides whether this is a
+    // permanent broadcast worth pinning — and costs nothing extra: videos?id= is 1 quota
+    // unit regardless of how many parts are requested.
+    let liveStreams: Array<LiveStream & { actualStartTime?: string }> = [];
     try {
       const { data } = await axios.get(`${this.apiUrl}/videos`, {
         timeout: this.YOUTUBE_API_TIMEOUT_MS,
         params: {
-          part: 'snippet',
+          part: 'snippet,liveStreamingDetails',
           id: videoIds.join(','),
           key: this.apiKey,
         },
@@ -1621,6 +1630,7 @@ export class YoutubeLiveService {
           thumbnailUrl: item.snippet.thumbnails?.medium?.url,
           channelTitle: item.snippet.channelTitle,
           liveBroadcastContent: item.snippet.liveBroadcastContent,
+          actualStartTime: item.liveStreamingDetails?.actualStartTime,
         }));
     } catch (err) {
       if (this.isYouTubeApiTimeout(err)) {
@@ -1649,13 +1659,38 @@ export class YoutubeLiveService {
 
     const found = liveStreams[0];
 
+    // Pin only genuinely permanent broadcasts. Pinning a per-program stream would be
+    // actively harmful: the pinned path short-circuits the search, so the channel would
+    // stop returning its other simultaneous streams and would skip the title matching
+    // that picks the right one for the program on air. Measured against real data the
+    // two cases are nowhere near each other — TN's stream had been up 26418 hours while
+    // every per-program stream checked (Luzu, Vorterix, Olga, Gelatina, Urbana Play) sat
+    // between 1.1 and 5.8 — so a 24h cut separates them with enormous margin: no program
+    // block lasts a day, and no 24/7 signal started less than one ago.
+    //
+    // The stream is returned either way: discovery still rescues any channel whose search
+    // came up empty. Only the persistence is gated.
+    const hoursOnAir = found.actualStartTime
+      ? (Date.now() - new Date(found.actualStartTime).getTime()) / 3_600_000
+      : null;
+
+    if (
+      hoursOnAir === null ||
+      hoursOnAir < this.PERMANENT_BROADCAST_MIN_HOURS
+    ) {
+      this.logger.debug(
+        `📌 [PinnedLive] Not pinning ${found.videoId} for ${handle}: ${hoursOnAir === null ? 'no actualStartTime' : `only ${hoursOnAir.toFixed(1)}h on air`} — looks like a per-program stream`,
+      );
+      return found;
+    }
+
     try {
       await this.channelsRepository.update(
         { youtube_channel_id: channelId },
         { youtube_live_video_id: found.videoId },
       );
       this.logger.log(
-        `📌 [PinnedLive] Pinned permanent broadcast ${found.videoId} for ${handle} - ${found.title}`,
+        `📌 [PinnedLive] Pinned permanent broadcast ${found.videoId} for ${handle} (${Math.round(hoursOnAir)}h on air) - ${found.title}`,
       );
     } catch (err) {
       // Returning the stream anyway: the pin is an optimisation, the answer is already right.

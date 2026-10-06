@@ -152,6 +152,14 @@ describe('YoutubeLiveService pinned permanent broadcast', () => {
     });
 
     /** videos?id= batch response. */
+    const hoursAgo = (h: number) =>
+      new Date(Date.now() - h * 3_600_000).toISOString();
+
+    /**
+     * videos?id= batch response. `hours` is how long the broadcast has been on air —
+     * the signal that separates a permanent 24/7 stream from a per-program one. Defaults
+     * to TN's real shape (years), since most cases here are about the permanent stream.
+     */
     const videosBatch = (vids: Array<Record<string, any>>) => ({
       data: {
         items: vids.map((v) => ({
@@ -161,6 +169,10 @@ describe('YoutubeLiveService pinned permanent broadcast', () => {
             liveBroadcastContent: v.live ?? 'live',
             channelId: v.channelId ?? CHANNEL_ID,
           }),
+          liveStreamingDetails:
+            v.hours === null
+              ? {}
+              : { actualStartTime: hoursAgo(v.hours ?? 26418) },
         })),
       },
     });
@@ -199,6 +211,10 @@ describe('YoutubeLiveService pinned permanent broadcast', () => {
         PLAYLIST_ID,
       );
       expect(mockedAxios.get.mock.calls[1][1]?.params.id).toBe(ids.join(','));
+      // liveStreamingDetails rides along free: videos?id= is 1 unit regardless of parts.
+      expect(mockedAxios.get.mock.calls[1][1]?.params.part).toBe(
+        'snippet,liveStreamingDetails',
+      );
     });
 
     it('pins nothing when the playlist holds only ended broadcasts', async () => {
@@ -253,6 +269,60 @@ describe('YoutubeLiveService pinned permanent broadcast', () => {
       );
 
       expect(await rediscover()).toBeNull();
+      expect(channelsRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('does not pin a stream that has only been on air for hours', async () => {
+      // A per-program broadcast surfaced because search blipped. Pinning it would make the
+      // channel skip search from then on, losing its other simultaneous streams and the
+      // title matching that picks the right one for the program on air.
+      mockedAxios.get
+        .mockResolvedValueOnce(playlistPage([VIDEO_ID]))
+        .mockResolvedValueOnce(
+          videosBatch([{ id: VIDEO_ID, live: 'live', hours: 1.1 }]),
+        );
+
+      // Still returned — discovery rescues any channel whose search came up empty.
+      expect(await rediscover()).toMatchObject({ videoId: VIDEO_ID });
+      expect(channelsRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('does not pin the longest per-program stream seen in the wild', async () => {
+      // Urbana Play ran 5.8h across several programs — still nowhere near permanent.
+      mockedAxios.get
+        .mockResolvedValueOnce(playlistPage([VIDEO_ID]))
+        .mockResolvedValueOnce(
+          videosBatch([{ id: VIDEO_ID, live: 'live', hours: 5.8 }]),
+        );
+
+      await rediscover();
+
+      expect(channelsRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('pins a broadcast that has been up longer than a day', async () => {
+      mockedAxios.get
+        .mockResolvedValueOnce(playlistPage([VIDEO_ID]))
+        .mockResolvedValueOnce(
+          videosBatch([{ id: VIDEO_ID, live: 'live', hours: 25 }]),
+        );
+
+      await rediscover();
+
+      expect(channelsRepository.update).toHaveBeenCalledWith(
+        { youtube_channel_id: CHANNEL_ID },
+        { youtube_live_video_id: VIDEO_ID },
+      );
+    });
+
+    it('does not pin when the API reports no actualStartTime', async () => {
+      mockedAxios.get
+        .mockResolvedValueOnce(playlistPage([VIDEO_ID]))
+        .mockResolvedValueOnce(
+          videosBatch([{ id: VIDEO_ID, live: 'live', hours: null }]),
+        );
+
+      expect(await rediscover()).toMatchObject({ videoId: VIDEO_ID });
       expect(channelsRepository.update).not.toHaveBeenCalled();
     });
 
