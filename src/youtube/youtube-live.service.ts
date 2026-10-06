@@ -1145,12 +1145,13 @@ export class YoutubeLiveService {
       if (liveStreams.length === 0 && currentProgramName) {
         // Nothing found by search or uploads. For a 24/7 signal that is the expected
         // outcome rather than an offline channel: its broadcast is de-indexed and out of
-        // reach of the uploads playlist, so the only way left is reading the canonical
-        // videoId off the channel's /live page. A hit gets pinned, and from the next cycle
-        // on this channel resolves through the 1-unit pinned path above.
+        // reach of the uploads playlist, so the only place left that still lists it is the
+        // channel's live-streams playlist. A hit gets pinned, and from the next cycle on
+        // this channel resolves through the 1-unit pinned path above.
         const rediscovered = await this.rediscoverPinnedLiveStream(
           channelId,
           handle,
+          currentProgramName,
         );
         if (rediscovered) {
           liveStreams.push(rediscovered);
@@ -1517,19 +1518,30 @@ export class YoutubeLiveService {
   }
 
   /**
-   * Last-resort discovery for permanent broadcasts: reads the canonical videoId off
-   * youtube.com/@handle/live and pins it on the channel row so later cycles resolve
-   * through the 1-unit videos?id= path instead of re-scraping.
+   * Last-resort discovery for permanent broadcasts, via the channel's *live streams*
+   * playlist, then pins what it finds so later cycles resolve through the 1-unit
+   * videos?id= path.
    *
-   * The scrape exists because no API endpoint can find these streams — search has them
-   * de-indexed and they are too deep in the uploads playlist to page to. It only runs
-   * once every PINNED_REDISCOVER_COOLDOWN per handle, and only after search and uploads
-   * have both come up empty, so a channel that is simply offline costs one HTML GET per
-   * cooldown window rather than one per cron tick.
+   * Every channel exposes auto-generated playlists derived from its id: UU… is uploads,
+   * and UULV… is live streams specifically. The latter is the one place the API still
+   * lists a permanent broadcast — TN's stream sits at position 15 of its UULV playlist
+   * while being absent from search entirely and ~20k entries deep in UU. Verified to
+   * hold for every channel checked (TN, Luzu, Vorterix, Olga, Gelatina, Urbana Play):
+   * the on-air stream was on the first page in all of them, so a single page is enough.
+   *
+   * Costs 2 quota units (playlistItems + one batched videos?id=) against the 100 a
+   * search burns. Deliberately uses the API rather than reading youtube.com/@handle/live:
+   * that page does expose the videoId in its canonical tag, but scraping it from a
+   * datacenter IP invites consent interstitials and bot checks, and the canonical points
+   * at the *last* broadcast when a channel is offline, so it cannot be trusted on its own.
+   *
+   * Runs only after search and uploads have both come up empty, and at most once per
+   * PINNED_REDISCOVER_COOLDOWN per handle.
    */
   private async rediscoverPinnedLiveStream(
     channelId: string,
     handle: string,
+    currentProgramName: string | null = null,
   ): Promise<LiveStream | null> {
     const cooldownKey = `livePinRediscover:${handle}`;
     const allowed = await this.redisService.setNX(
@@ -1544,73 +1556,115 @@ export class YoutubeLiveService {
       return null;
     }
 
-    const normalizedHandle = handle.startsWith('@') ? handle : `@${handle}`;
-    let html: string;
+    // Live-streams playlist id: the channel id with its 'UC' prefix swapped for 'UULV'.
+    const liveStreamsPlaylistId = `UULV${channelId.replace(/^UC/, '')}`;
+
+    let videoIds: string[] = [];
     try {
-      const { data } = await axios.get<string>(
-        `https://www.youtube.com/${normalizedHandle}/live`,
-        {
-          timeout: this.YOUTUBE_API_TIMEOUT_MS,
-          responseType: 'text',
-          headers: {
-            // Without a browser UA YouTube serves a consent interstitial with no canonical.
-            'User-Agent':
-              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept-Language': 'es-AR,es;q=0.9',
-          },
+      const { data } = await axios.get(`${this.apiUrl}/playlistItems`, {
+        timeout: this.YOUTUBE_API_TIMEOUT_MS,
+        params: {
+          part: 'snippet',
+          playlistId: liveStreamsPlaylistId,
+          maxResults: 50,
+          key: this.apiKey,
         },
-      );
-      html = data;
+      });
+      videoIds = (data.items || [])
+        .map((item: any) => item.snippet?.resourceId?.videoId)
+        .filter((id: string | undefined): id is string => Boolean(id));
     } catch (err) {
-      this.logger.warn(
-        `⚠️ [PinnedLive] Could not load ${normalizedHandle}/live: ${err instanceof Error ? err.message : err}`,
+      // A channel that has never streamed has no UULV playlist at all (404) — normal.
+      if (this.isYouTubeApiTimeout(err)) {
+        this.logger.warn(
+          `⏱️ YouTube API timeout (>${this.YOUTUBE_API_TIMEOUT_MS}ms) reading live playlist for ${handle}`,
+        );
+      } else {
+        this.logger.debug(
+          `📌 [PinnedLive] No live-streams playlist for ${handle}: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+      return null;
+    }
+
+    if (videoIds.length === 0) {
+      this.logger.debug(
+        `📌 [PinnedLive] Live-streams playlist empty for ${handle}`,
       );
       return null;
     }
 
-    const canonical = html.match(
-      /<link rel="canonical" href="https:\/\/www\.youtube\.com\/watch\?v=([\w-]{11})"/,
-    );
-    const videoId = canonical?.[1];
-    if (!videoId) {
-      // Channels without a permanent broadcast resolve /live to the channel page, which
-      // has no watch canonical — that is the normal "nothing to pin here" outcome.
+    // One batched call for the whole page: videos?id= accepts up to 50 ids per request.
+    let liveStreams: LiveStream[] = [];
+    try {
+      const { data } = await axios.get(`${this.apiUrl}/videos`, {
+        timeout: this.YOUTUBE_API_TIMEOUT_MS,
+        params: {
+          part: 'snippet',
+          id: videoIds.join(','),
+          key: this.apiKey,
+        },
+      });
+      liveStreams = (data.items || [])
+        .filter(
+          (item: any) =>
+            item.snippet?.liveBroadcastContent === 'live' &&
+            // The playlist is the channel's own, but guard anyway: a pin must never
+            // point at a video this channel does not own.
+            item.snippet?.channelId === channelId,
+        )
+        .map((item: any) => ({
+          videoId: item.id,
+          title: item.snippet.title,
+          publishedAt: item.snippet.publishedAt,
+          description: item.snippet.description,
+          thumbnailUrl: item.snippet.thumbnails?.medium?.url,
+          channelTitle: item.snippet.channelTitle,
+          liveBroadcastContent: item.snippet.liveBroadcastContent,
+        }));
+    } catch (err) {
+      if (this.isYouTubeApiTimeout(err)) {
+        this.logger.warn(
+          `⏱️ YouTube API timeout (>${this.YOUTUBE_API_TIMEOUT_MS}ms) checking live playlist videos for ${handle}`,
+        );
+      }
+      return null;
+    }
+
+    if (liveStreams.length === 0) {
       this.logger.debug(
-        `📌 [PinnedLive] No canonical live video on ${normalizedHandle}/live`,
+        `📌 [PinnedLive] Nothing live in the first ${videoIds.length} entries of ${handle}'s live playlist`,
       );
       return null;
     }
 
-    const resolved = await this.fetchLiveStreamById(videoId);
-    if (!resolved) {
-      this.logger.debug(
-        `📌 [PinnedLive] Canonical video ${videoId} for ${handle} is not live, not pinning`,
+    // Several broadcasts can be open at once; prefer the one matching the on-air program.
+    if (liveStreams.length > 1 && currentProgramName) {
+      liveStreams.sort(
+        (a, b) =>
+          SimilarityUtil.calculateTitleSimilarity(currentProgramName, b.title) -
+          SimilarityUtil.calculateTitleSimilarity(currentProgramName, a.title),
       );
-      return null;
     }
-    if (resolved.channelId !== channelId) {
-      this.logger.warn(
-        `📌 [PinnedLive] ${normalizedHandle}/live resolved to ${videoId} owned by ${resolved.channelId}, expected ${channelId} — not pinning`,
-      );
-      return null;
-    }
+
+    const found = liveStreams[0];
 
     try {
       await this.channelsRepository.update(
         { youtube_channel_id: channelId },
-        { youtube_live_video_id: videoId },
+        { youtube_live_video_id: found.videoId },
       );
       this.logger.log(
-        `📌 [PinnedLive] Pinned permanent broadcast ${videoId} for ${handle} - ${resolved.stream.title}`,
+        `📌 [PinnedLive] Pinned permanent broadcast ${found.videoId} for ${handle} - ${found.title}`,
       );
     } catch (err) {
       // Returning the stream anyway: the pin is an optimisation, the answer is already right.
       this.logger.warn(
-        `⚠️ [PinnedLive] Found ${videoId} for ${handle} but could not persist the pin: ${err instanceof Error ? err.message : err}`,
+        `⚠️ [PinnedLive] Found ${found.videoId} for ${handle} but could not persist the pin: ${err instanceof Error ? err.message : err}`,
       );
     }
 
-    return resolved.stream;
+    return found;
   }
 
   public async isVideoLive(videoId: string): Promise<boolean> {

@@ -21,7 +21,9 @@ const VIDEO_ID = 'cb12KmMMDJA';
  *
  * The pinned videoId closes that gap, and these tests hold its two halves in place:
  * resolving through the pin must stay cheap and must not trust a stale pin, and
- * re-discovery must only pin a video that is genuinely live and genuinely this channel's.
+ * re-discovery must only pin a video that is genuinely live and genuinely this channel's,
+ * and must find it through the channel's UULV (live streams) playlist — the one listing
+ * the API still returns a permanent broadcast in.
  */
 describe('YoutubeLiveService pinned permanent broadcast', () => {
   let service: YoutubeLiveService;
@@ -40,10 +42,6 @@ describe('YoutubeLiveService pinned permanent broadcast', () => {
     },
     ...overrides,
   });
-
-  /** The canonical tag YouTube serves on /@handle/live for a channel with an open stream. */
-  const livePageHtml = (videoId: string) =>
-    `<html><head><link rel="canonical" href="https://www.youtube.com/watch?v=${videoId}"></head></html>`;
 
   const resolvePinned = () =>
     (service as any).resolvePinnedLiveStream(CHANNEL_ID, HANDLE);
@@ -143,13 +141,40 @@ describe('YoutubeLiveService pinned permanent broadcast', () => {
     });
   });
 
-  describe('re-discovery', () => {
-    it('pins the canonical video from the /live page and returns it', async () => {
+  describe('re-discovery via the live-streams playlist', () => {
+    const PLAYLIST_ID = 'UULVj6PcyLvpnIRT_2W_mwa9Aw';
+
+    /** playlistItems page for the channel's UULV (live streams) playlist. */
+    const playlistPage = (ids: string[]) => ({
+      data: {
+        items: ids.map((id) => ({ snippet: { resourceId: { videoId: id } } })),
+      },
+    });
+
+    /** videos?id= batch response. */
+    const videosBatch = (vids: Array<Record<string, any>>) => ({
+      data: {
+        items: vids.map((v) => ({
+          id: v.id,
+          snippet: snippetFor({
+            title: v.title ?? 'TN EN VIVO',
+            liveBroadcastContent: v.live ?? 'live',
+            channelId: v.channelId ?? CHANNEL_ID,
+          }),
+        })),
+      },
+    });
+
+    it('pins the live entry found in the playlist and returns it', async () => {
       mockedAxios.get
-        .mockResolvedValueOnce({ data: livePageHtml(VIDEO_ID) })
-        .mockResolvedValueOnce({
-          data: { items: [{ snippet: snippetFor() }] },
-        });
+        .mockResolvedValueOnce(playlistPage(['oldA', 'oldB', VIDEO_ID]))
+        .mockResolvedValueOnce(
+          videosBatch([
+            { id: 'oldA', live: 'none' },
+            { id: 'oldB', live: 'none' },
+            { id: VIDEO_ID, live: 'live' },
+          ]),
+        );
 
       const stream = await rediscover();
 
@@ -160,43 +185,69 @@ describe('YoutubeLiveService pinned permanent broadcast', () => {
       );
     });
 
-    it('does not pin a canonical video that is not live', async () => {
-      // /live resolves to the *last* broadcast when a channel is offline, so the
-      // canonical tag alone is not evidence of anything being on air.
+    it('reads the UULV playlist and batches the whole page in one videos call', async () => {
+      const ids = Array.from({ length: 50 }, (_, i) => `vid${i}`);
       mockedAxios.get
-        .mockResolvedValueOnce({ data: livePageHtml(VIDEO_ID) })
-        .mockResolvedValueOnce({
-          data: {
-            items: [{ snippet: snippetFor({ liveBroadcastContent: 'none' }) }],
-          },
-        });
+        .mockResolvedValueOnce(playlistPage(ids))
+        .mockResolvedValueOnce(videosBatch([{ id: 'vid7', live: 'live' }]));
+
+      await rediscover();
+
+      // 2 quota units total, against the 100 a search would have cost.
+      expect(mockedAxios.get).toHaveBeenCalledTimes(2);
+      expect(mockedAxios.get.mock.calls[0][1]?.params.playlistId).toBe(
+        PLAYLIST_ID,
+      );
+      expect(mockedAxios.get.mock.calls[1][1]?.params.id).toBe(ids.join(','));
+    });
+
+    it('pins nothing when the playlist holds only ended broadcasts', async () => {
+      mockedAxios.get
+        .mockResolvedValueOnce(playlistPage(['oldA', 'oldB']))
+        .mockResolvedValueOnce(
+          videosBatch([
+            { id: 'oldA', live: 'none' },
+            { id: 'oldB', live: 'none' },
+          ]),
+        );
 
       expect(await rediscover()).toBeNull();
       expect(channelsRepository.update).not.toHaveBeenCalled();
     });
 
-    it('does not pin a video owned by a different channel', async () => {
+    it('never pins a video owned by a different channel', async () => {
       mockedAxios.get
-        .mockResolvedValueOnce({ data: livePageHtml(VIDEO_ID) })
-        .mockResolvedValueOnce({
-          data: {
-            items: [{ snippet: snippetFor({ channelId: 'UCsomeoneelse' }) }],
-          },
-        });
+        .mockResolvedValueOnce(playlistPage([VIDEO_ID]))
+        .mockResolvedValueOnce(
+          videosBatch([
+            { id: VIDEO_ID, live: 'live', channelId: 'UCsomeoneelse' },
+          ]),
+        );
 
       expect(await rediscover()).toBeNull();
       expect(channelsRepository.update).not.toHaveBeenCalled();
     });
 
-    it('returns null without scraping while inside the cooldown', async () => {
-      redisService.setNX.mockResolvedValue(false);
+    it('picks the broadcast matching the on-air program when several are live', async () => {
+      mockedAxios.get
+        .mockResolvedValueOnce(playlistPage(['otro', VIDEO_ID]))
+        .mockResolvedValueOnce(
+          videosBatch([
+            { id: 'otro', live: 'live', title: 'ARCHIVO | Copa America 2024' },
+            { id: VIDEO_ID, live: 'live', title: 'TN DE 10 A 13 EN VIVO' },
+          ]),
+        );
 
-      expect(await rediscover()).toBeNull();
-      expect(mockedAxios.get).not.toHaveBeenCalled();
+      const stream = await (service as any).rediscoverPinnedLiveStream(
+        CHANNEL_ID,
+        HANDLE,
+        'TN DE 10 A 13',
+      );
+
+      expect(stream).toMatchObject({ videoId: VIDEO_ID });
     });
 
-    it('survives a /live page that 404s', async () => {
-      // Channels whose handle has no /live route at all (axios rejects on 404).
+    it('survives a channel with no live-streams playlist (404)', async () => {
       mockedAxios.get.mockRejectedValue(
         new Error('Request failed with status code 404'),
       );
@@ -205,13 +256,18 @@ describe('YoutubeLiveService pinned permanent broadcast', () => {
       expect(channelsRepository.update).not.toHaveBeenCalled();
     });
 
+    it('returns null without calling the API while inside the cooldown', async () => {
+      redisService.setNX.mockResolvedValue(false);
+
+      expect(await rediscover()).toBeNull();
+      expect(mockedAxios.get).not.toHaveBeenCalled();
+    });
+
     it('still returns the stream when persisting the pin fails', async () => {
       // The pin is an optimisation; the liveness answer is already correct without it.
       mockedAxios.get
-        .mockResolvedValueOnce({ data: livePageHtml(VIDEO_ID) })
-        .mockResolvedValueOnce({
-          data: { items: [{ snippet: snippetFor() }] },
-        });
+        .mockResolvedValueOnce(playlistPage([VIDEO_ID]))
+        .mockResolvedValueOnce(videosBatch([{ id: VIDEO_ID, live: 'live' }]));
       channelsRepository.update.mockRejectedValue(new Error('db down'));
 
       expect(await rediscover()).toMatchObject({ videoId: VIDEO_ID });
