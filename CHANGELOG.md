@@ -13,6 +13,8 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ### Fixed
 
+- **Las señales 24/7 nunca se detectaban en vivo (TN)**: `search?eventType=live` devolvia 0 resultados para Todo Noticias mientras su transmision estaba al aire con 84k espectadores simultaneos. No era un filtro mal aplicado ni una restriccion regional: el video estaba **fuera del indice de busqueda del canal**, y una `search?order=date` sin `eventType` sobre sus 77k videos indexados tampoco lo devolvia. La causa es la antiguedad de la emision — abierta desde 2023-10-01, tres años sin cortar — que es como transmiten todas las señales de noticias. El fallback por uploads tampoco llegaba: el video se publico en 2023 y quedo ~20k posiciones abajo, pasado el tope que `playlistItems` pagina. Se agrega `channel.youtube_live_video_id`, que fija el videoId de la transmision permanente y se resuelve con `videos?id=` — el unico endpoint que la reporta correctamente, y de paso 1 unidad de cuota en lugar de las 100 que cuesta una busqueda, por lo que se consulta **antes** del search y no despues. El id se descubre solo leyendo el canonical de `youtube.com/@handle/live` cuando search y uploads quedaron sin resultado, y se repinea automaticamente si el canal corta y reinicia la transmision. El descubrimiento valida contra `videos?id=` antes de fijar nada, porque `/live` sirve un canonical apuntando a la **ultima** emision aunque el canal este offline, y valida tambien que el video sea del canal esperado; tiene ademas un cooldown de 10 minutos por handle para no golpear la pagina en cada corrida del cron.
+
 ---
 
 ## [1.44.1] - 2026-09-22
