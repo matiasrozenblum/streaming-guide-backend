@@ -65,6 +65,12 @@ export class YoutubeLiveService {
    * fast retries would escalate a channel to not-found (and email about it) within minutes.
    */
   private readonly NOT_FOUND_ATTEMPT_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+  /**
+   * Minimum gap between re-discoveries of a channel's permanent broadcast. The lookup
+   * scrapes youtube.com/@handle/live, so it must not run on every cron tick for channels
+   * that are simply offline — once the id is pinned, the cheap videos?id= path takes over.
+   */
+  private readonly PINNED_REDISCOVER_COOLDOWN = 600; // 10 minutes
 
   // YouTube API usage tracking removed - no longer needed
 
@@ -1004,7 +1010,17 @@ export class YoutubeLiveService {
 
       let allStreams: LiveStream[] = [];
 
-      if (uploadsOnlyRetry) {
+      // Permanent 24/7 broadcasts are invisible to search?eventType=live (see
+      // resolvePinnedLiveStream), so a pinned videoId is checked first: when it hits, it
+      // is authoritative and costs 1 quota unit instead of the 100 a search would.
+      const pinnedStream = await this.resolvePinnedLiveStream(
+        channelId,
+        handle,
+      );
+
+      if (pinnedStream) {
+        allStreams = [pinnedStream];
+      } else if (uploadsOnlyRetry) {
         this.logger.debug(
           `💸 [getLiveStreams] Skipping search for ${handle} (inside not-found retry window), relying on uploads fallback`,
         );
@@ -1052,23 +1068,29 @@ export class YoutubeLiveService {
 
       // Filter out scheduled streams - only keep actually live streams
       const liveStreams: LiveStream[] = [];
-      for (const stream of allStreams) {
-        this.logger.debug(
-          `🔍 [getLiveStreams] Checking if ${stream.videoId} (${stream.title}) is actually live for ${handle}`,
-        );
-        const isActuallyLive = await this.isVideoLive(stream.videoId);
-        this.logger.debug(
-          `🔍 [getLiveStreams] isVideoLive(${stream.videoId}) returned: ${isActuallyLive}`,
-        );
-        if (isActuallyLive) {
-          liveStreams.push(stream);
+      if (pinnedStream) {
+        // The pinned path already resolved through videos?id=, so it is confirmed live;
+        // re-validating would spend a second quota unit re-asking the same question.
+        liveStreams.push(pinnedStream);
+      } else {
+        for (const stream of allStreams) {
           this.logger.debug(
-            `✅ [getLiveStreams] Confirmed live stream for ${handle}: ${stream.videoId} - ${stream.title}`,
+            `🔍 [getLiveStreams] Checking if ${stream.videoId} (${stream.title}) is actually live for ${handle}`,
           );
-        } else {
+          const isActuallyLive = await this.isVideoLive(stream.videoId);
           this.logger.debug(
-            `⏰ [getLiveStreams] Skipping scheduled stream for ${handle}: ${stream.videoId} - ${stream.title}`,
+            `🔍 [getLiveStreams] isVideoLive(${stream.videoId}) returned: ${isActuallyLive}`,
           );
+          if (isActuallyLive) {
+            liveStreams.push(stream);
+            this.logger.debug(
+              `✅ [getLiveStreams] Confirmed live stream for ${handle}: ${stream.videoId} - ${stream.title}`,
+            );
+          } else {
+            this.logger.debug(
+              `⏰ [getLiveStreams] Skipping scheduled stream for ${handle}: ${stream.videoId} - ${stream.title}`,
+            );
+          }
         }
       }
 
@@ -1117,6 +1139,21 @@ export class YoutubeLiveService {
           this.logger.debug(
             `🎬 [UploadsFallback] Found active live/premiere for ${handle} (is_premiere=${currentProgramIsPremiere}): ${uploadStream.videoId} - ${uploadStream.title}`,
           );
+        }
+      }
+
+      if (liveStreams.length === 0 && currentProgramName) {
+        // Nothing found by search or uploads. For a 24/7 signal that is the expected
+        // outcome rather than an offline channel: its broadcast is de-indexed and out of
+        // reach of the uploads playlist, so the only way left is reading the canonical
+        // videoId off the channel's /live page. A hit gets pinned, and from the next cycle
+        // on this channel resolves through the 1-unit pinned path above.
+        const rediscovered = await this.rediscoverPinnedLiveStream(
+          channelId,
+          handle,
+        );
+        if (rediscovered) {
+          liveStreams.push(rediscovered);
         }
       }
 
@@ -1379,6 +1416,201 @@ export class YoutubeLiveService {
       );
       return null;
     }
+  }
+
+  /**
+   * Fetches a single video and returns it as a LiveStream only if it is actually on air.
+   * Also hands back the owning channelId so callers can reject a videoId that belongs to
+   * someone else (the /live page can redirect to a collab or a re-upload).
+   */
+  private async fetchLiveStreamById(
+    videoId: string,
+  ): Promise<{ stream: LiveStream; channelId: string } | null> {
+    try {
+      const { data } = await axios.get(`${this.apiUrl}/videos`, {
+        timeout: this.YOUTUBE_API_TIMEOUT_MS,
+        params: { part: 'snippet', id: videoId, key: this.apiKey },
+      });
+
+      const item = data.items?.[0];
+      if (!item || item.snippet?.liveBroadcastContent !== 'live') return null;
+
+      const snippet = item.snippet;
+      return {
+        channelId: snippet.channelId,
+        stream: {
+          videoId,
+          title: snippet.title,
+          publishedAt: snippet.publishedAt,
+          description: snippet.description,
+          thumbnailUrl: snippet.thumbnails?.medium?.url,
+          channelTitle: snippet.channelTitle,
+          liveBroadcastContent: snippet.liveBroadcastContent,
+        },
+      };
+    } catch (err) {
+      if (this.isYouTubeApiTimeout(err)) {
+        this.logger.warn(
+          `⏱️ YouTube API timeout (>${this.YOUTUBE_API_TIMEOUT_MS}ms) in fetchLiveStreamById for videoId=${videoId}`,
+        );
+      }
+      return null;
+    }
+  }
+
+  /**
+   * Resolves a channel's live stream from the videoId pinned on the channel row.
+   *
+   * 24/7 signals (TN, C5N, A24…) hold a single broadcast open for years, and such a
+   * stream drops out of YouTube's *search index* while still demonstrably live: for
+   * UCj6PcyLvpnIRT_2W_mwa9Aw, search?eventType=live returned 0 items against a video
+   * sitting at 84k concurrent viewers, and so did a plain search?order=date over the
+   * channel's 77k indexed videos. The uploads fallback cannot reach it either — the
+   * broadcast was published in 2023 and sits ~20k entries deep, at the playlist's cap.
+   *
+   * videos?id=<pinned> answers correctly for 1 quota unit against the 100 a search
+   * burns, which is why this runs *before* the search path instead of after it.
+   *
+   * Returns null when there is no pin yet or the pinned broadcast has ended; the
+   * caller then falls through to search/uploads and finally to re-discovery.
+   */
+  private async resolvePinnedLiveStream(
+    channelId: string,
+    handle: string,
+  ): Promise<LiveStream | null> {
+    let pinnedVideoId: string | null = null;
+    try {
+      const channel = await this.channelsRepository.findOne({
+        where: { youtube_channel_id: channelId },
+        select: ['id', 'youtube_live_video_id'],
+      });
+      pinnedVideoId = channel?.youtube_live_video_id ?? null;
+    } catch (err) {
+      this.logger.warn(
+        `⚠️ [PinnedLive] Could not read pinned videoId for ${handle}: ${err instanceof Error ? err.message : err}`,
+      );
+      return null;
+    }
+
+    if (!pinnedVideoId) return null;
+
+    const resolved = await this.fetchLiveStreamById(pinnedVideoId);
+    if (!resolved) {
+      this.logger.debug(
+        `📌 [PinnedLive] Pinned video ${pinnedVideoId} for ${handle} is not live, falling through to discovery`,
+      );
+      return null;
+    }
+
+    // A pin that now points at another channel's video is stale, not a hit.
+    if (resolved.channelId !== channelId) {
+      this.logger.warn(
+        `📌 [PinnedLive] Pinned video ${pinnedVideoId} belongs to ${resolved.channelId}, not ${channelId} (${handle}) — ignoring`,
+      );
+      return null;
+    }
+
+    this.logger.debug(
+      `📌 [PinnedLive] ${handle} is live via pinned video ${pinnedVideoId} - ${resolved.stream.title}`,
+    );
+    return resolved.stream;
+  }
+
+  /**
+   * Last-resort discovery for permanent broadcasts: reads the canonical videoId off
+   * youtube.com/@handle/live and pins it on the channel row so later cycles resolve
+   * through the 1-unit videos?id= path instead of re-scraping.
+   *
+   * The scrape exists because no API endpoint can find these streams — search has them
+   * de-indexed and they are too deep in the uploads playlist to page to. It only runs
+   * once every PINNED_REDISCOVER_COOLDOWN per handle, and only after search and uploads
+   * have both come up empty, so a channel that is simply offline costs one HTML GET per
+   * cooldown window rather than one per cron tick.
+   */
+  private async rediscoverPinnedLiveStream(
+    channelId: string,
+    handle: string,
+  ): Promise<LiveStream | null> {
+    const cooldownKey = `livePinRediscover:${handle}`;
+    const allowed = await this.redisService.setNX(
+      cooldownKey,
+      { timestamp: Date.now() },
+      this.PINNED_REDISCOVER_COOLDOWN,
+    );
+    if (!allowed) {
+      this.logger.debug(
+        `📌 [PinnedLive] Skipping re-discovery for ${handle} (inside cooldown)`,
+      );
+      return null;
+    }
+
+    const normalizedHandle = handle.startsWith('@') ? handle : `@${handle}`;
+    let html: string;
+    try {
+      const { data } = await axios.get<string>(
+        `https://www.youtube.com/${normalizedHandle}/live`,
+        {
+          timeout: this.YOUTUBE_API_TIMEOUT_MS,
+          responseType: 'text',
+          headers: {
+            // Without a browser UA YouTube serves a consent interstitial with no canonical.
+            'User-Agent':
+              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'es-AR,es;q=0.9',
+          },
+        },
+      );
+      html = data;
+    } catch (err) {
+      this.logger.warn(
+        `⚠️ [PinnedLive] Could not load ${normalizedHandle}/live: ${err instanceof Error ? err.message : err}`,
+      );
+      return null;
+    }
+
+    const canonical = html.match(
+      /<link rel="canonical" href="https:\/\/www\.youtube\.com\/watch\?v=([\w-]{11})"/,
+    );
+    const videoId = canonical?.[1];
+    if (!videoId) {
+      // Channels without a permanent broadcast resolve /live to the channel page, which
+      // has no watch canonical — that is the normal "nothing to pin here" outcome.
+      this.logger.debug(
+        `📌 [PinnedLive] No canonical live video on ${normalizedHandle}/live`,
+      );
+      return null;
+    }
+
+    const resolved = await this.fetchLiveStreamById(videoId);
+    if (!resolved) {
+      this.logger.debug(
+        `📌 [PinnedLive] Canonical video ${videoId} for ${handle} is not live, not pinning`,
+      );
+      return null;
+    }
+    if (resolved.channelId !== channelId) {
+      this.logger.warn(
+        `📌 [PinnedLive] ${normalizedHandle}/live resolved to ${videoId} owned by ${resolved.channelId}, expected ${channelId} — not pinning`,
+      );
+      return null;
+    }
+
+    try {
+      await this.channelsRepository.update(
+        { youtube_channel_id: channelId },
+        { youtube_live_video_id: videoId },
+      );
+      this.logger.log(
+        `📌 [PinnedLive] Pinned permanent broadcast ${videoId} for ${handle} - ${resolved.stream.title}`,
+      );
+    } catch (err) {
+      // Returning the stream anyway: the pin is an optimisation, the answer is already right.
+      this.logger.warn(
+        `⚠️ [PinnedLive] Found ${videoId} for ${handle} but could not persist the pin: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
+    return resolved.stream;
   }
 
   public async isVideoLive(videoId: string): Promise<boolean> {
