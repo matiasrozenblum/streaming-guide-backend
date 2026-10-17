@@ -74,6 +74,7 @@ export class AnalyticsRollupService {
     await this.rollupStreamers(date);
     await this.rollupUsers(date);
     await this.rollupUserStreamers(date);
+    await this.rollupUserSlots(date);
   }
 
   /**
@@ -104,6 +105,10 @@ export class AnalyticsRollupService {
    */
   private dayExpression(): string {
     return `(e.occurred_at AT TIME ZONE 'America/Argentina/Buenos_Aires')::date`;
+  }
+
+  private hourExpression(): string {
+    return `EXTRACT(HOUR FROM e.occurred_at AT TIME ZONE 'America/Argentina/Buenos_Aires')::smallint`;
   }
 
   private async rollupTotals(date: string): Promise<void> {
@@ -258,6 +263,45 @@ export class AnalyticsRollupService {
       GROUP BY e.user_id, e.streamer_id, e.event_name
       ON CONFLICT (date, user_id, streamer_id, event_name) DO UPDATE SET
         count = EXCLUDED.count
+      `,
+      [date],
+    );
+  }
+
+  /**
+   * Same rows as rollupUsers, split by hour of day and keyed on the channel too,
+   * so the recap can draw a channel-by-hour grid without reading raw events —
+   * which get pruned at 90 days and would leave the yearly recap blind.
+   *
+   * The hour is stored raw; the three-hour bands the design shows are a GROUP BY
+   * at read time, so changing them later costs nothing.
+   */
+  private async rollupUserSlots(date: string): Promise<void> {
+    await this.eventRepository.query(
+      `
+      INSERT INTO analytics_daily_user_slot
+        (date, user_id, channel_id, program_id, hour, event_name, count)
+      SELECT
+        $1::date,
+        e.user_id,
+        e.channel_id,
+        e.program_id,
+        ${this.hourExpression()},
+        e.event_name,
+        COUNT(*)::int
+      FROM analytics_event e
+      WHERE ${this.dayExpression()} = $1::date
+        AND e.user_id IS NOT NULL
+        AND e.channel_id IS NOT NULL
+        AND e.program_id IS NOT NULL
+      GROUP BY
+        e.user_id,
+        e.channel_id,
+        e.program_id,
+        ${this.hourExpression()},
+        e.event_name
+      ON CONFLICT (date, user_id, channel_id, program_id, hour, event_name)
+      DO UPDATE SET count = EXCLUDED.count
       `,
       [date],
     );

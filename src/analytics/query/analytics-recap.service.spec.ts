@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { AnalyticsRecapService } from './analytics-recap.service';
 import { AnalyticsDailyUser } from '../entities/analytics-daily-user.entity';
 import { AnalyticsDailyUserStreamer } from '../entities/analytics-daily-user-streamer.entity';
+import { AnalyticsDailyUserSlot } from '../entities/analytics-daily-user-slot.entity';
 import { RedisService } from '../../redis/redis.service';
 import { RecapPeriod } from '../dto/analytics-query.dto';
 
@@ -13,6 +14,9 @@ describe('AnalyticsRecapService', () => {
   let streamerBuilder: Record<string, jest.Mock>;
   /** Rows the streamer rollup returns; kept apart from rawManyQueue. */
   let streamerRows: unknown[];
+  let slotBuilder: Record<string, jest.Mock>;
+  /** Rows the slot rollup returns; also kept apart from rawManyQueue. */
+  let slotRows: unknown[];
   let whereCalls: Array<[string, Record<string, unknown>]>;
 
   /** Rows returned by getRawMany, in call order. */
@@ -25,6 +29,7 @@ describe('AnalyticsRecapService', () => {
     rawManyQueue = [];
     rawOneQueue = [];
     streamerRows = [];
+    slotRows = [];
 
     const chain = () => builder;
     builder = {
@@ -74,6 +79,24 @@ describe('AnalyticsRecapService', () => {
       getRawMany: jest.fn(() => Promise.resolve(streamerRows)),
     };
 
+    const slotChain = () => slotBuilder;
+    slotBuilder = {
+      select: jest.fn(slotChain),
+      addSelect: jest.fn(slotChain),
+      innerJoin: jest.fn(slotChain),
+      where: jest.fn((sql: string, params: Record<string, unknown>) => {
+        whereCalls.push([sql, params]);
+        return slotBuilder;
+      }),
+      andWhere: jest.fn((sql: string, params: Record<string, unknown>) => {
+        whereCalls.push([sql, params]);
+        return slotBuilder;
+      }),
+      groupBy: jest.fn(slotChain),
+      addGroupBy: jest.fn(slotChain),
+      getRawMany: jest.fn(() => Promise.resolve(slotRows)),
+    };
+
     redisService = {
       get: jest.fn().mockResolvedValue(null),
       set: jest.fn().mockResolvedValue(undefined),
@@ -89,6 +112,10 @@ describe('AnalyticsRecapService', () => {
         {
           provide: getRepositoryToken(AnalyticsDailyUserStreamer),
           useValue: { createQueryBuilder: jest.fn(() => streamerBuilder) },
+        },
+        {
+          provide: getRepositoryToken(AnalyticsDailyUserSlot),
+          useValue: { createQueryBuilder: jest.fn(() => slotBuilder) },
         },
         { provide: RedisService, useValue: redisService },
       ],
@@ -306,6 +333,70 @@ describe('AnalyticsRecapService', () => {
       const openTtl = redisService.set.mock.calls[0][2] as number;
 
       expect(closedTtl).toBeGreaterThan(openTtl);
+    });
+  });
+
+  describe('grilla por hora', () => {
+    const slot = (hour: number, plays = 1, channelId = 1) => ({
+      channel_id: String(channelId),
+      channel_name: channelId === 1 ? 'Luzu TV' : 'Olga',
+      channel_logo_url: null,
+      hour: String(hour),
+      plays: String(plays),
+    });
+
+    /** Three plays clears MIN_PLAYS_FOR_RECAP so the grid is not withheld. */
+    const withEnoughPlays = () => {
+      rawOneQueue = [
+        { plays: '3', distinct_programs: '1', distinct_channels: '1' },
+        { dow: '3', plays: '3' },
+        { plays: '0' },
+      ];
+    };
+
+    it('agrupa las horas en bandas de tres desde las 6', async () => {
+      withEnoughPlays();
+      slotRows = [slot(6), slot(8), slot(9), slot(21)];
+
+      const recap = await service.getRecap(42, RecapPeriod.WEEK, '2026-09-02');
+
+      expect(recap.grid.from_hour).toBe(6);
+      expect(recap.grid.band_hours).toBe(3);
+      // 6 y 8 caen en la primera banda, 9 en la segunda, 21 en la ultima.
+      expect(recap.grid.rows[0].cells).toEqual([2, 1, 0, 0, 0, 1]);
+    });
+
+    it('pliega la trasnoche en la primera banda en vez de perderla', async () => {
+      withEnoughPlays();
+      slotRows = [slot(3), slot(0)];
+
+      const recap = await service.getRecap(42, RecapPeriod.WEEK, '2026-09-02');
+
+      expect(recap.grid.rows[0].cells[0]).toBe(2);
+    });
+
+    it('cuenta las casillas encendidas, no las reproducciones', async () => {
+      withEnoughPlays();
+      slotRows = [slot(9, 7), slot(12, 1), slot(9, 4, 2)];
+
+      const recap = await service.getRecap(42, RecapPeriod.WEEK, '2026-09-02');
+
+      expect(recap.grid.lit_cells).toBe(3);
+      expect(recap.grid.total_cells).toBe(12);
+    });
+
+    it('no devuelve la grilla cuando no alcanza el minimo', async () => {
+      rawOneQueue = [
+        { plays: '1', distinct_programs: '1', distinct_channels: '1' },
+        { dow: '3', plays: '1' },
+        { plays: '0' },
+      ];
+      slotRows = [slot(9)];
+
+      const recap = await service.getRecap(42, RecapPeriod.WEEK, '2026-09-02');
+
+      expect(recap.enough_data).toBe(false);
+      expect(recap.grid.rows).toEqual([]);
     });
   });
 });

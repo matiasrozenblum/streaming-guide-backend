@@ -31,13 +31,14 @@ describe('AnalyticsRollupService', () => {
     await service.rollupDate('2026-09-01');
 
     const statements = query.mock.calls.map((call) => call[0] as string);
-    expect(statements).toHaveLength(6);
+    expect(statements).toHaveLength(7);
     expect(statements.join()).toContain('analytics_daily_totals');
     expect(statements.join()).toContain('analytics_daily_program');
     expect(statements.join()).toContain('analytics_daily_channel');
     expect(statements.join()).toContain('analytics_daily_streamer');
     expect(statements.join()).toContain('analytics_daily_user');
     expect(statements.join()).toContain('analytics_daily_user_streamer');
+    expect(statements.join()).toContain('analytics_daily_user_slot');
   });
 
   it('keeps the per-user streamer rollup to attributable rows', async () => {

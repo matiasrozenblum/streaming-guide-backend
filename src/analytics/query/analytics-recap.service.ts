@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AnalyticsDailyUser } from '../entities/analytics-daily-user.entity';
 import { AnalyticsDailyUserStreamer } from '../entities/analytics-daily-user-streamer.entity';
+import { AnalyticsDailyUserSlot } from '../entities/analytics-daily-user-slot.entity';
 import { RedisService } from '../../redis/redis.service';
 import { RecapPeriod } from '../dto/analytics-query.dto';
 import {
@@ -15,6 +16,17 @@ const MIN_PLAYS_FOR_RECAP = 3;
 const TOP_PROGRAMS = 5;
 const TOP_CHANNELS = 3;
 const TOP_STREAMERS = 3;
+
+/**
+ * The channel-by-hour grid. Bands are applied here and not stored, so changing
+ * them is a constant rather than a migration. The day starts at 06: earlier
+ * activity is rare enough that a column for it would be empty for almost
+ * everyone, and it rolls into the first band rather than being dropped.
+ */
+const GRID_ROWS = 5;
+const GRID_FROM_HOUR = 6;
+const GRID_BAND_HOURS = 3;
+const GRID_BANDS = 6;
 
 const WEEKDAY_LABELS = [
   'domingo',
@@ -54,12 +66,29 @@ export interface RecapStreamer {
   plays: number;
 }
 
+export interface RecapGridRow {
+  channel_id: number;
+  channel_name: string;
+  channel_logo_url: string | null;
+  /** One entry per band, in order, starting at `grid.from_hour`. */
+  cells: number[];
+}
+
+export interface RecapGrid {
+  from_hour: number;
+  band_hours: number;
+  rows: RecapGridRow[];
+  lit_cells: number;
+  total_cells: number;
+}
+
 export interface Recap {
   enough_data: boolean;
   period: { type: RecapPeriod; from: string; to: string; label: string };
   top_programs: RecapProgram[];
   top_channels: RecapChannel[];
   top_streamers: RecapStreamer[];
+  grid: RecapGrid;
   totals: {
     plays: number;
     distinct_programs: number;
@@ -85,6 +114,8 @@ export class AnalyticsRecapService {
     private readonly dailyUserRepository: Repository<AnalyticsDailyUser>,
     @InjectRepository(AnalyticsDailyUserStreamer)
     private readonly dailyUserStreamerRepository: Repository<AnalyticsDailyUserStreamer>,
+    @InjectRepository(AnalyticsDailyUserSlot)
+    private readonly dailyUserSlotRepository: Repository<AnalyticsDailyUserSlot>,
     private readonly redisService: RedisService,
   ) {}
 
@@ -119,11 +150,12 @@ export class AnalyticsRecapService {
     period: RecapPeriod,
     range: { from: string; to: string; label: string },
   ): Promise<Recap> {
-    const [programs, channels, streamers, totals, weekday, previousPlays] =
+    const [programs, channels, streamers, grid, totals, weekday, previousPlays] =
       await Promise.all([
         this.topPrograms(userId, range.from, range.to),
         this.topChannels(userId, range.from, range.to),
         this.topStreamers(userId, range.from, range.to),
+        this.buildGrid(userId, range.from, range.to),
         this.totals(userId, range.from, range.to),
         this.favoriteWeekday(userId, range.from, range.to),
         this.playCount(
@@ -145,6 +177,15 @@ export class AnalyticsRecapService {
       top_programs: enoughData ? programs : [],
       top_channels: enoughData ? channels : [],
       top_streamers: enoughData ? streamers : [],
+      grid: enoughData
+        ? grid
+        : {
+            from_hour: GRID_FROM_HOUR,
+            band_hours: GRID_BAND_HOURS,
+            rows: [],
+            lit_cells: 0,
+            total_cells: 0,
+          },
       totals,
       habits: { favorite_weekday: enoughData ? weekday : null },
       comparison: {
@@ -270,6 +311,83 @@ export class AnalyticsRecapService {
       streamer_logo_url: row.streamer_logo_url,
       plays: Number(row.plays),
     }));
+  }
+
+  /**
+   * The channel-by-hour grid. Reads the slot rollup, which carries the hour the
+   * raw events no longer do once they are pruned, so this works for a year just
+   * as well as for a week.
+   *
+   * Rows are the user's top channels by plays, so the grid never grows with how
+   * many channels someone sampled once.
+   */
+  private async buildGrid(
+    userId: number,
+    from: string,
+    to: string,
+  ): Promise<RecapGrid> {
+    const rows = await this.dailyUserSlotRepository
+      .createQueryBuilder('s')
+      .select('s.channel_id', 'channel_id')
+      .addSelect('ch.name', 'channel_name')
+      .addSelect('ch.logo_url', 'channel_logo_url')
+      .addSelect('s.hour', 'hour')
+      .addSelect('SUM(s.count)', 'plays')
+      .innerJoin('channel', 'ch', 'ch.id = s.channel_id')
+      .where('s.user_id = :userId', { userId })
+      .andWhere('s.date BETWEEN :from AND :to', { from, to })
+      .andWhere('s.event_name = :metric', { metric: DEFAULT_METRIC })
+      .groupBy('s.channel_id')
+      .addGroupBy('ch.name')
+      .addGroupBy('ch.logo_url')
+      .addGroupBy('s.hour')
+      .getRawMany();
+
+    const byChannel = new Map<number, RecapGridRow & { total: number }>();
+
+    for (const row of rows) {
+      const channelId = Number(row.channel_id);
+      let entry = byChannel.get(channelId);
+      if (!entry) {
+        entry = {
+          channel_id: channelId,
+          channel_name: row.channel_name,
+          channel_logo_url: row.channel_logo_url,
+          cells: new Array<number>(GRID_BANDS).fill(0),
+          total: 0,
+        };
+        byChannel.set(channelId, entry);
+      }
+
+      const plays = Number(row.plays);
+      entry.cells[this.bandIndex(Number(row.hour))] += plays;
+      entry.total += plays;
+    }
+
+    const ordered = [...byChannel.values()]
+      .sort((a, b) => b.total - a.total || a.channel_name.localeCompare(b.channel_name))
+      .slice(0, GRID_ROWS);
+
+    return {
+      from_hour: GRID_FROM_HOUR,
+      band_hours: GRID_BAND_HOURS,
+      rows: ordered.map(({ total: _total, ...row }) => row),
+      lit_cells: ordered.reduce(
+        (sum, row) => sum + row.cells.filter((plays) => plays > 0).length,
+        0,
+      ),
+      total_cells: ordered.length * GRID_BANDS,
+    };
+  }
+
+  /**
+   * Hours before the grid starts fold into the first band rather than being
+   * dropped — a play at 03:00 is still a play, and silently losing it would
+   * make the grid disagree with the totals beside it.
+   */
+  private bandIndex(hour: number): number {
+    const offset = Math.floor((hour - GRID_FROM_HOUR) / GRID_BAND_HOURS);
+    return Math.min(Math.max(offset, 0), GRID_BANDS - 1);
   }
 
   private async totals(
