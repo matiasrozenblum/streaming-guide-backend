@@ -73,6 +73,7 @@ export class AnalyticsRollupService {
     await this.rollupChannels(date);
     await this.rollupStreamers(date);
     await this.rollupUsers(date);
+    await this.rollupUserStreamers(date);
   }
 
   /**
@@ -229,6 +230,33 @@ export class AnalyticsRollupService {
       GROUP BY e.user_id, e.program_id, e.event_name
       ON CONFLICT (date, user_id, program_id, event_name) DO UPDATE SET
         channel_id = EXCLUDED.channel_id,
+        count = EXCLUDED.count
+      `,
+      [date],
+    );
+  }
+
+  /**
+   * Streamers get their own per-user table: `analytics_daily_user` keys on
+   * program_id, and a streamer has no program to put there.
+   */
+  private async rollupUserStreamers(date: string): Promise<void> {
+    await this.eventRepository.query(
+      `
+      INSERT INTO analytics_daily_user_streamer
+        (date, user_id, streamer_id, event_name, count)
+      SELECT
+        $1::date,
+        e.user_id,
+        e.streamer_id,
+        e.event_name,
+        COUNT(*)::int
+      FROM analytics_event e
+      WHERE ${this.dayExpression()} = $1::date
+        AND e.user_id IS NOT NULL
+        AND e.streamer_id IS NOT NULL
+      GROUP BY e.user_id, e.streamer_id, e.event_name
+      ON CONFLICT (date, user_id, streamer_id, event_name) DO UPDATE SET
         count = EXCLUDED.count
       `,
       [date],

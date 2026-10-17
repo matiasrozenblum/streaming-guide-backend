@@ -2,14 +2,19 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AnalyticsDailyUser } from '../entities/analytics-daily-user.entity';
+import { AnalyticsDailyUserStreamer } from '../entities/analytics-daily-user-streamer.entity';
 import { RedisService } from '../../redis/redis.service';
 import { RecapPeriod } from '../dto/analytics-query.dto';
-import { DEFAULT_METRIC } from './analytics-admin.service';
+import {
+  DEFAULT_METRIC,
+  DEFAULT_STREAMER_METRIC,
+} from './analytics-admin.service';
 
 /** Below this, a recap is a sadder object than no recap. */
 const MIN_PLAYS_FOR_RECAP = 3;
 const TOP_PROGRAMS = 5;
 const TOP_CHANNELS = 3;
+const TOP_STREAMERS = 3;
 
 const WEEKDAY_LABELS = [
   'domingo',
@@ -41,11 +46,20 @@ export interface RecapChannel {
   plays: number;
 }
 
+export interface RecapStreamer {
+  position: number;
+  streamer_id: number;
+  streamer_name: string;
+  streamer_logo_url: string | null;
+  plays: number;
+}
+
 export interface Recap {
   enough_data: boolean;
   period: { type: RecapPeriod; from: string; to: string; label: string };
   top_programs: RecapProgram[];
   top_channels: RecapChannel[];
+  top_streamers: RecapStreamer[];
   totals: {
     plays: number;
     distinct_programs: number;
@@ -69,6 +83,8 @@ export class AnalyticsRecapService {
   constructor(
     @InjectRepository(AnalyticsDailyUser)
     private readonly dailyUserRepository: Repository<AnalyticsDailyUser>,
+    @InjectRepository(AnalyticsDailyUserStreamer)
+    private readonly dailyUserStreamerRepository: Repository<AnalyticsDailyUserStreamer>,
     private readonly redisService: RedisService,
   ) {}
 
@@ -103,10 +119,11 @@ export class AnalyticsRecapService {
     period: RecapPeriod,
     range: { from: string; to: string; label: string },
   ): Promise<Recap> {
-    const [programs, channels, totals, weekday, previousPlays] =
+    const [programs, channels, streamers, totals, weekday, previousPlays] =
       await Promise.all([
         this.topPrograms(userId, range.from, range.to),
         this.topChannels(userId, range.from, range.to),
+        this.topStreamers(userId, range.from, range.to),
         this.totals(userId, range.from, range.to),
         this.favoriteWeekday(userId, range.from, range.to),
         this.playCount(
@@ -127,6 +144,7 @@ export class AnalyticsRecapService {
       },
       top_programs: enoughData ? programs : [],
       top_channels: enoughData ? channels : [],
+      top_streamers: enoughData ? streamers : [],
       totals,
       habits: { favorite_weekday: enoughData ? weekday : null },
       comparison: {
@@ -213,6 +231,43 @@ export class AnalyticsRecapService {
       channel_name: row.channel_name,
       channel_logo_url: row.channel_logo_url,
       channel_background_color: row.channel_background_color,
+      plays: Number(row.plays),
+    }));
+  }
+
+  /**
+   * Reads the streamer rollup, not analytics_daily_user, and counts
+   * streamer_service_click: opening a streamer is a play like any other, but it
+   * is a different event name than a program's.
+   */
+  private async topStreamers(
+    userId: number,
+    from: string,
+    to: string,
+  ): Promise<RecapStreamer[]> {
+    const rows = await this.dailyUserStreamerRepository
+      .createQueryBuilder('s')
+      .select('s.streamer_id', 'streamer_id')
+      .addSelect('st.name', 'streamer_name')
+      .addSelect('st.logo_url', 'streamer_logo_url')
+      .addSelect('SUM(s.count)', 'plays')
+      .innerJoin('streamer', 'st', 'st.id = s.streamer_id')
+      .where('s.user_id = :userId', { userId })
+      .andWhere('s.date BETWEEN :from AND :to', { from, to })
+      .andWhere('s.event_name = :metric', { metric: DEFAULT_STREAMER_METRIC })
+      .groupBy('s.streamer_id')
+      .addGroupBy('st.name')
+      .addGroupBy('st.logo_url')
+      .orderBy('SUM(s.count)', 'DESC')
+      .addOrderBy('st.name', 'ASC')
+      .limit(TOP_STREAMERS)
+      .getRawMany();
+
+    return rows.map((row, index) => ({
+      position: index + 1,
+      streamer_id: Number(row.streamer_id),
+      streamer_name: row.streamer_name,
+      streamer_logo_url: row.streamer_logo_url,
       plays: Number(row.plays),
     }));
   }

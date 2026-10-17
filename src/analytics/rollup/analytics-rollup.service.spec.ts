@@ -31,12 +31,23 @@ describe('AnalyticsRollupService', () => {
     await service.rollupDate('2026-09-01');
 
     const statements = query.mock.calls.map((call) => call[0] as string);
-    expect(statements).toHaveLength(5);
+    expect(statements).toHaveLength(6);
     expect(statements.join()).toContain('analytics_daily_totals');
     expect(statements.join()).toContain('analytics_daily_program');
     expect(statements.join()).toContain('analytics_daily_channel');
     expect(statements.join()).toContain('analytics_daily_streamer');
     expect(statements.join()).toContain('analytics_daily_user');
+    expect(statements.join()).toContain('analytics_daily_user_streamer');
+  });
+
+  it('keeps the per-user streamer rollup to attributable rows', async () => {
+    await service.rollupDate('2026-09-01');
+
+    const sql = query.mock.calls
+      .map((call) => call[0] as string)
+      .find((text) => text.includes('analytics_daily_user_streamer'))!;
+    expect(sql).toContain('e.user_id IS NOT NULL');
+    expect(sql).toContain('e.streamer_id IS NOT NULL');
   });
 
   it('excludes rows that cannot be attributed from the streamer rollup', async () => {

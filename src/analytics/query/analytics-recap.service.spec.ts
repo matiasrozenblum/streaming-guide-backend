@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { AnalyticsRecapService } from './analytics-recap.service';
 import { AnalyticsDailyUser } from '../entities/analytics-daily-user.entity';
+import { AnalyticsDailyUserStreamer } from '../entities/analytics-daily-user-streamer.entity';
 import { RedisService } from '../../redis/redis.service';
 import { RecapPeriod } from '../dto/analytics-query.dto';
 
@@ -9,6 +10,9 @@ describe('AnalyticsRecapService', () => {
   let service: AnalyticsRecapService;
   let redisService: { get: jest.Mock; set: jest.Mock };
   let builder: Record<string, jest.Mock>;
+  let streamerBuilder: Record<string, jest.Mock>;
+  /** Rows the streamer rollup returns; kept apart from rawManyQueue. */
+  let streamerRows: unknown[];
   let whereCalls: Array<[string, Record<string, unknown>]>;
 
   /** Rows returned by getRawMany, in call order. */
@@ -20,6 +24,7 @@ describe('AnalyticsRecapService', () => {
     whereCalls = [];
     rawManyQueue = [];
     rawOneQueue = [];
+    streamerRows = [];
 
     const chain = () => builder;
     builder = {
@@ -46,6 +51,29 @@ describe('AnalyticsRecapService', () => {
       ),
     };
 
+    // Its own builder: the streamer rollup is a separate table, and sharing the
+    // queue would make every existing expectation depend on call interleaving.
+    const streamerChain = () => streamerBuilder;
+    streamerBuilder = {
+      select: jest.fn(streamerChain),
+      addSelect: jest.fn(streamerChain),
+      innerJoin: jest.fn(streamerChain),
+      where: jest.fn((sql: string, params: Record<string, unknown>) => {
+        whereCalls.push([sql, params]);
+        return streamerBuilder;
+      }),
+      andWhere: jest.fn((sql: string, params: Record<string, unknown>) => {
+        whereCalls.push([sql, params]);
+        return streamerBuilder;
+      }),
+      groupBy: jest.fn(streamerChain),
+      addGroupBy: jest.fn(streamerChain),
+      orderBy: jest.fn(streamerChain),
+      addOrderBy: jest.fn(streamerChain),
+      limit: jest.fn(streamerChain),
+      getRawMany: jest.fn(() => Promise.resolve(streamerRows)),
+    };
+
     redisService = {
       get: jest.fn().mockResolvedValue(null),
       set: jest.fn().mockResolvedValue(undefined),
@@ -57,6 +85,10 @@ describe('AnalyticsRecapService', () => {
         {
           provide: getRepositoryToken(AnalyticsDailyUser),
           useValue: { createQueryBuilder: jest.fn(() => builder) },
+        },
+        {
+          provide: getRepositoryToken(AnalyticsDailyUserStreamer),
+          useValue: { createQueryBuilder: jest.fn(() => streamerBuilder) },
         },
         { provide: RedisService, useValue: redisService },
       ],
@@ -73,6 +105,15 @@ describe('AnalyticsRecapService', () => {
         sql.includes('u.user_id = :userId'),
       );
       expect(userFilters.length).toBeGreaterThan(0);
+      // The streamer rollup is a second table holding the same private data,
+      // so it has to be scoped too — it would not be covered by the check above.
+      const streamerFilters = whereCalls.filter(([sql]) =>
+        sql.includes('s.user_id = :userId'),
+      );
+      expect(streamerFilters.length).toBeGreaterThan(0);
+      for (const [, params] of [...userFilters, ...streamerFilters]) {
+        expect(params).toEqual(expect.objectContaining({ userId: 42 }));
+      }
       for (const [, params] of userFilters) {
         expect(params).toMatchObject({ userId: 42 });
       }
