@@ -33,3 +33,7 @@
 ## 2026-09-06 - [Push concurrente en StreamerSubscriptionService]
 **Learning:** `notifySubscribers` mandaba las push notifications con `await` dentro de un triple loop, serializando una llamada de red por suscripcion. `PushService.sendNotificationToDevices` ya resolvia esto con IIAFEs + `Promise.all`.
 **Action:** Encolar cada envio como funcion async auto-invocada con su propio try/catch y esperar todo con `Promise.allSettled`, siguiendo el patron que ya existia en `push.service.ts`.
+
+## 2026-09-14 - [N+1 DB Query Avoidance in Linked Program Schedules]
+**Learning:** Found N+1 query patterns inside the `syncSchedulesToLinkedPrograms` method of `SchedulesService`. For every linked program, it executed an individual `DELETE` statement, and then inside the loop it individually saved new schedule copies. This caused unnecessary network overhead to the database.
+**Action:** Replace iterative `DELETE` and `save` calls with a single bulk delete using the `In()` operator and a single bulk save by accumulating all schedule copies into an array. Also ensure empty arrays are guarded before passing to `In()`.
