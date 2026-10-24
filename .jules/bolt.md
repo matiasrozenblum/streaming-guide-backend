@@ -33,3 +33,7 @@
 ## 2026-09-06 - [Push concurrente en StreamerSubscriptionService]
 **Learning:** `notifySubscribers` mandaba las push notifications con `await` dentro de un triple loop, serializando una llamada de red por suscripcion. `PushService.sendNotificationToDevices` ya resolvia esto con IIAFEs + `Promise.all`.
 **Action:** Encolar cada envio como funcion async auto-invocada con su propio try/catch y esperar todo con `Promise.allSettled`, siguiendo el patron que ya existia en `push.service.ts`.
+
+## 2026-09-12 - [N+1 DB Query Avoidance in Program Schedules Bulk Creation]
+**Learning:** Found an N+1 pattern in `ProgramsService.createBulk`, where iterating through newly created programs and calling `SchedulesService.createBulk` for each program triggered separate DB `findOne` queries to fetch the newly created program again, and separate saves.
+**Action:** Replaced iterative service calls with a single bulk accumulation of `schedulesRepository.create()` inside `ProgramsService`, followed by a single `schedulesRepository.save()` for all programs' schedules simultaneously.

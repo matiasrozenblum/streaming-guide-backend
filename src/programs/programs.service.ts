@@ -151,16 +151,34 @@ export class ProgramsService {
 
     // Create schedules for each program if provided (skip link propagation — all programs handled here)
     if (dto.schedules && dto.schedules.length > 0) {
-      await Promise.all(
-        savedPrograms.map((program) =>
-          this.schedulesService.createBulk({
-            programId: program.id.toString(),
-            channelId: program.channel.id.toString(),
-            schedules: dto.schedules!,
-            skipLinkPropagation: true,
-          }),
-        ),
-      );
+      const allSchedules: Schedule[] = [];
+      for (const program of savedPrograms) {
+        for (const scheduleDto of dto.schedules) {
+          allSchedules.push(
+            this.schedulesRepository.create({
+              day_of_week: scheduleDto.dayOfWeek ?? null,
+              start_time: scheduleDto.startTime,
+              end_time: scheduleDto.endTime,
+              schedule_type: (scheduleDto.scheduleType as any) ?? 'weekly',
+              week_number_in_month: scheduleDto.weekNumberInMonth ?? null,
+              specific_date: scheduleDto.specificDate ?? null,
+              program,
+            }),
+          );
+        }
+      }
+      if (allSchedules.length > 0) {
+        await this.schedulesRepository.save(allSchedules);
+
+        // Notify for schedules created in bulk
+        await this.notifyUtil.notifyAndRevalidate({
+          eventType: 'schedules_bulk_created',
+          entity: 'schedule',
+          entityId: 'bulk',
+          payload: { count: allSchedules.length },
+          revalidatePaths: ['/'],
+        });
+      }
     }
 
     // Clear caches once for all created programs
