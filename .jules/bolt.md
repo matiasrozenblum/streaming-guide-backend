@@ -33,3 +33,7 @@
 ## 2026-09-06 - [Push concurrente en StreamerSubscriptionService]
 **Learning:** `notifySubscribers` mandaba las push notifications con `await` dentro de un triple loop, serializando una llamada de red por suscripcion. `PushService.sendNotificationToDevices` ya resolvia esto con IIAFEs + `Promise.all`.
 **Action:** Encolar cada envio como funcion async auto-invocada con su propio try/catch y esperar todo con `Promise.allSettled`, siguiendo el patron que ya existia en `push.service.ts`.
+
+## 2024-05-18 - [Optimize N+1 deletion in Schedules sync]
+**Learning:** Found an N+1 deletion in `syncSchedulesToLinkedPrograms` which iteratively executed `schedulesRepository.delete` for each program in the `others` array.
+**Action:** Replaced the loop of `.delete` calls with a single bulk deletion utilizing the `In` operator from TypeORM (`this.schedulesRepository.delete({ program_id: In(otherIds) })`). This pattern is critical for efficiently wiping associated schedules across linked entities without inducing N+1 database queries.
