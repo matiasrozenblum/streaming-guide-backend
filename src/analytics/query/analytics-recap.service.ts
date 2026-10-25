@@ -15,7 +15,9 @@ import {
 const MIN_PLAYS_FOR_RECAP = 3;
 const TOP_PROGRAMS = 5;
 const TOP_CHANNELS = 3;
-const TOP_STREAMERS = 3;
+// Five, like the programmes: the monthly placa lists five and the weekly one
+// takes the first three. Capping at three here would silently shorten the month.
+const TOP_STREAMERS = 5;
 
 /**
  * The channel-by-hour grid. Bands are applied here and not stored, so changing
@@ -145,6 +147,11 @@ export interface RecapGrids {
 
 export interface Recap {
   enough_data: boolean;
+  /**
+   * How many plays a recap needs. Sent rather than hardcoded in the clients so
+   * the "you are at 2 of 3" progress cannot drift from the rule that gates it.
+   */
+  minimum_plays: number;
   period: { type: RecapPeriod; from: string; to: string; label: string };
   top_programs: RecapProgram[];
   top_channels: RecapChannel[];
@@ -239,6 +246,7 @@ export class AnalyticsRecapService {
 
     return {
       enough_data: enoughData,
+      minimum_plays: MIN_PLAYS_FOR_RECAP,
       period: {
         type: period,
         from: range.from,
