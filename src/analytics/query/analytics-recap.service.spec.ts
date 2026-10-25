@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { AnalyticsRecapService } from './analytics-recap.service';
 import { AnalyticsDailyUser } from '../entities/analytics-daily-user.entity';
+import { AnalyticsDailyUserStreamer } from '../entities/analytics-daily-user-streamer.entity';
+import { AnalyticsDailyUserSlot } from '../entities/analytics-daily-user-slot.entity';
 import { RedisService } from '../../redis/redis.service';
 import { RecapPeriod } from '../dto/analytics-query.dto';
 
@@ -9,6 +11,12 @@ describe('AnalyticsRecapService', () => {
   let service: AnalyticsRecapService;
   let redisService: { get: jest.Mock; set: jest.Mock };
   let builder: Record<string, jest.Mock>;
+  let streamerBuilder: Record<string, jest.Mock>;
+  /** Rows the streamer rollup returns; kept apart from rawManyQueue. */
+  let streamerRows: unknown[];
+  let slotBuilder: Record<string, jest.Mock>;
+  /** Rows the slot rollup returns; also kept apart from rawManyQueue. */
+  let slotRows: unknown[];
   let whereCalls: Array<[string, Record<string, unknown>]>;
 
   /** Rows returned by getRawMany, in call order. */
@@ -20,6 +28,8 @@ describe('AnalyticsRecapService', () => {
     whereCalls = [];
     rawManyQueue = [];
     rawOneQueue = [];
+    streamerRows = [];
+    slotRows = [];
 
     const chain = () => builder;
     builder = {
@@ -46,6 +56,47 @@ describe('AnalyticsRecapService', () => {
       ),
     };
 
+    // Its own builder: the streamer rollup is a separate table, and sharing the
+    // queue would make every existing expectation depend on call interleaving.
+    const streamerChain = () => streamerBuilder;
+    streamerBuilder = {
+      select: jest.fn(streamerChain),
+      addSelect: jest.fn(streamerChain),
+      innerJoin: jest.fn(streamerChain),
+      where: jest.fn((sql: string, params: Record<string, unknown>) => {
+        whereCalls.push([sql, params]);
+        return streamerBuilder;
+      }),
+      andWhere: jest.fn((sql: string, params: Record<string, unknown>) => {
+        whereCalls.push([sql, params]);
+        return streamerBuilder;
+      }),
+      groupBy: jest.fn(streamerChain),
+      addGroupBy: jest.fn(streamerChain),
+      orderBy: jest.fn(streamerChain),
+      addOrderBy: jest.fn(streamerChain),
+      limit: jest.fn(streamerChain),
+      getRawMany: jest.fn(() => Promise.resolve(streamerRows)),
+    };
+
+    const slotChain = () => slotBuilder;
+    slotBuilder = {
+      select: jest.fn(slotChain),
+      addSelect: jest.fn(slotChain),
+      innerJoin: jest.fn(slotChain),
+      where: jest.fn((sql: string, params: Record<string, unknown>) => {
+        whereCalls.push([sql, params]);
+        return slotBuilder;
+      }),
+      andWhere: jest.fn((sql: string, params: Record<string, unknown>) => {
+        whereCalls.push([sql, params]);
+        return slotBuilder;
+      }),
+      groupBy: jest.fn(slotChain),
+      addGroupBy: jest.fn(slotChain),
+      getRawMany: jest.fn(() => Promise.resolve(slotRows)),
+    };
+
     redisService = {
       get: jest.fn().mockResolvedValue(null),
       set: jest.fn().mockResolvedValue(undefined),
@@ -57,6 +108,14 @@ describe('AnalyticsRecapService', () => {
         {
           provide: getRepositoryToken(AnalyticsDailyUser),
           useValue: { createQueryBuilder: jest.fn(() => builder) },
+        },
+        {
+          provide: getRepositoryToken(AnalyticsDailyUserStreamer),
+          useValue: { createQueryBuilder: jest.fn(() => streamerBuilder) },
+        },
+        {
+          provide: getRepositoryToken(AnalyticsDailyUserSlot),
+          useValue: { createQueryBuilder: jest.fn(() => slotBuilder) },
         },
         { provide: RedisService, useValue: redisService },
       ],
@@ -73,6 +132,15 @@ describe('AnalyticsRecapService', () => {
         sql.includes('u.user_id = :userId'),
       );
       expect(userFilters.length).toBeGreaterThan(0);
+      // The streamer rollup is a second table holding the same private data,
+      // so it has to be scoped too — it would not be covered by the check above.
+      const streamerFilters = whereCalls.filter(([sql]) =>
+        sql.includes('s.user_id = :userId'),
+      );
+      expect(streamerFilters.length).toBeGreaterThan(0);
+      for (const [, params] of [...userFilters, ...streamerFilters]) {
+        expect(params).toEqual(expect.objectContaining({ userId: 42 }));
+      }
       for (const [, params] of userFilters) {
         expect(params).toMatchObject({ userId: 42 });
       }
@@ -265,6 +333,186 @@ describe('AnalyticsRecapService', () => {
       const openTtl = redisService.set.mock.calls[0][2] as number;
 
       expect(closedTtl).toBeGreaterThan(openTtl);
+    });
+  });
+
+  describe('grilla', () => {
+    /** La semana del 5 al 11 de octubre de 2026 arranca lunes. */
+    const slot = (date: string, hour: number, plays = 1, channel = 1) => ({
+      date,
+      hour: String(hour),
+      program_id: '92',
+      key_id: String(channel),
+      key_name: channel === 1 ? 'Luzu TV' : 'Olga',
+      plays: String(plays),
+    });
+
+    /** Tres plays superan MIN_PLAYS_FOR_RECAP, asi que la grilla no se retiene. */
+    const withEnoughPlays = () => {
+      rawOneQueue = [
+        { plays: '3', distinct_programs: '1', distinct_channels: '1' },
+        { dow: '3', plays: '3' },
+        { plays: '0' },
+      ];
+    };
+
+    it('arma 3 franjas por 7 dias en la semana', async () => {
+      withEnoughPlays();
+      slotRows = [slot('2026-10-05', 10)];
+
+      const { grids } = await service.getRecap(
+        42,
+        RecapPeriod.WEEK,
+        '2026-10-07',
+      );
+
+      expect(grids.total.shape).toBe('week');
+      expect(grids.total.day_labels).toEqual([
+        'L',
+        'M',
+        'X',
+        'J',
+        'V',
+        'S',
+        'D',
+      ]);
+      expect(grids.total.rows.map((r) => r.label)).toEqual([
+        'Mañana',
+        'Tarde',
+        'Noche',
+      ]);
+      for (const row of grids.total.rows) expect(row.cells).toHaveLength(7);
+    });
+
+    it('ubica cada play en su franja y su dia', async () => {
+      withEnoughPlays();
+      // lunes a la mañana, miercoles a la tarde, viernes a la noche
+      slotRows = [
+        slot('2026-10-05', 9),
+        slot('2026-10-07', 15),
+        slot('2026-10-09', 21),
+      ];
+
+      const { grids } = await service.getRecap(
+        42,
+        RecapPeriod.WEEK,
+        '2026-10-07',
+      );
+      const [manana, tarde, noche] = grids.total.rows;
+
+      expect(manana.cells[0].plays).toBe(1);
+      expect(tarde.cells[2].plays).toBe(1);
+      expect(noche.cells[4].plays).toBe(1);
+    });
+
+    it('pliega la trasnoche en la noche y no la pierde', async () => {
+      withEnoughPlays();
+      slotRows = [slot('2026-10-05', 3, 4)];
+
+      const { grids } = await service.getRecap(
+        42,
+        RecapPeriod.WEEK,
+        '2026-10-07',
+      );
+
+      expect(grids.total.rows[2].cells[0].plays).toBe(4);
+      expect(grids.total.rows[0].cells[0].plays).toBe(0);
+    });
+
+    it('pinta la celda con el canal que mas la ocupa', async () => {
+      withEnoughPlays();
+      slotRows = [slot('2026-10-05', 9, 2, 1), slot('2026-10-05', 10, 5, 2)];
+
+      const { grids } = await service.getRecap(
+        42,
+        RecapPeriod.WEEK,
+        '2026-10-07',
+      );
+      const cell = grids.total.rows[0].cells[0];
+
+      expect(cell.plays).toBe(7);
+      expect(cell.channel_name).toBe('Olga');
+    });
+
+    it('marca una sola celda como pico', async () => {
+      withEnoughPlays();
+      slotRows = [slot('2026-10-05', 9, 2), slot('2026-10-07', 10, 9)];
+
+      const { grids } = await service.getRecap(
+        42,
+        RecapPeriod.WEEK,
+        '2026-10-07',
+      );
+      const peaks = grids.total.rows.flatMap((r) =>
+        r.cells.filter((c) => c.peak),
+      );
+
+      expect(peaks).toHaveLength(1);
+      expect(peaks[0].plays).toBe(9);
+    });
+
+    it('nombra el pico en la frase', async () => {
+      withEnoughPlays();
+      slotRows = [slot('2026-10-05', 9, 2), slot('2026-10-07', 10, 9)];
+
+      const { grids } = await service.getRecap(
+        42,
+        RecapPeriod.WEEK,
+        '2026-10-07',
+      );
+
+      expect(grids.total.peak_label).toBe('los miércoles a la mañana');
+    });
+
+    it('arma un calendario con el relleno del primer dia en el mes', async () => {
+      withEnoughPlays();
+      slotRows = [slot('2026-10-01', 10)];
+
+      const { grids } = await service.getRecap(
+        42,
+        RecapPeriod.MONTH,
+        '2026-10-07',
+      );
+
+      // El 1 de octubre de 2026 cae jueves: las tres celdas previas van vacias.
+      expect(grids.total.shape).toBe('month');
+      const first = grids.total.rows[0].cells;
+      expect(first.slice(0, 3).every((c) => c.date === null)).toBe(true);
+      expect(first[3].date).toBe('2026-10-01');
+      for (const row of grids.total.rows) expect(row.cells).toHaveLength(7);
+    });
+
+    it('la grilla del programa deja afuera a los demas', async () => {
+      withEnoughPlays();
+      slotRows = [
+        { ...slot('2026-10-05', 9, 4), program_id: '92' },
+        { ...slot('2026-10-06', 9, 7), program_id: '99' },
+      ];
+
+      const { grids } = await service.getRecap(
+        42,
+        RecapPeriod.WEEK,
+        '2026-10-07',
+      );
+
+      // topPrograms viene vacio en este mock, asi que no hay programa destacado.
+      expect(grids.program).toBeNull();
+      expect(grids.total.rows[0].cells[1].plays).toBe(7);
+    });
+
+    it('no devuelve grilla cuando no alcanza el minimo', async () => {
+      rawOneQueue = [
+        { plays: '1', distinct_programs: '1', distinct_channels: '1' },
+        { dow: '3', plays: '1' },
+        { plays: '0' },
+      ];
+      slotRows = [slot('2026-10-05', 9)];
+
+      const recap = await service.getRecap(42, RecapPeriod.WEEK, '2026-10-07');
+
+      expect(recap.enough_data).toBe(false);
+      expect(recap.grids.total.rows).toEqual([]);
+      expect(recap.grids.program).toBeNull();
     });
   });
 });

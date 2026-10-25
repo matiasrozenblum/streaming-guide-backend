@@ -2,14 +2,51 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AnalyticsDailyUser } from '../entities/analytics-daily-user.entity';
+import { AnalyticsDailyUserStreamer } from '../entities/analytics-daily-user-streamer.entity';
+import { AnalyticsDailyUserSlot } from '../entities/analytics-daily-user-slot.entity';
 import { RedisService } from '../../redis/redis.service';
 import { RecapPeriod } from '../dto/analytics-query.dto';
-import { DEFAULT_METRIC } from './analytics-admin.service';
+import {
+  DEFAULT_METRIC,
+  DEFAULT_STREAMER_METRIC,
+} from './analytics-admin.service';
 
 /** Below this, a recap is a sadder object than no recap. */
 const MIN_PLAYS_FOR_RECAP = 3;
 const TOP_PROGRAMS = 5;
 const TOP_CHANNELS = 3;
+const TOP_STREAMERS = 3;
+
+/**
+ * The channel-by-hour grid. Bands are applied here and not stored, so changing
+ * them is a constant rather than a migration. The day starts at 06: earlier
+ * activity is rare enough that a column for it would be empty for almost
+ * everyone, and it rolls into the first band rather than being dropped.
+ */
+const DAY_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+
+/**
+ * Three day parts rather than fixed hour bands, because that is how people
+ * describe when they watch. Anything before 06 folds into the night: a play at
+ * 03:00 belongs to the night before, not to the morning after, and dropping it
+ * would make the grid disagree with the totals beside it.
+ */
+const DAYPARTS = [
+  { label: 'Mañana', from: 6, to: 12 },
+  { label: 'Tarde', from: 12, to: 19 },
+  { label: 'Noche', from: 19, to: 24 },
+] as const;
+
+/** Plural, for the sentence under the grid: "los miércoles a la mañana". */
+const WEEKDAY_PLURAL = [
+  'lunes',
+  'martes',
+  'miércoles',
+  'jueves',
+  'viernes',
+  'sábados',
+  'domingos',
+];
 
 const WEEKDAY_LABELS = [
   'domingo',
@@ -41,11 +78,73 @@ export interface RecapChannel {
   plays: number;
 }
 
+export interface RecapStreamer {
+  position: number;
+  streamer_id: number;
+  streamer_name: string;
+  streamer_logo_url: string | null;
+  plays: number;
+}
+
+/** One aggregated slot, before it is folded into a grid. */
+interface SlotRow {
+  date: string;
+  hour: number;
+  program_id: number | null;
+  /** Channel id on a programme grid, streamer id on a streamer's. */
+  key_id: number;
+  key_name: string;
+  platform: string | null;
+  plays: number;
+}
+
+export type RecapGridShape = 'week' | 'month';
+
+export interface RecapGridCell {
+  /** The day this cell stands for; null for the calendar's leading padding. */
+  date: string | null;
+  plays: number;
+  /** Whichever channel the cell is mostly made of, and its colour on screen. */
+  channel_id: number | null;
+  channel_name: string | null;
+  /** Set instead of the channel on a streamer's grid: twitch, kick, youtube. */
+  platform: string | null;
+  /** The single busiest cell of the grid. */
+  peak: boolean;
+}
+
+export interface RecapGridRow {
+  /** 'Mañana' | 'Tarde' | 'Noche' on a week, 'Semana 1'… on a month. */
+  label: string;
+  /** Always seven, Monday first. */
+  cells: RecapGridCell[];
+}
+
+export interface RecapGrid {
+  shape: RecapGridShape;
+  day_labels: string[];
+  rows: RecapGridRow[];
+  /** "los miércoles a la mañana", ready to drop into the sentence. */
+  peak_label: string | null;
+}
+
+/**
+ * Three views of the same plays. The placas show the whole period on a ranking,
+ * and only that one programme or streamer on the cards that feature one.
+ */
+export interface RecapGrids {
+  total: RecapGrid;
+  program: RecapGrid | null;
+  streamer: RecapGrid | null;
+}
+
 export interface Recap {
   enough_data: boolean;
   period: { type: RecapPeriod; from: string; to: string; label: string };
   top_programs: RecapProgram[];
   top_channels: RecapChannel[];
+  top_streamers: RecapStreamer[];
+  grids: RecapGrids;
   totals: {
     plays: number;
     distinct_programs: number;
@@ -69,6 +168,10 @@ export class AnalyticsRecapService {
   constructor(
     @InjectRepository(AnalyticsDailyUser)
     private readonly dailyUserRepository: Repository<AnalyticsDailyUser>,
+    @InjectRepository(AnalyticsDailyUserStreamer)
+    private readonly dailyUserStreamerRepository: Repository<AnalyticsDailyUserStreamer>,
+    @InjectRepository(AnalyticsDailyUserSlot)
+    private readonly dailyUserSlotRepository: Repository<AnalyticsDailyUserSlot>,
     private readonly redisService: RedisService,
   ) {}
 
@@ -103,10 +206,11 @@ export class AnalyticsRecapService {
     period: RecapPeriod,
     range: { from: string; to: string; label: string },
   ): Promise<Recap> {
-    const [programs, channels, totals, weekday, previousPlays] =
+    const [programs, channels, streamers, totals, weekday, previousPlays] =
       await Promise.all([
         this.topPrograms(userId, range.from, range.to),
         this.topChannels(userId, range.from, range.to),
+        this.topStreamers(userId, range.from, range.to),
         this.totals(userId, range.from, range.to),
         this.favoriteWeekday(userId, range.from, range.to),
         this.playCount(
@@ -114,6 +218,17 @@ export class AnalyticsRecapService {
           ...this.previousRangeTuple(range.from, range.to),
         ),
       ]);
+
+    // The grids need to know which programme and streamer came first, so they
+    // run once that is settled rather than alongside it.
+    const grids = await this.buildGrids(
+      userId,
+      period,
+      range.from,
+      range.to,
+      programs[0]?.program_id ?? null,
+      streamers[0]?.streamer_id ?? null,
+    );
 
     const enoughData = totals.plays >= MIN_PLAYS_FOR_RECAP;
 
@@ -127,6 +242,10 @@ export class AnalyticsRecapService {
       },
       top_programs: enoughData ? programs : [],
       top_channels: enoughData ? channels : [],
+      top_streamers: enoughData ? streamers : [],
+      grids: enoughData
+        ? grids
+        : { total: this.emptyGrid(period), program: null, streamer: null },
       totals,
       habits: { favorite_weekday: enoughData ? weekday : null },
       comparison: {
@@ -215,6 +334,344 @@ export class AnalyticsRecapService {
       channel_background_color: row.channel_background_color,
       plays: Number(row.plays),
     }));
+  }
+
+  /**
+   * Reads the streamer rollup, not analytics_daily_user, and counts
+   * streamer_service_click: opening a streamer is a play like any other, but it
+   * is a different event name than a program's.
+   */
+  private async topStreamers(
+    userId: number,
+    from: string,
+    to: string,
+  ): Promise<RecapStreamer[]> {
+    const rows = await this.dailyUserStreamerRepository
+      .createQueryBuilder('s')
+      .select('s.streamer_id', 'streamer_id')
+      .addSelect('st.name', 'streamer_name')
+      .addSelect('st.logo_url', 'streamer_logo_url')
+      .addSelect('SUM(s.count)', 'plays')
+      .innerJoin('streamer', 'st', 'st.id = s.streamer_id')
+      .where('s.user_id = :userId', { userId })
+      .andWhere('s.date BETWEEN :from AND :to', { from, to })
+      .andWhere('s.event_name = :metric', { metric: DEFAULT_STREAMER_METRIC })
+      .groupBy('s.streamer_id')
+      .addGroupBy('st.name')
+      .addGroupBy('st.logo_url')
+      .orderBy('SUM(s.count)', 'DESC')
+      .addOrderBy('st.name', 'ASC')
+      .limit(TOP_STREAMERS)
+      .getRawMany();
+
+    return rows.map((row, index) => ({
+      position: index + 1,
+      streamer_id: Number(row.streamer_id),
+      streamer_name: row.streamer_name,
+      streamer_logo_url: row.streamer_logo_url,
+      plays: Number(row.plays),
+    }));
+  }
+
+  /**
+   * The three grids the placas draw. One query feeds the whole-period grid and
+   * the one for the top programme; a second feeds the streamer's, which colours
+   * by platform instead of channel.
+   */
+  private async buildGrids(
+    userId: number,
+    period: RecapPeriod,
+    from: string,
+    to: string,
+    topProgramId: number | null,
+    topStreamerId: number | null,
+  ): Promise<RecapGrids> {
+    const shape: RecapGridShape =
+      period === RecapPeriod.WEEK ? 'week' : 'month';
+
+    const [programRows, streamerRows] = await Promise.all([
+      this.programSlots(userId, from, to),
+      topStreamerId === null
+        ? Promise.resolve([])
+        : this.streamerSlots(userId, from, to, topStreamerId),
+    ]);
+
+    const build = (rows: SlotRow[]) =>
+      shape === 'week'
+        ? this.weekGrid(rows, from)
+        : this.monthGrid(rows, from, to);
+
+    return {
+      total: build(programRows),
+      program:
+        topProgramId === null
+          ? null
+          : build(programRows.filter((r) => r.program_id === topProgramId)),
+      streamer: streamerRows.length === 0 ? null : build(streamerRows),
+    };
+  }
+
+  private async programSlots(
+    userId: number,
+    from: string,
+    to: string,
+  ): Promise<SlotRow[]> {
+    const rows = await this.dailyUserSlotRepository
+      .createQueryBuilder('s')
+      .select('s.date', 'date')
+      .addSelect('s.hour', 'hour')
+      .addSelect('s.program_id', 'program_id')
+      .addSelect('s.channel_id', 'key_id')
+      .addSelect('ch.name', 'key_name')
+      .addSelect('SUM(s.count)', 'plays')
+      .innerJoin('channel', 'ch', 'ch.id = s.channel_id')
+      .where('s.user_id = :userId', { userId })
+      .andWhere('s.date BETWEEN :from AND :to', { from, to })
+      .andWhere('s.event_name = :metric', { metric: DEFAULT_METRIC })
+      .groupBy('s.date')
+      .addGroupBy('s.hour')
+      .addGroupBy('s.program_id')
+      .addGroupBy('s.channel_id')
+      .addGroupBy('ch.name')
+      .getRawMany();
+
+    return rows.map((row) => ({
+      date: this.iso(new Date(row.date)),
+      hour: Number(row.hour),
+      program_id: Number(row.program_id),
+      key_id: Number(row.key_id),
+      key_name: row.key_name as string,
+      platform: null,
+      plays: Number(row.plays),
+    }));
+  }
+
+  /**
+   * A streamer's grid is coloured by platform, which the rollup does not store:
+   * it takes the streamer's first configured service. Someone who streams on
+   * both Twitch and Kick is drawn in one of them rather than per play.
+   */
+  private async streamerSlots(
+    userId: number,
+    from: string,
+    to: string,
+    streamerId: number,
+  ): Promise<SlotRow[]> {
+    const rows = await this.dailyUserStreamerRepository
+      .createQueryBuilder('s')
+      .select('s.date', 'date')
+      .addSelect('s.hour', 'hour')
+      .addSelect('st.name', 'key_name')
+      .addSelect('st.services', 'services')
+      .addSelect('SUM(s.count)', 'plays')
+      .innerJoin('streamer', 'st', 'st.id = s.streamer_id')
+      .where('s.user_id = :userId', { userId })
+      .andWhere('s.date BETWEEN :from AND :to', { from, to })
+      .andWhere('s.streamer_id = :streamerId', { streamerId })
+      .andWhere('s.event_name = :metric', { metric: DEFAULT_STREAMER_METRIC })
+      .groupBy('s.date')
+      .addGroupBy('s.hour')
+      .addGroupBy('st.name')
+      .addGroupBy('st.services')
+      .getRawMany();
+
+    return rows.map((row) => ({
+      date: this.iso(new Date(row.date)),
+      hour: Number(row.hour),
+      program_id: null,
+      key_id: streamerId,
+      key_name: row.key_name as string,
+      platform: this.firstService(row.services),
+      plays: Number(row.plays),
+    }));
+  }
+
+  private firstService(services: unknown): string | null {
+    const list =
+      typeof services === 'string'
+        ? (JSON.parse(services) as Array<{ service?: string }>)
+        : (services as Array<{ service?: string }> | null);
+    return list?.[0]?.service ?? null;
+  }
+
+  /** 0 for the morning, 1 for the afternoon, 2 for the night and the small hours. */
+  private daypartIndex(hour: number): number {
+    const found = DAYPARTS.findIndex((p) => hour >= p.from && hour < p.to);
+    return found === -1 ? DAYPARTS.length - 1 : found;
+  }
+
+  /** Monday 0 … Sunday 6. */
+  private weekdayIndex(date: string): number {
+    return (new Date(`${date}T12:00:00Z`).getUTCDay() + 6) % 7;
+  }
+
+  private weekGrid(rows: SlotRow[], from: string): RecapGrid {
+    const buckets = new Map<string, Map<string, number>>();
+    const start = new Date(`${from}T12:00:00Z`);
+
+    for (const row of rows) {
+      const key = `${this.daypartIndex(row.hour)}:${this.weekdayIndex(row.date)}`;
+      const byKey = buckets.get(key) ?? new Map<string, number>();
+      const id = `${row.key_id}|${row.key_name}|${row.platform ?? ''}`;
+      byKey.set(id, (byKey.get(id) ?? 0) + row.plays);
+      buckets.set(key, byKey);
+    }
+
+    const gridRows: RecapGridRow[] = DAYPARTS.map((part, partIndex) => ({
+      label: part.label,
+      cells: Array.from({ length: 7 }, (_, day) => {
+        const date = new Date(start);
+        date.setUTCDate(date.getUTCDate() + day);
+        return this.cell(this.iso(date), buckets.get(`${partIndex}:${day}`));
+      }),
+    }));
+
+    return this.finish('week', gridRows, rows);
+  }
+
+  private monthGrid(rows: SlotRow[], from: string, to: string): RecapGrid {
+    const byDate = new Map<string, Map<string, number>>();
+    for (const row of rows) {
+      const byKey = byDate.get(row.date) ?? new Map<string, number>();
+      const id = `${row.key_id}|${row.key_name}|${row.platform ?? ''}`;
+      byKey.set(id, (byKey.get(id) ?? 0) + row.plays);
+      byDate.set(row.date, byKey);
+    }
+
+    const first = new Date(`${from}T12:00:00Z`);
+    const last = new Date(`${to}T12:00:00Z`);
+    const lead = this.weekdayIndex(from);
+    const days = Math.round((last.getTime() - first.getTime()) / 86400000) + 1;
+
+    const gridRows: RecapGridRow[] = [];
+    let cells: RecapGridCell[] = [];
+    // The month rarely starts on a Monday; the cells before it stay empty so the
+    // columns still line up under the day letters.
+    for (let i = 0; i < lead; i++) cells.push(this.blankCell());
+
+    for (let day = 0; day < days; day++) {
+      const date = new Date(first);
+      date.setUTCDate(date.getUTCDate() + day);
+      const iso = this.iso(date);
+      cells.push(this.cell(iso, byDate.get(iso)));
+      if (cells.length === 7) {
+        gridRows.push({ label: `Semana ${gridRows.length + 1}`, cells });
+        cells = [];
+      }
+    }
+    if (cells.length > 0) {
+      while (cells.length < 7) cells.push(this.blankCell());
+      gridRows.push({ label: `Semana ${gridRows.length + 1}`, cells });
+    }
+
+    return this.finish('month', gridRows, rows);
+  }
+
+  private emptyGrid(period: RecapPeriod): RecapGrid {
+    return {
+      shape: period === RecapPeriod.WEEK ? 'week' : 'month',
+      day_labels: DAY_LABELS,
+      rows: [],
+      peak_label: null,
+    };
+  }
+
+  private blankCell(): RecapGridCell {
+    return {
+      date: null,
+      plays: 0,
+      channel_id: null,
+      channel_name: null,
+      platform: null,
+      peak: false,
+    };
+  }
+
+  /** Whichever key holds most of the cell wins its colour; ties break by name. */
+  private cell(
+    date: string,
+    byKey: Map<string, number> | undefined,
+  ): RecapGridCell {
+    if (!byKey || byKey.size === 0) {
+      return { ...this.blankCell(), date };
+    }
+
+    let bestKey = '';
+    let bestPlays = -1;
+    let plays = 0;
+    for (const [key, value] of byKey) {
+      plays += value;
+      const better =
+        value > bestPlays || (value === bestPlays && key < bestKey);
+      if (better) {
+        bestKey = key;
+        bestPlays = value;
+      }
+    }
+
+    const [id, name, platform] = bestKey.split('|');
+    return {
+      date,
+      plays,
+      channel_id: platform === '' ? Number(id) : null,
+      channel_name: platform === '' ? name : null,
+      platform: platform === '' ? null : platform,
+      peak: false,
+    };
+  }
+
+  /** Marks the busiest cell and writes the sentence that goes under the grid. */
+  private finish(
+    shape: RecapGridShape,
+    rows: RecapGridRow[],
+    slots: SlotRow[],
+  ): RecapGrid {
+    let peak: RecapGridCell | null = null;
+    for (const row of rows) {
+      for (const cell of row.cells) {
+        if (cell.plays > 0 && (peak === null || cell.plays > peak.plays)) {
+          peak = cell;
+        }
+      }
+    }
+    if (peak) peak.peak = true;
+
+    return {
+      shape,
+      day_labels: DAY_LABELS,
+      rows,
+      peak_label: this.peakLabel(slots),
+    };
+  }
+
+  /**
+   * The weekday and day part with the most plays, as a phrase. Computed from the
+   * slots rather than from the grid so a month — whose cells are whole days —
+   * still names a day part.
+   */
+  private peakLabel(slots: SlotRow[]): string | null {
+    if (slots.length === 0) return null;
+
+    const totals = new Map<string, number>();
+    for (const slot of slots) {
+      const key = `${this.weekdayIndex(slot.date)}:${this.daypartIndex(slot.hour)}`;
+      totals.set(key, (totals.get(key) ?? 0) + slot.plays);
+    }
+
+    let bestKey: string | null = null;
+    let best = -1;
+    for (const [key, plays] of totals) {
+      if (plays > best) {
+        best = plays;
+        bestKey = key;
+      }
+    }
+    if (bestKey === null) return null;
+
+    const [weekday, part] = bestKey.split(':').map(Number);
+    const day = WEEKDAY_PLURAL[weekday];
+    const daypart = DAYPARTS[part].label.toLowerCase();
+    return `los ${day} a la ${daypart}`;
   }
 
   private async totals(

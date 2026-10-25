@@ -5,6 +5,8 @@ import { AnalyticsDailyProgram } from './entities/analytics-daily-program.entity
 import { AnalyticsDailyChannel } from './entities/analytics-daily-channel.entity';
 import { AnalyticsDailyStreamer } from './entities/analytics-daily-streamer.entity';
 import { AnalyticsDailyUser } from './entities/analytics-daily-user.entity';
+import { AnalyticsDailyUserStreamer } from './entities/analytics-daily-user-streamer.entity';
+import { AnalyticsDailyUserSlot } from './entities/analytics-daily-user-slot.entity';
 import { AnalyticsDailyTotals } from './entities/analytics-daily-totals.entity';
 import { Program } from '../programs/programs.entity';
 import { Channel } from '../channels/channels.entity';
@@ -34,6 +36,8 @@ import { SentryModule } from '../sentry/sentry.module';
       AnalyticsDailyChannel,
       AnalyticsDailyStreamer,
       AnalyticsDailyUser,
+      AnalyticsDailyUserStreamer,
+      AnalyticsDailyUserSlot,
       AnalyticsDailyTotals,
       Program,
       Channel,
