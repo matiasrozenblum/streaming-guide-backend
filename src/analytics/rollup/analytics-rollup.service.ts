@@ -249,19 +249,20 @@ export class AnalyticsRollupService {
     await this.eventRepository.query(
       `
       INSERT INTO analytics_daily_user_streamer
-        (date, user_id, streamer_id, event_name, count)
+        (date, user_id, streamer_id, hour, event_name, count)
       SELECT
         $1::date,
         e.user_id,
         e.streamer_id,
+        ${this.hourExpression()},
         e.event_name,
         COUNT(*)::int
       FROM analytics_event e
       WHERE ${this.dayExpression()} = $1::date
         AND e.user_id IS NOT NULL
         AND e.streamer_id IS NOT NULL
-      GROUP BY e.user_id, e.streamer_id, e.event_name
-      ON CONFLICT (date, user_id, streamer_id, event_name) DO UPDATE SET
+      GROUP BY e.user_id, e.streamer_id, ${this.hourExpression()}, e.event_name
+      ON CONFLICT (date, user_id, streamer_id, hour, event_name) DO UPDATE SET
         count = EXCLUDED.count
       `,
       [date],

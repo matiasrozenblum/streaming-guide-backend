@@ -336,16 +336,18 @@ describe('AnalyticsRecapService', () => {
     });
   });
 
-  describe('grilla por hora', () => {
-    const slot = (hour: number, plays = 1, channelId = 1) => ({
-      channel_id: String(channelId),
-      channel_name: channelId === 1 ? 'Luzu TV' : 'Olga',
-      channel_logo_url: null,
+  describe('grilla', () => {
+    /** La semana del 5 al 11 de octubre de 2026 arranca lunes. */
+    const slot = (date: string, hour: number, plays = 1, channel = 1) => ({
+      date,
       hour: String(hour),
+      program_id: '92',
+      key_id: String(channel),
+      key_name: channel === 1 ? 'Luzu TV' : 'Olga',
       plays: String(plays),
     });
 
-    /** Three plays clears MIN_PLAYS_FOR_RECAP so the grid is not withheld. */
+    /** Tres plays superan MIN_PLAYS_FOR_RECAP, asi que la grilla no se retiene. */
     const withEnoughPlays = () => {
       rawOneQueue = [
         { plays: '3', distinct_programs: '1', distinct_channels: '1' },
@@ -354,49 +356,163 @@ describe('AnalyticsRecapService', () => {
       ];
     };
 
-    it('agrupa las horas en bandas de tres desde las 6', async () => {
+    it('arma 3 franjas por 7 dias en la semana', async () => {
       withEnoughPlays();
-      slotRows = [slot(6), slot(8), slot(9), slot(21)];
+      slotRows = [slot('2026-10-05', 10)];
 
-      const recap = await service.getRecap(42, RecapPeriod.WEEK, '2026-09-02');
+      const { grids } = await service.getRecap(
+        42,
+        RecapPeriod.WEEK,
+        '2026-10-07',
+      );
 
-      expect(recap.grid.from_hour).toBe(6);
-      expect(recap.grid.band_hours).toBe(3);
-      // 6 y 8 caen en la primera banda, 9 en la segunda, 21 en la ultima.
-      expect(recap.grid.rows[0].cells).toEqual([2, 1, 0, 0, 0, 1]);
+      expect(grids.total.shape).toBe('week');
+      expect(grids.total.day_labels).toEqual([
+        'L',
+        'M',
+        'X',
+        'J',
+        'V',
+        'S',
+        'D',
+      ]);
+      expect(grids.total.rows.map((r) => r.label)).toEqual([
+        'Mañana',
+        'Tarde',
+        'Noche',
+      ]);
+      for (const row of grids.total.rows) expect(row.cells).toHaveLength(7);
     });
 
-    it('pliega la trasnoche en la primera banda en vez de perderla', async () => {
+    it('ubica cada play en su franja y su dia', async () => {
       withEnoughPlays();
-      slotRows = [slot(3), slot(0)];
+      // lunes a la mañana, miercoles a la tarde, viernes a la noche
+      slotRows = [
+        slot('2026-10-05', 9),
+        slot('2026-10-07', 15),
+        slot('2026-10-09', 21),
+      ];
 
-      const recap = await service.getRecap(42, RecapPeriod.WEEK, '2026-09-02');
+      const { grids } = await service.getRecap(
+        42,
+        RecapPeriod.WEEK,
+        '2026-10-07',
+      );
+      const [manana, tarde, noche] = grids.total.rows;
 
-      expect(recap.grid.rows[0].cells[0]).toBe(2);
+      expect(manana.cells[0].plays).toBe(1);
+      expect(tarde.cells[2].plays).toBe(1);
+      expect(noche.cells[4].plays).toBe(1);
     });
 
-    it('cuenta las casillas encendidas, no las reproducciones', async () => {
+    it('pliega la trasnoche en la noche y no la pierde', async () => {
       withEnoughPlays();
-      slotRows = [slot(9, 7), slot(12, 1), slot(9, 4, 2)];
+      slotRows = [slot('2026-10-05', 3, 4)];
 
-      const recap = await service.getRecap(42, RecapPeriod.WEEK, '2026-09-02');
+      const { grids } = await service.getRecap(
+        42,
+        RecapPeriod.WEEK,
+        '2026-10-07',
+      );
 
-      expect(recap.grid.lit_cells).toBe(3);
-      expect(recap.grid.total_cells).toBe(12);
+      expect(grids.total.rows[2].cells[0].plays).toBe(4);
+      expect(grids.total.rows[0].cells[0].plays).toBe(0);
     });
 
-    it('no devuelve la grilla cuando no alcanza el minimo', async () => {
+    it('pinta la celda con el canal que mas la ocupa', async () => {
+      withEnoughPlays();
+      slotRows = [slot('2026-10-05', 9, 2, 1), slot('2026-10-05', 10, 5, 2)];
+
+      const { grids } = await service.getRecap(
+        42,
+        RecapPeriod.WEEK,
+        '2026-10-07',
+      );
+      const cell = grids.total.rows[0].cells[0];
+
+      expect(cell.plays).toBe(7);
+      expect(cell.channel_name).toBe('Olga');
+    });
+
+    it('marca una sola celda como pico', async () => {
+      withEnoughPlays();
+      slotRows = [slot('2026-10-05', 9, 2), slot('2026-10-07', 10, 9)];
+
+      const { grids } = await service.getRecap(
+        42,
+        RecapPeriod.WEEK,
+        '2026-10-07',
+      );
+      const peaks = grids.total.rows.flatMap((r) =>
+        r.cells.filter((c) => c.peak),
+      );
+
+      expect(peaks).toHaveLength(1);
+      expect(peaks[0].plays).toBe(9);
+    });
+
+    it('nombra el pico en la frase', async () => {
+      withEnoughPlays();
+      slotRows = [slot('2026-10-05', 9, 2), slot('2026-10-07', 10, 9)];
+
+      const { grids } = await service.getRecap(
+        42,
+        RecapPeriod.WEEK,
+        '2026-10-07',
+      );
+
+      expect(grids.total.peak_label).toBe('los miércoles a la mañana');
+    });
+
+    it('arma un calendario con el relleno del primer dia en el mes', async () => {
+      withEnoughPlays();
+      slotRows = [slot('2026-10-01', 10)];
+
+      const { grids } = await service.getRecap(
+        42,
+        RecapPeriod.MONTH,
+        '2026-10-07',
+      );
+
+      // El 1 de octubre de 2026 cae jueves: las tres celdas previas van vacias.
+      expect(grids.total.shape).toBe('month');
+      const first = grids.total.rows[0].cells;
+      expect(first.slice(0, 3).every((c) => c.date === null)).toBe(true);
+      expect(first[3].date).toBe('2026-10-01');
+      for (const row of grids.total.rows) expect(row.cells).toHaveLength(7);
+    });
+
+    it('la grilla del programa deja afuera a los demas', async () => {
+      withEnoughPlays();
+      slotRows = [
+        { ...slot('2026-10-05', 9, 4), program_id: '92' },
+        { ...slot('2026-10-06', 9, 7), program_id: '99' },
+      ];
+
+      const { grids } = await service.getRecap(
+        42,
+        RecapPeriod.WEEK,
+        '2026-10-07',
+      );
+
+      // topPrograms viene vacio en este mock, asi que no hay programa destacado.
+      expect(grids.program).toBeNull();
+      expect(grids.total.rows[0].cells[1].plays).toBe(7);
+    });
+
+    it('no devuelve grilla cuando no alcanza el minimo', async () => {
       rawOneQueue = [
         { plays: '1', distinct_programs: '1', distinct_channels: '1' },
         { dow: '3', plays: '1' },
         { plays: '0' },
       ];
-      slotRows = [slot(9)];
+      slotRows = [slot('2026-10-05', 9)];
 
-      const recap = await service.getRecap(42, RecapPeriod.WEEK, '2026-09-02');
+      const recap = await service.getRecap(42, RecapPeriod.WEEK, '2026-10-07');
 
       expect(recap.enough_data).toBe(false);
-      expect(recap.grid.rows).toEqual([]);
+      expect(recap.grids.total.rows).toEqual([]);
+      expect(recap.grids.program).toBeNull();
     });
   });
 });

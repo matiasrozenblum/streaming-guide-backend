@@ -33,6 +33,19 @@ export class AnalyticsDailyUserStreamer {
   @PrimaryColumn({ type: 'int' })
   streamer_id: number;
 
+  /**
+   * Hour of day, 0-23, Argentina time. In the key for the same reason as in the
+   * slot rollup: the recap draws a grid of when someone watched, and the hour
+   * only exists on raw events, which are pruned at 90 days.
+   *
+   * The program side keeps this in its own table (analytics_daily_user_slot)
+   * because analytics_daily_user already existed and feeds the program ranking.
+   * Streamers never had that split, so the hour lives here and the ranking sums
+   * over it.
+   */
+  @PrimaryColumn({ type: 'smallint' })
+  hour: number;
+
   @PrimaryColumn({ type: 'varchar', length: 64 })
   event_name: string;
 
