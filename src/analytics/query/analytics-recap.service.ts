@@ -133,8 +133,13 @@ export interface RecapGrid {
  * and only that one programme or streamer on the cards that feature one.
  */
 export interface RecapGrids {
+  /** Every programme of the period, coloured by channel. */
   total: RecapGrid;
+  /** Every streamer of the period, coloured by platform. */
+  streamers: RecapGrid;
+  /** Only the top programme. */
   program: RecapGrid | null;
+  /** Only the top streamer. */
   streamer: RecapGrid | null;
 }
 
@@ -245,7 +250,12 @@ export class AnalyticsRecapService {
       top_streamers: enoughData ? streamers : [],
       grids: enoughData
         ? grids
-        : { total: this.emptyGrid(period), program: null, streamer: null },
+        : {
+            total: this.emptyGrid(period),
+            streamers: this.emptyGrid(period),
+            program: null,
+            streamer: null,
+          },
       totals,
       habits: { favorite_weekday: enoughData ? weekday : null },
       comparison: {
@@ -389,11 +399,11 @@ export class AnalyticsRecapService {
     const shape: RecapGridShape =
       period === RecapPeriod.WEEK ? 'week' : 'month';
 
+    // One query covers every streamer; the top one's grid is a filter over it,
+    // which is cheaper than asking the database twice for overlapping rows.
     const [programRows, streamerRows] = await Promise.all([
       this.programSlots(userId, from, to),
-      topStreamerId === null
-        ? Promise.resolve([])
-        : this.streamerSlots(userId, from, to, topStreamerId),
+      this.streamerSlots(userId, from, to),
     ]);
 
     const build = (rows: SlotRow[]) =>
@@ -401,13 +411,19 @@ export class AnalyticsRecapService {
         ? this.weekGrid(rows, from)
         : this.monthGrid(rows, from, to);
 
+    const topStreamerRows =
+      topStreamerId === null
+        ? []
+        : streamerRows.filter((r) => r.key_id === topStreamerId);
+
     return {
       total: build(programRows),
+      streamers: build(streamerRows),
       program:
         topProgramId === null
           ? null
           : build(programRows.filter((r) => r.program_id === topProgramId)),
-      streamer: streamerRows.length === 0 ? null : build(streamerRows),
+      streamer: topStreamerRows.length === 0 ? null : build(topStreamerRows),
     };
   }
 
@@ -458,7 +474,6 @@ export class AnalyticsRecapService {
     userId: number,
     from: string,
     to: string,
-    streamerId: number,
   ): Promise<SlotRow[]> {
     const rows = await this.dailyUserStreamerRepository
       .createQueryBuilder('s')
@@ -471,23 +486,24 @@ export class AnalyticsRecapService {
       // has no equality operator for it, so grouping by it fails outright. The
       // streamer is already pinned by the WHERE, so every row carries the same
       // name and services and taking any one of them is exact.
+      .addSelect('s.streamer_id', 'streamer_id')
       .addSelect('MAX(st.name)', 'key_name')
       .addSelect('MAX(st.services::text)', 'services')
       .addSelect('SUM(s.count)', 'plays')
       .innerJoin('streamer', 'st', 'st.id = s.streamer_id')
       .where('s.user_id = :userId', { userId })
       .andWhere('s.date BETWEEN :from AND :to', { from, to })
-      .andWhere('s.streamer_id = :streamerId', { streamerId })
       .andWhere('s.event_name = :metric', { metric: DEFAULT_STREAMER_METRIC })
       .groupBy('s.date')
       .addGroupBy('s.hour')
+      .addGroupBy('s.streamer_id')
       .getRawMany();
 
     return rows.map((row) => ({
       date: row.date as string,
       hour: Number(row.hour),
       program_id: null,
-      key_id: streamerId,
+      key_id: Number(row.streamer_id),
       key_name: row.key_name as string,
       platform: this.firstService(row.services),
       plays: Number(row.plays),

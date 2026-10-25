@@ -512,6 +512,7 @@ describe('AnalyticsRecapService', () => {
 
       expect(recap.enough_data).toBe(false);
       expect(recap.grids.total.rows).toEqual([]);
+      expect(recap.grids.streamers.rows).toEqual([]);
       expect(recap.grids.program).toBeNull();
     });
   });
