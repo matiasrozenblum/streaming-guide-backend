@@ -418,7 +418,10 @@ export class AnalyticsRecapService {
   ): Promise<SlotRow[]> {
     const rows = await this.dailyUserSlotRepository
       .createQueryBuilder('s')
-      .select('s.date', 'date')
+      // As text, not as a date: node-postgres would parse it in the server's
+      // timezone, and toISOString() on a machine east of UTC shifts the day back
+      // by one. The grid would then put a play on the wrong square.
+      .select('s.date::text', 'date')
       .addSelect('s.hour', 'hour')
       .addSelect('s.program_id', 'program_id')
       .addSelect('s.channel_id', 'key_id')
@@ -436,7 +439,7 @@ export class AnalyticsRecapService {
       .getRawMany();
 
     return rows.map((row) => ({
-      date: this.iso(new Date(row.date)),
+      date: row.date as string,
       hour: Number(row.hour),
       program_id: Number(row.program_id),
       key_id: Number(row.key_id),
@@ -459,10 +462,17 @@ export class AnalyticsRecapService {
   ): Promise<SlotRow[]> {
     const rows = await this.dailyUserStreamerRepository
       .createQueryBuilder('s')
-      .select('s.date', 'date')
+      // As text, not as a date: node-postgres would parse it in the server's
+      // timezone, and toISOString() on a machine east of UTC shifts the day back
+      // by one. The grid would then put a play on the wrong square.
+      .select('s.date::text', 'date')
       .addSelect('s.hour', 'hour')
-      .addSelect('st.name', 'key_name')
-      .addSelect('st.services', 'services')
+      // Aggregated rather than grouped: `services` is a json column and Postgres
+      // has no equality operator for it, so grouping by it fails outright. The
+      // streamer is already pinned by the WHERE, so every row carries the same
+      // name and services and taking any one of them is exact.
+      .addSelect('MAX(st.name)', 'key_name')
+      .addSelect('MAX(st.services::text)', 'services')
       .addSelect('SUM(s.count)', 'plays')
       .innerJoin('streamer', 'st', 'st.id = s.streamer_id')
       .where('s.user_id = :userId', { userId })
@@ -471,12 +481,10 @@ export class AnalyticsRecapService {
       .andWhere('s.event_name = :metric', { metric: DEFAULT_STREAMER_METRIC })
       .groupBy('s.date')
       .addGroupBy('s.hour')
-      .addGroupBy('st.name')
-      .addGroupBy('st.services')
       .getRawMany();
 
     return rows.map((row) => ({
-      date: this.iso(new Date(row.date)),
+      date: row.date as string,
       hour: Number(row.hour),
       program_id: null,
       key_id: streamerId,
