@@ -9,6 +9,16 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ### Added
 
+### Changed
+
+### Fixed
+
+---
+
+## [1.45.0] - 2026-10-31
+
+### Added
+
 - **`POST /auth/check-code` valida un codigo de acceso sin consumirlo**: en olvide mi contrasena el codigo se validaba recien al enviar la contrasena nueva (`POST /users/reset-password`), asi que un codigo vencido o mal tipeado se descubria al final del flujo, despues de elegir y confirmar la contrasena. El endpoint nuevo permite chequearlo en su propio paso; `reset-password` lo sigue consumiendo igual que antes. Recibe `{ identifier, code }` y responde `{ valid: true }` o 400 con el mismo mensaje que el resto de los endpoints de codigo. No cambia ningun contrato existente.
 
 ### Changed
