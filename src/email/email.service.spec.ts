@@ -3,6 +3,13 @@ import { MailerService } from '@nestjs-modules/mailer';
 import { SentryService } from '../sentry/sentry.service';
 import { ProposedChange } from '../proposed-changes/proposed-changes.entity';
 
+const mockResendSend = jest.fn();
+jest.mock('resend', () => ({
+  Resend: jest.fn().mockImplementation(() => ({
+    emails: { send: mockResendSend },
+  })),
+}));
+
 describe('EmailService', () => {
   let service: EmailService;
   let mockMailerService: jest.Mocked<MailerService>;
@@ -24,8 +31,8 @@ describe('EmailService', () => {
 
     const mockConfigService = {
       get: jest.fn().mockImplementation((key: string) => {
-        if (key === 'SENDGRID_API_KEY') {
-          return null; // No SendGrid API key, so it will fall back to SMTP
+        if (key === 'RESEND_API_KEY') {
+          return null; // No Resend API key, so it will fall back to SMTP
         }
         // Return undefined for email sender keys so defaults are used
         if (key.startsWith('EMAIL_SENDER_') || key === 'EMAIL_ADMIN') {
@@ -129,8 +136,11 @@ describe('EmailService', () => {
         html: expect.stringContaining('123456'),
       });
       expect(consoleSpy).toHaveBeenCalledWith(
-        'OTP enviado a test@example.com via SMTP: 123456',
+        'OTP enviado a test@example.com via SMTP',
       );
+      // The code must never end up in the logs
+      const logged = consoleSpy.mock.calls.flat().map(String).join(' ');
+      expect(logged).not.toContain('123456');
     });
 
     it('reports error to Sentry when OTP email fails', async () => {
@@ -235,7 +245,7 @@ describe('EmailService', () => {
   });
 
   describe('sendEmail', () => {
-    it('sends email successfully via SMTP when no SendGrid API key', async () => {
+    it('sends email successfully via SMTP when no Resend API key', async () => {
       mockMailerService.sendMail.mockResolvedValue(undefined);
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
 
@@ -280,104 +290,161 @@ describe('EmailService', () => {
       );
     });
 
-    it('tries SendGrid first when API key is available', async () => {
-      const mockConfigService = {
-        get: jest.fn().mockImplementation((key: string) => {
-          if (key === 'SENDGRID_API_KEY') {
-            return 'test-sendgrid-key';
-          }
-          // Return undefined for email sender keys so defaults are used
-          if (key.startsWith('EMAIL_SENDER_') || key === 'EMAIL_ADMIN') {
-            return undefined;
-          }
-          return 'test-value';
-        }),
-      } as any;
+    describe('with RESEND_API_KEY configured', () => {
+      beforeEach(() => {
+        const mockConfigService = {
+          get: jest.fn().mockImplementation((key: string) => {
+            if (key === 'RESEND_API_KEY') {
+              return 're_test_key';
+            }
+            // Return undefined for email sender keys so defaults are used
+            if (key.startsWith('EMAIL_SENDER_') || key === 'EMAIL_ADMIN') {
+              return undefined;
+            }
+            return 'test-value';
+          }),
+        } as any;
 
-      service = new EmailService(
-        mockMailerService,
-        mockSentryService,
-        mockConfigService,
-      );
-
-      // Mock the private sendViaSendGrid method
-      const sendViaSendGridSpy = jest
-        .spyOn(service as any, 'sendViaSendGrid')
-        .mockResolvedValue(undefined);
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
-
-      await service.sendEmail({
-        to: 'test@example.com',
-        subject: 'Test Subject',
-        html: '<h1>Test Content</h1>',
+        service = new EmailService(
+          mockMailerService,
+          mockSentryService,
+          mockConfigService,
+        );
       });
 
-      expect(sendViaSendGridSpy).toHaveBeenCalledWith(
-        'test@example.com',
-        'Test Subject',
-        '<h1>Test Content</h1>',
-        'general',
-      );
-      expect(consoleSpy).toHaveBeenCalledWith(
-        'Email enviado a test@example.com via SendGrid',
-      );
-      expect(mockMailerService.sendMail).not.toHaveBeenCalled();
-    });
+      it('sends via Resend and skips SMTP', async () => {
+        mockResendSend.mockResolvedValue({
+          data: { id: 'email_123' },
+          error: null,
+        });
+        const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
 
-    it('falls back to SMTP when SendGrid fails', async () => {
-      const mockConfigService = {
-        get: jest.fn().mockImplementation((key: string) => {
-          if (key === 'SENDGRID_API_KEY') {
-            return 'test-sendgrid-key';
-          }
-          // Return undefined for email sender keys so defaults are used
-          if (key.startsWith('EMAIL_SENDER_') || key === 'EMAIL_ADMIN') {
-            return undefined;
-          }
-          return 'test-value';
-        }),
-      } as any;
+        await service.sendEmail({
+          to: 'test@example.com',
+          subject: 'Test Subject',
+          html: '<h1>Test Content</h1>',
+          emailType: 'admin_alert',
+        });
 
-      service = new EmailService(
-        mockMailerService,
-        mockSentryService,
-        mockConfigService,
-      );
-
-      // Mock SendGrid to fail
-      const sendViaSendGridSpy = jest
-        .spyOn(service as any, 'sendViaSendGrid')
-        .mockRejectedValue(new Error('SendGrid API error'));
-      mockMailerService.sendMail.mockResolvedValue(undefined);
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-
-      await service.sendEmail({
-        to: 'test@example.com',
-        subject: 'Test Subject',
-        html: '<h1>Test Content</h1>',
+        expect(mockResendSend).toHaveBeenCalledWith(
+          expect.objectContaining({
+            from: 'La Guía del Streaming <notifications@laguiadelstreaming.com>',
+            to: 'test@example.com',
+            subject: 'Test Subject',
+            html: '<h1>Test Content</h1>',
+            text: 'Test Content',
+            replyTo: 'notifications@laguiadelstreaming.com',
+            tags: [{ name: 'email_type', value: 'admin_alert' }],
+            headers: expect.objectContaining({ Precedence: 'bulk' }),
+          }),
+        );
+        expect(consoleSpy).toHaveBeenCalledWith(
+          'Email enviado a test@example.com via Resend',
+        );
+        expect(mockMailerService.sendMail).not.toHaveBeenCalled();
       });
 
-      expect(sendViaSendGridSpy).toHaveBeenCalledWith(
-        'test@example.com',
-        'Test Subject',
-        '<h1>Test Content</h1>',
-        'general',
-      );
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        '❌ SendGrid failed, falling back to SMTP:',
-        expect.any(Error),
-      );
-      expect(mockMailerService.sendMail).toHaveBeenCalledWith({
-        from: expect.stringContaining('hola@laguiadelstreaming.com'),
-        to: 'test@example.com',
-        subject: 'Test Subject',
-        html: '<h1>Test Content</h1>',
-        text: 'Test Content',
+      it('sends OTP from noreply with reply-to general and no bulk header', async () => {
+        mockResendSend.mockResolvedValue({
+          data: { id: 'email_123' },
+          error: null,
+        });
+        jest.spyOn(console, 'log').mockImplementation();
+
+        await service.sendOtpCode('user@example.com', '123456', 5);
+
+        const payload = mockResendSend.mock.calls[0][0];
+        expect(payload.from).toBe(
+          'La Guía del Streaming <noreply@laguiadelstreaming.com>',
+        );
+        expect(payload.replyTo).toBe('hola@laguiadelstreaming.com');
+        expect(payload.headers.Precedence).toBeUndefined();
+        expect(payload.text).toContain('123456');
+        expect(mockMailerService.sendMail).not.toHaveBeenCalled();
       });
-      expect(consoleSpy).toHaveBeenCalledWith(
-        'Email enviado a test@example.com via SMTP',
-      );
+
+      it('passes attachments as Buffers to Resend', async () => {
+        mockResendSend.mockResolvedValue({
+          data: { id: 'email_123' },
+          error: null,
+        });
+        jest.spyOn(console, 'log').mockImplementation();
+        const content = Buffer.from('a,b\n1,2');
+
+        await service.sendReportWithAttachment({
+          to: 'admin@example.com',
+          subject: 'Reporte',
+          text: 'Adjunto',
+          html: '<p>Adjunto</p>',
+          attachments: [
+            { filename: 'r.csv', content, contentType: 'text/csv' },
+          ],
+        });
+
+        expect(mockResendSend).toHaveBeenCalledWith(
+          expect.objectContaining({
+            text: 'Adjunto',
+            attachments: [
+              { filename: 'r.csv', content, contentType: 'text/csv' },
+            ],
+          }),
+        );
+        expect(mockMailerService.sendMail).not.toHaveBeenCalled();
+      });
+
+      it('falls back to SMTP when Resend returns an error (SDK does not throw)', async () => {
+        mockResendSend.mockResolvedValue({
+          data: null,
+          error: {
+            name: 'validation_error',
+            message: 'Domain not verified',
+            statusCode: 403,
+          },
+        });
+        mockMailerService.sendMail.mockResolvedValue(undefined);
+        const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+        const consoleErrorSpy = jest
+          .spyOn(console, 'error')
+          .mockImplementation();
+
+        await service.sendEmail({
+          to: 'test@example.com',
+          subject: 'Test Subject',
+          html: '<h1>Test Content</h1>',
+        });
+
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          '❌ Resend failed, falling back to SMTP:',
+          expect.objectContaining({
+            message: expect.stringContaining('Domain not verified'),
+          }),
+        );
+        expect(mockMailerService.sendMail).toHaveBeenCalledWith({
+          from: expect.stringContaining('hola@laguiadelstreaming.com'),
+          to: 'test@example.com',
+          subject: 'Test Subject',
+          html: '<h1>Test Content</h1>',
+          text: 'Test Content',
+        });
+        expect(consoleSpy).toHaveBeenCalledWith(
+          'Email enviado a test@example.com via SMTP',
+        );
+      });
+
+      it('falls back to SMTP when the Resend call throws', async () => {
+        mockResendSend.mockRejectedValue(new Error('network down'));
+        mockMailerService.sendMail.mockResolvedValue(undefined);
+        jest.spyOn(console, 'log').mockImplementation();
+        jest.spyOn(console, 'error').mockImplementation();
+
+        await service.sendEmail({
+          to: 'test@example.com',
+          subject: 'Test Subject',
+          html: '<h1>Test Content</h1>',
+        });
+
+        expect(mockMailerService.sendMail).toHaveBeenCalled();
+      });
     });
 
     it('reports error to Sentry when SMTP fails', async () => {
