@@ -173,7 +173,7 @@ export class EmailService {
           },
           'otp_code',
         );
-        console.log(`OTP enviado a ${to} via Resend: ${code}`);
+        console.log(`OTP enviado a ${to} via Resend`);
         return;
       } catch (error) {
         console.error('❌ Resend failed, falling back to SMTP:', error);
@@ -189,7 +189,7 @@ export class EmailService {
         subject: 'Tu código de acceso • La Guía del Streaming',
         html,
       });
-      console.log(`OTP enviado a ${to} via SMTP: ${code}`);
+      console.log(`OTP enviado a ${to} via SMTP`);
     } catch (error) {
       console.error('❌ Error sending OTP email:', error);
 
