@@ -9,6 +9,8 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ### Added
 
+- **`POST /auth/check-code` valida un codigo de acceso sin consumirlo**: en olvide mi contrasena el codigo se validaba recien al enviar la contrasena nueva (`POST /users/reset-password`), asi que un codigo vencido o mal tipeado se descubria al final del flujo, despues de elegir y confirmar la contrasena. El endpoint nuevo permite chequearlo en su propio paso; `reset-password` lo sigue consumiendo igual que antes. Recibe `{ identifier, code }` y responde `{ valid: true }` o 400 con el mismo mensaje que el resto de los endpoints de codigo. No cambia ningun contrato existente.
+
 ### Changed
 
 - **Los mails salen por Resend en lugar de SendGrid**: desde que las notificaciones a usuarios pasaron a push, el mail quedo solo para el codigo de acceso (registro y olvide mi contrasena), las alertas a admins (programa no encontrado, cambios del scraper) y los reportes de estadisticas con adjuntos, y no justificaba los USD 20 mensuales de SendGrid. `EmailService` envia ahora con el SDK de Resend (plan gratuito: 3.000 mails por mes, 100 por dia) cuando esta configurada `RESEND_API_KEY`, y sigue cayendo a SMTP si no lo esta o si Resend falla. Se usa la API HTTP y no el SMTP de Resend porque Railway bloquea el SMTP saliente fuera del plan Pro. El SDK de Resend no tira excepcion ante un error de la API sino que lo devuelve, asi que se convierte en excepcion a mano: sin eso un envio fallido pasaba por exitoso, sin fallback ni alerta en Sentry. Los remitentes (`noreply@`, `notifications@`, `hola@`), el reply-to y los headers se mantienen; las `categories` de SendGrid pasan a un tag `email_type`. La version texto plano del mail ahora se genera desde el HTML: la del codigo de acceso no incluia el codigo. El dominio se verifico en Resend con registros propios (`send`, `rsend`, `resend._domainkey`) que conviven con los de SendGrid hasta darlo de baja.
@@ -18,6 +20,8 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 - **`@sendgrid/mail` y el endpoint `POST /test-sendgrid`**: el endpoint era publico y disparaba llamadas a la API de SendGrid.
 
 ### Fixed
+
+- **Los codigos de acceso se podian adivinar por fuerza bruta**: ni `verify-code` ni `reset-password` limitaban los intentos, y no hay rate limiting en el backend, asi que en los 5 minutos de vida de un codigo se podian probar tantos de los 900.000 posibles como la red permitiera — y un endpoint que valida sin consumir lo hacia todavia mas facil. `OtpService` ahora cuenta los intentos fallidos por email: al quinto el codigo se invalida y responde "Demasiados intentos. Pedi un codigo nuevo." El contador vence junto con el codigo y se reinicia al pedir uno nuevo. Aplica a login, registro y reset por igual, y se ajusta con `OTP_MAX_ATTEMPTS`.
 
 - **El codigo de acceso quedaba escrito en los logs**: cada envio logueaba `OTP enviado a <email>: <codigo>`, asi que cualquiera con acceso a los logs podia entrar a cualquier cuenta mientras el codigo estuviera vigente. El log conserva el destinatario y el canal pero ya no el codigo.
 

@@ -5,6 +5,7 @@ import { OtpService } from './otp.service';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { BadRequestException } from '@nestjs/common';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -56,6 +57,7 @@ describe('AuthController', () => {
           useValue: {
             sendCode: jest.fn(),
             verifyCode: jest.fn(),
+            validateCode: jest.fn(),
           },
         },
         {
@@ -150,6 +152,45 @@ describe('AuthController', () => {
       await expect(controller.sendCode({ identifier: '' })).rejects.toThrow(
         'Falta identificador',
       );
+    });
+  });
+
+  describe('checkCode', () => {
+    it('validates the code without consuming it', async () => {
+      const validateSpy = jest
+        .spyOn(otpService, 'validateCode')
+        .mockResolvedValue(undefined);
+      const verifySpy = jest.spyOn(otpService, 'verifyCode');
+
+      const result = await controller.checkCode({
+        identifier: 'test@example.com',
+        code: '123456',
+      });
+
+      expect(result).toEqual({ valid: true });
+      expect(validateSpy).toHaveBeenCalledWith('test@example.com', '123456');
+      expect(verifySpy).not.toHaveBeenCalled();
+    });
+
+    it('propagates an invalid code error', async () => {
+      jest
+        .spyOn(otpService, 'validateCode')
+        .mockRejectedValue(
+          new BadRequestException('Código inválido o expirado'),
+        );
+
+      await expect(
+        controller.checkCode({
+          identifier: 'test@example.com',
+          code: '000000',
+        }),
+      ).rejects.toThrow('Código inválido o expirado');
+    });
+
+    it('requires identifier and code', async () => {
+      await expect(
+        controller.checkCode({ identifier: 'test@example.com', code: '' }),
+      ).rejects.toThrow('Falta identificador o código');
     });
   });
 
