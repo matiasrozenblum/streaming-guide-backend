@@ -13,6 +13,25 @@ import {
 
 /** Below this, a recap is a sadder object than no recap. */
 const MIN_PLAYS_FOR_RECAP = 3;
+
+/** Every cut below is wall-clock time here, not UTC. */
+const TIMEZONE = 'America/Argentina/Buenos_Aires';
+
+/**
+ * When a period becomes readable, and how much of it each publication carries.
+ *
+ * A recap is a weekly thing to look forward to, not a counter that twitches
+ * while you watch. The week opens on Friday evening with Monday to Friday in
+ * it, picks up Saturday on Saturday evening, and closes on Sunday night with
+ * the whole week. The month follows the same shape on its last two days.
+ *
+ * Until the current period opens, the recap shown is the previous one, whole:
+ * nobody is ever sent to an empty screen because it happens to be Tuesday.
+ */
+const WEEK_EVENING_CUT_HOUR = 18;
+const WEEK_FINAL_CUT_HOUR = 22;
+const MONTH_FIRST_CUT_HOUR = 18;
+const MONTH_FINAL_CUT_HOUR = 22;
 const TOP_PROGRAMS = 5;
 const TOP_CHANNELS = 3;
 // Five, like the programmes: the monthly placa lists five and the weekly one
@@ -193,7 +212,13 @@ export class AnalyticsRecapService {
     date?: string,
   ): Promise<Recap> {
     const range = this.resolveRange(period, date);
-    const cacheKey = `analytics:recap:${userId}:${period}:${range.from}`;
+    /**
+     * `to` is part of the key, not decoration: the same week is published three
+     * times with three different ends, and keying only on `from` would serve
+     * Friday's recap all weekend. A new cut writes a new key and the old one
+     * ages out on its own, so nothing has to be invalidated by hand.
+     */
+    const cacheKey = `analytics:recap:${userId}:${period}:${range.from}:${range.to}`;
 
     try {
       const cached = await this.redisService.get<Recap>(cacheKey);
@@ -216,7 +241,7 @@ export class AnalyticsRecapService {
   private async buildRecap(
     userId: number,
     period: RecapPeriod,
-    range: { from: string; to: string; label: string },
+    range: { from: string; to: string; shapeTo: string; label: string },
   ): Promise<Recap> {
     const [programs, channels, streamers, totals, weekday, previousPlays] =
       await Promise.all([
@@ -238,6 +263,7 @@ export class AnalyticsRecapService {
       period,
       range.from,
       range.to,
+      range.shapeTo,
       programs[0]?.program_id ?? null,
       streamers[0]?.streamer_id ?? null,
     );
@@ -401,6 +427,13 @@ export class AnalyticsRecapService {
     period: RecapPeriod,
     from: string,
     to: string,
+    /**
+     * Where the period ends, which is not where its data stops while the
+     * period is still being published. The grid is drawn to this so a week
+     * keeps all seven columns and the days still to come read as empty rather
+     * than as missing.
+     */
+    shapeTo: string,
     topProgramId: number | null,
     topStreamerId: number | null,
   ): Promise<RecapGrids> {
@@ -417,7 +450,7 @@ export class AnalyticsRecapService {
     const build = (rows: SlotRow[]) =>
       shape === 'week'
         ? this.weekGrid(rows, from)
-        : this.monthGrid(rows, from, to);
+        : this.monthGrid(rows, from, shapeTo);
 
     const topStreamerRows =
       topStreamerId === null
@@ -777,50 +810,202 @@ export class AnalyticsRecapService {
    * Resolve the period containing `date` (default today). Weeks run Monday to
    * Sunday, matching how the schedule grid already presents a week.
    */
+  /**
+   * Now, as a wall clock in Buenos Aires.
+   *
+   * The returned Date's *UTC* fields hold the local date and hour, so the rest
+   * of this file can keep using UTC getters and still be reading local time.
+   * Doing it any other way had the week rolling over at 21:00 on Sunday, when
+   * UTC crosses into Monday — three hours before the week it was showing had
+   * even finished.
+   */
+  private buenosAiresNow(at: Date = new Date()): Date {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: TIMEZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).formatToParts(at);
+
+    const value = (type: string) =>
+      Number(parts.find((part) => part.type === type)?.value ?? '0');
+
+    return new Date(
+      Date.UTC(
+        value('year'),
+        value('month') - 1,
+        value('day'),
+        // Midnight comes back as hour 24 in some runtimes.
+        value('hour') % 24,
+        value('minute'),
+      ),
+    );
+  }
+
+  /** The Monday of whichever week `anchor` falls in. */
+  private weekStart(anchor: Date): Date {
+    // getUTCDay() is 0 for Sunday, which must map to 6.
+    const daysSinceMonday = (anchor.getUTCDay() + 6) % 7;
+    const start = new Date(
+      Date.UTC(
+        anchor.getUTCFullYear(),
+        anchor.getUTCMonth(),
+        anchor.getUTCDate(),
+      ),
+    );
+    start.setUTCDate(start.getUTCDate() - daysSinceMonday);
+    return start;
+  }
+
+  /**
+   * The last day of the current week that has been published, or null when the
+   * week has not opened yet — Monday through Thursday, and Friday before the
+   * evening cut.
+   */
+  private weekPublishedThrough(anchor: Date): Date | null {
+    const monday = this.weekStart(anchor);
+    const dayOfWeek = (anchor.getUTCDay() + 6) % 7; // 0 = Monday
+    const hour = anchor.getUTCHours();
+
+    const offset = (days: number) => {
+      const day = new Date(monday);
+      day.setUTCDate(day.getUTCDate() + days);
+      return day;
+    };
+
+    // Sunday: Saturday's recap until the final cut, then the whole week.
+    if (dayOfWeek === 6) {
+      return hour >= WEEK_FINAL_CUT_HOUR ? offset(6) : offset(5);
+    }
+    // Saturday: Friday's recap until the evening cut, then with Saturday in it.
+    if (dayOfWeek === 5) {
+      return hour >= WEEK_EVENING_CUT_HOUR ? offset(5) : offset(4);
+    }
+    // Friday: the week opens here, Monday to Friday.
+    if (dayOfWeek === 4) {
+      return hour >= WEEK_EVENING_CUT_HOUR ? offset(4) : null;
+    }
+    return null;
+  }
+
+  /**
+   * The same idea for a month: it opens on the second-to-last day and closes on
+   * the last one. Null until then, which sends the reader to the month before.
+   */
+  private monthPublishedThrough(anchor: Date): Date | null {
+    const year = anchor.getUTCFullYear();
+    const month = anchor.getUTCMonth();
+    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    const day = anchor.getUTCDate();
+    const hour = anchor.getUTCHours();
+
+    const dayInMonth = (dayOfMonth: number) =>
+      new Date(Date.UTC(year, month, dayOfMonth));
+
+    if (day === lastDay) {
+      return hour >= MONTH_FINAL_CUT_HOUR
+        ? dayInMonth(lastDay)
+        : dayInMonth(lastDay - 1);
+    }
+    if (day === lastDay - 1) {
+      return hour >= MONTH_FIRST_CUT_HOUR ? dayInMonth(lastDay - 1) : null;
+    }
+    return null;
+  }
+
+  /**
+   * Which days the recap covers, and which period it is a picture of.
+   *
+   * `to` is where the data stops, and it moves with each publication — that is
+   * what makes the card read "26 — 30 oct" on Friday and "26 — 1 nov" on
+   * Sunday. `shapeTo` is where the period itself ends, so a grid still draws
+   * all seven days of the week with the unpublished ones empty.
+   *
+   * An explicit `date` asks for that period whole, publication schedule aside:
+   * it exists for backfills and for tests, which want a fixed answer.
+   */
   private resolveRange(
     period: RecapPeriod,
     date?: string,
-  ): { from: string; to: string; label: string } {
-    const anchor = date ? new Date(`${date}T12:00:00Z`) : new Date();
+  ): { from: string; to: string; shapeTo: string; label: string } {
+    const pinned = Boolean(date);
+    const anchor = date ? new Date(`${date}T12:00:00Z`) : this.buenosAiresNow();
 
     if (period === RecapPeriod.YEAR) {
       const year = anchor.getUTCFullYear();
       return {
         from: `${year}-01-01`,
         to: `${year}-12-31`,
+        shapeTo: `${year}-12-31`,
         label: `${year}`,
       };
     }
 
     if (period === RecapPeriod.MONTH) {
+      const published = pinned ? null : this.monthPublishedThrough(anchor);
       const year = anchor.getUTCFullYear();
       const month = anchor.getUTCMonth();
-      const start = new Date(Date.UTC(year, month, 1));
-      const end = new Date(Date.UTC(year, month + 1, 0));
+
+      if (published || pinned) {
+        const start = new Date(Date.UTC(year, month, 1));
+        const end = new Date(Date.UTC(year, month + 1, 0));
+        return {
+          from: this.iso(start),
+          to: this.iso(published ?? end),
+          shapeTo: this.iso(end),
+          label: this.monthLabel(start),
+        };
+      }
+
+      // Not open yet: the month before, whole.
+      const start = new Date(Date.UTC(year, month - 1, 1));
+      const end = new Date(Date.UTC(year, month, 0));
       return {
         from: this.iso(start),
         to: this.iso(end),
-        label: start.toLocaleDateString('es-AR', {
-          month: 'long',
-          year: 'numeric',
-          timeZone: 'UTC',
-        }),
+        shapeTo: this.iso(end),
+        label: this.monthLabel(start),
       };
     }
 
-    // Monday-anchored week: getUTCDay() is 0 for Sunday, which must map to 6.
-    const dow = anchor.getUTCDay();
-    const daysSinceMonday = (dow + 6) % 7;
-    const start = new Date(anchor);
-    start.setUTCDate(start.getUTCDate() - daysSinceMonday);
-    const end = new Date(start);
-    end.setUTCDate(end.getUTCDate() + 6);
+    const monday = this.weekStart(anchor);
+    const sunday = new Date(monday);
+    sunday.setUTCDate(sunday.getUTCDate() + 6);
+
+    const published = pinned ? sunday : this.weekPublishedThrough(anchor);
+
+    if (published) {
+      return {
+        from: this.iso(monday),
+        to: this.iso(published),
+        shapeTo: this.iso(sunday),
+        label: this.weekLabel(monday, published),
+      };
+    }
+
+    // Not open yet: last week, whole.
+    const previousMonday = new Date(monday);
+    previousMonday.setUTCDate(previousMonday.getUTCDate() - 7);
+    const previousSunday = new Date(previousMonday);
+    previousSunday.setUTCDate(previousSunday.getUTCDate() + 6);
 
     return {
-      from: this.iso(start),
-      to: this.iso(end),
-      label: this.weekLabel(start, end),
+      from: this.iso(previousMonday),
+      to: this.iso(previousSunday),
+      shapeTo: this.iso(previousSunday),
+      label: this.weekLabel(previousMonday, previousSunday),
     };
+  }
+
+  private monthLabel(start: Date): string {
+    return start.toLocaleDateString('es-AR', {
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
   }
 
   /**

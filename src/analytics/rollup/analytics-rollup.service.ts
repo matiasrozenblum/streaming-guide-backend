@@ -66,6 +66,53 @@ export class AnalyticsRollupService {
     }
   }
 
+  /**
+   * The recap publishes at 18:00 on Friday and Saturday, at 22:00 on Sunday,
+   * and on the last two evenings of the month — and every one of those cuts
+   * needs *today* aggregated, which the nightly job never does: it walks
+   * backwards from yesterday.
+   *
+   * Ten minutes of head start is enough for one day's aggregation and keeps
+   * the cut from racing the job, which would otherwise cache a half-built
+   * recap for the next quarter of an hour. Plays in those ten minutes land on
+   * the following run. Daily rather than pinned to Friday and Sunday because
+   * the month's cuts fall on whatever weekday they fall on, and a day's
+   * rollup is a full recompute with an UPSERT — running it twice more costs
+   * little and is never wrong.
+   */
+  @Cron('50 17 * * *', {
+    name: 'analytics-rollup-before-evening-cut',
+    timeZone: 'America/Argentina/Buenos_Aires',
+  })
+  async runBeforeEveningCut(): Promise<void> {
+    await this.rollupToday();
+  }
+
+  @Cron('50 21 * * *', {
+    name: 'analytics-rollup-before-night-cut',
+    timeZone: 'America/Argentina/Buenos_Aires',
+  })
+  async runBeforeNightCut(): Promise<void> {
+    await this.rollupToday();
+  }
+
+  private async rollupToday(): Promise<void> {
+    const date = this.todayInArgentina();
+    try {
+      await this.rollupDate(date);
+    } catch (error) {
+      this.logger.error(
+        `Rollup failed for ${date}: ${(error as Error).message}`,
+      );
+      this.sentryService.captureMessage('Analytics rollup failed', 'error', {
+        service: 'analytics',
+        error_type: 'rollup_failed',
+        date,
+        error_message: (error as Error).message,
+      });
+    }
+  }
+
   /** Recompute every rollup table for a single day. Safe to call repeatedly. */
   async rollupDate(date: string): Promise<void> {
     await this.rollupTotals(date);
@@ -342,6 +389,16 @@ export class AnalyticsRollupService {
   }
 
   /** The last `days` dates ending yesterday, oldest first, in Argentina time. */
+  /** Today where the schedule lives, as YYYY-MM-DD. */
+  private todayInArgentina(): string {
+    const today = new Date(
+      new Date().toLocaleString('en-US', {
+        timeZone: 'America/Argentina/Buenos_Aires',
+      }),
+    );
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  }
+
   private recentDates(days: number): string[] {
     const dates: string[] = [];
     const today = new Date(
