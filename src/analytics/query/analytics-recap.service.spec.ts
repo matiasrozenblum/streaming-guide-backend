@@ -217,6 +217,136 @@ describe('AnalyticsRecapService', () => {
     });
   });
 
+  /**
+   * The recap is published, not live: the week opens on Friday evening with
+   * Monday to Friday in it, takes Saturday on Saturday evening and closes on
+   * Sunday night. Until it opens, the reader gets last week, whole.
+   *
+   * Argentina does not observe DST, so UTC-3 holds all year and these instants
+   * are the wall-clock times in the comments.
+   */
+  describe('calendario de publicacion', () => {
+    /** 2026-10-26 is a Monday; its week ends Sunday 2026-11-01. */
+    const at = (iso: string) => {
+      jest.useFakeTimers({ now: new Date(iso) });
+    };
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('muestra la semana anterior de lunes a jueves', async () => {
+      at('2026-10-27T15:00:00Z'); // martes 12:00
+      const recap = await service.getRecap(1, RecapPeriod.WEEK);
+
+      expect(recap.period.from).toBe('2026-10-19');
+      expect(recap.period.to).toBe('2026-10-25');
+    });
+
+    it('todavia muestra la anterior el viernes antes de las 18', async () => {
+      at('2026-10-30T20:00:00Z'); // viernes 17:00
+      const recap = await service.getRecap(1, RecapPeriod.WEEK);
+
+      expect(recap.period.from).toBe('2026-10-19');
+      expect(recap.period.to).toBe('2026-10-25');
+    });
+
+    it('abre la semana el viernes a las 18, de lunes a viernes', async () => {
+      at('2026-10-30T21:00:00Z'); // viernes 18:00
+      const recap = await service.getRecap(1, RecapPeriod.WEEK);
+
+      expect(recap.period.from).toBe('2026-10-26');
+      expect(recap.period.to).toBe('2026-10-30');
+      expect(recap.period.label).toBe('Semana del 26 al 30 de octubre');
+    });
+
+    it('el sabado a la manana sigue cerrada en el viernes', async () => {
+      at('2026-10-31T13:00:00Z'); // sabado 10:00
+      const recap = await service.getRecap(1, RecapPeriod.WEEK);
+
+      expect(recap.period.to).toBe('2026-10-30');
+    });
+
+    it('suma el sabado a las 18', async () => {
+      at('2026-10-31T21:00:00Z'); // sabado 18:00
+      const recap = await service.getRecap(1, RecapPeriod.WEEK);
+
+      expect(recap.period.from).toBe('2026-10-26');
+      expect(recap.period.to).toBe('2026-10-31');
+    });
+
+    it('el domingo a las 21 todavia no suma el domingo', async () => {
+      at('2026-11-02T00:00:00Z'); // domingo 21:00
+      const recap = await service.getRecap(1, RecapPeriod.WEEK);
+
+      expect(recap.period.to).toBe('2026-10-31');
+    });
+
+    it('cierra la semana el domingo a las 22', async () => {
+      at('2026-11-02T01:00:00Z'); // domingo 22:00
+      const recap = await service.getRecap(1, RecapPeriod.WEEK);
+
+      expect(recap.period.from).toBe('2026-10-26');
+      expect(recap.period.to).toBe('2026-11-01');
+      expect(recap.period.label).toBe(
+        'Semana del 26 de octubre al 1 de noviembre',
+      );
+    });
+
+    it('no adelanta la semana cuando UTC ya paso a lunes', async () => {
+      // Domingo 21:30 en Buenos Aires es lunes 00:30 UTC: anclar en UTC movia
+      // el resumen a la semana siguiente tres horas antes de que esta cerrara.
+      at('2026-11-02T00:30:00Z');
+      const recap = await service.getRecap(1, RecapPeriod.WEEK);
+
+      expect(recap.period.from).toBe('2026-10-26');
+    });
+
+    it('dibuja los siete dias aunque la semana cierre el viernes', async () => {
+      at('2026-10-30T21:00:00Z'); // viernes 18:00
+      rawOneQueue = [{ plays: '9', programs: '2', channels: '1' }];
+      const recap = await service.getRecap(1, RecapPeriod.WEEK);
+
+      expect(recap.grids.total.day_labels).toHaveLength(7);
+      expect(recap.grids.total.rows[0].cells).toHaveLength(7);
+    });
+
+    it('muestra el mes anterior hasta el anteultimo dia', async () => {
+      at('2026-10-29T15:00:00Z'); // 29 de octubre, 12:00
+      const recap = await service.getRecap(1, RecapPeriod.MONTH);
+
+      expect(recap.period.from).toBe('2026-09-01');
+      expect(recap.period.to).toBe('2026-09-30');
+    });
+
+    it('abre el mes el anteultimo dia a las 18', async () => {
+      at('2026-10-30T21:00:00Z'); // 30 de octubre, 18:00
+      const recap = await service.getRecap(1, RecapPeriod.MONTH);
+
+      expect(recap.period.from).toBe('2026-10-01');
+      expect(recap.period.to).toBe('2026-10-30');
+    });
+
+    it('cierra el mes el ultimo dia a las 22', async () => {
+      at('2026-10-31T22:00:00Z'); // 31 de octubre, 19:00
+      let recap = await service.getRecap(1, RecapPeriod.MONTH);
+      expect(recap.period.to).toBe('2026-10-30');
+
+      jest.useRealTimers();
+      at('2026-11-01T01:00:00Z'); // 31 de octubre, 22:00
+      recap = await service.getRecap(1, RecapPeriod.MONTH);
+      expect(recap.period.to).toBe('2026-10-31');
+    });
+
+    it('una fecha explicita pide el periodo entero, sin calendario', async () => {
+      at('2026-10-27T15:00:00Z'); // martes: sin fecha daria la semana anterior
+      const recap = await service.getRecap(1, RecapPeriod.WEEK, '2026-10-27');
+
+      expect(recap.period.from).toBe('2026-10-26');
+      expect(recap.period.to).toBe('2026-11-01');
+    });
+  });
+
   describe('empty state', () => {
     it('flags too little activity and withholds the lists', async () => {
       rawManyQueue = [[{ program_id: '1', program_name: 'A', plays: '2' }], []];
