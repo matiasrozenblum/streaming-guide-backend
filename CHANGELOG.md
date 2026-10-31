@@ -9,9 +9,13 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ### Added
 
+- **`POST /auth/check-code` valida un codigo de acceso sin consumirlo**: en olvide mi contrasena el codigo se validaba recien al enviar la contrasena nueva (`POST /users/reset-password`), asi que un codigo vencido o mal tipeado se descubria al final del flujo, despues de elegir y confirmar la contrasena. El endpoint nuevo permite chequearlo en su propio paso; `reset-password` lo sigue consumiendo igual que antes. Recibe `{ identifier, code }` y responde `{ valid: true }` o 400 con el mismo mensaje que el resto de los endpoints de codigo. No cambia ningun contrato existente.
+
 ### Changed
 
 ### Fixed
+
+- **Los codigos de acceso se podian adivinar por fuerza bruta**: ni `verify-code` ni `reset-password` limitaban los intentos, y no hay rate limiting en el backend, asi que en los 5 minutos de vida de un codigo se podian probar tantos de los 900.000 posibles como la red permitiera — y un endpoint que valida sin consumir lo hacia todavia mas facil. `OtpService` ahora cuenta los intentos fallidos por email: al quinto el codigo se invalida y responde "Demasiados intentos. Pedi un codigo nuevo." El contador vence junto con el codigo y se reinicia al pedir uno nuevo. Aplica a login, registro y reset por igual, y se ajusta con `OTP_MAX_ATTEMPTS`.
 
 ---
 
