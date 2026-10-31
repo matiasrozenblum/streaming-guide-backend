@@ -78,3 +78,5 @@ backend-firebase-key.json
 
 # Active story context (operational, not code)
 STORY.md
+# Memoria local del asistente, no es documentacion del proyecto.
+.claude/memory/
