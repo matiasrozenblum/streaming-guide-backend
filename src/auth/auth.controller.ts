@@ -56,6 +56,21 @@ export class AuthController {
     return { message: 'Código enviado correctamente' };
   }
 
+  @Post('check-code')
+  @ApiOperation({
+    summary:
+      'Valida un OTP sin consumirlo (p. ej. antes de pedir la nueva contraseña)',
+  })
+  @ApiResponse({ status: 200, description: 'Código válido' })
+  @ApiResponse({ status: 400, description: 'Código inválido o expirado' })
+  async checkCode(@Body() body: { identifier: string; code: string }) {
+    const { identifier, code } = body;
+    if (!identifier || !code)
+      throw new BadRequestException('Falta identificador o código');
+    await this.otpService.validateCode(identifier, code);
+    return { valid: true };
+  }
+
   @Post('verify-code')
   @ApiOperation({ summary: 'Verifica OTP y retorna JWT o registration_token' })
   async verifyCode(
