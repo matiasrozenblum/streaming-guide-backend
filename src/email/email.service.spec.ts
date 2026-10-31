@@ -136,8 +136,11 @@ describe('EmailService', () => {
         html: expect.stringContaining('123456'),
       });
       expect(consoleSpy).toHaveBeenCalledWith(
-        'OTP enviado a test@example.com via SMTP: 123456',
+        'OTP enviado a test@example.com via SMTP',
       );
+      // The code must never end up in the logs
+      const logged = consoleSpy.mock.calls.flat().map(String).join(' ');
+      expect(logged).not.toContain('123456');
     });
 
     it('reports error to Sentry when OTP email fails', async () => {
