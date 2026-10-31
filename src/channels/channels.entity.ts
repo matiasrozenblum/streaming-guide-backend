@@ -31,6 +31,17 @@ export class Channel {
   @Column({ type: 'text', nullable: true })
   youtube_channel_id: string;
 
+  /**
+   * videoId of the channel's permanent 24/7 broadcast, when it has one.
+   *
+   * Signals like TN keep a single stream open for years, and YouTube's search index
+   * drops those videos even while they are live — so the only reliable way to resolve
+   * them is to ask videos?id=<this> directly. Discovered and refreshed automatically
+   * by YoutubeLiveService; null for channels that broadcast per-program.
+   */
+  @Column({ type: 'text', nullable: true })
+  youtube_live_video_id: string | null;
+
   @Column({ type: 'int', nullable: true })
   order: number;
 

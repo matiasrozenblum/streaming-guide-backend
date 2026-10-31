@@ -40,6 +40,7 @@ describe('SubscriptionService', () => {
     logo_url: 'test-logo.png',
     handle: 'test',
     youtube_channel_id: 'test-channel-id',
+    youtube_live_video_id: null,
     order: 1,
     programs: [],
     is_visible: true,
