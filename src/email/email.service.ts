@@ -4,9 +4,18 @@ import { ProposedChange } from '../proposed-changes/proposed-changes.entity';
 import { buildProposedChangesReportHtml } from './email.templates';
 import { SentryService } from '../sentry/sentry.service';
 import { ConfigService } from '@nestjs/config';
+import { Resend } from 'resend';
+
+type EmailAttachment = {
+  filename: string;
+  content: Buffer;
+  contentType: string;
+};
 
 @Injectable()
 export class EmailService {
+  private resendClient: Resend | null = null;
+
   constructor(
     private readonly mailerService: MailerService,
     private readonly sentryService: SentryService,
@@ -89,21 +98,20 @@ export class EmailService {
       this.configService.get('EMAIL_ADMIN') || 'admin@laguiadelstreaming.com';
     const subject = '📋 Nuevos cambios detectados en la programación';
 
-    // Try SendGrid first if configured, fallback to SMTP
-    const sendGridApiKey = this.configService.get('SENDGRID_API_KEY');
+    // Try Resend first if configured, fallback to SMTP
+    const resend = this.getResendClient();
 
-    if (sendGridApiKey) {
+    if (resend) {
       try {
-        await this.sendViaSendGrid(
-          to,
-          subject,
-          htmlContent,
+        await this.sendViaResend(
+          resend,
+          { to, subject, html: htmlContent },
           'proposed_changes_report',
         );
-        console.log('📬 Email de cambios enviado via SendGrid.');
+        console.log('📬 Email de cambios enviado via Resend.');
         return;
       } catch (error) {
-        console.error('❌ SendGrid failed, falling back to SMTP:', error);
+        console.error('❌ Resend failed, falling back to SMTP:', error);
         // Fall through to SMTP
       }
     }
@@ -151,21 +159,24 @@ export class EmailService {
     }
     const html = this.buildOtpHtml(code, ttlMinutes);
 
-    // Try SendGrid first if configured, fallback to SMTP
-    const sendGridApiKey = this.configService.get('SENDGRID_API_KEY');
+    // Try Resend first if configured, fallback to SMTP
+    const resend = this.getResendClient();
 
-    if (sendGridApiKey) {
+    if (resend) {
       try {
-        await this.sendViaSendGrid(
-          to,
-          'Tu código de acceso • La Guía del Streaming',
-          html,
+        await this.sendViaResend(
+          resend,
+          {
+            to,
+            subject: 'Tu código de acceso • La Guía del Streaming',
+            html,
+          },
           'otp_code',
         );
-        console.log(`OTP enviado a ${to} via SendGrid: ${code}`);
+        console.log(`OTP enviado a ${to} via Resend: ${code}`);
         return;
       } catch (error) {
-        console.error('❌ SendGrid failed, falling back to SMTP:', error);
+        console.error('❌ Resend failed, falling back to SMTP:', error);
         // Fall through to SMTP
       }
     }
@@ -202,144 +213,72 @@ export class EmailService {
     }
   }
 
-  private async sendViaSendGrid(
-    to: string,
-    subject: string,
-    html: string,
+  /**
+   * Returns the Resend client, or null if RESEND_API_KEY is not configured
+   * (in which case callers fall back to SMTP). Created lazily because the
+   * Resend constructor throws when there is no API key.
+   */
+  private getResendClient(): Resend | null {
+    if (this.resendClient) return this.resendClient;
+    const apiKey = this.configService.get<string>('RESEND_API_KEY');
+    if (!apiKey) return null;
+    this.resendClient = new Resend(apiKey);
+    return this.resendClient;
+  }
+
+  private async sendViaResend(
+    resend: Resend,
+    params: {
+      to: string;
+      subject: string;
+      html: string;
+      text?: string;
+      attachments?: EmailAttachment[];
+    },
     emailType: string = 'general',
   ) {
-    const sgMail = require('@sendgrid/mail');
-    const apiKey = this.configService.get('SENDGRID_API_KEY');
-
-    sgMail.setApiKey(apiKey);
-
-    // Generate appropriate text version based on email type
-    let textContent = 'Mensaje de La Guía del Streaming.';
-    let categories = ['general'];
-    let customArgs = { source: 'general', app: 'streaming_guide' };
-
-    if (emailType === 'otp_code') {
-      textContent =
-        'Tu código de acceso para La Guía del Streaming. Este código expirará en 5 minutos. Si no solicitaste este código, puedes ignorar este mensaje.';
-      categories = ['otp', 'authentication'];
-      customArgs = { source: 'password_recovery', app: 'streaming_guide' };
-    } else if (emailType === 'program_notification') {
-      textContent = `Notificación de programa: ${subject}`;
-      categories = ['notifications', 'program_alerts'];
-      customArgs = { source: 'program_notification', app: 'streaming_guide' };
-    } else if (emailType === 'proposed_changes_report') {
-      textContent =
-        'Nuevos cambios detectados en la programación. Revisa el contenido HTML para más detalles.';
-      categories = ['reports', 'programming_changes'];
-      customArgs = { source: 'programming_changes', app: 'streaming_guide' };
-    }
-
     const senderEmail = this.getSenderEmail(emailType);
 
-    // Configure headers based on email type
-    // Program notifications should be treated as transactional (Primary inbox) not bulk
+    // Transactional emails (OTP) must not be flagged as bulk so they land in
+    // the Primary inbox; reports and admin alerts keep Precedence: bulk.
     const isTransactional =
       emailType === 'program_notification' || emailType === 'otp_code';
-    const baseHeaders = {
+    const headers: Record<string, string> = {
       'X-Mailer': 'La Guía del Streaming',
       'X-Priority': '1',
       'X-MSMail-Priority': 'High',
       'X-Auto-Response-Suppress': 'All',
+      ...(isTransactional ? {} : { Precedence: 'bulk' }),
     };
 
-    // Only add Precedence: bulk for non-transactional emails
-    const headers = isTransactional
-      ? baseHeaders
-      : { ...baseHeaders, Precedence: 'bulk' };
-
-    // Add List-Unsubscribe for better deliverability (even for transactional emails)
-    if (emailType === 'program_notification') {
-      headers['List-Unsubscribe'] =
-        '<https://laguiadelstreaming.com/subscriptions>, <mailto:hola@laguiadelstreaming.com?subject=Unsubscribe>';
-      headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
-    }
-
-    const msg = {
-      to,
-      from: {
-        email: senderEmail,
-        name: 'La Guía del Streaming',
-      },
-      subject,
-      html,
-      // Add text version for better deliverability
-      text: textContent,
-      // Add tracking and categorization
-      categories,
-      // Add custom headers for better deliverability
-      headers,
-      // Add reply-to for better deliverability (use general contact for replies)
+    const { data, error } = await resend.emails.send({
+      from: `La Guía del Streaming <${senderEmail}>`,
+      to: params.to,
+      subject: params.subject,
+      html: params.html,
+      text: params.text || this.stripHtml(params.html),
+      // Replies to OTP emails (sent from noreply@) go to the general inbox
       replyTo:
         emailType === 'otp_code' ? this.getSenderEmail('general') : senderEmail,
-      // Add custom args for tracking
-      customArgs,
-    };
+      headers,
+      // Tag values only allow ASCII letters, numbers, '_' and '-'
+      tags: [{ name: 'email_type', value: emailType }],
+      attachments: params.attachments?.map((attachment) => ({
+        filename: attachment.filename,
+        content: attachment.content,
+        contentType: attachment.contentType,
+      })),
+    });
 
-    await sgMail.send(msg);
-  }
-
-  private async sendViaSendGridWithAttachments(
-    to: string,
-    subject: string,
-    html: string,
-    text: string,
-    attachments: { filename: string; content: Buffer; contentType: string }[],
-    emailType: string = 'general',
-  ) {
-    const sgMail = require('@sendgrid/mail');
-    const apiKey = this.configService.get('SENDGRID_API_KEY');
-
-    sgMail.setApiKey(apiKey);
-
-    // Convert attachments to SendGrid format
-    const sendGridAttachments = attachments.map((attachment) => ({
-      content: attachment.content.toString('base64'),
-      filename: attachment.filename,
-      type: attachment.contentType,
-      disposition: 'attachment',
-    }));
-
-    let categories = ['reports'];
-    let customArgs = { source: 'reports', app: 'streaming_guide' };
-
-    if (emailType === 'report_with_attachment') {
-      categories = ['reports', 'attachments'];
-      customArgs = { source: 'reports', app: 'streaming_guide' };
+    // The Resend SDK does not throw on API errors: it returns them. Throw so
+    // callers fall back to SMTP and failures are not silently swallowed.
+    if (error) {
+      throw new Error(
+        `Resend error (${error.name}${error.statusCode ? ` ${error.statusCode}` : ''}): ${error.message}`,
+      );
     }
 
-    const senderEmail = this.getSenderEmail(emailType);
-    const msg = {
-      to,
-      from: {
-        email: senderEmail,
-        name: 'La Guía del Streaming',
-      },
-      subject,
-      html,
-      text,
-      attachments: sendGridAttachments,
-      // Add tracking and categorization
-      categories,
-      // Add custom headers for better deliverability
-      headers: {
-        'X-Mailer': 'La Guía del Streaming',
-        'X-Priority': '1',
-        'X-MSMail-Priority': 'High',
-        'X-Auto-Response-Suppress': 'All',
-        Precedence: 'bulk',
-      },
-      // Add reply-to for better deliverability
-      replyTo: senderEmail,
-      // Add custom args for tracking
-      customArgs,
-    };
-
-    await sgMail.send(msg);
+    return data;
   }
 
   private buildOtpHtml(code: string, ttl: number) {
@@ -407,23 +346,20 @@ export class EmailService {
       );
       return;
     }
-    // Try SendGrid first if configured, fallback to SMTP
-    const sendGridApiKey = this.configService.get('SENDGRID_API_KEY');
+    // Try Resend first if configured, fallback to SMTP
+    const resend = this.getResendClient();
 
-    if (sendGridApiKey) {
+    if (resend) {
       try {
-        await this.sendViaSendGridWithAttachments(
-          to,
-          subject,
-          html,
-          text,
-          attachments,
+        await this.sendViaResend(
+          resend,
+          { to, subject, html, text, attachments },
           'report_with_attachment',
         );
-        console.log(`📬 Report with attachment enviado a ${to} via SendGrid.`);
+        console.log(`📬 Report with attachment enviado a ${to} via Resend.`);
         return;
       } catch (error) {
-        console.error('❌ SendGrid failed, falling back to SMTP:', error);
+        console.error('❌ Resend failed, falling back to SMTP:', error);
         // Fall through to SMTP
       }
     }
@@ -522,16 +458,20 @@ export class EmailService {
       return;
     }
 
-    // Try SendGrid first if configured, fallback to SMTP
-    const sendGridApiKey = this.configService.get('SENDGRID_API_KEY');
+    // Try Resend first if configured, fallback to SMTP
+    const resend = this.getResendClient();
 
-    if (sendGridApiKey) {
+    if (resend) {
       try {
-        await this.sendViaSendGrid(to, subject, html, emailType);
-        console.log(`Email enviado a ${to} via SendGrid`);
+        await this.sendViaResend(
+          resend,
+          { to, subject, html, text },
+          emailType,
+        );
+        console.log(`Email enviado a ${to} via Resend`);
         return;
       } catch (error) {
-        console.error('❌ SendGrid failed, falling back to SMTP:', error);
+        console.error('❌ Resend failed, falling back to SMTP:', error);
         // Fall through to SMTP
       }
     }
