@@ -12,7 +12,7 @@ import {
 } from './analytics-admin.service';
 
 /** Below this, a recap is a sadder object than no recap. */
-const MIN_PLAYS_FOR_RECAP = 3;
+export const MIN_PLAYS_FOR_RECAP = 3;
 
 /** Every cut below is wall-clock time here, not UTC. */
 const TIMEZONE = 'America/Argentina/Buenos_Aires';

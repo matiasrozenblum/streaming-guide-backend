@@ -5,6 +5,7 @@ import {
   Body,
   Query,
   Param,
+  Req,
   UseGuards,
   ParseIntPipe,
   BadRequestException,
@@ -19,6 +20,7 @@ import {
   DEFAULT_STREAMER_METRIC,
 } from './analytics-admin.service';
 import { AnalyticsRollupService } from '../rollup/analytics-rollup.service';
+import { RecapNotificationService } from '../notify/recap-notification.service';
 import {
   DateRangeDto,
   TrendQueryDto,
@@ -36,6 +38,7 @@ export class AnalyticsAdminController {
   constructor(
     private readonly adminService: AnalyticsAdminService,
     private readonly rollupService: AnalyticsRollupService,
+    private readonly recapNotificationService: RecapNotificationService,
   ) {}
 
   @Get('overview')
@@ -143,5 +146,41 @@ export class AnalyticsAdminController {
 
     const processed = await this.rollupService.backfill(body.from, body.to);
     return { from: body.from, to: body.to, days_processed: processed };
+  }
+  /**
+   * Fire the recap announcement by hand, the way the cron fires it.
+   *
+   * It runs the real path end to end — who has enough plays, who still wants
+   * the notification, which devices are native — so a rehearsal proves the
+   * thing that will actually happen on Friday at 18:00.
+   *
+   * **It only reaches the caller unless told otherwise.** A test that pushes
+   * to every account is not a test, it is an incident, so the blast radius has
+   * to be asked for: `userId` to aim at one person, `everyone: true` to do what
+   * the cron does.
+   */
+  @Post('recap-notification')
+  @ApiOperation({ summary: 'Disparar a mano el aviso de resumen listo' })
+  async announceRecap(
+    @Req() req,
+    @Body()
+    body: { period?: 'week' | 'month'; userId?: number; everyone?: boolean },
+  ) {
+    const period = body.period ?? 'week';
+    if (period !== 'week' && period !== 'month') {
+      throw new BadRequestException("period debe ser 'week' o 'month'");
+    }
+
+    const target = body.everyone
+      ? undefined
+      : (body.userId ?? Number(req.user?.id));
+
+    if (!body.everyone && !Number.isFinite(target)) {
+      throw new BadRequestException(
+        'No se pudo resolver a quién enviarlo: pasá userId o everyone: true',
+      );
+    }
+
+    return this.recapNotificationService.announce(period, target);
   }
 }

@@ -109,6 +109,31 @@ export class UsersController {
     return this.usersService.addSeenFeature(req.user.id, body.feature);
   }
 
+  /** Preferencias de aviso del resumen, del usuario autenticado */
+  @ApiBearerAuth()
+  @Get('me/recap-push')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary: 'Avisos de resumen semanal y mensual del usuario autenticado',
+  })
+  @ApiResponse({ status: 200, description: '{ weekly, monthly }' })
+  getRecapPushSettings(@Req() req) {
+    return this.usersService.getRecapPushSettings(req.user.id);
+  }
+
+  /** Encender o apagar los avisos de resumen */
+  @ApiBearerAuth()
+  @Patch('me/recap-push')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Cambiar los avisos de resumen' })
+  @ApiResponse({ status: 200, description: '{ weekly, monthly }' })
+  updateRecapPushSettings(
+    @Req() req,
+    @Body() body: { weekly?: boolean; monthly?: boolean },
+  ) {
+    return this.usersService.updateRecapPushSettings(req.user.id, body);
+  }
+
   /** Resetear features vistos (para testing o si el usuario quiere ver el onboarding de nuevo) */
   @ApiBearerAuth()
   @Delete('me/seen-features')

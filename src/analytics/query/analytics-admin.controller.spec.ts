@@ -70,6 +70,7 @@ describe('Analytics controller access control', () => {
       new AnalyticsAdminController(
         {} as never,
         { backfill: jest.fn().mockResolvedValue(3) } as never,
+        {} as never,
       );
 
     it('rejects an inverted range', async () => {
@@ -92,7 +93,11 @@ describe('Analytics controller access control', () => {
 
     it('delegates the range to the rollup service', async () => {
       const rollup = { backfill: jest.fn().mockResolvedValue(2) };
-      const c = new AnalyticsAdminController({} as never, rollup as never);
+      const c = new AnalyticsAdminController(
+        {} as never,
+        rollup as never,
+        {} as never,
+      );
 
       await c.runRollup({ from: '2026-09-01', to: '2026-09-02' });
 
@@ -124,6 +129,60 @@ describe('Analytics controller access control', () => {
       expect(
         Reflect.getMetadata(ROLES_KEY, AnalyticsIngestController),
       ).toBeUndefined();
+    });
+  });
+  describe('disparo manual del aviso de resumen', () => {
+    const build = () => {
+      const announce = jest.fn().mockResolvedValue({ devices: 1 });
+      const controller = new AnalyticsAdminController(
+        {} as never,
+        {} as never,
+        { announce } as never,
+      );
+      return { controller, announce };
+    };
+
+    const admin = { user: { id: 7, role: 'admin' } };
+
+    it('por defecto se lo manda solo a quien lo dispara', async () => {
+      const { controller, announce } = build();
+
+      await controller.announceRecap(admin, { period: 'week' });
+
+      expect(announce).toHaveBeenCalledWith('week', 7);
+    });
+
+    it('acepta apuntar a otra cuenta', async () => {
+      const { controller, announce } = build();
+
+      await controller.announceRecap(admin, { period: 'month', userId: 42 });
+
+      expect(announce).toHaveBeenCalledWith('month', 42);
+    });
+
+    it('solo alcanza a todos si se lo pide explicitamente', async () => {
+      const { controller, announce } = build();
+
+      await controller.announceRecap(admin, { period: 'week', everyone: true });
+
+      expect(announce).toHaveBeenCalledWith('week', undefined);
+    });
+
+    it('rechaza un periodo que no existe', async () => {
+      const { controller } = build();
+
+      await expect(
+        controller.announceRecap(admin, { period: 'year' as never }),
+      ).rejects.toThrow(/week/);
+    });
+
+    it('no manda nada si no puede resolver a quien', async () => {
+      const { controller, announce } = build();
+
+      await expect(
+        controller.announceRecap({ user: {} }, { period: 'week' }),
+      ).rejects.toThrow(/userId/);
+      expect(announce).not.toHaveBeenCalled();
     });
   });
 });
