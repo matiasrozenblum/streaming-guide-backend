@@ -9,6 +9,7 @@ describe('RecapNotificationService', () => {
   let dailyUser: { createQueryBuilder: jest.Mock };
   let users: { find: jest.Mock };
   let subscriptions: { find: jest.Mock };
+  let recap: { publishedRange: jest.Mock };
   let push: { sendNotification: jest.Mock };
   let sentry: { captureMessage: jest.Mock };
   let service: RecapNotificationService;
@@ -31,6 +32,11 @@ describe('RecapNotificationService', () => {
     dailyUser = { createQueryBuilder: jest.fn(chain) };
     users = { find: jest.fn().mockResolvedValue([]) };
     subscriptions = { find: jest.fn().mockResolvedValue([]) };
+    recap = {
+      publishedRange: jest
+        .fn()
+        .mockReturnValue({ from: '2026-10-26', to: '2026-10-30' }),
+    };
     push = { sendNotification: jest.fn().mockResolvedValue(true) };
     sentry = { captureMessage: jest.fn() };
 
@@ -38,6 +44,7 @@ describe('RecapNotificationService', () => {
       dailyUser as never,
       users as never,
       subscriptions as never,
+      recap as never,
       push as never,
       sentry as never,
     );
@@ -117,25 +124,38 @@ describe('RecapNotificationService', () => {
     );
   });
 
-  it('la semana va de lunes a hoy', async () => {
-    // Viernes 2026-10-30, 18:00 en Buenos Aires.
-    jest.useFakeTimers({ now: new Date('2026-10-30T21:00:00Z') });
+  it('toma el rango del servicio que publica el resumen, no lo recalcula', async () => {
     eligibleRows = [{ user_id: 1 }];
 
     const result = await service.announce('week');
 
+    expect(recap.publishedRange).toHaveBeenCalledWith('week');
     expect(result.from).toBe('2026-10-26');
     expect(result.to).toBe('2026-10-30');
   });
 
-  it('el mes va del dia 1 a hoy', async () => {
-    jest.useFakeTimers({ now: new Date('2026-10-30T21:00:00Z') });
+  it('le pide el periodo correcto cuando es mensual', async () => {
+    recap.publishedRange.mockReturnValue({
+      from: '2026-10-01',
+      to: '2026-10-30',
+    });
     eligibleRows = [{ user_id: 1 }];
 
     const result = await service.announce('month');
 
+    expect(recap.publishedRange).toHaveBeenCalledWith('month');
     expect(result.from).toBe('2026-10-01');
-    expect(result.to).toBe('2026-10-30');
+  });
+
+  it('consulta el mismo rango que usa para contar reproducciones', async () => {
+    eligibleRows = [{ user_id: 1 }];
+
+    await service.announce('week');
+
+    expect(queryBuilder.where).toHaveBeenCalledWith(
+      'u.date BETWEEN :from AND :to',
+      { from: '2026-10-26', to: '2026-10-30' },
+    );
   });
 
   it('el aviso mensual solo sale el anteultimo dia del mes', async () => {

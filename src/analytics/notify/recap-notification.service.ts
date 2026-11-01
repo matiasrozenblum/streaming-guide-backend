@@ -8,7 +8,10 @@ import { User } from '../../users/users.entity';
 import { PushService } from '../../push/push.service';
 import { SentryService } from '../../sentry/sentry.service';
 import { DEFAULT_METRIC } from '../query/analytics-admin.service';
-import { MIN_PLAYS_FOR_RECAP } from '../query/analytics-recap.service';
+import {
+  AnalyticsRecapService,
+  MIN_PLAYS_FOR_RECAP,
+} from '../query/analytics-recap.service';
 import { RecapPeriod } from '../dto/analytics-query.dto';
 
 const TIMEZONE = 'America/Argentina/Buenos_Aires';
@@ -59,6 +62,7 @@ export class RecapNotificationService {
     private readonly usersRepository: Repository<User>,
     @InjectRepository(PushSubscriptionEntity)
     private readonly subscriptionRepository: Repository<PushSubscriptionEntity>,
+    private readonly recapService: AnalyticsRecapService,
     private readonly pushService: PushService,
     private readonly sentryService: SentryService,
   ) {}
@@ -125,7 +129,14 @@ export class RecapNotificationService {
     period: 'week' | 'month',
     onlyUserId?: number,
   ): Promise<RecapAnnouncement> {
-    const { from, to } = this.publishedRange(period);
+    /**
+     * Straight from the service that publishes it, never recomputed here. On
+     * the cron's own schedule the two agree anyway, but a rehearsal fired on
+     * some other day used to announce a week that was not published yet.
+     */
+    const { from, to } = this.recapService.publishedRange(
+      period === 'week' ? RecapPeriod.WEEK : RecapPeriod.MONTH,
+    );
 
     const eligible = await this.usersWithEnoughPlays(from, to, onlyUserId);
     if (eligible.length === 0) {
@@ -187,29 +198,6 @@ export class RecapNotificationService {
   }
 
   /**
-   * The days the recap being announced covers: Monday to today for the week,
-   * the 1st to today for the month. Today is the day of the first publication,
-   * so this matches what the recap endpoint returns at the same moment.
-   */
-  private publishedRange(period: 'week' | 'month'): {
-    from: string;
-    to: string;
-  } {
-    const today = this.buenosAiresNow();
-
-    if (period === 'month') {
-      const first = new Date(
-        Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1),
-      );
-      return { from: this.iso(first), to: this.iso(today) };
-    }
-
-    const monday = new Date(today);
-    monday.setUTCDate(monday.getUTCDate() - ((today.getUTCDay() + 6) % 7));
-    return { from: this.iso(monday), to: this.iso(today) };
-  }
-
-  /**
    * Who has enough in this period to be worth telling. The same metric and the
    * same threshold the recap itself gates on, so nobody is sent to a screen
    * that tells them to keep watching.
@@ -257,10 +245,6 @@ export class RecapNotificationService {
         value('hour') % 24,
       ),
     );
-  }
-
-  private iso(date: Date): string {
-    return date.toISOString().slice(0, 10);
   }
 }
 
