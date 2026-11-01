@@ -16,8 +16,11 @@ import { AnalyticsIngestService } from './ingest/analytics-ingest.service';
 import { AnalyticsRollupService } from './rollup/analytics-rollup.service';
 import { AnalyticsAdminController } from './query/analytics-admin.controller';
 import { AnalyticsAdminService } from './query/analytics-admin.service';
-import { AnalyticsRecapController } from './query/analytics-recap.controller';
 import { AnalyticsRecapService } from './query/analytics-recap.service';
+import { AnalyticsRecapController } from './query/analytics-recap.controller';
+import { RecapNotificationService } from './notify/recap-notification.service';
+import { User } from '../users/users.entity';
+import { PushModule } from '../push/push.module';
 import { RedisModule } from '../redis/redis.module';
 import { SentryModule } from '../sentry/sentry.module';
 
@@ -42,7 +45,11 @@ import { SentryModule } from '../sentry/sentry.module';
       Program,
       Channel,
       Streamer,
+      User,
     ]),
+    // For the push that announces a recap. Native only: the service picks the
+    // subscriptions that carry an FCM token.
+    PushModule,
     RedisModule,
     SentryModule,
   ],
@@ -56,6 +63,7 @@ import { SentryModule } from '../sentry/sentry.module';
     AnalyticsRollupService,
     AnalyticsAdminService,
     AnalyticsRecapService,
+    RecapNotificationService,
   ],
   exports: [AnalyticsRollupService, AnalyticsAdminService],
 })

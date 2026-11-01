@@ -264,6 +264,42 @@ export class UsersService {
     return user.seenFeatures ?? [];
   }
 
+  /**
+   * Which recap announcements this person is willing to get on their phone.
+   *
+   * Returned as a pair rather than as the raw columns so the clients have one
+   * shape to render and one shape to send back.
+   */
+  async getRecapPushSettings(
+    userId: number,
+  ): Promise<{ weekly: boolean; monthly: boolean }> {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException(`User with ID ${userId} not found`);
+    return {
+      weekly: user.recapWeeklyPush ?? true,
+      monthly: user.recapMonthlyPush ?? true,
+    };
+  }
+
+  /** Each field is optional: sending one switch must not reset the other. */
+  async updateRecapPushSettings(
+    userId: number,
+    settings: { weekly?: boolean; monthly?: boolean },
+  ): Promise<{ weekly: boolean; monthly: boolean }> {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException(`User with ID ${userId} not found`);
+
+    if (typeof settings.weekly === 'boolean') {
+      user.recapWeeklyPush = settings.weekly;
+    }
+    if (typeof settings.monthly === 'boolean') {
+      user.recapMonthlyPush = settings.monthly;
+    }
+    await this.usersRepository.save(user);
+
+    return { weekly: user.recapWeeklyPush, monthly: user.recapMonthlyPush };
+  }
+
   async removeSeenFeature(userId: number, feature?: string): Promise<string[]> {
     const user = await this.usersRepository.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException(`User with ID ${userId} not found`);
