@@ -238,6 +238,17 @@ export class AnalyticsRecapService {
     return recap;
   }
 
+  /**
+   * The days the recap covers right now, for anything that has to agree with
+   * it — the push that announces it, above all. Asking here rather than
+   * recomputing the calendar elsewhere is what keeps the notification from
+   * naming a week the endpoint is not serving yet.
+   */
+  publishedRange(period: RecapPeriod): { from: string; to: string } {
+    const range = this.resolveRange(period);
+    return { from: range.from, to: range.to };
+  }
+
   private async buildRecap(
     userId: number,
     period: RecapPeriod,
