@@ -31,6 +31,9 @@ const TITLE: Record<'week' | 'month', string> = {
 
 export interface RecapAnnouncement {
   period: 'week' | 'month';
+  /** What was sent, so a rehearsal can be read without looking at a phone. */
+  title: string;
+  body: string;
   from: string;
   to: string;
   /** People whose recap is worth announcing. */
@@ -141,7 +144,15 @@ export class RecapNotificationService {
 
     const eligible = await this.usersWithEnoughPlays(from, to, onlyUserId);
     if (eligible.length === 0) {
-      return { period, from, to, eligible: 0, optedIn: 0, devices: 0 };
+      return {
+        period,
+        ...this.copy(period),
+        from,
+        to,
+        eligible: 0,
+        optedIn: 0,
+        devices: 0,
+      };
     }
 
     const column = period === 'week' ? 'recapWeeklyPush' : 'recapMonthlyPush';
@@ -152,6 +163,7 @@ export class RecapNotificationService {
     if (optedIn.length === 0) {
       return {
         period,
+        ...this.copy(period),
         from,
         to,
         eligible: eligible.length,
@@ -174,8 +186,7 @@ export class RecapNotificationService {
     });
 
     const payload = {
-      title: TITLE[period],
-      body: BODY,
+      ...this.copy(period),
       data: {
         // FCM only carries strings in `data`.
         type: 'recap',
@@ -191,12 +202,17 @@ export class RecapNotificationService {
 
     return {
       period,
+      ...this.copy(period),
       from,
       to,
       eligible: eligible.length,
       optedIn: optedIn.length,
       devices: subscriptions.length,
     };
+  }
+
+  private copy(period: 'week' | 'month'): { title: string; body: string } {
+    return { title: TITLE[period], body: BODY };
   }
 
   /**

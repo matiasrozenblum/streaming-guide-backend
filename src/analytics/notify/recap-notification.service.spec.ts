@@ -161,6 +161,8 @@ describe('RecapNotificationService', () => {
   it('el aviso mensual solo sale el anteultimo dia del mes', async () => {
     const announce = jest.spyOn(service, 'announce').mockResolvedValue({
       period: 'month',
+      title: '¡Llegó tu resumen del mes!',
+      body: 'Mirá qué programas y streamers te acompañaron y compartilo.',
       from: '2026-10-01',
       to: '2026-10-30',
       eligible: 0,
