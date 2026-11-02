@@ -16,16 +16,17 @@ import { RecapPeriod } from '../dto/analytics-query.dto';
 
 const TIMEZONE = 'America/Argentina/Buenos_Aires';
 
-/** What the notification says. The recap itself is the content; this is a tap. */
-const COPY: Record<'week' | 'month', { title: string; body: string }> = {
-  week: {
-    title: '¡Llegó tu resumen de la semana!',
-    body: 'Mirá qué programas y streamers te acompañaron y compartilo.',
-  },
-  month: {
-    title: '¡Llegó tu resumen del mes!',
-    body: 'Un mes entero de La Guía, en placas listas para compartir.',
-  },
+/**
+ * What the notification says. The recap itself is the content; this is a tap.
+ *
+ * One body for both: what is on the other side of the notification is the same
+ * thing either way, and only the title needs to say which period it covers.
+ */
+const BODY = 'Mirá qué programas y streamers te acompañaron y compartilo.';
+
+const TITLE: Record<'week' | 'month', string> = {
+  week: '¡Llegó tu resumen semanal!',
+  month: '¡Llegó tu resumen del mes!',
 };
 
 export interface RecapAnnouncement {
@@ -173,7 +174,8 @@ export class RecapNotificationService {
     });
 
     const payload = {
-      ...COPY[period],
+      title: TITLE[period],
+      body: BODY,
       data: {
         // FCM only carries strings in `data`.
         type: 'recap',
