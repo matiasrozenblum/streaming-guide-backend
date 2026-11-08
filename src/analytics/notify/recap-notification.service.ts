@@ -10,7 +10,7 @@ import { SentryService } from '../../sentry/sentry.service';
 import { DEFAULT_METRIC } from '../query/analytics-admin.service';
 import {
   AnalyticsRecapService,
-  MIN_PLAYS_FOR_RECAP,
+  MIN_PLAYS_FOR_NOTIFICATION,
 } from '../query/analytics-recap.service';
 import { RecapPeriod } from '../dto/analytics-query.dto';
 
@@ -231,7 +231,7 @@ export class RecapNotificationService {
       .where('u.date BETWEEN :from AND :to', { from, to })
       .andWhere('u.event_name = :metric', { metric: DEFAULT_METRIC })
       .groupBy('u.user_id')
-      .having('SUM(u.count) >= :minimum', { minimum: MIN_PLAYS_FOR_RECAP });
+      .having('SUM(u.count) >= :minimum', { minimum: MIN_PLAYS_FOR_NOTIFICATION });
 
     if (onlyUserId !== undefined) {
       query.andWhere('u.user_id = :onlyUserId', { onlyUserId });

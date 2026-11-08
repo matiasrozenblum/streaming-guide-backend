@@ -7,6 +7,11 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+### Changed
+
+- **El resumen ya no exige un minimo de reproducciones**: la unica regla es el calendario. Quien miro algo en un periodo publicado tiene sus placas, sea una reproduccion o cincuenta; antes hacian falta tres y a quien no llegaba se le mostraba un contador —"vas 1 de 3"— que ademas mentia de lunes a jueves, porque la semana en pantalla ya estaba cerrada y nada de lo que mirara podia cambiarla. `enough_data` pasa a significar lo que su nombre dice: que haya algo que mostrar. El campo `minimum_plays` se va de la respuesta.
+- **El aviso conserva un umbral propio**, ahora llamado `MIN_PLAYS_FOR_NOTIFICATION`. No se ve en ninguna pantalla y hace falta por un motivo distinto: decirle a alguien que llego su resumen y depositarlo en una pantalla vacia es como se consigue que apague los avisos.
+
 ### Added
 
 - **Push cuando el resumen se publica por primera vez**: viernes a las 18 para la semana y el anteultimo dia del mes a las 18 para el mes — las dos primeras publicaciones, no las tandas que las completan: un segundo y un tercer aviso por la misma semana serian ruido. Va **solo a la app**: la suscripcion nativa guarda el token de FCM en `endpoint` y deja las claves de web push en null, asi que un `p256dh` nulo es lo que separa un telefono de un navegador. Solo le llega a quien ya tiene de que leer —el mismo umbral y la misma metrica con que el resumen se habilita—, de modo que nadie recibe un aviso que lo manda a una pantalla que le dice que siga mirando. El payload lleva `data.type = recap`, que es lo que la app usa para abrir la seccion al tocarlo.
