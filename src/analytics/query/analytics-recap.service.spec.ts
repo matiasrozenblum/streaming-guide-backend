@@ -348,10 +348,10 @@ describe('AnalyticsRecapService', () => {
   });
 
   describe('empty state', () => {
-    it('flags too little activity and withholds the lists', async () => {
-      rawManyQueue = [[{ program_id: '1', program_name: 'A', plays: '2' }], []];
+    it('withholds the lists when nothing was watched', async () => {
+      rawManyQueue = [[], []];
       rawOneQueue = [
-        { plays: '2', distinct_programs: '1', distinct_channels: '1' },
+        { plays: '0', distinct_programs: '0', distinct_channels: '0' },
         undefined,
         { plays: '0' },
       ];
@@ -362,6 +362,24 @@ describe('AnalyticsRecapService', () => {
       expect(recap.top_programs).toEqual([]);
       expect(recap.top_channels).toEqual([]);
       expect(recap.habits.favorite_weekday).toBeNull();
+    });
+
+    /**
+     * There used to be a floor of three plays. The rule is the calendar now,
+     * so a single play is a recap.
+     */
+    it('a single play is already a recap', async () => {
+      rawManyQueue = [[{ program_id: '1', program_name: 'A', plays: '1' }], []];
+      rawOneQueue = [
+        { plays: '1', distinct_programs: '1', distinct_channels: '1' },
+        { dow: '3', plays: '1' },
+        { plays: '0' },
+      ];
+
+      const recap = await service.getRecap(1, RecapPeriod.WEEK, '2026-09-02');
+
+      expect(recap.enough_data).toBe(true);
+      expect(recap.top_programs).toHaveLength(1);
     });
 
     it('returns the lists once there is enough activity', async () => {
@@ -477,7 +495,7 @@ describe('AnalyticsRecapService', () => {
       plays: String(plays),
     });
 
-    /** Tres plays superan MIN_PLAYS_FOR_RECAP, asi que la grilla no se retiene. */
+    /** Con actividad, la grilla no se retiene. */
     const withEnoughPlays = () => {
       rawOneQueue = [
         { plays: '3', distinct_programs: '1', distinct_channels: '1' },
@@ -630,10 +648,10 @@ describe('AnalyticsRecapService', () => {
       expect(grids.total.rows[0].cells[1].plays).toBe(7);
     });
 
-    it('no devuelve grilla cuando no alcanza el minimo', async () => {
+    it('no devuelve grilla cuando no hubo actividad', async () => {
       rawOneQueue = [
-        { plays: '1', distinct_programs: '1', distinct_channels: '1' },
-        { dow: '3', plays: '1' },
+        { plays: '0', distinct_programs: '0', distinct_channels: '0' },
+        undefined,
         { plays: '0' },
       ];
       slotRows = [slot('2026-10-05', 9)];

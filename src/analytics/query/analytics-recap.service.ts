@@ -12,7 +12,12 @@ import {
 } from './analytics-admin.service';
 
 /** Below this, a recap is a sadder object than no recap. */
-export const MIN_PLAYS_FOR_RECAP = 3;
+/**
+ * The floor the notification keeps for itself. The recap no longer has one —
+ * the calendar decides whether it exists — but an aviso that lands somebody on
+ * a screen with nothing on it is worse than no aviso.
+ */
+export const MIN_PLAYS_FOR_NOTIFICATION = 3;
 
 /** Every cut below is wall-clock time here, not UTC. */
 const TIMEZONE = 'America/Argentina/Buenos_Aires';
@@ -170,7 +175,6 @@ export interface Recap {
    * How many plays a recap needs. Sent rather than hardcoded in the clients so
    * the "you are at 2 of 3" progress cannot drift from the rule that gates it.
    */
-  minimum_plays: number;
   period: { type: RecapPeriod; from: string; to: string; label: string };
   top_programs: RecapProgram[];
   top_channels: RecapChannel[];
@@ -279,11 +283,19 @@ export class AnalyticsRecapService {
       streamers[0]?.streamer_id ?? null,
     );
 
-    const enoughData = totals.plays >= MIN_PLAYS_FOR_RECAP;
+    /**
+     * Whether there is a recap to show, which is now only a question of having
+     * something to rank. There used to be a floor of three plays, surfaced to
+     * the reader as "vas 1 de 3"; the rule is the calendar alone, so the floor
+     * is gone and anybody who watched anything in a published period gets
+     * their placas. The notification keeps a floor of its own, because telling
+     * somebody their recap arrived and landing them on an empty screen is how
+     * notifications get turned off.
+     */
+    const enoughData = totals.plays > 0;
 
     return {
       enough_data: enoughData,
-      minimum_plays: MIN_PLAYS_FOR_RECAP,
       period: {
         type: period,
         from: range.from,
