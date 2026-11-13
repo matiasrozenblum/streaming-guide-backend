@@ -7,12 +7,17 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+### Added
+
 ### Changed
 
-- **El zapeo cuenta como haber visto algo.** Entrar a un programa desde la grilla y cambiar de canal dentro del reproductor son la misma decision —elegir ver una cosa— y contabamos solo la primera: quien se quedaba adentro del reproductor zapeando entre cinco canales terminaba con un resumen que decia que vio uno. El evento ya se emitia; lo que faltaba era contarlo. Entra en las dos familias de metricas porque su destino puede ser un canal o un streamer, y cual de los dos lo dice el id de la fila. La notificacion mide lo mismo, para que a quien se le avisa sea exactamente quien va a encontrar algo al entrar.
+### Removed
 
-- **El resumen ya no exige un minimo de reproducciones**: la unica regla es el calendario. Quien miro algo en un periodo publicado tiene sus placas, sea una reproduccion o cincuenta; antes hacian falta tres y a quien no llegaba se le mostraba un contador —"vas 1 de 3"— que ademas mentia de lunes a jueves, porque la semana en pantalla ya estaba cerrada y nada de lo que mirara podia cambiarla. `enough_data` pasa a significar lo que su nombre dice: que haya algo que mostrar. El campo `minimum_plays` se va de la respuesta.
-- **El aviso conserva un umbral propio**, ahora llamado `MIN_PLAYS_FOR_NOTIFICATION`. No se ve en ninguna pantalla y hace falta por un motivo distinto: decirle a alguien que llego su resumen y depositarlo en una pantalla vacia es como se consigue que apague los avisos.
+### Fixed
+
+---
+
+## [1.48.0] - 2026-11-13
 
 ### Added
 
@@ -28,9 +33,13 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 - **La hora entra en el rollup de streamers** (`analytics_daily_user_streamer.hour`): el lado de programas ya la tenia en `analytics_daily_user_slot`, pero los streamers no, asi que su grilla no se podia construir mas que leyendo eventos crudos, que se podan a los 90 dias. La hora entra en la clave primaria en lugar de acompaniarla: dos aperturas del mismo streamer el mismo dia a distinta hora son filas distintas, y el ranking simplemente las suma.
 - **El resumen ya sabe a que hora se vio cada cosa** (`analytics_daily_user_slot`): la hora solo existia en `analytics_event`, que se poda a los 90 dias, asi que un resumen anual nunca iba a poder mostrarla. El rollup nuevo la conserva por toda la historia retenida. La hora se guarda **cruda (0-23, hora argentina) y no en bloques**: el agrupado en bandas ocurre al leer, de modo que cambiar las bandas —o sumar la franja de 00 a 06 que el primer diseno dejo afuera— es un GROUP BY distinto y no una migracion. `channel_id` y `program_id` van los dos en la clave, asi que las mismas filas responden que canales a que horas y tambien que programas en esa franja; el grano fino se agrega al grueso con un SUM, al reves es imposible. El recap expone `grid` con las filas por canal, las celdas por banda y el conteo de casillas encendidas sobre el total. Las horas anteriores al inicio de la grilla se pliegan en la primera banda en lugar de descartarse: una reproduccion a las 3 de la manana sigue siendo una reproduccion, y perderla haria que la grilla no cerrara con los totales que tiene al lado.
 - **El resumen por usuario ya puede rankear streamers** (`analytics_daily_user_streamer`): hasta ahora el recap tenia top de programas y de canales pero no de streamers, y no era una consulta que faltara sino la tabla. `analytics_daily_user` lleva `program_id` en la clave primaria y un streamer no tiene programa que poner ahi, asi que una fila compartida habria necesitado un nulo en una columna de clave. Se agrega una tabla paralela, que es la misma division que ya existe entre los rollups de programa, canal y streamer. Cuenta `streamer_service_click`, que es el evento con el que se abre un streamer: el reproductor de Twitch y Kick va embebido en el sitio, asi que es una reproduccion igual que la de un programa, solo que con otro nombre de evento. La clave foranea cascadea al borrar la cuenta por el mismo motivo que la otra tabla — `user_id` es parte de la clave y no se puede anular — de modo que la baja sigue cumpliendo lo que promete la politica de privacidad.
+
 ### Changed
 
-### Fixed
+- **El zapeo cuenta como haber visto algo.** Entrar a un programa desde la grilla y cambiar de canal dentro del reproductor son la misma decision —elegir ver una cosa— y contabamos solo la primera: quien se quedaba adentro del reproductor zapeando entre cinco canales terminaba con un resumen que decia que vio uno. El evento ya se emitia; lo que faltaba era contarlo. Entra en las dos familias de metricas porque su destino puede ser un canal o un streamer, y cual de los dos lo dice el id de la fila. La notificacion mide lo mismo, para que a quien se le avisa sea exactamente quien va a encontrar algo al entrar.
+
+- **El resumen ya no exige un minimo de reproducciones**: la unica regla es el calendario. Quien miro algo en un periodo publicado tiene sus placas, sea una reproduccion o cincuenta; antes hacian falta tres y a quien no llegaba se le mostraba un contador —"vas 1 de 3"— que ademas mentia de lunes a jueves, porque la semana en pantalla ya estaba cerrada y nada de lo que mirara podia cambiarla. `enough_data` pasa a significar lo que su nombre dice: que haya algo que mostrar. El campo `minimum_plays` se va de la respuesta.
+- **El aviso conserva un umbral propio**, ahora llamado `MIN_PLAYS_FOR_NOTIFICATION`. No se ve en ninguna pantalla y hace falta por un motivo distinto: decirle a alguien que llego su resumen y depositarlo en una pantalla vacia es como se consigue que apague los avisos.
 
 ---
 
