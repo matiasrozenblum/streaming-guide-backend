@@ -30,6 +30,8 @@ describe('AuthController', () => {
     lastLogin: new Date(),
     origin: 'traditional' as const,
     seenFeatures: [],
+    recapWeeklyPush: true,
+    recapMonthlyPush: true,
     devices: [],
     subscriptions: [],
     streamerSubscriptions: [],

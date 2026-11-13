@@ -28,6 +28,8 @@ describe('SubscriptionService', () => {
     createdAt: new Date(),
     origin: 'traditional',
     seenFeatures: [],
+    recapWeeklyPush: true,
+    recapMonthlyPush: true,
     devices: [],
     subscriptions: [],
     streamerSubscriptions: [],

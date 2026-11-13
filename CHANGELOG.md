@@ -11,7 +11,35 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ### Changed
 
+### Removed
+
 ### Fixed
+
+---
+
+## [1.48.0] - 2026-11-13
+
+### Added
+
+- **Push cuando el resumen se publica por primera vez**: viernes a las 18 para la semana y el anteultimo dia del mes a las 18 para el mes — las dos primeras publicaciones, no las tandas que las completan: un segundo y un tercer aviso por la misma semana serian ruido. Va **solo a la app**: la suscripcion nativa guarda el token de FCM en `endpoint` y deja las claves de web push en null, asi que un `p256dh` nulo es lo que separa un telefono de un navegador. Solo le llega a quien ya tiene de que leer —el mismo umbral y la misma metrica con que el resumen se habilita—, de modo que nadie recibe un aviso que lo manda a una pantalla que le dice que siga mirando. El payload lleva `data.type = recap`, que es lo que la app usa para abrir la seccion al tocarlo.
+- **Dos interruptores para apagarlo**, en `GET` y `PATCH /users/me/recap-push`: semanal y mensual por separado, porque el mensual es mas espaciado y hay a quien le sirve quedarse solo con ese. Viven en el usuario y no en el dispositivo: un resumen es de una persona, no del telefono que tenga en la mano. Vienen encendidos, incluido para las cuentas que ya existian.
+- **El aviso toma el rango del servicio que publica el resumen** en vez de recalcularlo. En el horario del cron las dos cuentas daban igual, pero un ensayo disparado otro dia anunciaba "lunes a hoy", que no es lo publicado — un miercoles habria anunciado una semana que todavia no abrio. Ahora pregunta, y de paso cuenta reproducciones sobre exactamente los mismos dias que el resumen muestra.
+- **El disparo manual devuelve el texto que mando** (`title` y `body`), para poder leer un ensayo sin tener que mirar un telefono.
+- **Disparo manual del aviso** (`POST /analytics/admin/recap-notification`), para no tener que esperar al viernes: corre el camino real de punta a punta —quien llega al minimo, quien lo quiere, que dispositivos son nativos—. **Por defecto le llega solo a quien lo dispara**; hay que pedir explicitamente `userId` para apuntar a otra cuenta o `everyone: true` para hacer lo que hace el cron. Un ensayo que le pushea a todo el padron no es un ensayo.
+
+- **El resumen se publica por tandas en lugar de acumular en vivo**: la semana abre el **viernes a las 18** con lunes a viernes adentro, suma el sabado el **sabado a las 18** y cierra el **domingo a las 22** con la semana entera; el mes hace lo mismo en sus dos ultimos dias (anteultimo a las 18, ultimo a las 22). Todos los cortes son hora de Buenos Aires. Hasta que el periodo abre se devuelve el anterior completo, asi que nadie cae en una pantalla vacia por entrar un martes. El `to` del periodo acompania cada tanda —viernes "26 — 30 oct", sabado "26 — 31 oct", domingo "26 — 1 nov"— y como el sitio y la app arman ese texto desde `from` y `to`, las fechas se actualizan solas sin tocar el cliente. La grilla se sigue dibujando sobre el periodo completo: una semana publicada hasta el viernes conserva sus siete columnas y sabado y domingo se ven vacios, no faltantes.
+
+- **La grilla del resumen pasa a la forma que dibujan las placas** (`grids` en `GET /analytics/me/recap`): antes devolvia canales por bandas de tres horas, que no es lo que muestra el diseno. Ahora la semana es 7 dias por 3 franjas (manana, tarde y noche) y el mes es un calendario de semanas por dias, con el relleno vacio del primer dia para que las columnas caigan bajo la letra correcta. Cada celda trae el canal que mas la ocupa —su color en pantalla— y una sola queda marcada como pico. Se devuelven tres vistas: la del periodo completo para las placas de ranking, la del programa mas visto y la del streamer mas visto, porque esas placas muestran solo lo suyo. La frase que va debajo (`peak_label`, por ejemplo "los miercoles a la manana") se calcula desde los slots y no desde la grilla, asi que el mes tambien nombra una franja aunque sus celdas sean dias enteros. Las horas anteriores a las 6 se pliegan en la noche: un play a las 3 de la manana pertenece a la noche anterior, y descartarlo haria que la grilla no cerrara con los totales.
+- **La hora entra en el rollup de streamers** (`analytics_daily_user_streamer.hour`): el lado de programas ya la tenia en `analytics_daily_user_slot`, pero los streamers no, asi que su grilla no se podia construir mas que leyendo eventos crudos, que se podan a los 90 dias. La hora entra en la clave primaria en lugar de acompaniarla: dos aperturas del mismo streamer el mismo dia a distinta hora son filas distintas, y el ranking simplemente las suma.
+- **El resumen ya sabe a que hora se vio cada cosa** (`analytics_daily_user_slot`): la hora solo existia en `analytics_event`, que se poda a los 90 dias, asi que un resumen anual nunca iba a poder mostrarla. El rollup nuevo la conserva por toda la historia retenida. La hora se guarda **cruda (0-23, hora argentina) y no en bloques**: el agrupado en bandas ocurre al leer, de modo que cambiar las bandas —o sumar la franja de 00 a 06 que el primer diseno dejo afuera— es un GROUP BY distinto y no una migracion. `channel_id` y `program_id` van los dos en la clave, asi que las mismas filas responden que canales a que horas y tambien que programas en esa franja; el grano fino se agrega al grueso con un SUM, al reves es imposible. El recap expone `grid` con las filas por canal, las celdas por banda y el conteo de casillas encendidas sobre el total. Las horas anteriores al inicio de la grilla se pliegan en la primera banda en lugar de descartarse: una reproduccion a las 3 de la manana sigue siendo una reproduccion, y perderla haria que la grilla no cerrara con los totales que tiene al lado.
+- **El resumen por usuario ya puede rankear streamers** (`analytics_daily_user_streamer`): hasta ahora el recap tenia top de programas y de canales pero no de streamers, y no era una consulta que faltara sino la tabla. `analytics_daily_user` lleva `program_id` en la clave primaria y un streamer no tiene programa que poner ahi, asi que una fila compartida habria necesitado un nulo en una columna de clave. Se agrega una tabla paralela, que es la misma division que ya existe entre los rollups de programa, canal y streamer. Cuenta `streamer_service_click`, que es el evento con el que se abre un streamer: el reproductor de Twitch y Kick va embebido en el sitio, asi que es una reproduccion igual que la de un programa, solo que con otro nombre de evento. La clave foranea cascadea al borrar la cuenta por el mismo motivo que la otra tabla — `user_id` es parte de la clave y no se puede anular — de modo que la baja sigue cumpliendo lo que promete la politica de privacidad.
+
+### Changed
+
+- **El zapeo cuenta como haber visto algo.** Entrar a un programa desde la grilla y cambiar de canal dentro del reproductor son la misma decision —elegir ver una cosa— y contabamos solo la primera: quien se quedaba adentro del reproductor zapeando entre cinco canales terminaba con un resumen que decia que vio uno. El evento ya se emitia; lo que faltaba era contarlo. Entra en las dos familias de metricas porque su destino puede ser un canal o un streamer, y cual de los dos lo dice el id de la fila. La notificacion mide lo mismo, para que a quien se le avisa sea exactamente quien va a encontrar algo al entrar.
+
+- **El resumen ya no exige un minimo de reproducciones**: la unica regla es el calendario. Quien miro algo en un periodo publicado tiene sus placas, sea una reproduccion o cincuenta; antes hacian falta tres y a quien no llegaba se le mostraba un contador —"vas 1 de 3"— que ademas mentia de lunes a jueves, porque la semana en pantalla ya estaba cerrada y nada de lo que mirara podia cambiarla. `enough_data` pasa a significar lo que su nombre dice: que haya algo que mostrar. El campo `minimum_plays` se va de la respuesta.
+- **El aviso conserva un umbral propio**, ahora llamado `MIN_PLAYS_FOR_NOTIFICATION`. No se ve en ninguna pantalla y hace falta por un motivo distinto: decirle a alguien que llego su resumen y depositarlo en una pantalla vacia es como se consigue que apague los avisos.
 
 ---
 
@@ -48,15 +76,56 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ## [1.44.1] - 2026-09-22
 
 ### Added
-
 - **`/health` expone metricas de heap y RSS del proceso**: investigando el uso de memoria del servicio en Railway (picos con correlacion horaria y un baseline de ~1.2 GB que sube en escalones y no baja) no habia forma de medir el proceso desde afuera. `GET /health` ahora agrega `process.memoryUsage()` y `v8.getHeapStatistics()` (`rssMb`, `heapUsedMb`, `heapTotalMb`, `externalMb`, `arrayBuffersMb`, `heapSizeLimitMb`, `heapUsedPercentOfLimit`, `uptimeSeconds`), que son las cifras que permiten separar un leak real de objetos JS — `heapUsed` alto y creciendo — de memoria simplemente reservada por V8 y nunca devuelta al OS — `heapUsed` bajo con `rss`/`heapTotal` altos — o de consumo off-heap por buffers de ioredis y HTTP. `heapSizeLimitMb` expone ademas el techo que V8 elige solo: sin `--max-old-space-size` lo deduce de la memoria que ve la VM y no de la asignada al contenedor, y no dispara GC mayor hasta acercarse a el. `status` y `timestamp` se mantienen en la raiz de la respuesta para no alterar lo que consume el healthcheck de Railway.
 - **`/health` tambien expone la memoria del cgroup del contenedor** (`container.currentMb`, `limitMb`, `anonMb`, `fileMb`, `outsideNodeMb`): `process.memoryUsage().rss` mide unicamente el proceso Node, y un Chromium lanzado por Puppeteer es un proceso **hijo** — su memoria no aparece ahi pero si en la del contenedor, que es la que Railway grafica y factura. Sin los dos numeros juntos no hay forma de decidir si un escalon en el grafico es memoria de Node o de otra cosa. `outsideNodeMb` es la resta (memoria anonima del contenedor menos el rss de Node): si crece mientras el rss se mantiene, hay procesos hijos acumulandose. `fileMb` es page cache, reclamable por el kernel y por lo tanto irrelevante para un leak. Soporta cgroup v2 y v1, y devuelve todo `null` fuera de un contenedor.
 
 ### Fixed
 
+- **La semana se adelantaba tres horas los domingos a la noche**: el periodo se anclaba con los getters UTC sobre `new Date()`, y a las 21:00 de Buenos Aires UTC ya esta en lunes, asi que el resumen saltaba a la semana siguiente antes de que la que estaba mostrando terminara. El ancla pasa a ser el reloj de pared de Buenos Aires.
+- **El rollup nunca procesaba el dia en curso**, asi que lo que se veia hoy aparecia recien a las 03:15 del dia siguiente. Se suman dos corridas diarias del dia de hoy, 17:50 y 21:50, diez minutos antes de cada corte de publicacion: es tiempo de sobra para agregar un solo dia y evita que el corte le gane al job y cachee un resumen a medio construir. Las reproducciones de esos diez minutos entran en la corrida siguiente.
+
 - **Las alertas de memoria median la maquina y no el proceso**: `ResourceMonitorService.getMemoryUsage()` calculaba el porcentaje como `(os.totalmem() - os.freemem()) / os.totalmem()`. Dentro de un contenedor esas dos funciones reportan la memoria del **host**, no la del cgroup ni la del proceso, asi que el numero no tenia ninguna relacion con lo que consume el servicio: los umbrales de 85% y 95% nunca dispararon una alerta aun con el backend estacionado en 1.2-1.5 GB en Railway. Ahora el porcentaje es `heapUsed / heap_size_limit` — el techo que V8 le impone al proceso y la unica razon por la que un proceso Node muere por OOM de heap — y el contexto que viaja a Sentry incluye `heap_used`, `heap_total`, `heap_limit`, `rss` y `external`. `rss` y `external` se reportan aparte a proposito: un RSS alto con el heap tranquilo es consumo off-heap (buffers de ioredis/HTTP, Chromium cuando corre un scraper) y no un leak de objetos JS, y distinguir esos dos casos es justamente lo que antes no se podia.
 - **Los scrapers dejaban Chromium vivo ante cualquier excepcion**: los tres (`vorterix`, `urbana`, `gelatina`) cerraban el browser con un `await browser.close()` suelto como ultima linea del flujo. Si algo entre `getBrowser()` y esa linea tiraba — un selector que el sitio dejo de exponer, un timeout de navegacion, un hipo de red — la linea nunca se ejecutaba y el proceso de Chromium quedaba vivo hasta que muriera el proceso Node. Cada huerfano son cientos de MB que no aparecen en el heap de V8 ni en `process.memoryUsage().rss`, porque es un proceso hijo, pero si cuentan para la memoria del contenedor. Ahora los tres cierran en un `finally`, y el cierre pasa por `closeBrowserQuietly()`, que loguea y sigue si `close()` falla por si mismo: sin esa proteccion la excepcion del cierre reemplaza a la del scraping y se pierde la causa real. Agrava el riesgo que el cron semanal lanza los tres browsers en paralelo con `Promise.allSettled` y que hay endpoints (`/scrape/*`) para dispararlos a demanda.
 - **Cambio de forma en `GET /health/resources`**: como consecuencia de lo anterior, el objeto `memory` deja de exponer `total`/`used`/`free` (memoria del host) y pasa a exponer `heapUsed`/`heapTotal`/`heapLimit`/`rss`/`external`. `percentage` se mantiene como clave pero ahora significa heap sobre el limite de V8. Es un endpoint de diagnostico, no lo consume ningun cliente.
+
+---
+
+## [1.47.0] - 2026-10-02
+
+### Fixed
+
+- **Dar de baja una cuenta no borraba todo el historial de esa persona**: `analytics_event` ya tenia FK con `ON DELETE SET NULL`, asi que sus eventos quedaban huerfanos correctamente, pero `analytics_daily_user` —la unica tabla de rollup con datos por persona— se creo **sin ninguna FK**, de modo que conservaba el `user_id` intacto tras la baja. La politica de privacidad promete lo contrario. Se agrega la constraint con `ON DELETE CASCADE`.
+  - Es `CASCADE` y no `SET NULL` porque `user_id` forma parte de la PRIMARY KEY y una columna de clave no admite nulos: anonimizar ahi significa necesariamente borrar las filas.
+  - Es ademas inocuo para los reportes: esa tabla solo alimenta el recap por usuario. Los rollups de programas, canales, streamers y totales se calculan por separado y no se tocan.
+  - La migracion borra primero las filas cuyo usuario ya no existe, que son anteriores a la constraint y la bloquearian al crearse.
+  - Verificado contra Postgres real: tras borrar un usuario quedan cero filas suyas en ambas tablas, las de otro usuario siguen intactas y el rollup agregado no cambia.
+
+---
+
+## [1.46.0] - 2026-09-09
+
+### Added
+
+- **Ranking de streamers (`GET /analytics/rankings/streamers`)**: los eventos de streamers (`streamer_service_click`, `streamer_subscribe`) ya viajaban con `streamer_id` en sus propiedades, pero `analytics_event` no tenia esa columna, asi que quedaban enterrados en el jsonb y no habia forma de rankearlos. Se promueve a columna con su FK e indice parcial, se suma la tabla de rollup `analytics_daily_streamer`, y el ranking devuelve el logo del streamer donde los otros devuelven el del canal. La metrica por defecto es `streamer_service_click` y no `click_youtube_live`: un streamer no tiene evento de click en vivo propio, la accion equivalente es salir hacia su canal de Twitch/Kick/YouTube.
+- La ingesta acepta `streamer_id` o `streamer_name`, resolviendo el nombre contra el mismo mapa cacheado que ya usaban programas y canales.
+
+---
+
+## [1.45.0] - 2026-09-09
+
+### Added
+
+- **Pipeline propio de analiticas de comportamiento (`AnalyticsModule`)**: hasta ahora todo lo que hacian los usuarios se reportaba unicamente a herramientas de terceros — PostHog, Datadog RUM, GA4, Firebase y Clarity — y ninguna las guarda lo suficiente como para responder "como vino este programa a lo largo del año": Datadog RUM retiene un mes. El backend no tenia ni un solo evento de comportamiento; `StatisticsModule` reporta sobre el *estado* de la base (quien se registro, quien se suscribio), no sobre lo que la gente hace. Este modulo agrega el registro de primera mano, en tres piezas:
+  - **Ingesta** (`POST /analytics/events`): batches de hasta 50 eventos, publico via `OptionalJwtAuthGuard` porque el trafico anonimo es la mayor parte y es justamente lo que miden los rankings. El `user_id` sale siempre del JWT y nunca del payload, asi que nadie puede imputar eventos a otra cuenta. Los eventos de admins se descartan, replicando el filtro que los clientes ya aplican. Las escrituras se bufferean en una lista de Redis y se drenan con un `INSERT` multi-row por minuto, para no gastar una conexion del pool compartido (max 35) por cada click; si Redis no responde se escribe directo, porque una caida de cache no deberia abrir un agujero en el historico. Responde `202` siempre: perder un evento es aceptable, hacer el producto mas lento para registrarlo no.
+  - **Rollups diarios**: un cron a las 03:15 ART agrega los eventos crudos en `analytics_daily_program`, `analytics_daily_channel`, `analytics_daily_user` y `analytics_daily_totals`. Los crudos se podan a los 90 dias; los rollups son permanentes y son los que sostienen el historico. Cada rollup es un recalculo completo del dia con `UPSERT`, nunca un incremento, asi que reejecutar una noche fallida o backfillear tras cambiar la logica de agregacion no duplica nada. La ventana de recalculo es de 3 dias porque mobile encola eventos mientras esta en background y los manda en el siguiente arranque — recalcular solo "ayer" congelaba esos numeros permanentemente por debajo.
+  - **APIs de lectura**: `/analytics/overview`, `/analytics/trends`, `/analytics/rankings/programs`, `/analytics/rankings/channels`, `/analytics/programs/:id/trend` y `/analytics/event-names`, todas restringidas a admin. Los rankings devuelven el logo y el color de marca del canal, de modo que un consumidor puede armar la imagen compartible con una sola llamada, e incluyen `previous_position` contra la ventana previa del mismo largo para que el ranking se lea como movimiento y no como foto fija.
+- **`POST /analytics/rollup` (admin)**: recalcula los rollups diarios de un rango a demanda. El cron nocturno cubre la operacion normal, pero hay tres casos que lo necesitan: sembrar historia despues de un import masivo, re-derivar todo cuando cambia la logica de agregacion, y verificar un entorno recien desplegado sin esperar a las 03:15. Es seguro llamarlo repetidas veces porque cada dia es un recalculo completo con `UPSERT`. El rango esta acotado a 370 dias: cada dia son varias agregaciones de tabla completa y un rango sin limite retendria una conexion del pool el tiempo que tarde.
+- **Recap personal estilo Wrapped (`GET /analytics/me/recap`)**: top 5 de programas, top 3 de canales, totales, dia favorito y comparacion con el periodo anterior, en ventanas semanal, mensual o anual. Lee solo de `analytics_daily_user`, asi que el recap sigue disponible por todo el historico retenido y no por los 90 dias de eventos crudos. El id de usuario viene del JWT y no hay parametro para sobreescribirlo: la unica cuenta que alguien puede leer es la propia. Debajo de 3 reproducciones devuelve `enough_data: false` para que el cliente muestre un estado vacio en vez de un Wrapped triste.
+
+### Notes
+
+- Los dias se agrupan en horario de Argentina, no UTC: un click a las 22:00 ART pertenece a esa noche, y agrupar por UTC lo empujaba al dia siguiente.
+- La ingesta acepta tanto `program_id`/`channel_id` como `program_name`/`channel_name`, resolviendo los nombres contra un mapa cacheado. Las builds de mobile ya publicadas solo mandan nombres, y asi siguen alimentando los rankings sin necesidad de un release.
 
 ---
 
@@ -245,6 +314,21 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 ### Fixed
 
 - `POST /auth/login` no longer crashes with `Cannot read properties of undefined (reading 'toLowerCase')` on a malformed/empty request body. Added `LoginDto` with `class-validator` decorators (`@IsEmail`, `@IsNotEmpty`) so the global `ValidationPipe` now returns a proper 400 instead of a 500.
+
+### Performance
+
+- **Consolidated N+1 and sequential I/O optimizations** across multiple services (PR #358):
+  - `WeeklyOverridesService.cleanupExpiredOverrides`: expired keys now deleted in a single batch `del([...keys])` instead of a sequential loop — O(N) Redis round-trips → O(1).
+  - `SchedulesService.enrichSchedules`: channel groups now enriched concurrently via `Promise.all` instead of sequentially.
+  - `PushScheduler`: `canFetchLive` pre-fetched once for all unique channel handles before the notification loop (was N+1 per schedule); all push sends are now fired concurrently with `Promise.allSettled`.
+  - `PushService.sendNotificationToDevices`: subscriptions now notified concurrently via `Promise.allSettled`.
+  - `YoutubeLiveService.getBatchLiveStreams`: replaced N×3 sequential Redis `GET` calls with 3 parallel `MGET` commands at the start of the method; added `MAX_IN_FLIGHT=50` cap with auto-clear to prevent memory leaks; added 10-second timeout on all YouTube API axios calls with explicit `⏱️` warning logs on timeout.
+  - `OptimizedSchedulesService.enrichWithCachedLiveStatus`: `canFetchLive` checks parallelized via `Promise.all`.
+  - `YoutubeDiscoveryService.getChannelIdsFromLiveUrls`: API calls now batched in groups of 5 concurrently.
+  - `WebhookSubscriptionService.verifyKickSubscriptions`: Kick API checks now processed in concurrent batches of 5 with inter-batch rate-limit delay.
+  - `StreamerLiveStatusService`: default Redis TTL reduced from 7 days (604 800 s) to 24 hours (86 400 s) to prevent unbounded stale-entry accumulation.
+
+- **`GET /channels/with-schedules`, `with-schedules/today` and `with-schedules/week` now use the batched live-status enrichment path (V2)** instead of the legacy per-handle sequential path: `ChannelsService.getChannelsWithSchedules` now calls `OptimizedSchedulesService.getSchedulesWithOptimizedLiveStatusV2` instead of the V1 method. V1 issued one sequential Redis `GET` per channel handle in both `LiveStatusBackgroundService.getLiveStatusForChannels` and `OptimizedSchedulesService.enrichWithCachedLiveStatus`'s `notFoundAttempts` lookup; V2 batches all of these into `MGET` calls. This is the same change that previously cut `today/v2`'s response time from ~7.5 s to ~600 ms, and was identified as the root cause of `week?live_status=true` taking 10+ seconds on first load. V2 has full functional parity with V1 (escalation, holiday overrides, time-window logic); the only behavioral difference is that V1 also opportunistically triggered an async YouTube fetch on stale cache, which V2 omits in favor of the existing 2-minute background cron.
 
 ---
 
