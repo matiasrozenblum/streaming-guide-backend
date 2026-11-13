@@ -124,6 +124,33 @@ describe('AnalyticsRecapService', () => {
     service = module.get<AnalyticsRecapService>(AnalyticsRecapService);
   });
 
+  describe('que cuenta como haber visto algo', () => {
+    it('cuenta el zapeo ademas de la entrada desde la grilla', async () => {
+      await service.getRecap(42, RecapPeriod.WEEK, '2026-09-02');
+
+      const metricFilters = whereCalls.filter(([sql]) =>
+        sql.includes('event_name IN (:...metrics)'),
+      );
+      expect(metricFilters.length).toBeGreaterThan(0);
+
+      // Toda consulta que mida actividad tiene que aceptar las dos, o el
+      // resumen contaria una cosa y la grilla de habitos otra.
+      for (const [, params] of metricFilters) {
+        expect(params.metrics).toContain('zap_use');
+      }
+
+      // Y el zapeo entra en las dos familias: su destino puede ser un canal
+      // o un streamer.
+      const families = new Set(
+        metricFilters.map(([, params]) =>
+          (params.metrics as string[]).filter((m) => m !== 'zap_use').join(),
+        ),
+      );
+      expect(families).toContain('click_youtube_live');
+      expect(families).toContain('streamer_service_click');
+    });
+  });
+
   describe('user isolation', () => {
     it('scopes every query to the requested user id', async () => {
       await service.getRecap(42, RecapPeriod.WEEK, '2026-09-02');
