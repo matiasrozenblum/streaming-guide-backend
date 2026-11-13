@@ -1,6 +1,8 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddRecapPushPreferences1784200000000 implements MigrationInterface {
+export class AddRecapPushPreferences1784200000000
+  implements MigrationInterface
+{
   name = 'AddRecapPushPreferences1784200000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

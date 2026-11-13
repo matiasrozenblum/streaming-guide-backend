@@ -437,7 +437,9 @@ export class AnalyticsRecapService {
       .innerJoin('streamer', 'st', 'st.id = s.streamer_id')
       .where('s.user_id = :userId', { userId })
       .andWhere('s.date BETWEEN :from AND :to', { from, to })
-      .andWhere('s.event_name IN (:...metrics)', { metrics: RECAP_STREAMER_METRICS })
+      .andWhere('s.event_name IN (:...metrics)', {
+        metrics: RECAP_STREAMER_METRICS,
+      })
       .groupBy('s.streamer_id')
       .addGroupBy('st.name')
       .addGroupBy('st.logo_url')
@@ -572,7 +574,9 @@ export class AnalyticsRecapService {
       .innerJoin('streamer', 'st', 'st.id = s.streamer_id')
       .where('s.user_id = :userId', { userId })
       .andWhere('s.date BETWEEN :from AND :to', { from, to })
-      .andWhere('s.event_name IN (:...metrics)', { metrics: RECAP_STREAMER_METRICS })
+      .andWhere('s.event_name IN (:...metrics)', {
+        metrics: RECAP_STREAMER_METRICS,
+      })
       .groupBy('s.date')
       .addGroupBy('s.hour')
       .addGroupBy('s.streamer_id')

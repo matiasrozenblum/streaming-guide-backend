@@ -233,7 +233,9 @@ export class RecapNotificationService {
       // exactamente quien va a encontrar algo al entrar.
       .andWhere('u.event_name IN (:...metrics)', { metrics: RECAP_METRICS })
       .groupBy('u.user_id')
-      .having('SUM(u.count) >= :minimum', { minimum: MIN_PLAYS_FOR_NOTIFICATION });
+      .having('SUM(u.count) >= :minimum', {
+        minimum: MIN_PLAYS_FOR_NOTIFICATION,
+      });
 
     if (onlyUserId !== undefined) {
       query.andWhere('u.user_id = :onlyUserId', { onlyUserId });
