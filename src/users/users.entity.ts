@@ -59,6 +59,21 @@ export class User {
   @Column({ type: 'text', array: true, name: 'seen_features', default: '{}' })
   seenFeatures: string[];
 
+  /**
+   * Whether we may tell this person, on their phone, that a recap is ready.
+   *
+   * Two switches and not one: the monthly recap is a rarer, bigger thing, and
+   * somebody who finds a weekly nudge too much may still want that one. They
+   * default to on — the recap is the point of having signed in — and they sit
+   * on the user and not on the device because a recap belongs to a person, not
+   * to the phone they happen to be holding.
+   */
+  @Column({ name: 'recap_weekly_push', type: 'boolean', default: true })
+  recapWeeklyPush: boolean;
+
+  @Column({ name: 'recap_monthly_push', type: 'boolean', default: true })
+  recapMonthlyPush: boolean;
+
   @OneToMany(() => Device, (device) => device.user, { cascade: true })
   devices: Device[];
 

@@ -27,6 +27,7 @@ import { PushModule } from './push/push.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { UsersModule } from './users/users.module';
 import { StatisticsModule } from './statistics/statistics.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { SentryModule } from './sentry/sentry.module';
 import { CategoriesModule } from './categories/categories.module';
 import { StreamersModule } from './streamers/streamers.module';
@@ -118,6 +119,7 @@ import { ConfigModule as AppConfigModule } from './config/config.module';
     NotificationsModule,
     UsersModule,
     StatisticsModule,
+    AnalyticsModule,
     SentryModule,
     CategoriesModule,
     StreamersModule,
