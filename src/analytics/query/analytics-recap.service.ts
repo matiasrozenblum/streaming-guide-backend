@@ -19,6 +19,21 @@ import {
  */
 export const MIN_PLAYS_FOR_NOTIFICATION = 3;
 
+/**
+ * Que cuenta como haber visto algo.
+ *
+ * Entrar desde la grilla y zapear dentro del reproductor son la misma
+ * decision —elegir ver una cosa— y contar solo la primera dejaba afuera a
+ * quien se queda adentro del reproductor cambiando de canal: su resumen
+ * decia que vio un programa cuando vio cinco.
+ *
+ * El zapeo entra en las dos familias porque su destino puede ser un canal o
+ * un streamer; cual de los dos lo dice el id que trae la fila, no la metrica.
+ */
+const ZAP_METRIC = 'zap_use';
+export const RECAP_METRICS = [DEFAULT_METRIC, ZAP_METRIC];
+const RECAP_STREAMER_METRICS = [DEFAULT_STREAMER_METRIC, ZAP_METRIC];
+
 /** Every cut below is wall-clock time here, not UTC. */
 const TIMEZONE = 'America/Argentina/Buenos_Aires';
 
@@ -344,7 +359,7 @@ export class AnalyticsRecapService {
       .leftJoin('channel', 'ch', 'ch.id = u.channel_id')
       .where('u.user_id = :userId', { userId })
       .andWhere('u.date BETWEEN :from AND :to', { from, to })
-      .andWhere('u.event_name = :metric', { metric: DEFAULT_METRIC })
+      .andWhere('u.event_name IN (:...metrics)', { metrics: RECAP_METRICS })
       .groupBy('u.program_id')
       .addGroupBy('prog.name')
       .addGroupBy('u.channel_id')
@@ -383,7 +398,7 @@ export class AnalyticsRecapService {
       .innerJoin('channel', 'ch', 'ch.id = u.channel_id')
       .where('u.user_id = :userId', { userId })
       .andWhere('u.date BETWEEN :from AND :to', { from, to })
-      .andWhere('u.event_name = :metric', { metric: DEFAULT_METRIC })
+      .andWhere('u.event_name IN (:...metrics)', { metrics: RECAP_METRICS })
       .groupBy('u.channel_id')
       .addGroupBy('ch.name')
       .addGroupBy('ch.logo_url')
@@ -422,7 +437,7 @@ export class AnalyticsRecapService {
       .innerJoin('streamer', 'st', 'st.id = s.streamer_id')
       .where('s.user_id = :userId', { userId })
       .andWhere('s.date BETWEEN :from AND :to', { from, to })
-      .andWhere('s.event_name = :metric', { metric: DEFAULT_STREAMER_METRIC })
+      .andWhere('s.event_name IN (:...metrics)', { metrics: RECAP_STREAMER_METRICS })
       .groupBy('s.streamer_id')
       .addGroupBy('st.name')
       .addGroupBy('st.logo_url')
@@ -510,7 +525,7 @@ export class AnalyticsRecapService {
       .innerJoin('channel', 'ch', 'ch.id = s.channel_id')
       .where('s.user_id = :userId', { userId })
       .andWhere('s.date BETWEEN :from AND :to', { from, to })
-      .andWhere('s.event_name = :metric', { metric: DEFAULT_METRIC })
+      .andWhere('s.event_name IN (:...metrics)', { metrics: RECAP_METRICS })
       .groupBy('s.date')
       .addGroupBy('s.hour')
       .addGroupBy('s.program_id')
@@ -557,7 +572,7 @@ export class AnalyticsRecapService {
       .innerJoin('streamer', 'st', 'st.id = s.streamer_id')
       .where('s.user_id = :userId', { userId })
       .andWhere('s.date BETWEEN :from AND :to', { from, to })
-      .andWhere('s.event_name = :metric', { metric: DEFAULT_STREAMER_METRIC })
+      .andWhere('s.event_name IN (:...metrics)', { metrics: RECAP_STREAMER_METRICS })
       .groupBy('s.date')
       .addGroupBy('s.hour')
       .addGroupBy('s.streamer_id')
@@ -778,7 +793,7 @@ export class AnalyticsRecapService {
       .addSelect('COUNT(DISTINCT u.channel_id)', 'distinct_channels')
       .where('u.user_id = :userId', { userId })
       .andWhere('u.date BETWEEN :from AND :to', { from, to })
-      .andWhere('u.event_name = :metric', { metric: DEFAULT_METRIC })
+      .andWhere('u.event_name IN (:...metrics)', { metrics: RECAP_METRICS })
       .getRawOne<{
         plays: string;
         distinct_programs: string;
@@ -802,7 +817,7 @@ export class AnalyticsRecapService {
       .select('COALESCE(SUM(u.count), 0)', 'plays')
       .where('u.user_id = :userId', { userId })
       .andWhere('u.date BETWEEN :from AND :to', { from, to })
-      .andWhere('u.event_name = :metric', { metric: DEFAULT_METRIC })
+      .andWhere('u.event_name IN (:...metrics)', { metrics: RECAP_METRICS })
       .getRawOne<{ plays: string }>();
 
     return Number(row?.plays ?? 0);
@@ -819,7 +834,7 @@ export class AnalyticsRecapService {
       .addSelect('SUM(u.count)', 'plays')
       .where('u.user_id = :userId', { userId })
       .andWhere('u.date BETWEEN :from AND :to', { from, to })
-      .andWhere('u.event_name = :metric', { metric: DEFAULT_METRIC })
+      .andWhere('u.event_name IN (:...metrics)', { metrics: RECAP_METRICS })
       .groupBy('1')
       .orderBy('SUM(u.count)', 'DESC')
       .limit(1)

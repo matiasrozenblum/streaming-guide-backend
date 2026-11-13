@@ -7,10 +7,10 @@ import { PushSubscriptionEntity } from '../../push/push-subscription.entity';
 import { User } from '../../users/users.entity';
 import { PushService } from '../../push/push.service';
 import { SentryService } from '../../sentry/sentry.service';
-import { DEFAULT_METRIC } from '../query/analytics-admin.service';
 import {
   AnalyticsRecapService,
   MIN_PLAYS_FOR_NOTIFICATION,
+  RECAP_METRICS,
 } from '../query/analytics-recap.service';
 import { RecapPeriod } from '../dto/analytics-query.dto';
 
@@ -229,7 +229,9 @@ export class RecapNotificationService {
       .createQueryBuilder('u')
       .select('u.user_id', 'user_id')
       .where('u.date BETWEEN :from AND :to', { from, to })
-      .andWhere('u.event_name = :metric', { metric: DEFAULT_METRIC })
+      // Lo mismo que cuenta el resumen: a quien se le avisa tiene que ser
+      // exactamente quien va a encontrar algo al entrar.
+      .andWhere('u.event_name IN (:...metrics)', { metrics: RECAP_METRICS })
       .groupBy('u.user_id')
       .having('SUM(u.count) >= :minimum', { minimum: MIN_PLAYS_FOR_NOTIFICATION });
 

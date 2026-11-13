@@ -9,6 +9,8 @@ y este proyecto utiliza [SemVer](https://semver.org/lang/es/).
 
 ### Changed
 
+- **El zapeo cuenta como haber visto algo.** Entrar a un programa desde la grilla y cambiar de canal dentro del reproductor son la misma decision —elegir ver una cosa— y contabamos solo la primera: quien se quedaba adentro del reproductor zapeando entre cinco canales terminaba con un resumen que decia que vio uno. El evento ya se emitia; lo que faltaba era contarlo. Entra en las dos familias de metricas porque su destino puede ser un canal o un streamer, y cual de los dos lo dice el id de la fila. La notificacion mide lo mismo, para que a quien se le avisa sea exactamente quien va a encontrar algo al entrar.
+
 - **El resumen ya no exige un minimo de reproducciones**: la unica regla es el calendario. Quien miro algo en un periodo publicado tiene sus placas, sea una reproduccion o cincuenta; antes hacian falta tres y a quien no llegaba se le mostraba un contador —"vas 1 de 3"— que ademas mentia de lunes a jueves, porque la semana en pantalla ya estaba cerrada y nada de lo que mirara podia cambiarla. `enough_data` pasa a significar lo que su nombre dice: que haya algo que mostrar. El campo `minimum_plays` se va de la respuesta.
 - **El aviso conserva un umbral propio**, ahora llamado `MIN_PLAYS_FOR_NOTIFICATION`. No se ve en ninguna pantalla y hace falta por un motivo distinto: decirle a alguien que llego su resumen y depositarlo en una pantalla vacia es como se consigue que apague los avisos.
 
